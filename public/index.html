@@ -713,7 +713,8 @@ function botBubble(m, idx) {
 }
 function fillBot(d, m, idx, live) {
   const c = d.querySelector(".content");
-  c.innerHTML = "";
+  if (live && m.genImage === undefined) { fillLive(c, m); return; }
+  c.innerHTML = ""; c._live = null;
   if (m.genImage !== undefined) {
     if (m.genImage) {
       const im = document.createElement("img"); im.className = "gen-img"; im.alt = m.prompt || "Generated image"; im.src = "data:image/png;base64," + m.genImage; c.appendChild(im);
@@ -739,6 +740,67 @@ function fillBot(d, m, idx, live) {
   a.appendChild(actBtn(ICON.trash, "Delete message", () => { current.messages.splice(idx, 1); saveChats(); renderMessages(); }));
   if (S.showStats && m.stats) { const s = document.createElement("span"); s.className = "stat"; s.textContent = m.stats; a.appendChild(s); }
 }
+// While a reply streams, update the bubble in place instead of rebuilding it every frame:
+// thinking text is appended, finished paragraphs are rendered once, and only the
+// paragraph still being written is re-rendered. Keeps long replies smooth.
+const TYPING = '<div class="typing"><span></span><span></span><span></span></div>';
+function fillLive(c, m) {
+  let L = c._live;
+  if (!L) {
+    c.innerHTML = "";
+    L = c._live = { blocks: [], wrap: document.createElement("div"), body: document.createElement("div"), done: 0, n: 0, tail: null };
+    L.body.className = "md";
+    c.append(L.wrap, L.body);
+    c.closest(".msg").querySelector(".actions").innerHTML = "";
+  }
+  const blocks = m.blocks || [];
+  blocks.forEach((b, i) => {
+    const active = !b.done && i === blocks.length - 1, e = L.blocks[i];
+    if (b.type === "thinking" && e) return updateThink(e, b, active);
+    const key = [b.active, b.error, b.title, (b.results || []).length].join("|");
+    if (e && e.key === key) return;
+    const el = renderBlock(b, active);
+    if (e) e.el.replaceWith(el); else L.wrap.appendChild(el);
+    L.blocks[i] = b.type === "thinking"
+      ? { el, tt: el.querySelector(".think-text"), sum: el.querySelector("summary"), len: el.querySelector(".think-text").textContent.length, active }
+      : { el, key };
+  });
+  const body = L.body, src = m.content || "";
+  const trimTail = () => { while (body.childNodes.length > L.n) body.lastChild.remove(); };
+  const rest = src.slice(L.done), cut = settledLength(rest);
+  if (cut) {
+    trimTail();
+    body.insertAdjacentHTML("beforeend", md(rest.slice(0, cut)));
+    L.done += cut; L.n = body.childNodes.length; L.tail = null;
+  }
+  const tail = src ? src.slice(L.done) : (blocks.length ? "" : TYPING);
+  if (tail !== L.tail) { trimTail(); body.insertAdjacentHTML("beforeend", src ? md(tail) : tail); L.tail = tail; }
+}
+// Length of the leading part of s that ends at a blank line outside any ``` block.
+// md() resets at such a line, so that part renders the same on its own.
+function settledLength(s) {
+  const re = /```|\n\n/g;
+  let fences = 0, cut = 0, m;
+  while ((m = re.exec(s))) { if (m[0] === "```") fences++; else if (!(fences & 1)) cut = m.index + 2; }
+  return cut;
+}
+function updateThink(e, b, active) {
+  const text = b.text.trim(), tt = e.tt;
+  if (text.length > e.len) {
+    const stick = tt.scrollHeight - tt.scrollTop - tt.clientHeight < 40;
+    if (tt.firstChild) tt.firstChild.appendData(text.slice(e.len)); else tt.append(text);
+    e.len = text.length;
+    if (stick) tt.scrollTop = tt.scrollHeight;
+  }
+  if (active !== e.active) {
+    e.active = active;
+    e.sum.innerHTML = BRAIN + thinkLabel(b, active) + CHEV;
+    e.el.open = b.userOpen ?? active;
+  }
+}
+function thinkLabel(b, active) {
+  return active ? '<span class="shimmer">Thinking…</span>' : (b.secs ? `Thought for ${b.secs < 1 ? "<1" : Math.round(b.secs)} second${Math.round(b.secs) === 1 ? "" : "s"}` : "Thoughts");
+}
 const BRAIN = '<svg class="i brain" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/></svg>';
 const CHEV = '<svg class="i chev" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M6 9l6 6 6-6"/></svg>';
 const MAG = '<svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
@@ -750,11 +812,11 @@ function renderBlock(b, active) {
     const det = document.createElement("details");
     det.className = "think-block";
     det.open = b.userOpen ?? active;
-    const label = active ? '<span class="shimmer">Thinking…</span>' : (b.secs ? `Thought for ${b.secs < 1 ? "<1" : Math.round(b.secs)} second${Math.round(b.secs) === 1 ? "" : "s"}` : "Thoughts");
-    det.innerHTML = `<summary>${BRAIN}${label}${CHEV}</summary><div class="think-text"></div>`;
+    det.innerHTML = `<summary>${BRAIN}${thinkLabel(b, active)}${CHEV}</summary><div class="think-text"></div>`;
     const tt = det.querySelector(".think-text");
     tt.textContent = b.text.trim();
-    det.addEventListener("toggle", () => { b.userOpen = det.open; });
+    // Only real clicks count as the user's choice (toggle also fires when we open/close it).
+    det.querySelector("summary").addEventListener("click", () => { b.userOpen = !det.open; });
     if (active) requestAnimationFrame(() => (tt.scrollTop = tt.scrollHeight));
     return det;
   }
