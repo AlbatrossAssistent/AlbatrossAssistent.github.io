@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Burrow — Local AI</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%230B1F3A'/%3E%3Cpath d='M5 21c0-5 4-9 9-9s9 4 9 9M10 21c0-2.2 1.8-4 4-4s4 1.8 4 4M4 21h20' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+:root {
+  --navy: #0B1F3A; --navy-2: #13294B; --navy-3: #1E3A66; --navy-4: #2C4F86;
+  --bg: #FFFFFF; --fg: #0B1F3A; --muted: #5B6B82; --line: #DCE3EE; --soft: #F3F6FA;
+  --bubble: #0B1F3A; --bubble-fg: #FFFFFF; --side: #0B1F3A; --side-fg: #FFFFFF;
+  --accent: #0B1F3A; --accent-fg: #FFFFFF; --danger: #B42318; --danger-bg: #FEF3F2;
+  --font-size: 16px;
+}
+[data-theme="dark"] {
+  --bg: #0B1F3A; --fg: #FFFFFF; --muted: #A9B7CC; --line: #24406B; --soft: #13294B;
+  --bubble: #FFFFFF; --bubble-fg: #0B1F3A; --side: #071628; --side-fg: #FFFFFF;
+  --accent: #FFFFFF; --accent-fg: #0B1F3A; --danger: #FF9C94; --danger-bg: #3A1620;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); display: flex; font-size: var(--font-size); overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ---------- Intro animation ---------- */
+#splash { position: fixed; inset: 0; z-index: 100; background: #0B1F3A; color: #fff; display: flex; align-items: center; justify-content: center; clip-path: inset(0 0 0 0); transition: clip-path .8s cubic-bezier(.77,0,.18,1); }
+#splash.done { clip-path: inset(0 0 100% 0); }
+#splash .wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+#splash .logo { width: 120px; height: 120px; }
+#splash .logo path { fill: none; stroke: #fff; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw .9s cubic-bezier(.65,0,.35,1) forwards; }
+#splash .logo path:nth-child(2) { animation-delay: .25s; }
+#splash .logo path:nth-child(3) { animation-delay: .5s; }
+#splash .word { display: flex; overflow: hidden; font-size: 54px; font-weight: 700; letter-spacing: -1px; }
+#splash .word span { display: inline-block; transform: translateY(110%); animation: rise .6s cubic-bezier(.2,.8,.2,1) forwards; }
+#splash .tag { font-size: 15px; letter-spacing: 4px; text-transform: uppercase; color: #A9B7CC; opacity: 0; animation: fade .6s ease 1.3s forwards; }
+#splash .glow { position: absolute; width: 520px; height: 520px; border-radius: 50%; border: 1px solid rgba(255,255,255,.08); animation: pulse 2.4s ease-out infinite; }
+#splash .glow.b { animation-delay: .8s; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes rise { to { transform: translateY(0); } }
+@keyframes fade { to { opacity: 1; } }
+@keyframes pulse { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+body.intro aside, body.intro main { opacity: 0; transform: translateY(14px); }
+aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8,.2,1) .2s; }
+@media (prefers-reduced-motion: reduce) { #splash { display: none; } body.intro aside, body.intro main { opacity: 1; transform: none; } }
+
+/* ---------- Sidebar ---------- */
+aside { width: 280px; flex: 0 0 280px; background: var(--side); color: var(--side-fg); display: flex; flex-direction: column; gap: 12px; padding: 16px 12px; height: 100vh; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 6px; font-weight: 700; font-size: 20px; }
+.brand svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
+.side-btn { min-height: 44px; border: 1px solid rgba(255,255,255,.22); background: transparent; color: #fff; border-radius: 10px; display: flex; align-items: center; gap: 10px; padding: 0 14px; }
+.side-btn:hover { background: var(--navy-2); }
+.search { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.08); border-radius: 10px; padding: 0 12px; min-height: 40px; }
+.search input { flex: 1; background: none; border: none; outline: none; color: #fff; }
+.search input::placeholder { color: #A9B7CC; }
+.chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 0 -4px; padding: 0 4px; }
+.group-label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8EA0BC; padding: 12px 10px 4px; }
+.chat-row { display: flex; align-items: center; border-radius: 8px; }
+.chat-row:hover, .chat-row.active { background: var(--navy-3); }
+.chat-row.active { background: var(--navy-4); }
+.chat-row .open { flex: 1; min-width: 0; text-align: left; min-height: 40px; padding: 0 10px; border: none; background: none; color: #DDE6F3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+.chat-row.active .open { color: #fff; }
+.chat-row .mini { width: 32px; height: 32px; border: none; background: none; color: #C9D4E5; border-radius: 6px; display: none; align-items: center; justify-content: center; }
+.chat-row:hover .mini, .chat-row.active .mini { display: flex; }
+.chat-row .mini:hover { background: rgba(255,255,255,.12); color: #fff; }
+.chat-row .mini svg { width: 15px; height: 15px; }
+.conn-card { border-top: 1px solid rgba(255,255,255,.14); padding: 12px 8px 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #C9D4E5; }
+.conn-line { display: flex; align-items: center; gap: 8px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #8A97AB; flex: none; }
+.dot.ok { background: #7CC4FF; box-shadow: 0 0 0 4px rgba(124,196,255,.15); }
+.dot.bad { background: #FF8A80; }
+.dot.wait { background: #FFD27A; }
+
+/* ---------- Main ---------- */
+main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--line); }
+.icon-btn { width: 40px; height: 40px; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--fg); }
+.icon-btn:hover { background: var(--soft); }
+.icon-btn.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.menu-btn { display: none; }
+select, .field input, .field textarea, .field select { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); min-height: 40px; padding: 0 12px; }
+.model-sel { font-weight: 600; max-width: 260px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: none; background: var(--bg); padding: 0 14px; min-height: 38px; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.seg button.on { background: var(--accent); color: var(--accent-fg); }
+.spacer { flex: 1; }
+.badge { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+
+.messages { flex: 1; overflow-y: auto; padding: 28px 20px; }
+.inner { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+body.compact .inner { gap: 14px; }
+.msg { line-height: 1.65; overflow-wrap: anywhere; animation: msgIn .35s cubic-bezier(.2,.8,.2,1); }
+@keyframes msgIn { from { opacity: 0; transform: translateY(8px); } }
+.msg.user { align-self: flex-end; max-width: 82%; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.msg.user .text { background: var(--bubble); color: var(--bubble-fg); padding: 12px 16px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap; }
+.msg.user .imgs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.msg.user .imgs img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.msg.bot { display: flex; gap: 12px; }
+.avatar { width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--navy); display: flex; align-items: center; justify-content: center; }
+[data-theme="dark"] .avatar { background: #fff; }
+.avatar svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.4; }
+[data-theme="dark"] .avatar svg { stroke: var(--navy); }
+.bot-body { flex: 1; min-width: 0; }
+.md p { margin: 0 0 10px; } .md p:last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3 { margin: 14px 0 8px; line-height: 1.3; } .md h1 { font-size: 1.35em; } .md h2 { font-size: 1.2em; } .md h3 { font-size: 1.05em; }
+.md ul, .md ol { margin: 0 0 10px; padding-left: 22px; }
+.md .code { position: relative; margin: 0 0 10px; }
+.md pre { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 0; font-size: .88em; }
+.md code { font-family: Consolas, "Cascadia Code", "Courier New", monospace; }
+.md :not(pre) > code { background: var(--soft); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+.md .copy-code { position: absolute; top: 6px; right: 6px; font-size: 12px; border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 3px 8px; color: var(--muted); }
+.thinking { border-left: 2px solid var(--line); padding: 2px 0 2px 12px; margin-bottom: 10px; color: var(--muted); font-size: .92em; }
+.thinking summary { cursor: pointer; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 8px; color: var(--muted); font-size: 12px; opacity: 0; transition: opacity .15s; }
+.msg:hover .actions, .msg:last-child .actions, .actions:focus-within { opacity: 1; }
+.actions button { border: none; background: none; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.actions button:hover { background: var(--soft); color: var(--fg); }
+.actions svg { width: 15px; height: 15px; }
+.actions .stat { margin-left: 6px; }
+.gen-img { max-width: 100%; width: 512px; border-radius: 12px; border: 1px solid var(--line); display: block; }
+.progress { height: 6px; background: var(--soft); border-radius: 6px; overflow: hidden; width: 320px; max-width: 100%; margin: 8px 0; }
+.progress div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.typing span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 4px; animation: blink 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.msg.error { background: var(--danger-bg); color: var(--danger); border-radius: 12px; padding: 14px 16px; white-space: pre-wrap; font-size: .95em; }
+.empty { text-align: center; margin-top: 12vh; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.empty h1 { margin: 0; font-size: 32px; letter-spacing: -.5px; }
+.empty p { margin: 0; color: var(--muted); }
+.suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; width: 100%; max-width: 640px; margin-top: 18px; }
+.suggestions button { text-align: left; border: 1px solid var(--line); background: var(--bg); border-radius: 12px; padding: 14px; color: var(--fg); min-height: 44px; }
+.suggestions button:hover { background: var(--soft); }
+.suggestions small { display: block; color: var(--muted); margin-top: 2px; }
+
+/* ---------- Thinking ---------- */
+.think-block { margin: 0 0 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.think-block summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: 14px; color: var(--muted); user-select: none; }
+.think-block summary::-webkit-details-marker { display: none; }
+.think-block summary .chev { margin-left: auto; transition: transform .2s; }
+.think-block[open] summary .chev { transform: rotate(180deg); }
+.think-block .think-text { padding: 0 16px 12px 16px; margin-left: 6px; border-left: 2px solid var(--line); color: var(--muted); font-size: .9em; line-height: 1.6; white-space: pre-wrap; max-height: 320px; overflow-y: auto; }
+.shimmer { background: linear-gradient(90deg, var(--muted) 0%, var(--fg) 50%, var(--muted) 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 1.6s linear infinite; font-weight: 600; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.brain { width: 16px; height: 16px; }
+
+/* ---------- Web search card ---------- */
+.search-card { margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.search-bar { position: relative; display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--line); border-radius: 999px; padding: 9px 16px; background: var(--soft); overflow: hidden; max-width: 560px; }
+.search-bar .q { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
+.search-bar.active .q::after { content: ""; display: inline-block; width: 2px; height: 1em; background: var(--fg); margin-left: 2px; vertical-align: -2px; animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.search-bar .meta { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.search-bar.active::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 35%; background: var(--accent); animation: sweep 1.1s ease-in-out infinite; }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--fg); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.results { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; max-width: 100%; }
+.res { flex: 0 0 200px; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; text-decoration: none; color: var(--fg); background: var(--bg); animation: msgIn .35s cubic-bezier(.2,.8,.2,1) backwards; }
+.res:hover { background: var(--soft); }
+.res .dom { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.res .ini { width: 18px; height: 18px; border-radius: 5px; background: var(--navy); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+[data-theme="dark"] .res .ini { background: #fff; color: var(--navy); }
+.res .tt { font-size: 13.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fetch-line { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+.fetch-line a { color: var(--fg); }
+.tool-err { font-size: 13px; color: var(--danger); }
+.md a { color: var(--fg); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+/* ---------- Composer ---------- */
+.composer { padding: 0 20px 18px; }
+.composer-inner { max-width: 800px; margin: 0 auto; }
+.img-opts { display: none; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+body.image-mode .img-opts { display: flex; }
+.img-opts label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.img-opts select, .img-opts input { min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); padding: 0 8px; width: 96px; }
+.attachments { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.att { position: relative; }
+.att img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); display: block; }
+.att button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--navy); color: #fff; font-size: 13px; line-height: 1; }
+.box { display: flex; align-items: flex-end; gap: 8px; border: 1.5px solid var(--line); border-radius: 16px; padding: 8px; background: var(--bg); transition: border-color .15s; }
+.box:focus-within { border-color: var(--accent); }
+.box.drag { border-style: dashed; border-color: var(--accent); }
+textarea#prompt { flex: 1; border: none; outline: none; resize: none; background: transparent; max-height: 220px; min-height: 28px; padding: 9px 4px; line-height: 1.5; }
+.send { width: 44px; height: 44px; flex: none; border: none; border-radius: 12px; background: var(--accent); color: var(--accent-fg); display: flex; align-items: center; justify-content: center; }
+.attach-btn { width: 44px; height: 44px; flex: none; border: none; border-radius: 12px; background: none; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.attach-btn:hover { background: var(--soft); color: var(--fg); }
+.attach-btn.web-btn { width: auto; padding: 0 12px; gap: 6px; font-size: 14px; border: 1px solid var(--line); height: 40px; margin-bottom: 2px; border-radius: 999px; }
+.attach-btn.web-btn.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.attach-btn.web-btn[disabled] { opacity: .4; cursor: not-allowed; }
+.hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+/* ---------- Modal ---------- */
+dialog { border: none; border-radius: 18px; padding: 0; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 40px); background: var(--bg); color: var(--fg); box-shadow: 0 30px 80px rgba(5,15,30,.35); }
+dialog::backdrop { background: rgba(5,15,30,.55); }
+dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+.modal { display: flex; flex-direction: column; max-height: calc(100vh - 40px); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.modal-head h2 { margin: 0; font-size: 20px; }
+.modal-body { display: flex; min-height: 0; flex: 1; }
+.tabs { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-right: 1px solid var(--line); min-width: 170px; }
+.tabs button { text-align: left; border: none; background: none; border-radius: 8px; min-height: 40px; padding: 0 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.tabs button.on { background: var(--soft); color: var(--fg); font-weight: 600; }
+.panes { flex: 1; overflow-y: auto; padding: 20px 22px 26px; }
+.pane { display: none; flex-direction: column; gap: 16px; }
+.pane.on { display: flex; }
+.pane h3 { margin: 6px 0 0; font-size: 15px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label { font-weight: 600; font-size: 14px; }
+.field small { color: var(--muted); font-size: 12.5px; }
+.field textarea { padding: 10px 12px; min-height: 90px; resize: vertical; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.row > .field { flex: 1 1 160px; }
+.range-row { display: flex; align-items: center; gap: 12px; }
+.range-row input[type=range] { flex: 1; accent-color: var(--navy); }
+[data-theme="dark"] .range-row input[type=range] { accent-color: #fff; }
+.range-row output { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; font-size: 14px; }
+.check { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; border-bottom: 1px solid var(--line); }
+.check span small { display: block; color: var(--muted); font-size: 12.5px; }
+.switch { appearance: none; width: 44px; height: 26px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; flex: none; transition: background .2s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.switch:checked { background: var(--navy-4); }
+.switch:checked::after { transform: translateX(18px); }
+.btn { min-height: 40px; border-radius: 10px; padding: 0 16px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover { background: var(--soft); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.danger { color: var(--danger); }
+.code-input { font-family: Consolas, monospace; font-size: 26px; letter-spacing: 4px; text-transform: uppercase; text-align: center; min-height: 56px !important; }
+.mode-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.mode-card { border: 1.5px solid var(--line); border-radius: 12px; padding: 14px; background: var(--bg); text-align: left; display: flex; flex-direction: column; gap: 4px; }
+.mode-card.on { border-color: var(--accent); background: var(--soft); }
+.mode-card small { color: var(--muted); }
+.note { background: var(--soft); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.note code { font-family: Consolas, monospace; color: var(--fg); }
+.model-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.model-table td, .model-table th { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.model-table th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.pill { font-size: 11px; border-radius: 999px; padding: 2px 8px; background: var(--soft); color: var(--muted); margin-left: 6px; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 20px); background: var(--navy); color: #fff; padding: 10px 16px; border-radius: 10px; opacity: 0; transition: .25s; z-index: 200; pointer-events: none; font-size: 14px; }
+[data-theme="dark"] .toast { background: #fff; color: var(--navy); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 820px) {
+  aside { position: fixed; inset: 0 auto 0 0; z-index: 20; transform: translateX(-100%); transition: transform .25s; box-shadow: 0 0 40px rgba(0,0,0,.3); }
+  aside.open { transform: none; }
+  .menu-btn { display: flex; }
+  .tabs { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--line); min-width: 0; }
+  .modal-body { flex-direction: column; }
+  .model-sel { max-width: 150px; }
+  .badge.hide-sm { display: none; }
+}
+</style>
+</head>
+<body class="intro">
+
+<!-- ================= INTRO ================= -->
+<div id="splash" aria-hidden="true">
+  <div class="glow"></div><div class="glow b"></div>
+  <div class="wrap">
+    <svg class="logo" viewBox="0 0 28 28"><path pathLength="1" d="M3 22c0-6 5-11 11-11s11 5 11 11"/><path pathLength="1" d="M9 22c0-3 2-5 5-5s5 2 5 5"/><path pathLength="1" d="M2 22h24"/></svg>
+    <div class="word" id="splashWord"></div>
+    <div class="tag">Your AI · Your computer</div>
+  </div>
+</div>
+
+<!-- ================= SIDEBAR ================= -->
+<aside id="sidebar">
+  <div class="brand"><svg viewBox="0 0 28 28"><path d="M3 22c0-6 5-11 11-11s11 5 11 11"/><path d="M9 22c0-3 2-5 5-5s5 2 5 5"/><path d="M2 22h24"/></svg>Burrow</div>
+  <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span style="margin-left:auto;font-size:12px;color:#8EA0BC">Ctrl+Shift+O</span></button>
+  <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
+  <div class="chat-list" id="chatList"></div>
+  <div class="conn-card">
+    <div class="conn-line"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+    <button class="side-btn" id="openConn"><svg class="i" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Connect with code</button>
+    <button class="side-btn" id="openSettings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+  </div>
+</aside>
+
+<!-- ================= MAIN ================= -->
+<main>
+  <div class="topbar">
+    <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open chats"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <div class="seg" role="group" aria-label="Mode">
+      <button id="modeChat" class="on"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Chat</button>
+      <button id="modeImage"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>Image</button>
+    </div>
+    <label for="model" class="sr">Model</label>
+    <select id="model" class="model-sel"><option>Loading…</option></select>
+    <span class="badge hide-sm" id="connBadge">This device</span>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="chatSettingsBtn" aria-label="System prompt for this chat" title="System prompt for this chat"><svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></button>
+    <button class="icon-btn" id="exportChat" aria-label="Download this chat" title="Download this chat (Markdown)"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg></button>
+    <button class="icon-btn" id="themeBtn" aria-label="Toggle dark mode" title="Toggle dark mode"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
+
+  <div class="messages" id="messages"><div class="inner" id="inner"></div></div>
+
+  <div class="composer">
+    <div class="composer-inner">
+      <div class="img-opts">
+        <label>Size <select id="imgSize"><option value="512x512">512²</option><option value="768x768">768²</option><option value="1024x1024" selected>1024²</option><option value="1024x768">1024×768</option><option value="768x1024">768×1024</option><option value="1280x720">1280×720</option></select></label>
+        <label>Steps <input id="imgSteps" type="number" min="1" max="100" placeholder="auto"></label>
+        <label>Seed <input id="imgSeed" type="number" placeholder="random"></label>
+      </div>
+      <div class="attachments" id="attachments"></div>
+      <div class="box" id="box">
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <button class="attach-btn" id="attachBtn" aria-label="Attach image" title="Attach image (for vision models)"><svg class="i" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
+        <button class="attach-btn web-btn" id="webBtn" aria-pressed="false" title="Let the AI search the web"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Search</span></button>
+        <label for="prompt" class="sr">Message</label>
+        <textarea id="prompt" rows="1" placeholder="Message your local AI…"></textarea>
+        <button class="send" id="send" aria-label="Send"><svg class="i" id="sendIcon" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+      </div>
+      <div class="hint" id="hint">Runs on your own computer through Ollama · Enter to send · Shift+Enter for a new line</div>
+    </div>
+  </div>
+</main>
+
+<!-- ================= SETTINGS ================= -->
+<dialog id="settings">
+  <div class="modal">
+    <div class="modal-head"><h2>Settings</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="tabs" role="tablist">
+        <button data-tab="connection" class="on">Connection</button>
+        <button data-tab="model">Model</button>
+        <button data-tab="models">Installed models</button>
+        <button data-tab="chat">Chat</button>
+        <button data-tab="appearance">Appearance</button>
+        <button data-tab="data">Data</button>
+      </div>
+      <div class="panes">
+
+        <!-- Connection -->
+        <section class="pane on" data-pane="connection">
+          <div class="mode-cards">
+            <button class="mode-card" data-conn="local"><strong>This device</strong><small>Talk to Ollama directly on this computer or a URL you choose.</small></button>
+            <button class="mode-card" data-conn="remote"><strong>Remote code</strong><small>Use another computer's Ollama through your Burrow server with an XXXX-XXXX code.</small></button>
+          </div>
+          <div id="connLocal" class="pane on" style="padding:0">
+            <div class="field"><label for="ollamaUrl">Ollama URL</label><input id="ollamaUrl" placeholder="http://localhost:11434"><small>Default is http://localhost:11434</small></div>
+          </div>
+          <div id="connRemote" class="pane" style="padding:0">
+            <div class="field"><label for="codeInput">Device code</label><input id="codeInput" class="code-input" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false"><small>Shown on the PC that runs <code>host.js</code>.</small></div>
+            <div class="field"><label for="relayUrl">Burrow server</label><input id="relayUrl" placeholder="https://your-server.com"><small>Filled in automatically when this page is opened from your server.</small></div>
+          </div>
+          <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
+          <div class="note">
+            <strong style="color:var(--fg)">Share this PC's AI with another device</strong><br>
+            On this PC, with Ollama running, open a terminal in the Burrow folder and run<br>
+            <code>node host/host.js <span id="serverHint">https://your-server.com</span></code><br>
+            It prints a code like <code>K7QM-4XPT</code>. Enter that code on the other device. Anyone with the code can use this PC's AI, so only share it with people you trust. Run it with <code>--new</code> to get a fresh code.
+          </div>
+        </section>
+
+        <!-- Model parameters -->
+        <section class="pane" data-pane="model">
+          <div class="row">
+            <div class="field"><label for="preset">Preset</label><select id="preset"><option value="">Custom</option><option value="precise">Precise</option><option value="balanced">Balanced</option><option value="creative">Creative</option></select></div>
+          </div>
+          <div class="field"><label>Temperature</label><div class="range-row"><input type="range" id="p_temperature" min="0" max="2" step="0.05"><output></output></div><small>Lower = more focused, higher = more creative.</small></div>
+          <div class="field"><label>Top P</label><div class="range-row"><input type="range" id="p_top_p" min="0" max="1" step="0.01"><output></output></div></div>
+          <div class="field"><label>Top K</label><div class="range-row"><input type="range" id="p_top_k" min="1" max="100" step="1"><output></output></div></div>
+          <div class="field"><label>Repeat penalty</label><div class="range-row"><input type="range" id="p_repeat_penalty" min="0.8" max="2" step="0.05"><output></output></div></div>
+          <div class="row">
+            <div class="field"><label for="p_num_ctx">Context length</label><select id="p_num_ctx"><option value="">Model default</option><option>2048</option><option>4096</option><option>8192</option><option>16384</option><option>32768</option></select><small>Longer remembers more but uses more memory.</small></div>
+            <div class="field"><label for="p_num_predict">Max answer length</label><input id="p_num_predict" type="number" placeholder="unlimited"><small>In tokens.</small></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="p_seed">Seed</label><input id="p_seed" type="number" placeholder="random"><small>Same seed + prompt = same answer.</small></div>
+            <div class="field"><label for="keepAlive">Keep model loaded</label><select id="keepAlive"><option value="">Default (5 min)</option><option value="1m">1 minute</option><option value="30m">30 minutes</option><option value="2h">2 hours</option><option value="-1">Forever</option><option value="0">Unload right away</option></select></div>
+          </div>
+          <div class="row"><button class="btn" id="resetParams">Reset to defaults</button></div>
+        </section>
+
+        <!-- Installed models -->
+        <section class="pane" data-pane="models">
+          <div class="row" style="justify-content:space-between;align-items:center"><h3>On the connected device</h3><button class="btn" id="refreshModels">Refresh</button></div>
+          <div style="overflow-x:auto"><table class="model-table"><thead><tr><th>Model</th><th>Size</th><th>Type</th><th>Status</th></tr></thead><tbody id="modelRows"></tbody></table></div>
+          <div class="note">Install more with <code>ollama pull &lt;name&gt;</code> on the PC that runs Ollama. Image models (e.g. <code>x/z-image-turbo</code>, <code>x/flux2-klein</code>) work in Image mode where Ollama supports image generation.</div>
+        </section>
+
+        <!-- Chat -->
+        <section class="pane" data-pane="chat">
+          <div class="field"><label for="defaultSystem">Default system prompt</label><textarea id="defaultSystem" placeholder="e.g. You are a helpful assistant. Answer briefly."></textarea><small>Used for new chats. Each chat can override it (sliders icon in the top bar).</small></div>
+          <label class="check"><span>Enter sends the message<small>Off: Ctrl+Enter sends, Enter makes a new line.</small></span><input type="checkbox" class="switch" id="enterSends"></label>
+          <label class="check"><span>Show speed & token stats<small>Tokens per second under each answer.</small></span><input type="checkbox" class="switch" id="showStats"></label>
+          <label class="check"><span>Show thinking<small>Live "Thinking…" for models that support it (qwen3, deepseek-r1, gpt-oss…). Others answer normally.</small></span><input type="checkbox" class="switch" id="think"></label>
+          <label class="check"><span>Auto-name chats<small>Uses the first message as the chat title.</small></span><input type="checkbox" class="switch" id="autoTitle"></label>
+          <label class="check"><span>Save chats in this browser<small>Off: chats vanish when you close the page.</small></span><input type="checkbox" class="switch" id="persist"></label>
+        </section>
+
+        <!-- Appearance -->
+        <section class="pane" data-pane="appearance">
+          <div class="field"><label for="theme">Theme</label><select id="theme"><option value="light">White</option><option value="dark">Navy</option><option value="system">Match system</option></select></div>
+          <div class="field"><label>Text size</label><div class="range-row"><input type="range" id="fontSize" min="13" max="20" step="1"><output></output></div></div>
+          <label class="check"><span>Opening animation<small>Plays when the site loads.</small></span><input type="checkbox" class="switch" id="intro"></label>
+          <label class="check"><span>Compact messages<small>Less space between messages.</small></span><input type="checkbox" class="switch" id="compact"></label>
+          <div class="row"><button class="btn" id="replayIntro">Replay animation</button></div>
+        </section>
+
+        <!-- Data -->
+        <section class="pane" data-pane="data">
+          <div class="row">
+            <button class="btn" id="exportAll">Export all chats (JSON)</button>
+            <button class="btn" id="importBtn">Import chats</button><input type="file" id="importFile" accept="application/json" hidden>
+          </div>
+          <div class="row"><button class="btn danger" id="deleteAll">Delete all chats</button><button class="btn danger" id="resetAll">Reset all settings</button></div>
+          <div class="note">Chats are stored only in this browser — never on the server.</div>
+        </section>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- per-chat system prompt -->
+<dialog id="chatSettings">
+  <div class="modal">
+    <div class="modal-head"><h2>This chat</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="panes" style="padding:20px 22px">
+      <div class="pane on">
+        <div class="field"><label for="chatTitle">Title</label><input id="chatTitle"></div>
+        <div class="field"><label for="chatSystem">System prompt</label><textarea id="chatSystem" placeholder="Leave empty to use the default"></textarea></div>
+        <div class="row"><button class="btn primary" id="saveChatSettings">Save</button></div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+// ======================================================================
+// State
+// ======================================================================
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+
+const DEFAULT_PARAMS = { temperature: 0.8, top_p: 0.9, top_k: 40, repeat_penalty: 1.1, num_ctx: "", num_predict: "", seed: "" };
+const PRESETS = {
+  precise:  { temperature: 0.2, top_p: 0.8, top_k: 20, repeat_penalty: 1.1 },
+  balanced: { temperature: 0.8, top_p: 0.9, top_k: 40, repeat_penalty: 1.1 },
+  creative: { temperature: 1.2, top_p: 0.95, top_k: 80, repeat_penalty: 1.05 },
+};
+const DEFAULTS = {
+  conn: { mode: "local", url: "http://localhost:11434", code: "", relay: location.protocol.startsWith("http") ? location.origin : "" },
+  params: { ...DEFAULT_PARAMS }, keepAlive: "",
+  defaultSystem: "", enterSends: true, showStats: true, think: true, webSearch: false, autoTitle: true, persist: true,
+  theme: "light", fontSize: 16, intro: true, compact: false,
+  model: "", imageModel: "", mode: "chat",
+};
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("burrow." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("burrow." + k, JSON.stringify(v)); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem("burrow." + k); } catch {} },
+};
+
+let S = deepMerge(structuredClone(DEFAULTS), store.get("settings", {}));
+let chats = S.persist ? store.get("chats", []) : [];
+let current = null;
+let controller = null;
+let attachments = []; // base64 strings (no prefix)
+let models = [];      // [{name, size, details, kind}]
+let connected = false;
+
+function deepMerge(a, b) { for (const k in b) { if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) && a[k]) deepMerge(a[k], b[k]); else a[k] = b[k]; } return a; }
+function saveSettings() { store.set("settings", S); }
+function saveChats() {
+  if (!S.persist) return;
+  if (!store.set("chats", chats)) {
+    // storage full (usually generated images) — keep text, drop old images
+    const slim = chats.map(c => ({ ...c, messages: c.messages.map(m => ({ ...m, images: undefined, genImage: m.genImage ? "" : undefined })) }));
+    if (store.set("chats", slim)) toast("Browser storage full — older images won't be kept");
+  }
+}
+
+// ======================================================================
+// Intro animation
+// ======================================================================
+function playIntro() {
+  const sp = $("#splash");
+  const word = $("#splashWord");
+  word.innerHTML = "";
+  [..."Burrow"].forEach((ch, i) => { const s = document.createElement("span"); s.textContent = ch; s.style.animationDelay = (0.55 + i * 0.06) + "s"; word.appendChild(s); });
+  sp.style.display = "flex"; sp.classList.remove("done");
+  // restart CSS animations
+  $$("#splash *").forEach(el => { el.style.animation = "none"; void el.offsetWidth; el.style.animation = ""; });
+  document.body.classList.add("intro");
+  const end = () => {
+    if (sp.classList.contains("done")) return;
+    sp.classList.add("done");
+    document.body.classList.remove("intro");
+    setTimeout(() => (sp.style.display = "none"), 850);
+  };
+  sp.onclick = end;
+  setTimeout(end, 2300);
+}
+if (S.intro && !matchMedia("(prefers-reduced-motion: reduce)").matches) playIntro();
+else { $("#splash").style.display = "none"; document.body.classList.remove("intro"); }
+
+// ======================================================================
+// Connection
+// ======================================================================
+function baseUrl() {
+  if (S.conn.mode === "remote") return (S.conn.relay || "").replace(/\/+$/, "") + "/relay/" + S.conn.code;
+  return (S.conn.url || "http://localhost:11434").replace(/\/+$/, "");
+}
+async function api(path, opts = {}) {
+  const res = await fetch(baseUrl() + path, opts);
+  if (!res.ok) {
+    let msg = "HTTP " + res.status;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return res;
+}
+function setStatus(kind, text) { $("#dot").className = "dot " + kind; $("#statusText").textContent = text; }
+
+async function connect(quiet) {
+  setStatus("wait", "Connecting…");
+  $("#connBadge").textContent = S.conn.mode === "remote" ? "Remote · " + S.conn.code : "This device";
+  try {
+    if (S.conn.mode === "remote") {
+      if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(S.conn.code)) throw new Error("Enter a code like K7QM-4XPT");
+      if (!S.conn.relay) throw new Error("Enter your Burrow server address");
+    }
+    const tags = await (await api("/api/tags")).json();
+    let running = [];
+    try { running = (await (await api("/api/ps")).json()).models || []; } catch {}
+    models = (tags.models || []).map(m => ({ ...m, kind: guessKind(m), running: running.some(r => r.name === m.name) }));
+    connected = true;
+    fillModelSelect();
+    renderModelTable();
+    let where = "This device";
+    if (S.conn.mode === "remote") {
+      try { const st = await (await api("/status")).json(); where = st.name || "Remote PC"; } catch { where = "Remote PC"; }
+    }
+    setStatus("ok", `Connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"}`);
+    return true;
+  } catch (e) {
+    connected = false; models = [];
+    fillModelSelect(); renderModelTable();
+    setStatus("bad", S.conn.mode === "remote" ? "Remote device not reachable" : "Can't reach Ollama");
+    if (!quiet) showConnHelp(e.message);
+    return false;
+  }
+}
+function guessKind(m) {
+  const n = (m.name + " " + (m.details?.family || "") + " " + (m.details?.families || []).join(" ")).toLowerCase();
+  if (/flux|z-image|zimage|stable-diffusion|sdxl|image-turbo/.test(n)) return "image";
+  if (/llava|vision|bakllava|moondream|minicpm-v|gemma3|qwen2\.5vl|qwen2-vl|qwen3-vl|llama3\.2-vision|mllama|clip/.test(n)) return "vision";
+  if (/embed|bge|nomic-embed|mxbai/.test(n)) return "embed";
+  return "text";
+}
+function fillModelSelect() {
+  const sel = $("#model");
+  sel.innerHTML = "";
+  const imageMode = S.mode === "image";
+  const list = models.filter(m => m.kind !== "embed" && (imageMode ? m.kind === "image" : m.kind !== "image"));
+  if (!connected) { sel.innerHTML = "<option value=''>Not connected</option>"; return; }
+  if (!list.length) {
+    sel.innerHTML = imageMode ? "<option value=''>No image models</option>" : "<option value=''>No models installed</option>";
+    return;
+  }
+  for (const m of list) {
+    const o = document.createElement("option");
+    o.value = m.name;
+    o.textContent = m.name + (m.kind === "vision" ? " (vision)" : "");
+    sel.appendChild(o);
+  }
+  const want = imageMode ? S.imageModel : S.model;
+  if (list.some(m => m.name === want)) sel.value = want;
+}
+function renderModelTable() {
+  const tb = $("#modelRows");
+  tb.innerHTML = "";
+  if (!models.length) { tb.innerHTML = `<tr><td colspan="4" style="color:var(--muted)">${connected ? "No models installed yet." : "Not connected."}</td></tr>`; return; }
+  for (const m of models) {
+    const tr = document.createElement("tr");
+    const size = m.size ? (m.size / 1e9).toFixed(1) + " GB" : "—";
+    const kind = { text: "Text", vision: "Text + images", image: "Image generation", embed: "Embeddings" }[m.kind];
+    tr.innerHTML = `<td><strong></strong><span class="pill"></span></td><td>${size}</td><td>${kind}</td><td>${m.running ? "● Loaded" : "—"}</td>`;
+    tr.querySelector("strong").textContent = m.name;
+    tr.querySelector(".pill").textContent = m.details?.parameter_size || "";
+    tb.appendChild(tr);
+  }
+}
+function showConnHelp(err) {
+  const text = S.conn.mode === "remote"
+    ? `Couldn't reach the remote device (${err}).\n\n• Check the code is right and host.js is still running on the other PC.\n• Check the Burrow server address in Settings → Connection.`
+    : `Couldn't reach Ollama at ${baseUrl()} (${err}).\n\n1. Make sure Ollama is running on this computer.\n2. Allow websites to talk to it: set the environment variable OLLAMA_ORIGINS to *\n   Windows: run  setx OLLAMA_ORIGINS "*"  then quit Ollama from the tray and start it again.\n3. Or use another computer's AI: Settings → Connection → Remote code.`;
+  if (!current.messages.length) { $("#inner").innerHTML = ""; }
+  errorBubble(text);
+}
+
+// ======================================================================
+// Chats
+// ======================================================================
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+function newChat() {
+  if (controller) controller.abort();
+  if (current && !current.messages.length) { renderAll(); $("#prompt").focus(); return; }
+  current = { id: uid(), title: "New chat", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
+  chats.unshift(current);
+  saveChats(); renderAll();
+  $("#prompt").focus();
+}
+function openChat(c) { if (controller) controller.abort(); current = c; renderAll(); $("#sidebar").classList.remove("open"); }
+function deleteChat(c) {
+  if (!confirmInline(c)) return;
+  chats = chats.filter(x => x !== c);
+  if (current === c) current = chats[0] || null;
+  if (!current) { newChat(); return; }
+  saveChats(); renderAll();
+}
+let pendingDelete = null;
+function confirmInline(c) {
+  if (pendingDelete === c) { pendingDelete = null; return true; }
+  pendingDelete = c; toast("Click delete again to confirm"); setTimeout(() => { if (pendingDelete === c) pendingDelete = null; }, 3000);
+  return false;
+}
+function renderSidebar() {
+  const list = $("#chatList");
+  const q = $("#search").value.trim().toLowerCase();
+  list.innerHTML = "";
+  const filtered = chats.filter(c => !q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content || "").toLowerCase().includes(q)));
+  const groups = [["Pinned", c => c.pinned], ["Today", c => !c.pinned && Date.now() - c.updated < 864e5], ["Earlier", c => !c.pinned && Date.now() - c.updated >= 864e5]];
+  for (const [label, test] of groups) {
+    const items = filtered.filter(test).sort((a, b) => b.updated - a.updated);
+    if (!items.length) continue;
+    const g = document.createElement("div"); g.className = "group-label"; g.textContent = label; list.appendChild(g);
+    for (const c of items) {
+      const row = document.createElement("div");
+      row.className = "chat-row" + (c === current ? " active" : "");
+      row.innerHTML = `<button class="open"></button>
+        <button class="mini" data-act="pin" title="${c.pinned ? "Unpin" : "Pin"}" aria-label="${c.pinned ? "Unpin" : "Pin"} chat"><svg class="i" viewBox="0 0 24 24"><path d="M12 17v5M5 17h14l-2-4V5h1V3H6v2h1v8z"/></svg></button>
+        <button class="mini" data-act="rename" title="Rename" aria-label="Rename chat"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
+        <button class="mini" data-act="del" title="Delete" aria-label="Delete chat"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`;
+      row.querySelector(".open").textContent = c.title;
+      row.querySelector(".open").onclick = () => openChat(c);
+      row.querySelector('[data-act="pin"]').onclick = () => { c.pinned = !c.pinned; saveChats(); renderSidebar(); };
+      row.querySelector('[data-act="rename"]').onclick = () => { current = c; renderAll(); openChatSettings(); };
+      row.querySelector('[data-act="del"]').onclick = () => deleteChat(c);
+      list.appendChild(row);
+    }
+  }
+  if (!filtered.length && q) { const d = document.createElement("div"); d.className = "group-label"; d.textContent = "No matches"; list.appendChild(d); }
+}
+function renderMessages() {
+  const inner = $("#inner");
+  inner.innerHTML = "";
+  if (!current.messages.length) return renderEmpty();
+  current.messages.forEach((m, i) => inner.appendChild(m.role === "user" ? userBubble(m, i) : botBubble(m, i)));
+  scrollDown(true);
+}
+function renderAll() { renderSidebar(); renderMessages(); }
+
+function renderEmpty() {
+  const imageMode = S.mode === "image";
+  const sugg = imageMode
+    ? [["A lighthouse in a storm", "oil painting, dramatic light"], ["Isometric tiny city", "pastel colors, 3D render"], ["Portrait of a fox astronaut", "studio lighting"], ["Minimal navy logo", "for a coffee shop"]]
+    : [["Explain a concept", "like I'm new to it"], ["Help me write", "an email, essay or message"], ["Debug my code", "paste it in"], ["Plan something", "a trip, a week, a project"]];
+  const d = document.createElement("div");
+  d.className = "empty";
+  d.innerHTML = `<h1>${imageMode ? "What should I draw?" : "What can I help with?"}</h1><p>Everything runs on ${S.conn.mode === "remote" ? "your connected PC" : "this computer"} — nothing goes to the cloud.</p><div class="suggestions"></div>`;
+  for (const [a, b] of sugg) {
+    const btn = document.createElement("button");
+    btn.innerHTML = "<strong></strong><small></small>";
+    btn.querySelector("strong").textContent = a; btn.querySelector("small").textContent = b;
+    btn.onclick = () => { const p = $("#prompt"); p.value = imageMode ? `${a}, ${b}` : `${a} ${b}: `; autosize(); p.focus(); };
+    d.querySelector(".suggestions").appendChild(btn);
+  }
+  $("#inner").appendChild(d);
+}
+
+// ---------- bubbles ----------
+const ICON = {
+  copy: '<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>',
+  redo: '<svg class="i" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
+  edit: '<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  dl: '<svg class="i" viewBox="0 0 24 24"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg>',
+  speak: '<svg class="i" viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+  trash: '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+};
+const LOGO = '<svg viewBox="0 0 28 28"><path d="M3 22c0-6 5-11 11-11s11 5 11 11"/><path d="M2 22h24"/></svg>';
+
+function userBubble(m, idx) {
+  const d = document.createElement("div");
+  d.className = "msg user";
+  if (m.images?.length) {
+    const imgs = document.createElement("div"); imgs.className = "imgs";
+    m.images.forEach(b => { const im = document.createElement("img"); im.src = "data:image/*;base64," + b; im.alt = "Attached image"; imgs.appendChild(im); });
+    d.appendChild(imgs);
+  }
+  const t = document.createElement("div"); t.className = "text"; t.textContent = m.content; d.appendChild(t);
+  const a = document.createElement("div"); a.className = "actions";
+  a.appendChild(actBtn(ICON.copy, "Copy", () => copy(m.content)));
+  a.appendChild(actBtn(ICON.edit, "Edit & resend", () => editFrom(idx)));
+  d.appendChild(a);
+  return d;
+}
+function botBubble(m, idx) {
+  const d = document.createElement("div");
+  d.className = "msg bot";
+  d.innerHTML = `<div class="avatar">${LOGO}</div><div class="bot-body"><div class="content"></div><div class="actions"></div></div>`;
+  fillBot(d, m, idx);
+  return d;
+}
+function fillBot(d, m, idx, live) {
+  const c = d.querySelector(".content");
+  c.innerHTML = "";
+  if (m.genImage !== undefined) {
+    if (m.genImage) {
+      const im = document.createElement("img"); im.className = "gen-img"; im.alt = m.prompt || "Generated image"; im.src = "data:image/png;base64," + m.genImage; c.appendChild(im);
+    } else if (live) {
+      c.innerHTML = `<div style="color:var(--muted);font-size:14px">Generating image… <span class="pct"></span></div><div class="progress"><div></div></div>`;
+    } else c.innerHTML = `<div style="color:var(--muted)">(image not stored)</div>`;
+  } else {
+    const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
+    blocks.forEach((b, bi) => c.appendChild(renderBlock(b, !!live && !b.done && bi === blocks.length - 1)));
+    const body = document.createElement("div"); body.className = "md";
+    body.innerHTML = m.content ? md(m.content) : (live && !blocks.length ? '<div class="typing"><span></span><span></span><span></span></div>' : "");
+    c.appendChild(body);
+  }
+  const a = d.querySelector(".actions");
+  a.innerHTML = "";
+  if (live) return;
+  if (m.genImage) a.appendChild(actBtn(ICON.dl, "Download image", () => download("burrow-image.png", b64ToBlob(m.genImage, "image/png"))));
+  else {
+    a.appendChild(actBtn(ICON.copy, "Copy", () => copy(m.content)));
+    if ("speechSynthesis" in window) a.appendChild(actBtn(ICON.speak, "Read aloud", () => speak(m.content)));
+  }
+  if (idx === current.messages.length - 1) a.appendChild(actBtn(ICON.redo, "Regenerate", regenerate));
+  a.appendChild(actBtn(ICON.trash, "Delete message", () => { current.messages.splice(idx, 1); saveChats(); renderMessages(); }));
+  if (S.showStats && m.stats) { const s = document.createElement("span"); s.className = "stat"; s.textContent = m.stats; a.appendChild(s); }
+}
+const BRAIN = '<svg class="i brain" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/></svg>';
+const CHEV = '<svg class="i chev" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M6 9l6 6 6-6"/></svg>';
+const MAG = '<svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+function domainOf(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u || ""; } }
+function safeHref(u) { return /^https?:\/\//i.test(u || "") ? u : "#"; }
+
+function renderBlock(b, active) {
+  if (b.type === "thinking") {
+    const det = document.createElement("details");
+    det.className = "think-block";
+    det.open = b.userOpen ?? active;
+    const label = active ? '<span class="shimmer">Thinking…</span>' : (b.secs ? `Thought for ${b.secs < 1 ? "<1" : Math.round(b.secs)} second${Math.round(b.secs) === 1 ? "" : "s"}` : "Thoughts");
+    det.innerHTML = `<summary>${BRAIN}${label}${CHEV}</summary><div class="think-text"></div>`;
+    const tt = det.querySelector(".think-text");
+    tt.textContent = b.text.trim();
+    det.addEventListener("toggle", () => { b.userOpen = det.open; });
+    if (active) requestAnimationFrame(() => (tt.scrollTop = tt.scrollHeight));
+    return det;
+  }
+  if (b.type === "search") {
+    const wrap = document.createElement("div");
+    wrap.className = "search-card";
+    const n = (b.results || []).length;
+    wrap.innerHTML = `<div class="search-bar ${b.active ? "active" : ""}">${MAG}<span class="q"></span>${b.active ? '<span class="spin"></span><span class="meta">Searching the web…</span>' : `<span class="meta">${b.error ? "failed" : n + " result" + (n === 1 ? "" : "s")}</span>`}</div>`;
+    wrap.querySelector(".q").textContent = b.query;
+    if (b.error) { const e = document.createElement("div"); e.className = "tool-err"; e.textContent = b.error; wrap.appendChild(e); }
+    if (n) {
+      const list = document.createElement("div"); list.className = "results";
+      b.results.forEach((r, i) => {
+        const a = document.createElement("a");
+        a.className = "res"; a.href = safeHref(r.url); a.target = "_blank"; a.rel = "noopener noreferrer";
+        a.style.animationDelay = (b.fresh ? i * 0.06 : 0) + "s";
+        const dom = domainOf(r.url);
+        a.innerHTML = `<span class="dom"><span class="ini"></span><span class="d"></span></span><span class="tt"></span>`;
+        a.querySelector(".ini").textContent = (dom[0] || "?").toUpperCase();
+        a.querySelector(".d").textContent = dom;
+        a.querySelector(".tt").textContent = r.title || r.url;
+        list.appendChild(a);
+      });
+      wrap.appendChild(list);
+    }
+    return wrap;
+  }
+  if (b.type === "fetch") {
+    const d = document.createElement("div");
+    d.className = "fetch-line";
+    d.innerHTML = `${b.active ? '<span class="spin"></span>Reading ' : '<svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/></svg>Read '}<a target="_blank" rel="noopener noreferrer"></a>`;
+    const a = d.querySelector("a"); a.href = safeHref(b.url); a.textContent = b.title || domainOf(b.url);
+    if (b.error) { const e = document.createElement("span"); e.className = "tool-err"; e.textContent = " — " + b.error; d.appendChild(e); }
+    return d;
+  }
+  return document.createElement("div");
+}
+function actBtn(icon, label, fn) { const b = document.createElement("button"); b.innerHTML = icon; b.title = label; b.setAttribute("aria-label", label); b.onclick = fn; return b; }
+function errorBubble(text) {
+  const empty = $("#inner .empty"); if (empty) empty.remove();
+  const d = document.createElement("div"); d.className = "msg error"; d.textContent = text; $("#inner").appendChild(d); scrollDown(true);
+}
+function scrollDown(force) {
+  const el = $("#messages");
+  if (force || el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+}
+
+// ======================================================================
+// Markdown (safe: everything escaped first)
+// ======================================================================
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function inline(s) {
+  return s.replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+function md(src) {
+  const parts = (src || "").split(/```/);
+  let out = "";
+  parts.forEach((part, i) => {
+    if (i % 2) {
+      const code = part.replace(/^[\w+#.-]*\n/, "");
+      out += `<div class="code"><button class="copy-code">Copy</button><pre><code>${esc(code.replace(/\n$/, ""))}</code></pre></div>`;
+      return;
+    }
+    const lines = esc(part).split("\n");
+    let para = [], list = null;
+    const flushP = () => { if (para.length) { out += "<p>" + inline(para.join("<br>")) + "</p>"; para = []; } };
+    const flushL = () => { if (list) { out += `<${list.t}>` + list.items.map(x => "<li>" + inline(x) + "</li>").join("") + `</${list.t}>`; list = null; } };
+    for (const line of lines) {
+      let m;
+      if (!line.trim()) { flushP(); flushL(); continue; }
+      if ((m = line.match(/^(#{1,3})\s+(.*)/))) { flushP(); flushL(); out += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; continue; }
+      if ((m = line.match(/^\s*[-*•]\s+(.*)/))) { flushP(); if (!list || list.t !== "ul") { flushL(); list = { t: "ul", items: [] }; } list.items.push(m[1]); continue; }
+      if ((m = line.match(/^\s*\d+[.)]\s+(.*)/))) { flushP(); if (!list || list.t !== "ol") { flushL(); list = { t: "ol", items: [] }; } list.items.push(m[1]); continue; }
+      flushL(); para.push(line);
+    }
+    flushP(); flushL();
+  });
+  return out;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".copy-code");
+  if (b) { copy(b.nextElementSibling.textContent); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1200); }
+});
+
+// ======================================================================
+// Sending
+// ======================================================================
+async function send(textOverride) {
+  if (controller) { controller.abort(); return; }
+  const p = $("#prompt");
+  const text = (textOverride ?? p.value).trim();
+  const model = $("#model").value;
+  if (!text && !attachments.length) return;
+  if (!connected) { await connect(); if (!connected) return; }
+  if (!model) { toast(S.mode === "image" ? "No image model installed on the connected device" : "Pick a model first"); return; }
+
+  const userMsg = { role: "user", content: text, images: attachments.length ? attachments.slice() : undefined };
+  if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; renderAttachments(); }
+  current.messages.push(userMsg);
+  if (S.autoTitle && current.title === "New chat") current.title = text.slice(0, 48) || "Image chat";
+  current.updated = Date.now();
+  if (current.messages.length === 1) $("#inner").innerHTML = "";
+  $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
+  renderSidebar();
+  await (S.mode === "image" ? generateImage(model, text) : chat(model));
+}
+
+// ---------- model capabilities (thinking / tools / vision) ----------
+const capsCache = {};
+async function getCaps(model) {
+  const key = baseUrl() + "|" + model;
+  if (capsCache[key]) return capsCache[key];
+  try {
+    const j = await (await api("/api/show", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) })).json();
+    capsCache[key] = j.capabilities || [];
+  } catch { capsCache[key] = []; }
+  return capsCache[key];
+}
+
+// ---------- web search tools ----------
+let searchAvailable = false;
+function toolsBase() { return (S.conn.relay || (location.protocol.startsWith("http") ? location.origin : "")).replace(/\/+$/, ""); }
+async function checkSearch() {
+  searchAvailable = false;
+  if (toolsBase()) {
+    try { searchAvailable = !!(await (await fetch(toolsBase() + "/tools/status")).json()).webSearch; } catch {}
+  }
+  const b = $("#webBtn");
+  b.disabled = !searchAvailable;
+  b.title = searchAvailable ? "Let the AI search the web" : "Web search needs the Burrow server with OLLAMA_API_KEY set (see README)";
+  b.classList.toggle("on", searchAvailable && S.webSearch);
+  b.setAttribute("aria-pressed", String(searchAvailable && S.webSearch));
+}
+const TOOLS = [
+  { type: "function", function: { name: "web_search", description: "Search the web for up-to-date information: news, recent events, prices, facts you are not sure about.", parameters: { type: "object", properties: { query: { type: "string", description: "The search query" } }, required: ["query"] } } },
+  { type: "function", function: { name: "web_fetch", description: "Open a web page by URL and read its text. Use it to read a search result in detail.", parameters: { type: "object", properties: { url: { type: "string", description: "Full http(s) URL" } }, required: ["url"] } } },
+];
+async function runTool(name, args, block) {
+  const r = await fetch(toolsBase() + "/tools/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args), signal: controller.signal });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+  if (name === "web_search") {
+    block.results = (j.results || []).map(x => ({ title: x.title, url: x.url }));
+    block.fresh = true;
+    return JSON.stringify(j.results || []);
+  }
+  block.title = j.title;
+  return JSON.stringify({ title: j.title, url: args.url, content: j.content });
+}
+
+async function chat(model) {
+  const reply = { role: "assistant", content: "", blocks: [], model };
+  const bubble = botBubble(reply, -1);
+  $("#inner").appendChild(bubble);
+  fillBot(bubble, reply, -1, true);
+  scrollDown(true);
+  setBusy(true);
+  controller = new AbortController();
+  let raf = 0;
+  const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; fillBot(bubble, reply, -1, true); scrollDown(); }); };
+
+  let totalTokens = 0, totalNs = 0, finished = false;
+  try {
+    const caps = await getCaps(model);
+    const useThink = S.think && caps.includes("thinking");
+    const wantSearch = S.webSearch && searchAvailable;
+    const useTools = wantSearch && caps.includes("tools");
+    if (wantSearch && !useTools) toast(`${model} can't use tools, so it can't search. Try qwen3, llama3.1 or gpt-oss.`);
+
+    let system = current.system || S.defaultSystem;
+    if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
+    const msgs = current.messages.filter(m => m.genImage === undefined).map(m => ({ role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) }));
+    if (system) msgs.unshift({ role: "system", content: system });
+
+    for (let round = 0; round < 6; round++) {
+      const body = { model, messages: msgs, stream: true, options: buildOptions() };
+      if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
+      if (useThink) body.think = true;
+      if (useTools && round < 5) body.tools = TOOLS;
+
+      const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+      let think = null, roundText = "", calls = [];
+      await readNdjson(res, j => {
+        if (j.error) throw new Error(j.error);
+        const m = j.message || {};
+        if (m.thinking) {
+          if (!think) { think = { type: "thinking", text: "", start: performance.now() }; reply.blocks.push(think); }
+          think.text += m.thinking;
+        }
+        if (m.content) {
+          if (think && !think.done) { think.done = true; think.secs = (performance.now() - think.start) / 1000; }
+          roundText += m.content; reply.content += m.content;
+        }
+        if (m.tool_calls) calls.push(...m.tool_calls);
+        if (j.done) { totalTokens += j.eval_count || 0; totalNs += j.eval_duration || 0; }
+        redraw();
+      });
+      if (think && !think.done) { think.done = true; think.secs = (performance.now() - think.start) / 1000; }
+      if (!calls.length) { finished = true; break; }
+
+      msgs.push({ role: "assistant", content: roundText, tool_calls: calls });
+      for (const tc of calls) {
+        const name = tc.function?.name;
+        let args = tc.function?.arguments || {};
+        if (typeof args === "string") { try { args = JSON.parse(args); } catch { args = {}; } }
+        const block = name === "web_fetch" ? { type: "fetch", url: args.url, active: true } : { type: "search", query: args.query || "", active: true, results: [] };
+        reply.blocks.push(block); redraw();
+        let out;
+        if (name !== "web_search" && name !== "web_fetch") out = "Unknown tool: " + name;
+        else {
+          try { out = await runTool(name, args, block); }
+          catch (e) { if (e.name === "AbortError") throw e; block.error = e.message; out = "Error: " + e.message; }
+        }
+        block.active = false; block.done = true; redraw();
+        msgs.push({ role: "tool", content: out, tool_name: name });
+      }
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message);
+  } finally {
+    controller = null; setBusy(false);
+    reply.blocks.forEach(b => { b.active = false; b.done = true; delete b.fresh; delete b.start; delete b.userOpen; });
+    if (reply.content || reply.blocks.length) {
+      if (!reply.blocks.length) delete reply.blocks;
+      reply.stats = totalTokens && totalNs ? `${model} · ${(totalTokens / (totalNs / 1e9)).toFixed(1)} tok/s · ${totalTokens} tokens` : model;
+      if (!finished) reply.stats += " · stopped";
+      current.messages.push(reply);
+      current.updated = Date.now();
+      saveChats();
+    }
+    renderMessages();
+  }
+}
+
+async function generateImage(model, prompt) {
+  const reply = { role: "assistant", content: "", genImage: "", prompt, model };
+  const bubble = botBubble(reply, -1);
+  $("#inner").appendChild(bubble);
+  fillBot(bubble, reply, -1, true);
+  scrollDown(true);
+  setBusy(true);
+  controller = new AbortController();
+  const [w, h] = $("#imgSize").value.split("x").map(Number);
+  const body = { model, prompt, stream: true, width: w, height: h };
+  const steps = $("#imgSteps").value, seed = $("#imgSeed").value;
+  if (steps) body.steps = Number(steps);
+  if (seed) body.seed = Number(seed);
+  const t0 = performance.now();
+  try {
+    const res = await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+    await readNdjson(res, j => {
+      if (j.error) throw new Error(j.error);
+      if (j.total) {
+        const pct = Math.round((j.completed || 0) / j.total * 100);
+        const bar = bubble.querySelector(".progress div"); if (bar) bar.style.width = pct + "%";
+        const t = bubble.querySelector(".pct"); if (t) t.textContent = pct + "%";
+      }
+      const img = j.image || j.images?.[0];
+      if (img) reply.genImage = img;
+    });
+    if (!reply.genImage) throw new Error("The model didn't return an image. Is this an image-generation model, and does your Ollama version support image generation on this OS?");
+  } catch (e) {
+    if (e.name !== "AbortError") errorBubble("Image generation failed: " + e.message);
+  } finally {
+    controller = null; setBusy(false);
+    if (reply.genImage) {
+      reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+      current.messages.push(reply); current.updated = Date.now(); saveChats();
+    }
+    renderMessages();
+  }
+}
+
+async function readNdjson(res, onObj) {
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split("\n"); buf = lines.pop();
+    for (const l of lines) if (l.trim()) onObj(JSON.parse(l));
+  }
+  if (buf.trim()) onObj(JSON.parse(buf));
+}
+function buildOptions() {
+  const o = {};
+  for (const [k, v] of Object.entries(S.params)) if (v !== "" && v !== null && v !== undefined && !Number.isNaN(Number(v))) o[k] = Number(v);
+  return o;
+}
+function regenerate() {
+  if (controller) return;
+  const msgs = current.messages;
+  if (msgs.length && msgs[msgs.length - 1].role === "assistant") msgs.pop();
+  const lastUser = msgs[msgs.length - 1];
+  if (!lastUser || lastUser.role !== "user") return;
+  renderMessages();
+  const model = $("#model").value;
+  (lastUser.genImage === undefined && S.mode === "image") ? generateImage(model, lastUser.content) : chat(model);
+}
+function editFrom(idx) {
+  if (controller) return;
+  const m = current.messages[idx];
+  current.messages = current.messages.slice(0, idx);
+  saveChats(); renderMessages();
+  $("#prompt").value = m.content; attachments = m.images ? m.images.slice() : []; renderAttachments(); autosize(); $("#prompt").focus();
+}
+function setBusy(b) {
+  $("#send").setAttribute("aria-label", b ? "Stop" : "Send");
+  $("#sendIcon").innerHTML = b ? '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>';
+}
+
+// ======================================================================
+// Attachments
+// ======================================================================
+function addFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) continue;
+    if (f.size > 20e6) { toast("Image too large (max 20 MB)"); continue; }
+    const r = new FileReader();
+    r.onload = () => { attachments.push(String(r.result).split(",")[1]); renderAttachments(); };
+    r.readAsDataURL(f);
+  }
+  const sel = models.find(m => m.name === $("#model").value);
+  if (sel && sel.kind === "text") toast("Tip: pick a vision model (e.g. llava, gemma3) to read images");
+}
+function renderAttachments() {
+  const el = $("#attachments"); el.innerHTML = "";
+  attachments.forEach((b, i) => {
+    const d = document.createElement("div"); d.className = "att";
+    d.innerHTML = `<img alt="Attachment ${i + 1}"><button aria-label="Remove attachment">×</button>`;
+    d.querySelector("img").src = "data:image/*;base64," + b;
+    d.querySelector("button").onclick = () => { attachments.splice(i, 1); renderAttachments(); };
+    el.appendChild(d);
+  });
+}
+
+// ======================================================================
+// Helpers
+// ======================================================================
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), 2200); }
+async function copy(t) { try { await navigator.clipboard.writeText(t); toast("Copied"); } catch { toast("Couldn't copy"); } }
+function speak(t) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t.replace(/[#*`]/g, "")); speechSynthesis.speak(u); }
+function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function b64ToBlob(b64, type) { const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type }); }
+function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, 220) + "px"; }
+function slug(s) { return (s || "chat").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "chat"; }
+
+function applyAppearance() {
+  const theme = S.theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : S.theme;
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.style.setProperty("--font-size", S.fontSize + "px");
+  document.body.classList.toggle("compact", S.compact);
+  $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
+}
+function setMode(mode) {
+  S.mode = mode; saveSettings();
+  document.body.classList.toggle("image-mode", mode === "image");
+  $("#modeChat").classList.toggle("on", mode === "chat");
+  $("#modeImage").classList.toggle("on", mode === "image");
+  $("#prompt").placeholder = mode === "image" ? "Describe the image you want…" : "Message your local AI…";
+  $("#attachBtn").style.display = mode === "image" ? "none" : "";
+  $("#webBtn").style.display = mode === "image" ? "none" : "";
+  fillModelSelect();
+  if (current && !current.messages.length) renderMessages();
+}
+
+// ======================================================================
+// Settings dialog
+// ======================================================================
+function openSettings(tab) {
+  const d = $("#settings");
+  // connection
+  setConnCards(S.conn.mode);
+  $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay;
+  $("#serverHint").textContent = S.conn.relay || "https://your-server.com";
+  $("#connResult").textContent = "";
+  // params
+  for (const k of ["temperature", "top_p", "top_k", "repeat_penalty"]) { const r = $("#p_" + k); r.value = S.params[k]; r.nextElementSibling.textContent = r.value; }
+  $("#p_num_ctx").value = S.params.num_ctx; $("#p_num_predict").value = S.params.num_predict; $("#p_seed").value = S.params.seed;
+  $("#keepAlive").value = S.keepAlive; $("#preset").value = "";
+  // chat
+  $("#defaultSystem").value = S.defaultSystem;
+  for (const k of ["enterSends", "showStats", "think", "autoTitle", "persist", "intro", "compact"]) $("#" + k).checked = !!S[k];
+  $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
+  if (tab) switchTab(tab);
+  d.showModal();
+}
+function switchTab(name) {
+  $$("#settings .tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  $$("#settings .pane[data-pane]").forEach(p => p.classList.toggle("on", p.dataset.pane === name));
+}
+function setConnCards(mode) {
+  $$(".mode-card").forEach(c => c.classList.toggle("on", c.dataset.conn === mode));
+  $("#connLocal").classList.toggle("on", mode === "local");
+  $("#connRemote").classList.toggle("on", mode === "remote");
+  $("#connectBtn").dataset.mode = mode;
+}
+function formatCode(v) {
+  const s = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  return s.length > 4 ? s.slice(0, 4) + "-" + s.slice(4) : s;
+}
+
+$$("#settings .tabs button").forEach(b => (b.onclick = () => switchTab(b.dataset.tab)));
+$$(".mode-card").forEach(c => (c.onclick = () => setConnCards(c.dataset.conn)));
+$("#codeInput").addEventListener("input", e => { e.target.value = formatCode(e.target.value); });
+$("#connectBtn").onclick = async () => {
+  S.conn.mode = $("#connectBtn").dataset.mode || "local";
+  S.conn.url = $("#ollamaUrl").value.trim() || "http://localhost:11434";
+  S.conn.code = formatCode($("#codeInput").value);
+  S.conn.relay = $("#relayUrl").value.trim().replace(/\/+$/, "");
+  saveSettings(); applyAppearance();
+  $("#connResult").textContent = "Connecting…";
+  const ok = await connect(true);
+  checkSearch();
+  $("#connResult").textContent = ok ? "✓ " + $("#statusText").textContent : "✕ Couldn't connect — check the details";
+  if (ok && current && !current.messages.length) renderMessages();
+};
+for (const k of ["temperature", "top_p", "top_k", "repeat_penalty"]) {
+  $("#p_" + k).addEventListener("input", e => { S.params[k] = Number(e.target.value); e.target.nextElementSibling.textContent = e.target.value; $("#preset").value = ""; saveSettings(); });
+}
+for (const k of ["num_ctx", "num_predict", "seed"]) $("#p_" + k).addEventListener("change", e => { S.params[k] = e.target.value; saveSettings(); });
+$("#keepAlive").onchange = e => { S.keepAlive = e.target.value; saveSettings(); };
+$("#preset").onchange = e => {
+  const p = PRESETS[e.target.value]; if (!p) return;
+  Object.assign(S.params, p); saveSettings();
+  for (const k in p) { const r = $("#p_" + k); r.value = p[k]; r.nextElementSibling.textContent = p[k]; }
+};
+$("#resetParams").onclick = () => { S.params = { ...DEFAULT_PARAMS }; S.keepAlive = ""; saveSettings(); openSettings("model"); };
+$("#refreshModels").onclick = () => connect(true);
+$("#defaultSystem").onchange = e => { S.defaultSystem = e.target.value; saveSettings(); };
+for (const k of ["enterSends", "showStats", "think", "autoTitle", "intro", "compact"]) $("#" + k).onchange = e => { S[k] = e.target.checked; saveSettings(); applyAppearance(); if (k === "showStats") renderMessages(); };
+$("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del("chats"); };
+$("#theme").onchange = e => { S.theme = e.target.value; saveSettings(); applyAppearance(); };
+$("#fontSize").addEventListener("input", e => { S.fontSize = Number(e.target.value); e.target.nextElementSibling.textContent = S.fontSize + "px"; saveSettings(); applyAppearance(); });
+$("#replayIntro").onclick = () => { $("#settings").close(); playIntro(); };
+$("#exportAll").onclick = () => download(`burrow-chats-${new Date().toISOString().slice(0, 10)}.json`, new Blob([JSON.stringify(chats, null, 2)], { type: "application/json" }));
+$("#importBtn").onclick = () => $("#importFile").click();
+$("#importFile").onchange = async e => {
+  try {
+    const data = JSON.parse(await e.target.files[0].text());
+    if (!Array.isArray(data)) throw 0;
+    const valid = data.filter(c => c && typeof c.title === "string" && Array.isArray(c.messages)).map(c => ({ ...c, id: uid() }));
+    chats = [...valid, ...chats]; saveChats(); renderSidebar(); toast(`Imported ${valid.length} chat(s)`);
+  } catch { toast("That file isn't a Burrow export"); }
+  e.target.value = "";
+};
+let armed = {};
+function armed2(key, fn) { if (armed[key]) { armed[key] = 0; fn(); } else { armed[key] = 1; toast("Click again to confirm"); setTimeout(() => (armed[key] = 0), 3000); } }
+$("#deleteAll").onclick = () => armed2("del", () => { chats = []; current = null; saveChats(); newChat(); toast("All chats deleted"); });
+$("#resetAll").onclick = () => armed2("reset", () => { S = structuredClone(DEFAULTS); saveSettings(); applyAppearance(); setMode("chat"); openSettings("appearance"); toast("Settings reset"); });
+$$("dialog [data-close]").forEach(b => (b.onclick = () => b.closest("dialog").close()));
+$$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));
+
+// per-chat
+function openChatSettings() { $("#chatTitle").value = current.title; $("#chatSystem").value = current.system || ""; $("#chatSystem").placeholder = S.defaultSystem ? "Default: " + S.defaultSystem.slice(0, 80) : "Leave empty for none"; $("#chatSettings").showModal(); }
+$("#chatSettingsBtn").onclick = openChatSettings;
+$("#saveChatSettings").onclick = () => { current.title = $("#chatTitle").value.trim() || current.title; current.system = $("#chatSystem").value; saveChats(); renderSidebar(); $("#chatSettings").close(); toast("Saved"); };
+
+// ======================================================================
+// Wire up
+// ======================================================================
+$("#send").onclick = () => send();
+$("#newChat").onclick = newChat;
+$("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
+$("#openSettings").onclick = () => openSettings();
+$("#openConn").onclick = () => { openSettings("connection"); setConnCards("remote"); setTimeout(() => $("#codeInput").focus(), 50); };
+$("#search").addEventListener("input", renderSidebar);
+$("#modeChat").onclick = () => setMode("chat");
+$("#modeImage").onclick = () => setMode("image");
+$("#model").onchange = e => { if (S.mode === "image") S.imageModel = e.target.value; else S.model = e.target.value; saveSettings(); };
+$("#themeBtn").onclick = () => { const cur = document.documentElement.dataset.theme; S.theme = cur === "dark" ? "light" : "dark"; saveSettings(); applyAppearance(); };
+$("#exportChat").onclick = () => {
+  if (!current.messages.length) return toast("This chat is empty");
+  const mdText = `# ${current.title}\n\n` + current.messages.map(m => `**${m.role === "user" ? "You" : "Burrow" + (m.model ? " (" + m.model + ")" : "")}:**\n\n${m.genImage !== undefined ? "[generated image: " + (m.prompt || "") + "]" : m.content}`).join("\n\n---\n\n");
+  download(slug(current.title) + ".md", new Blob([mdText], { type: "text/markdown" }));
+};
+$("#webBtn").onclick = () => { S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on — the AI can look things up" : "Web search off"); };
+$("#attachBtn").onclick = () => $("#fileInput").click();
+$("#fileInput").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
+const box = $("#box");
+box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("drag"); });
+box.addEventListener("dragleave", () => box.classList.remove("drag"));
+box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("drag"); if (S.mode === "chat") addFiles(e.dataTransfer.files); });
+$("#prompt").addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])]; if (f.length && S.mode === "chat") { e.preventDefault(); addFiles(f); } });
+$("#prompt").addEventListener("input", autosize);
+$("#prompt").addEventListener("keydown", e => {
+  if (e.key !== "Enter" || e.isComposing) return;
+  const sendNow = S.enterSends ? !e.shiftKey : (e.ctrlKey || e.metaKey);
+  if (sendNow) { e.preventDefault(); if (!controller) send(); }
+});
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "o") { e.preventDefault(); newChat(); }
+  if (e.key === "Escape" && controller) controller.abort();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppearance);
+
+// ---------- start ----------
+const urlCode = new URLSearchParams(location.search).get("code");
+if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = location.origin; saveSettings(); history.replaceState(null, "", location.pathname); }
+applyAppearance();
+current = chats[0] && !chats[0].messages.length ? chats[0] : null;
+if (!current) newChat(); else renderAll();
+setMode(S.mode);
+connect();
+checkSearch();
+</script>
+</body>
+</html>
