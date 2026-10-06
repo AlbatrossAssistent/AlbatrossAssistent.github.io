@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: burrow
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /tools/status
+    envVars:
+      - key: OLLAMA_API_KEY
+        sync: false
