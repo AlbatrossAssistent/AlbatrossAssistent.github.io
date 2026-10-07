@@ -30,12 +30,12 @@ Write-Host "If you sign in with a Microsoft account, use that account's password
 $cred = Get-Credential -UserName $user -Message "Your Windows password, so Burrow can start at boot"
 if (-not $cred) { Write-Host "Cancelled."; return }
 
-$action = New-ScheduledTaskAction -Execute $node -Argument "`"$PSScriptRoot\background.js`"" -WorkingDirectory $root
+$taskAction = New-ScheduledTaskAction -Execute $node -Argument "`"$PSScriptRoot\background.js`"" -WorkingDirectory $root
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $trigger.Delay = "PT30S"   # give the network a moment after boot
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
   -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
+Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $trigger -Settings $settings `
   -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Limited -Force | Out-Null
 
 Write-Host ""
