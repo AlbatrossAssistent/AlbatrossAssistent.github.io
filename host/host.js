@@ -3,6 +3,7 @@
 // Anyone who enters that code on the website can use this PC's Ollama, so only share it with people you trust.
 //
 // Usage:
+//   node host.js                                   (uses the server from last time, or https://burrow-uu7e.onrender.com)
 //   node host.js https://your-server.com          (keeps the same code every time)
 //   node host.js https://your-server.com --new    (makes a new code; the old one stops working)
 //   add --no-panel to skip opening the control center window
@@ -26,7 +27,7 @@ function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8
 
 const args = process.argv.slice(2);
 // Without a server argument, use the one from last time (the boot-time background task relies on this).
-const SERVER = (args.find((a) => !a.startsWith("--")) || process.env.BURROW_SERVER || readState()?.server || "").replace(/\/+$/, "");
+const SERVER = (args.find((a) => !a.startsWith("--")) || process.env.BURROW_SERVER || readState()?.server || "https://burrow-uu7e.onrender.com").replace(/\/+$/, "");
 const OLLAMA = (process.env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/+$/, "");
 const NAME = process.env.BURROW_NAME || os.hostname();
 

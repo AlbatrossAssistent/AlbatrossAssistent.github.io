@@ -8,6 +8,11 @@ Burrow is a web chat for the Ollama on your own PC. You can also use that PC's A
 
 Your PC connects out to the server, so you don't need any port forwarding on your router. Your chats are stored only in the browser, never on the server.
 
+**Live:**
+- Server: https://burrow-uu7e.onrender.com
+- Web page: https://burrowgeneral.github.io/burrow/
+- Repo: https://github.com/BurrowGeneral/burrow
+
 ## 1. Put it on a server
 
 You need any server with Node.js 18 or newer, like a small VPS, a Raspberry Pi or Render/Railway/Fly.io.
@@ -25,13 +30,13 @@ On the PC that has Ollama:
 
 ```bash
 npm install
-node host/host.js https://your-domain.com
+node host/host.js https://burrow-uu7e.onrender.com
 ```
 
 It prints your code, e.g. `K7QM-4XPT`, plus a link. Keep that window open while you want to share.
 
 - You get the same code every time. It's saved in `host/host-code.json`.
-- Run `node host/host.js https://your-domain.com --new` to get a fresh code. The old code stops working.
+- Run `node host/host.js https://burrow-uu7e.onrender.com --new` to get a fresh code. The old code stops working.
 - Press Ctrl+C to stop sharing.
 - A **control center** window opens (http://127.0.0.1:4747, only reachable from this PC). It shows the code in big letters, whether the server and Ollama are running, which models are in GPU memory, and every incoming message live. Add `--no-panel` to skip it.
 - On Windows the PC **won't go to sleep** while the host runs. No power settings are changed; it's a request that ends when the host stops. The screen can still turn off, and closing a laptop lid still sleeps it.
@@ -48,7 +53,7 @@ Flip **Start at boot** in the control center, or double-click `autostart-on.bat`
 
 ## 3. Connect from another device
 
-Open `https://your-domain.com`, go to **Connect with code**, enter the code and press **Connect**. Or open the link that host.js printed.
+Open `https://burrow-uu7e.onrender.com` (or https://burrowgeneral.github.io/burrow/), go to **Connect with code**, enter the code and press **Connect**. Or open the link that host.js printed.
 
 ## Using it only on your own PC (no server)
 

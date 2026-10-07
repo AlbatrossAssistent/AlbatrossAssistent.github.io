@@ -348,13 +348,13 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
           </div>
           <div id="connRemote" class="pane" style="padding:0">
             <div class="field"><label for="codeInput">Device code</label><input id="codeInput" class="code-input" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false"><small>Shown on the PC that runs <code>host.js</code>.</small></div>
-            <div class="field"><label for="relayUrl">Burrow server</label><input id="relayUrl" placeholder="https://your-server.com"><small>Filled in automatically when this page is opened from your server.</small></div>
+            <div class="field"><label for="relayUrl">Burrow server</label><input id="relayUrl" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
           </div>
           <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
           <div class="note">
             <strong style="color:var(--fg)">Share this PC's AI with another device</strong><br>
             On this PC, with Ollama running, open a terminal in the Burrow folder and run<br>
-            <code>node host/host.js <span id="serverHint">https://your-server.com</span></code><br>
+            <code>node host/host.js <span id="serverHint">https://burrow-uu7e.onrender.com</span></code><br>
             It prints a code like <code>K7QM-4XPT</code>. Enter that code on the other device. Anyone with the code can use this PC's AI, so only share it with people you trust. Run it with <code>--new</code> to get a fresh code.
           </div>
         </section>
@@ -443,6 +443,7 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
+const DEFAULT_SERVER = "https://burrow-uu7e.onrender.com";
 const DEFAULT_PARAMS = { temperature: 0.8, top_p: 0.9, top_k: 40, repeat_penalty: 1.1, num_ctx: "", num_predict: "", seed: "" };
 const PRESETS = {
   precise:  { temperature: 0.2, top_p: 0.8, top_k: 20, repeat_penalty: 1.1 },
@@ -450,7 +451,7 @@ const PRESETS = {
   creative: { temperature: 1.2, top_p: 0.95, top_k: 80, repeat_penalty: 1.05 },
 };
 const DEFAULTS = {
-  conn: { mode: "local", url: "http://localhost:11434", code: "", relay: location.protocol.startsWith("http") ? location.origin : "" },
+  conn: { mode: "local", url: "http://localhost:11434", code: "", relay: DEFAULT_SERVER },
   params: { ...DEFAULT_PARAMS }, keepAlive: "",
   defaultSystem: "", enterSends: true, showStats: true, think: true, webSearch: false, autoTitle: true, persist: true,
   theme: "light", fontSize: 16, intro: true, compact: false,
@@ -464,6 +465,8 @@ const store = {
 };
 
 let S = deepMerge(structuredClone(DEFAULTS), store.get("settings", {}));
+// Older versions saved the page's own address (e.g. GitHub Pages) as the server; use the real one instead.
+try { if (!S.conn.relay || new URL(S.conn.relay).hostname.endsWith(".github.io")) S.conn.relay = DEFAULT_SERVER; } catch { S.conn.relay = DEFAULT_SERVER; }
 let chats = S.persist ? store.get("chats", []) : [];
 let current = null;
 let controller = null;
@@ -969,7 +972,7 @@ async function getCaps(model) {
 
 // ---------- web search tools ----------
 let searchAvailable = false;
-function toolsBase() { return (S.conn.relay || (location.protocol.startsWith("http") ? location.origin : "")).replace(/\/+$/, ""); }
+function toolsBase() { return (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, ""); }
 async function checkSearch() {
   searchAvailable = false;
   if (toolsBase()) {
@@ -1241,7 +1244,7 @@ function openSettings(tab) {
   // connection
   setConnCards(S.conn.mode);
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay;
-  $("#serverHint").textContent = S.conn.relay || "https://your-server.com";
+  $("#serverHint").textContent = S.conn.relay || DEFAULT_SERVER;
   $("#connResult").textContent = "";
   // params
   for (const k of ["temperature", "top_p", "top_k", "repeat_penalty"]) { const r = $("#p_" + k); r.value = S.params[k]; r.nextElementSibling.textContent = r.value; }
@@ -1367,7 +1370,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- start ----------
 const urlCode = new URLSearchParams(location.search).get("code");
-if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = location.origin; saveSettings(); history.replaceState(null, "", location.pathname); }
+if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER; saveSettings(); history.replaceState(null, "", location.pathname); }
 applyAppearance();
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
