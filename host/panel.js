@@ -7,7 +7,8 @@ const path = require("path");
 
 const HTML = path.join(__dirname, "control.html");
 
-function startPanel({ port, getState, actions, onListening }) {
+// The panel's port doubles as a lock: if it's taken, another Burrow host is already running (onBusy).
+function startPanel({ port, getState, actions, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -49,9 +50,8 @@ function startPanel({ port, getState, actions, onListening }) {
   };
   setInterval(() => { for (const c of clients) c.write(": ping\n\n"); }, 20000).unref();
 
-  let tries = 0;
   server.on("error", (e) => {
-    if (e.code === "EADDRINUSE" && tries++ < 10) return server.listen(++port, "127.0.0.1");
+    if (e.code === "EADDRINUSE") return onBusy(`http://127.0.0.1:${port}/`);
     console.log("  Control center couldn't start:", e.message);
   });
   server.on("listening", () => onListening(`http://127.0.0.1:${port}/`));

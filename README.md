@@ -116,4 +116,4 @@ set OLLAMA_API_KEY=your_key && npm start   # Windows (cmd)
    - `vae/ae.safetensors` (0.3 GB)
 3. Restart the host. **z-image-turbo:comfyui** appears in Image mode on every device connected with your code. It stays end-to-end encrypted.
 
-The host starts ComfyUI (only reachable from this PC) on the first image request. The first image after that takes a while to load; after that a 1024×1024 image takes about 15 seconds on an RTX 5070. **Free GPU memory** also unloads ComfyUI. ComfyUI's log is in `host/comfyui.log`.
+Only one model is kept in GPU memory at a time: before a chat or image, the host unloads every other model (Ollama and ComfyUI). The host starts ComfyUI (only reachable from this PC) on the first image request. The first image after that takes a while to load; after that a 1024×1024 image takes about 15 seconds on an RTX 5070. **Free GPU memory** also unloads ComfyUI. ComfyUI's log is in `host/comfyui.log`.

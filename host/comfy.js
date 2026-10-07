@@ -84,6 +84,7 @@ async function generate(body, emit, signal, log) {
   const ws = new WebSocket(COMFY.replace(/^http/, "ws") + "/ws?clientId=" + clientId);
   await new Promise((ok, fail) => { ws.once("open", ok); ws.once("error", fail); });
   try {
+    loaded = true;
     const r = await fetch(COMFY + "/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: workflow(opts), client_id: clientId }) });
     const j = await r.json();
     if (!r.ok || !j.prompt_id) throw new Error(j.error?.message || JSON.stringify(j.node_errors || j).slice(0, 300));
@@ -119,10 +120,14 @@ async function generate(body, emit, signal, log) {
 }
 
 // Frees ComfyUI's GPU memory (used by the "Free GPU memory" buttons). Does nothing if it isn't running.
+// Returns true if it had made an image since the last free (so there's something worth reporting).
+let loaded = false;
 async function free() {
   if (!(await up())) return false;
   await fetch(COMFY + "/free", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unload_models: true, free_memory: true }) }).catch(() => {});
-  return true;
+  const was = loaded;
+  loaded = false;
+  return was;
 }
 
 module.exports = { MODEL, isComfy, models, generate, free, installed };

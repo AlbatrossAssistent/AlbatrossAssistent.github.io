@@ -24,7 +24,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const exe = [path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama.exe")].find((f) => fs.existsSync(f)) || "ollama";
     console.log("Starting Ollama:", exe);
     const ollamaLog = fs.openSync(path.join(__dirname, "ollama-background.log"), "a");
-    const child = spawn(exe, ["serve"], { detached: true, stdio: ["ignore", ollamaLog, ollamaLog], windowsHide: true });
+    // One model in memory at a time, also for the website used directly on this PC.
+    const env = { ...process.env, OLLAMA_MAX_LOADED_MODELS: "1" };
+    const child = spawn(exe, ["serve"], { detached: true, env, stdio: ["ignore", ollamaLog, ollamaLog], windowsHide: true });
     child.on("error", (e) => console.log("Couldn't start Ollama:", e.message));
     child.unref();
     for (let i = 0; i < 60 && !(await up()); i++) await wait(1000);

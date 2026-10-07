@@ -135,12 +135,24 @@ function describe(p, body) {
   return { kind: "chat", image: comfy.isComfy(j.model), model: j.model, text: (text.length > 140 ? text.slice(0, 140) + "…" : text) || (imgs ? "(image)" : "") };
 }
 
+// Only one model in GPU memory at a time: before a model runs, unload every other one
+// (Ollama models and ComfyUI), so models don't crowd each other out of the 12 GB.
+async function onlyThisModel(model) {
+  let loaded = [];
+  try { loaded = ((await (await fetch(OLLAMA + "/api/ps", { signal: AbortSignal.timeout(3000) })).json()).models || []).map((m) => m.name); } catch {}
+  const others = loaded.filter((n) => n !== model);
+  await Promise.all(others.map((m) => fetch(OLLAMA + "/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: m, keep_alive: 0 }) }).catch(() => {})));
+  if (!comfy.isComfy(model) && (await comfy.free())) others.push("ComfyUI");
+  if (others.length) note(`Unloaded ${others.join(", ")} to make room for ${model}`);
+}
+
 // Ollama, with the ComfyUI image model mixed in (see comfy.js): it shows up in the model list
 // and /api/generate for it makes an image, answered in Ollama's format.
 async function upstream(method, p, body, signal) {
   let j = null;
   if (method === "POST") { try { j = JSON.parse(body || "{}"); } catch {} }
   const unload = p === "/api/generate" && j && !j.prompt && j.keep_alive === 0;
+  if (!unload && j?.model && (p === "/api/chat" || p === "/api/generate")) await onlyThisModel(j.model);
   if (comfy.isComfy(j?.model)) {
     if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
     if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models()[0]?.details || {} });
@@ -390,14 +402,20 @@ panel = startPanel({
   port: Number(process.env.BURROW_PANEL_PORT) || 4747,
   getState: () => ({ ...stats, now: Date.now() }),
   actions: { "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
+  // Only start sharing once we hold the panel's port, so two hosts never fight over the same code.
   onListening: (url) => {
     console.log(`  Control center: ${url}`);
     if (!args.includes("--no-panel")) openWindow(url);
+    keepAwake();
+    pollOllama();
+    setInterval(pollOllama, 3000);
+    checkAutostart();
+    setInterval(checkAutostart, 5000);
+    connect();
+  },
+  onBusy: (url) => {
+    console.log(`  Burrow is already running on this PC. Control center: ${url}`);
+    if (!args.includes("--no-panel")) openWindow(url);
+    setTimeout(() => process.exit(0), 500);
   },
 });
-keepAwake();
-pollOllama();
-setInterval(pollOllama, 3000);
-checkAutostart();
-setInterval(checkAutostart, 5000);
-connect();
