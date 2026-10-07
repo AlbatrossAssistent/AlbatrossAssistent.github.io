@@ -104,7 +104,8 @@ function handlePower(req, res, url) {
   cors(res);
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
   const available = !!(POWER_ON_URL && POWER_PIN);
-  if (url.pathname === "/power/status") return sendJson(res, 200, { available });
+  // Says which setting is missing (never the values) to help with setup.
+  if (url.pathname === "/power/status") return sendJson(res, 200, { available, url: !!POWER_ON_URL, pin: !!POWER_PIN });
   if (url.pathname !== "/power/on" || req.method !== "POST") return sendJson(res, 404, { error: "Not found" });
   if (!available) return sendJson(res, 501, { error: "Turning the PC on isn't set up on the server (POWER_ON_URL and POWER_PIN)." });
 
