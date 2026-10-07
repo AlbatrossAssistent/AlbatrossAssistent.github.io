@@ -228,7 +228,7 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
 .btn:hover { background: var(--soft); }
 .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .btn.danger { color: var(--danger); }
-.code-input { font-family: Consolas, monospace; font-size: 26px; letter-spacing: 4px; text-transform: uppercase; text-align: center; min-height: 56px !important; }
+.code-input { font-family: Consolas, monospace; font-size: clamp(17px, 5vw, 24px); letter-spacing: 2px; text-transform: uppercase; text-align: center; min-height: 56px !important; }
 .mode-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
 .mode-card { border: 1.5px solid var(--line); border-radius: 12px; padding: 14px; background: var(--bg); text-align: left; display: flex; flex-direction: column; gap: 4px; }
 .mode-card.on { border-color: var(--accent); background: var(--soft); }
@@ -341,13 +341,13 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
         <section class="pane on" data-pane="connection">
           <div class="mode-cards">
             <button class="mode-card" data-conn="local"><strong>This device</strong><small>Talk to Ollama directly on this computer or a URL you choose.</small></button>
-            <button class="mode-card" data-conn="remote"><strong>Remote code</strong><small>Use another computer's Ollama through your Burrow server with an XXXX-XXXX code.</small></button>
+            <button class="mode-card" data-conn="remote"><strong>Remote code</strong><small>Use another computer's Ollama through your Burrow server with its code. End-to-end encrypted.</small></button>
           </div>
           <div id="connLocal" class="pane on" style="padding:0">
             <div class="field"><label for="ollamaUrl">Ollama URL</label><input id="ollamaUrl" placeholder="http://localhost:11434"><small>Default is http://localhost:11434</small></div>
           </div>
           <div id="connRemote" class="pane" style="padding:0">
-            <div class="field"><label for="codeInput">Device code</label><input id="codeInput" class="code-input" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false"><small>Shown on the PC that runs <code>host.js</code>.</small></div>
+            <div class="field"><label for="codeInput">Device code</label><input id="codeInput" class="code-input" maxlength="19" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false"><small>Shown in the Burrow control center on the PC. The second half is the encryption key: it never leaves this device, so the server can't read your chats.</small></div>
             <div class="field"><label for="relayUrl">Burrow server</label><input id="relayUrl" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
           </div>
           <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
@@ -355,7 +355,7 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
             <strong style="color:var(--fg)">Share this PC's AI with another device</strong><br>
             On this PC, with Ollama running, open a terminal in the Burrow folder and run<br>
             <code>node host/host.js <span id="serverHint">https://burrow-uu7e.onrender.com</span></code><br>
-            It prints a code like <code>K7QM-4XPT</code>. Enter that code on the other device. Anyone with the code can use this PC's AI, so only share it with people you trust. Run it with <code>--new</code> to get a fresh code.
+            It shows a code like <code>K7QM-4XPT-9F2C-HW3D</code>. Enter that code on the other device. Anyone with the code can use this PC's AI, so only share it with people you trust. Run it with <code>--new</code> to get a fresh code.
           </div>
         </section>
 
@@ -515,11 +515,12 @@ else { $("#splash").style.display = "none"; document.body.classList.remove("intr
 // Connection
 // ======================================================================
 function baseUrl() {
-  if (S.conn.mode === "remote") return (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "") + "/relay/" + S.conn.code;
+  if (S.conn.mode === "remote") return (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "") + "/relay/" + splitCode(S.conn.code).route;
   return (S.conn.url || "http://localhost:11434").replace(/\/+$/, "");
 }
 async function api(path, opts = {}) {
-  const res = await fetch(baseUrl() + path, opts);
+  // Remote: everything except the server's own online check goes end-to-end encrypted.
+  const res = S.conn.mode === "remote" && path !== "/status" ? await e2eFetch(path, opts) : await fetch(baseUrl() + path, opts);
   if (!res.ok) {
     let msg = "HTTP " + res.status;
     try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
@@ -527,14 +528,85 @@ async function api(path, opts = {}) {
   }
   return res;
 }
+
+// ---------- end-to-end encryption (remote code) ----------
+// A code looks like K7QM-4XPT-9F2C-HW3D. The first half finds the PC on the Burrow server; the second
+// half is a key that never leaves this browser. Requests and answers are encrypted with it (AES-256-GCM),
+// so the server only passes along data it can't read or change. host/host.js does the same on the PC.
+const CODE_RE = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+const te = new TextEncoder();
+function splitCode(code) { return { route: (code || "").slice(0, 9), secret: (code || "").slice(10).replace("-", "") }; }
+let e2eCache = null; // { code, key: Promise<CryptoKey> }
+function e2eKey() {
+  if (!crypto.subtle) return Promise.reject(new Error("Encrypted connections need the page to be opened over https"));
+  if (e2eCache?.code !== S.conn.code) {
+    const { route, secret } = splitCode(S.conn.code);
+    const key = crypto.subtle.importKey("raw", te.encode(secret), "PBKDF2", false, ["deriveKey"])
+      .then(base => crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: te.encode("burrow-e2e-v1|" + route), iterations: 600000 },
+        base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]));
+    e2eCache = { code: S.conn.code, key };
+  }
+  return e2eCache.key;
+}
+function toB64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); }
+async function seal(key, text, aad) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: te.encode(aad) }, key, te.encode(text)));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+  return toB64(out);
+}
+async function unseal(key, b64, aad) {
+  const b = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b.subarray(0, 12), additionalData: te.encode(aad) }, key, b.subarray(12)));
+}
+async function e2eFetch(path, opts = {}) {
+  const key = await e2eKey();
+  const id = crypto.randomUUID();
+  const envelope = await seal(key, JSON.stringify({ id, t: Date.now(), method: opts.method || "GET", path, body: opts.body }), "req");
+  const res = await fetch(baseUrl() + "/e2e", { method: "POST", headers: { "Content-Type": "text/plain" }, body: envelope, signal: opts.signal });
+  if (!res.ok) return res; // the server or PC refused before anything was encrypted (offline, wrong code…)
+  // The answer is encrypted lines: meta, data…, end. They're numbered, so nothing can be dropped, swapped or added.
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "", seq = 0;
+  const next = async () => {
+    while (true) {
+      const i = buf.indexOf("\n");
+      if (i >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        let text;
+        try { text = await unseal(key, line, id + ":" + seq++); } catch { throw new Error("The answer from the device couldn't be verified"); }
+        return JSON.parse(text);
+      }
+      const r = await reader.read();
+      if (r.done) throw new Error("The connection to the device was cut off");
+      buf += dec.decode(r.value, { stream: true });
+    }
+  };
+  const meta = await next();
+  if (meta.k === "x") throw new Error(meta.error || "Device error");
+  const body = new ReadableStream({
+    async pull(c) {
+      try {
+        const f = await next();
+        if (f.k === "d") c.enqueue(te.encode(f.d));
+        else if (f.k === "e") c.close();
+        else c.error(new Error(f.error || "Device error"));
+      } catch (e) { c.error(e); }
+    },
+    cancel() { reader.cancel().catch(() => {}); },
+  });
+  return new Response(body, { status: meta.s, headers: { "Content-Type": meta.c || "application/json" } });
+}
 function setStatus(kind, text) { $("#dot").className = "dot " + kind; $("#statusText").textContent = text; }
 
 async function connect(quiet) {
   setStatus("wait", "Connecting…");
-  $("#connBadge").textContent = S.conn.mode === "remote" ? "Remote · " + S.conn.code : "This device";
+  $("#connBadge").textContent = S.conn.mode === "remote" ? "Remote · " + splitCode(S.conn.code).route : "This device";
   try {
     if (S.conn.mode === "remote") {
-      if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(S.conn.code)) throw new Error("Enter a code like K7QM-4XPT");
+      if (!CODE_RE.test(S.conn.code)) throw new Error(S.conn.code.length === 9
+        ? "Codes now have 16 characters, like K7QM-4XPT-9F2C-HW3D. Get the full code from the control center on the PC."
+        : "Enter the full 16-character code, like K7QM-4XPT-9F2C-HW3D");
       if (!S.conn.relay) throw new Error("Enter your Burrow server address");
     }
     const tags = await (await api("/api/tags")).json();
@@ -1270,8 +1342,8 @@ function setConnCards(mode) {
   $("#connectBtn").dataset.mode = mode;
 }
 function formatCode(v) {
-  const s = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
-  return s.length > 4 ? s.slice(0, 4) + "-" + s.slice(4) : s;
+  const s = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
+  return s.match(/.{1,4}/g)?.join("-") || "";
 }
 
 $$("#settings .tabs button").forEach(b => (b.onclick = () => switchTab(b.dataset.tab)));
@@ -1371,7 +1443,8 @@ document.addEventListener("keydown", e => {
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppearance);
 
 // ---------- start ----------
-const urlCode = new URLSearchParams(location.search).get("code");
+// Links look like …/#code=K7QM-4XPT-9F2C-HW3D: the part after # is never sent to any server, so the key stays private.
+const urlCode = new URLSearchParams(location.hash.slice(1)).get("code") || new URLSearchParams(location.search).get("code");
 if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER; saveSettings(); history.replaceState(null, "", location.pathname); }
 applyAppearance();
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;

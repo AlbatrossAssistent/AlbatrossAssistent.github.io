@@ -1,6 +1,6 @@
 # Burrow: local AI chat for Ollama
 
-Burrow is a web chat for the Ollama on your own PC. You can also use that PC's AI from any other device by entering an XXXX-XXXX code.
+Burrow is a web chat for the Ollama on your own PC. You can also use that PC's AI from any other device by entering a 16-character code. Everything between that device and your PC is end-to-end encrypted.
 
 ```
  Other device (phone, laptop)  ──HTTPS──▶  Your server (server.js)  ◀──WebSocket──  Your PC (host.js) ──▶ Ollama
@@ -33,7 +33,7 @@ npm install
 node host/host.js https://burrow-uu7e.onrender.com
 ```
 
-It prints your code, e.g. `K7QM-4XPT`, plus a link. Keep that window open while you want to share.
+It prints your code, e.g. `K7QM-4XPT-9F2C-HW3D`, plus a link. Keep that window open while you want to share.
 
 - You get the same code every time. It's saved in `host/host-code.json`.
 - Run `node host/host.js https://burrow-uu7e.onrender.com --new` to get a fresh code. The old code stops working.
@@ -61,7 +61,10 @@ Open `public/index.html` in your browser. It talks to `http://localhost:11434`. 
 
 ## Security
 
-- Anyone with the code can chat with your PC's AI. Only share it with people you trust.
+- **End-to-end encrypted.** The code has two halves. `K7QM-4XPT` tells the server which PC to connect to. `9F2C-HW3D` is an encryption key that never leaves the browser or your PC (in links it comes after `#`, which browsers never send to a server). Messages and answers are encrypted with AES-256-GCM, using a key made from it with PBKDF2 (600,000 rounds). The server only passes along data it can't read or change.
+- Your PC only accepts encrypted requests, so knowing the first half isn't enough to use it. Each request can only be used once and expires after 10 minutes. Each piece of an answer is numbered, so a dropped, swapped or changed piece is detected.
+- Anyone with the full code can chat with your PC's AI. Only share it with people you trust, and use `--new` to replace it.
+- Open the website from GitHub Pages (https://burrowgeneral.github.io/burrow/) for the strongest protection. The page that does the encryption then doesn't come from the relay server.
 - The relay only allows: list models, show model, chat, generate. It can't delete or download models.
 - After 30 wrong codes, the server blocks that IP for 10 minutes.
 

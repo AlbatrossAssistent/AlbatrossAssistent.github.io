@@ -34,6 +34,9 @@ const ALLOWED = new Set([
   "POST /api/show",
   "POST /api/chat",
   "POST /api/generate",
+  // End-to-end encrypted request: the server can't read it, the host PC decrypts it and
+  // applies the same list above. Current host PCs accept only this.
+  "POST /e2e",
 ]);
 
 const hosts = new Map(); // code -> { ws, name, secretHash, pending: Map<id, {res, timer}> }

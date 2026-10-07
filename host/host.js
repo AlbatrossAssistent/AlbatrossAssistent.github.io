@@ -42,27 +42,67 @@ const ALLOWED = new Set([
 ]);
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I to avoid typos
-function newCode() {
-  const bytes = crypto.randomBytes(8);
+function randomChars(n) {
+  const bytes = crypto.randomBytes(n);
   let s = "";
-  for (let i = 0; i < 8; i++) s += ALPHABET[bytes[i] % ALPHABET.length];
-  return s.slice(0, 4) + "-" + s.slice(4);
+  for (let i = 0; i < n; i++) s += ALPHABET[bytes[i] % ALPHABET.length];
+  return s;
 }
+function newCode() { const s = randomChars(8); return s.slice(0, 4) + "-" + s.slice(4); }
 function loadState(forceNew) {
   let st = !forceNew && readState();
+  let dirty = !st;
   if (!st) st = { code: newCode(), secret: crypto.randomBytes(24).toString("hex") };
-  if (st.server !== SERVER) { st.server = SERVER; fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2)); }
+  if (!st.key) { st.key = randomChars(8); dirty = true; } // encryption key, the second half of the code
+  if (st.server !== SERVER) { st.server = SERVER; dirty = true; }
+  if (dirty) fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2));
   return st;
+}
+// The full code: XXXX-XXXX finds this PC on the server, the second half is the key and is never sent anywhere.
+const fullCode = (st) => `${st.code}-${st.key.slice(0, 4)}-${st.key.slice(4)}`;
+
+// ---------- end-to-end encryption ----------
+// Requests and answers are encrypted with AES-256-GCM using a key made from the second half of the code,
+// so the Burrow server only passes along data it can't read or change. public/index.html does the same.
+const deriveKey = (st) => crypto.pbkdf2Sync(st.key, "burrow-e2e-v1|" + st.code, 600000, 32, "sha256");
+function seal(key, text, aad) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv("aes-256-gcm", key, iv);
+  c.setAAD(Buffer.from(aad));
+  const ct = Buffer.concat([c.update(text, "utf8"), c.final()]);
+  return Buffer.concat([iv, ct, c.getAuthTag()]).toString("base64");
+}
+function unseal(key, b64, aad) {
+  const b = Buffer.from(b64, "base64");
+  if (b.length < 29) throw new Error("too short");
+  const d = crypto.createDecipheriv("aes-256-gcm", key, b.subarray(0, 12));
+  d.setAAD(Buffer.from(aad));
+  d.setAuthTag(b.subarray(b.length - 16));
+  return Buffer.concat([d.update(b.subarray(12, b.length - 16)), d.final()]).toString("utf8");
+}
+// Only encrypted requests are accepted: they prove the sender has the full code.
+// Each request carries a random id and a time, so a captured request can't be sent again.
+const seen = new Map(); // request id -> time
+setInterval(() => { for (const [id, t] of seen) if (Date.now() - t > 11 * 60e3) seen.delete(id); }, 60e3).unref();
+function openRequest(msg) {
+  if (msg.method !== "POST" || msg.path !== "/e2e") throw new Error("This PC only accepts encrypted connections. Reload the page (Ctrl+F5) and enter the full 16-character code.");
+  let r;
+  try { r = JSON.parse(unseal(aesKey, String(msg.body || "").trim(), "req")); } catch { throw new Error("Wrong code. Check the last 8 characters."); }
+  if (typeof r.id !== "string" || !(Math.abs(Date.now() - r.t) < 10 * 60e3)) throw new Error("Request expired. Check that the clock on your device is right.");
+  if (seen.has(r.id)) throw new Error("Repeated request rejected");
+  seen.set(r.id, Date.now());
+  return { rid: r.id, method: r.method, path: r.path, body: r.body };
 }
 
 let state = loadState(args.includes("--new"));
+let aesKey = deriveKey(state);
 const wsUrl = SERVER.replace(/^http/, "ws") + "/host";
 const running = new Map(); // id -> AbortController
 let retry = 1000;
 
 // ---------- what the control center shows ----------
 const stats = {
-  name: NAME, server: SERVER, code: state.code, startedAt: Date.now(),
+  name: NAME, server: SERVER, code: fullCode(state), startedAt: Date.now(),
   link: "", connection: "connecting", connectionSince: Date.now(),
   ollama: { up: false, version: "", url: OLLAMA, models: [] },
   awake: false,
@@ -109,13 +149,14 @@ function connect() {
     try { msg = JSON.parse(raw); } catch { return; }
 
     if (msg.type === "registered") {
-      stats.code = msg.code;
-      stats.link = `${SERVER}/?code=${msg.code}`;
+      stats.code = fullCode(state);
+      // After "#" the browser never sends it to any server, so the key stays private.
+      stats.link = `${SERVER}/#code=${stats.code}`;
       setConnection("online");
-      note("Connected to the server, sharing is on");
-      console.log("\n  ┌──────────────────────────────┐");
-      console.log(`  │   Your code:   ${msg.code}     │`);
-      console.log("  └──────────────────────────────┘");
+      note("Connected to the server, sharing is on (end-to-end encrypted)");
+      console.log("\n  ┌─────────────────────────────────────────┐");
+      console.log(`  │   Your code:   ${stats.code}      │`);
+      console.log("  └─────────────────────────────────────────┘");
       console.log(`  Open ${stats.link} on another device.`);
       console.log("  Keep this window open. Ctrl+C to stop sharing.\n");
       return;
@@ -125,6 +166,7 @@ function connect() {
         console.log("That code is taken on the server — making a new one.");
         note("Code was taken on the server, made a new one", "error");
         state = loadState(true);
+        aesKey = deriveKey(state);
         send({ type: "register", code: state.code, secret: state.secret, name: NAME });
       } else { console.log("Server error:", msg.error); note("Server error: " + msg.error, "error"); }
       return;
@@ -136,9 +178,22 @@ function connect() {
     }
     if (msg.type !== "req") return;
 
-    const { id, method, path: p, body } = msg;
+    const { id } = msg;
     stats.totals.requests++;
-    if (!ALLOWED.has(`${method} ${p}`)) { changed(); return send({ type: "fail", id, error: "Not allowed" }); }
+    let req;
+    try { req = openRequest(msg); }
+    catch (e) {
+      stats.totals.errors++;
+      note("Rejected a request: " + e.message, "error");
+      return send({ type: "fail", id, error: e.message });
+    }
+    const { rid, method, path: p, body } = req;
+    // The answer goes back as encrypted, numbered frames ending with an "end" frame,
+    // so the server can't change, reorder or cut off an answer without the browser noticing.
+    let seq = 0;
+    const reply = (frame) => send({ type: "chunk", id, data: seal(aesKey, JSON.stringify(frame), `${rid}:${seq++}`) + "\n" });
+    send({ type: "head", id, status: 200, contentType: "text/plain; charset=utf-8" });
+    if (!ALLOWED.has(`${method} ${p}`)) { changed(); reply({ k: "x", error: "Not allowed" }); return send({ type: "end", id }); }
 
     // Model lists, status checks etc. only count; chats and generations get a row in the activity list.
     const isChat = method === "POST" && (p === "/api/chat" || p === "/api/generate");
@@ -158,20 +213,21 @@ function connect() {
         body,
         signal: ctrl.signal,
       });
-      send({ type: "head", id, status: r.status, contentType: r.headers.get("content-type") || "application/json" });
+      reply({ k: "m", s: r.status, c: r.headers.get("content-type") || "application/json" });
       const reader = r.body.getReader();
       const dec = new TextDecoder();
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         const data = dec.decode(value, { stream: true });
-        send({ type: "chunk", id, data });
+        reply({ k: "d", d: data });
         if (entry) {
           tail = (tail + data).slice(-8192);
           entry.tokens += (data.match(/\n/g) || []).length; // ~1 streamed line per token, exact count comes at the end
           changed();
         }
       }
+      reply({ k: "e" });
       send({ type: "end", id });
       if (entry) {
         entry.status = r.status;
@@ -192,7 +248,8 @@ function connect() {
       if (e.name === "AbortError") { if (entry) entry.stopped = true; }
       else {
         console.log("  Ollama error:", e.message);
-        send({ type: "fail", id, error: "Couldn't reach Ollama on the host PC — is it running?" });
+        reply({ k: "x", error: "Couldn't reach Ollama on the host PC — is it running?" });
+        send({ type: "end", id });
         stats.totals.errors++;
         if (entry) entry.error = "Couldn't reach Ollama";
       }
