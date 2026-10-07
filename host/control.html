@@ -68,6 +68,13 @@ button:disabled { opacity: .5; cursor: default; }
 .ev.error .what { color: #ffb3b3; }
 .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.switch { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 17px; font-weight: 700; user-select: none; }
+.switch input { appearance: none; width: 48px; height: 28px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background .2s; flex: none; margin: 0; }
+.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.switch input:checked { background: var(--ok); }
+.switch input:checked::after { transform: translateX(20px); }
+.switch input:disabled { opacity: .5; cursor: default; }
+.switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .banner { background: #3a1620; border: 1px solid #6b2a36; color: #ffd0d6; border-radius: 12px; padding: 10px 14px; font-size: 14px; }
 </style>
 </head>
@@ -98,6 +105,7 @@ button:disabled { opacity: .5; cursor: default; }
     <div class="card tile"><h2>Ollama</h2><div class="big" id="oll"><span class="dot"></span><span></span></div><div class="small" id="ollSub"></div></div>
     <div class="card tile"><h2>Sleep mode</h2><div class="big" id="slp"><span class="dot"></span><span></span></div><div class="small" id="slpSub"></div></div>
     <div class="card tile"><h2>Working on</h2><div class="big" id="act"><span class="dot"></span><span></span></div><div class="small" id="actSub"></div></div>
+    <div class="card tile"><h2>Start at boot</h2><label class="switch"><input type="checkbox" id="boot" role="switch"><span id="bootText">Checking…</span></label><div class="small" id="bootSub"></div></div>
   </section>
 
   <section class="grid4">
@@ -166,6 +174,17 @@ function render() {
   setTile("act", S.active ? "warn" : "ok", S.active ? `${S.active} request${S.active === 1 ? "" : "s"}` : "Idle",
     live.length ? `Answering with ${live[0].model}…` : "Waiting for messages");
 
+  const boot = $("#boot");
+  if (bootPending && S.autostart === bootPending.want) bootPending = null;
+  if (bootPending && now - bootPending.at > 180000) bootPending = null;
+  boot.checked = bootPending ? bootPending.want : !!S.autostart;
+  boot.disabled = S.autostart === null || !!bootPending;
+  $("#bootText").textContent = S.autostart === null ? "Not available" : boot.checked ? "On" : "Off";
+  $("#bootSub").textContent = bootError || (bootPending
+    ? (bootPending.want ? "Confirm in the window that opened: allow admin, then enter your Windows password" : "Confirm in the window that opened (allow admin)")
+    : S.autostart ? "Ollama and Burrow start when the PC boots, even before you sign in" + (S.background ? " (running that way now)" : "")
+    : S.autostart === false ? "Only runs when you start burrow-host.bat" : "Needs Windows");
+
   $("#nMsg").textContent = fmt(S.totals.messages);
   $("#nTok").textContent = fmt(S.totals.tokens + live.reduce((t, e) => t + e.tokens, 0));
   $("#nReq").textContent = fmt(S.totals.requests);
@@ -224,6 +243,19 @@ async function copy(text, btn) {
 }
 $("#copyCode").onclick = (e) => S && copy(S.code, e.target);
 $("#copyLink").onclick = (e) => S && copy(S.link || S.server, e.target);
+let bootPending = null, bootError = "";
+$("#boot").onchange = async (e) => {
+  const want = e.target.checked;
+  bootError = "";
+  bootPending = { want, at: Date.now() };
+  render();
+  try {
+    const r = await fetch("/action/autostart-" + (want ? "on" : "off"), { method: "POST", headers: { "X-Burrow": "1" } });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+  } catch (err) { bootPending = null; bootError = err.message; }
+  render();
+};
 $("#freeGpu").onclick = async (e) => {
   e.target.disabled = true;
   try { await fetch("/action/free-gpu", { method: "POST", headers: { "X-Burrow": "1" } }); } finally { e.target.disabled = false; }

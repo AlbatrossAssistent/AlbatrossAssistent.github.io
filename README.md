@@ -37,6 +37,15 @@ It prints your code, e.g. `K7QM-4XPT`, plus a link. Keep that window open while 
 - On Windows the PC **won't go to sleep** while the host runs. No power settings are changed; it's a request that ends when the host stops. The screen can still turn off, and closing a laptop lid still sleeps it.
 - `burrow-host.bat` starts Ollama if it isn't running, then starts the host.
 
+### Start at boot (Windows)
+
+Flip **Start at boot** in the control center, or double-click `autostart-on.bat`. Windows asks for admin rights and your account password (a Microsoft account's password, not your PIN). Windows Task Scheduler stores the password; Burrow never sees it. From the next restart, Ollama and Burrow start by themselves, even before you sign in. The PC stays locked; Burrow just runs in the background.
+
+- Run `burrow-host.bat` once first, so Burrow knows your server.
+- While Burrow runs in the background, `burrow-host.bat` just opens the control center.
+- The log is in `host/background.log`.
+- To turn it off, use the switch or `autostart-off.bat`.
+
 ## 3. Connect from another device
 
 Open `https://your-domain.com`, go to **Connect with code**, enter the code and press **Connect**. Or open the link that host.js printed.

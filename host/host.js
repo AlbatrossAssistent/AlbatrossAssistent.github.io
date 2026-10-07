@@ -17,15 +17,18 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
-const { spawn } = require("child_process");
+const { spawn, execFile } = require("child_process");
 const WebSocket = require("ws");
 const { startPanel } = require("./panel");
 
+const STATE_FILE = path.join(__dirname, "host-code.json");
+function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
+
 const args = process.argv.slice(2);
-const SERVER = (args.find((a) => !a.startsWith("--")) || process.env.BURROW_SERVER || "").replace(/\/+$/, "");
+// Without a server argument, use the one from last time (the boot-time background task relies on this).
+const SERVER = (args.find((a) => !a.startsWith("--")) || process.env.BURROW_SERVER || readState()?.server || "").replace(/\/+$/, "");
 const OLLAMA = (process.env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/+$/, "");
 const NAME = process.env.BURROW_NAME || os.hostname();
-const STATE_FILE = path.join(__dirname, "host-code.json");
 
 if (!SERVER) {
   console.log("Usage: node host.js https://your-burrow-server.com [--new] [--no-panel]");
@@ -45,11 +48,9 @@ function newCode() {
   return s.slice(0, 4) + "-" + s.slice(4);
 }
 function loadState(forceNew) {
-  if (!forceNew) {
-    try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch {}
-  }
-  const st = { code: newCode(), secret: crypto.randomBytes(24).toString("hex") };
-  fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2));
+  let st = !forceNew && readState();
+  if (!st) st = { code: newCode(), secret: crypto.randomBytes(24).toString("hex") };
+  if (st.server !== SERVER) { st.server = SERVER; fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2)); }
   return st;
 }
 
@@ -64,6 +65,8 @@ const stats = {
   link: "", connection: "connecting", connectionSince: Date.now(),
   ollama: { up: false, version: "", url: OLLAMA, models: [] },
   awake: false,
+  background: args.includes("--background"), // started at boot by Windows, no visible windows
+  autostart: null,                           // is the "start at boot" task set up? null = unknown / not Windows
   totals: { requests: 0, messages: 0, tokens: 0, errors: 0 },
   active: 0,
   log: [],
@@ -240,6 +243,27 @@ async function freeGpu() {
   return { unloaded: names };
 }
 
+// ---------- start at boot (Windows scheduled task, see host/autostart.ps1) ----------
+const TASK = "Burrow host";
+const ROOT = path.join(__dirname, "..");
+function checkAutostart() {
+  if (process.platform !== "win32") return;
+  execFile("schtasks", ["/Query", "/TN", TASK], { windowsHide: true }, (err) => {
+    const on = !err;
+    if (stats.autostart !== null && stats.autostart !== on) note(on ? "Start at boot turned on" : "Start at boot turned off");
+    if (stats.autostart !== on) { stats.autostart = on; changed(); }
+  });
+}
+// Opens autostart-on.bat / -off.bat; Windows then asks for admin rights (and for turning on, your password).
+function runAutostartBat(on) {
+  if (process.platform !== "win32") throw new Error("Start at boot is only available on Windows");
+  if (stats.background) throw new Error(`Burrow is running in the background, so it can't open windows. Double-click autostart-${on ? "on" : "off"}.bat in the Burrow folder instead.`);
+  const child = spawn("cmd", ["/c", "start", "", path.join(ROOT, on ? "autostart-on.bat" : "autostart-off.bat")], { detached: true, stdio: "ignore", windowsHide: true });
+  child.on("error", () => {});
+  child.unref();
+  return { opened: true };
+}
+
 // ---------- keep the PC awake ----------
 // Asks Windows not to go to sleep while this process runs (like a video player does).
 // Doesn't change any power settings; the request ends as soon as the host stops.
@@ -279,7 +303,7 @@ console.log(`Burrow host — sharing Ollama at ${OLLAMA} via ${SERVER}`);
 panel = startPanel({
   port: Number(process.env.BURROW_PANEL_PORT) || 4747,
   getState: () => ({ ...stats, now: Date.now() }),
-  actions: { "free-gpu": freeGpu },
+  actions: { "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
   onListening: (url) => {
     console.log(`  Control center: ${url}`);
     if (!args.includes("--no-panel")) openWindow(url);
@@ -288,4 +312,6 @@ panel = startPanel({
 keepAwake();
 pollOllama();
 setInterval(pollOllama, 3000);
+checkAutostart();
+setInterval(checkAutostart, 5000);
 connect();
