@@ -3,3 +3,4 @@ node_modules/
 host/host-code.json
 host/background.log*
 host/ollama-background.log
+host/comfyui.log

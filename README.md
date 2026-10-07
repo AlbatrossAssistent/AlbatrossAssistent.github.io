@@ -105,4 +105,15 @@ set OLLAMA_API_KEY=your_key && npm start   # Windows (cmd)
 
 ## Image generation
 
-Ollama can generate images with `x/z-image-turbo` and `x/flux2-klein` (`ollama pull x/z-image-turbo`). This was macOS-only at launch (January 2026), so check whether your Ollama version supports it on Windows/Linux. Image models show up automatically in **Image** mode.
+**On macOS**, Ollama can make images itself: `ollama pull x/z-image-turbo` (or `x/flux2-klein`). Image models show up automatically in **Image** mode.
+
+**On Windows (and Linux)**, Ollama can't make images yet, so the Burrow host uses [ComfyUI](https://github.com/Comfy-Org/ComfyUI) instead:
+
+1. Download `ComfyUI_windows_portable_nvidia.7z` from the [ComfyUI releases](https://github.com/Comfy-Org/ComfyUI/releases) and unpack it to `D:\ComfyUI` (so `D:\ComfyUI\ComfyUI_windows_portable` exists). Set `COMFY_DIR` if you put it somewhere else.
+2. From [Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo/tree/main/split_files), put these into `ComfyUI\models`:
+   - `diffusion_models/z_image_turbo_nvfp4.safetensors` (4.5 GB, for RTX 50-series; use `z_image_turbo_int8_convrot.safetensors` on older cards and change `FILES.unet` in `host/comfy.js`)
+   - `text_encoders/qwen_3_4b_fp8_mixed.safetensors` (5.6 GB)
+   - `vae/ae.safetensors` (0.3 GB)
+3. Restart the host. **z-image-turbo:comfyui** appears in Image mode on every device connected with your code. It stays end-to-end encrypted.
+
+The host starts ComfyUI (only reachable from this PC) on the first image request. The first image after that takes a while to load; after that a 1024×1024 image takes about 15 seconds on an RTX 5070. **Free GPU memory** also unloads ComfyUI. ComfyUI's log is in `host/comfyui.log`.

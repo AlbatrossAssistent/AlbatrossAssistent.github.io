@@ -21,6 +21,7 @@ const crypto = require("crypto");
 const { spawn, execFile } = require("child_process");
 const WebSocket = require("ws");
 const { startPanel } = require("./panel");
+const comfy = require("./comfy");
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
@@ -131,7 +132,38 @@ function describe(p, body) {
   const last = p === "/api/chat" ? [...(j.messages || [])].reverse().find((m) => m.role === "user") : null;
   const text = String((last ? last.content : j.prompt) || "").replace(/\s+/g, " ").trim();
   const imgs = (last?.images || j.images || []).length;
-  return { kind: "chat", model: j.model, text: (text.length > 140 ? text.slice(0, 140) + "…" : text) || (imgs ? "(image)" : "") };
+  return { kind: "chat", image: comfy.isComfy(j.model), model: j.model, text: (text.length > 140 ? text.slice(0, 140) + "…" : text) || (imgs ? "(image)" : "") };
+}
+
+// Ollama, with the ComfyUI image model mixed in (see comfy.js): it shows up in the model list
+// and /api/generate for it makes an image, answered in Ollama's format.
+async function upstream(method, p, body, signal) {
+  let j = null;
+  if (method === "POST") { try { j = JSON.parse(body || "{}"); } catch {} }
+  const unload = p === "/api/generate" && j && !j.prompt && j.keep_alive === 0;
+  if (comfy.isComfy(j?.model)) {
+    if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
+    if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models()[0]?.details || {} });
+    if (p === "/api/generate") {
+      const enc = new TextEncoder();
+      return new Response(new ReadableStream({
+        async start(c) {
+          const emit = (o) => c.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+          try { await comfy.generate(j, emit, signal, (t) => note(t)); }
+          catch (e) { if (e.name === "AbortError") return c.error(e); emit({ error: e.message }); }
+          c.close();
+        },
+      }), { headers: { "Content-Type": "application/x-ndjson" } });
+    }
+  }
+  const r = await fetch(OLLAMA + p, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body, signal });
+  if (p === "/api/tags" && r.ok) {
+    const t = await r.json();
+    t.models = [...(t.models || []), ...comfy.models()];
+    return Response.json(t);
+  }
+  if (unload) comfy.free(); // "Free GPU memory" on the website frees ComfyUI's memory too
+  return r;
 }
 
 function connect() {
@@ -207,12 +239,7 @@ function connect() {
     const started = Date.now();
     let tail = "";
     try {
-      const r = await fetch(OLLAMA + p, {
-        method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        body,
-        signal: ctrl.signal,
-      });
+      const r = await upstream(method, p, body, ctrl.signal);
       reply({ k: "m", s: r.status, c: r.headers.get("content-type") || "application/json" });
       const reader = r.body.getReader();
       const dec = new TextDecoder();
@@ -223,7 +250,7 @@ function connect() {
         reply({ k: "d", d: data });
         if (entry) {
           tail = (tail + data).slice(-8192);
-          entry.tokens += (data.match(/\n/g) || []).length; // ~1 streamed line per token, exact count comes at the end
+          if (!entry.image) entry.tokens += (data.match(/\n/g) || []).length; // ~1 streamed line per token, exact count comes at the end
           changed();
         }
       }
@@ -296,6 +323,7 @@ async function freeGpu() {
   for (const model of names) {
     await fetch(OLLAMA + "/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, keep_alive: 0 }) });
   }
+  if (await comfy.free()) names.push("ComfyUI");
   note(names.length ? `Freed GPU memory (${names.join(", ")})` : "Free GPU: nothing was loaded");
   await pollOllama();
   return { unloaded: names };
