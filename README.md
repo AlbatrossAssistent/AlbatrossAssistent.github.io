@@ -33,6 +33,9 @@ It prints your code, e.g. `K7QM-4XPT`, plus a link. Keep that window open while 
 - You get the same code every time. It's saved in `host/host-code.json`.
 - Run `node host/host.js https://your-domain.com --new` to get a fresh code. The old code stops working.
 - Press Ctrl+C to stop sharing.
+- A **control center** window opens (http://127.0.0.1:4747, only reachable from this PC). It shows the code in big letters, whether the server and Ollama are running, which models are in GPU memory, and every incoming message live. Add `--no-panel` to skip it.
+- On Windows the PC **won't go to sleep** while the host runs. No power settings are changed; it's a request that ends when the host stops. The screen can still turn off, and closing a laptop lid still sleeps it.
+- `burrow-host.bat` starts Ollama if it isn't running, then starts the host.
 
 ## 3. Connect from another device
 
