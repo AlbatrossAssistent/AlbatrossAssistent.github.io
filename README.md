@@ -109,7 +109,7 @@ set OLLAMA_API_KEY=your_key && npm start   # Windows (cmd)
 
 **On Windows (and Linux)**, Ollama can't make images yet, so the Burrow host uses [ComfyUI](https://github.com/Comfy-Org/ComfyUI) instead:
 
-1. Download `ComfyUI_windows_portable_nvidia.7z` from the [ComfyUI releases](https://github.com/Comfy-Org/ComfyUI/releases) and unpack it to `D:\ComfyUI` (so `D:\ComfyUI\ComfyUI_windows_portable` exists). Set `COMFY_DIR` if you put it somewhere else.
+1. Download `ComfyUI_windows_portable_nvidia.7z` from the [ComfyUI releases](https://github.com/Comfy-Org/ComfyUI/releases) and unpack it into a `ComfyUI` folder next to the Burrow folder (for example `D:\Burrow\app` and `D:\Burrow\ComfyUI\ComfyUI_windows_portable`). Set `COMFY_DIR` if you put it somewhere else.
 2. From [Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo/tree/main/split_files), put these into `ComfyUI\models`:
    - `diffusion_models/z_image_turbo_nvfp4.safetensors` (4.5 GB, for RTX 50-series; use `z_image_turbo_int8_convrot.safetensors` on older cards and change `FILES.unet` in `host/comfy.js`)
    - `text_encoders/qwen_3_4b_fp8_mixed.safetensors` (5.6 GB)

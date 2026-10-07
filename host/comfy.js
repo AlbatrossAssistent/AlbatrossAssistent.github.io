@@ -3,7 +3,8 @@
 // in Ollama's format, so the website's Image mode works unchanged (and stays end-to-end encrypted).
 // ComfyUI is started on the first image request and runs only on this PC (127.0.0.1).
 //
-// Env: COMFY_DIR (default D:\ComfyUI\ComfyUI_windows_portable), COMFY_URL (default http://127.0.0.1:8188)
+// Env: COMFY_DIR (default: a ComfyUI folder next to the Burrow folder, e.g. D:\Burrow\ComfyUI\ComfyUI_windows_portable),
+//      COMFY_URL (default http://127.0.0.1:8188)
 
 const fs = require("fs");
 const path = require("path");
@@ -11,7 +12,10 @@ const crypto = require("crypto");
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
 
-const COMFY_DIR = process.env.COMFY_DIR || "D:\\ComfyUI\\ComfyUI_windows_portable";
+const COMFY_DIR = process.env.COMFY_DIR || [
+  path.join(__dirname, "..", "..", "ComfyUI", "ComfyUI_windows_portable"), // D:\Burrow\app\host -> D:\Burrow\ComfyUI
+  "D:\\ComfyUI\\ComfyUI_windows_portable",
+].find((d) => fs.existsSync(d)) || "D:\\ComfyUI\\ComfyUI_windows_portable";
 const COMFY = (process.env.COMFY_URL || "http://127.0.0.1:8188").replace(/\/+$/, "");
 const MODEL = "z-image-turbo:comfyui";
 const FILES = { unet: "z_image_turbo_nvfp4.safetensors", clip: "qwen_3_4b_fp8_mixed.safetensors", vae: "ae.safetensors" };

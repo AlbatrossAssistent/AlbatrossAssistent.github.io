@@ -387,11 +387,12 @@ function keepAwake() {
 // ---------- control center window ----------
 function openWindow(url) {
   if (process.platform !== "win32") return console.log(`  Control center: ${url}`);
-  // Edge's app mode gives a clean window without tabs; fall back to the default browser.
-  const edge = [process.env["ProgramFiles(x86)"], process.env.ProgramFiles]
-    .filter(Boolean).map((d) => path.join(d, "Microsoft", "Edge", "Application", "msedge.exe")).find((f) => fs.existsSync(f));
-  const child = edge
-    ? spawn(edge, [`--app=${url}`, "--window-size=1100,800"], { detached: true, stdio: "ignore" })
+  // Chrome's or Edge's app mode gives a clean window without tabs; otherwise use the default browser.
+  const dirs = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA].filter(Boolean);
+  const browser = [["Google", "Chrome", "Application", "chrome.exe"], ["Microsoft", "Edge", "Application", "msedge.exe"]]
+    .flatMap((p) => dirs.map((d) => path.join(d, ...p))).find((f) => fs.existsSync(f));
+  const child = browser
+    ? spawn(browser, [`--app=${url}`, "--window-size=1100,800"], { detached: true, stdio: "ignore" })
     : spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore", windowsHide: true });
   child.on("error", () => {});
   child.unref();
