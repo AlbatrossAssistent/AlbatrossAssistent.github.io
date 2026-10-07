@@ -291,6 +291,7 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
     <select id="model" class="model-sel"><option>Loading…</option></select>
     <span class="badge hide-sm" id="connBadge">This device</span>
     <div class="spacer"></div>
+    <button class="icon-btn" id="freeGpuBtn" aria-label="Free GPU memory" title="Free GPU memory (unload all models)"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></button>
     <button class="icon-btn" id="chatSettingsBtn" aria-label="System prompt for this chat" title="System prompt for this chat"><svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></button>
     <button class="icon-btn" id="exportChat" aria-label="Download this chat" title="Download this chat (Markdown)"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg></button>
     <button class="icon-btn" id="themeBtn" aria-label="Toggle dark mode" title="Toggle dark mode"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
@@ -378,7 +379,7 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
 
         <!-- Installed models -->
         <section class="pane" data-pane="models">
-          <div class="row" style="justify-content:space-between;align-items:center"><h3>On the connected device</h3><button class="btn" id="refreshModels">Refresh</button></div>
+          <div class="row" style="justify-content:space-between;align-items:center"><h3>On the connected device</h3><div class="row"><button class="btn" id="unloadAll">Free GPU memory</button><button class="btn" id="refreshModels">Refresh</button></div></div>
           <div style="overflow-x:auto"><table class="model-table"><thead><tr><th>Model</th><th>Size</th><th>Type</th><th>Status</th></tr></thead><tbody id="modelRows"></tbody></table></div>
           <div class="note">Install more with <code>ollama pull &lt;name&gt;</code> on the PC that runs Ollama. Image models (e.g. <code>x/z-image-turbo</code>, <code>x/flux2-klein</code>) work in Image mode where Ollama supports image generation.</div>
         </section>
@@ -584,11 +585,36 @@ function renderModelTable() {
     const tr = document.createElement("tr");
     const size = m.size ? (m.size / 1e9).toFixed(1) + " GB" : "—";
     const kind = { text: "Text", vision: "Text + images", image: "Image generation", embed: "Embeddings" }[m.kind];
-    tr.innerHTML = `<td><strong></strong><span class="pill"></span></td><td>${size}</td><td>${kind}</td><td>${m.running ? "● Loaded" : "—"}</td>`;
+    tr.innerHTML = `<td><strong></strong><span class="pill"></span></td><td>${size}</td><td>${kind}</td><td>${m.running ? '● Loaded <button class="btn unload" style="min-height:28px;padding:0 10px;margin-left:6px">Unload</button>' : "—"}</td>`;
     tr.querySelector("strong").textContent = m.name;
     tr.querySelector(".pill").textContent = m.details?.parameter_size || "";
+    const ub = tr.querySelector(".unload");
+    if (ub) ub.onclick = () => freeGpu([m.name]);
     tb.appendChild(tr);
   }
+}
+
+// ---------- free GPU memory ----------
+// keep_alive: 0 tells Ollama to drop a model from GPU/RAM right away.
+async function freeGpu(names) {
+  if (!connected) { toast("Not connected"); return; }
+  if (controller) { toast("Wait for the reply to finish (or stop it) first"); return; }
+  if (!names) {
+    try { names = ((await (await api("/api/ps")).json()).models || []).map(m => m.name); }
+    catch (e) { toast("Couldn't check loaded models: " + e.message); return; }
+    if (!names.length) { toast("No models loaded, GPU memory is already free"); return; }
+  }
+  const results = await Promise.allSettled(names.map(model =>
+    api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, keep_alive: 0 }) })));
+  const failed = results.filter(r => r.status === "rejected");
+  toast(failed.length ? `Couldn't unload: ${failed[0].reason.message}` : `Unloaded ${names.length === 1 ? names[0] : names.length + " models"}, GPU memory freed`);
+  await refreshLoaded();
+}
+async function refreshLoaded() {
+  let running = [];
+  try { running = (await (await api("/api/ps")).json()).models || []; } catch { return; }
+  for (const m of models) m.running = running.some(r => r.name === m.name);
+  renderModelTable();
 }
 function showConnHelp(err) {
   const text = S.conn.mode === "remote"
@@ -1243,7 +1269,9 @@ for (const k of ["temperature", "top_p", "top_k", "repeat_penalty"]) {
   $("#p_" + k).addEventListener("input", e => { S.params[k] = Number(e.target.value); e.target.nextElementSibling.textContent = e.target.value; $("#preset").value = ""; saveSettings(); });
 }
 for (const k of ["num_ctx", "num_predict", "seed"]) $("#p_" + k).addEventListener("change", e => { S.params[k] = e.target.value; saveSettings(); });
-$("#keepAlive").onchange = e => { S.keepAlive = e.target.value; saveSettings(); };
+$("#freeGpuBtn").onclick = () => freeGpu();
+$("#unloadAll").onclick = () => freeGpu();
+$("#keepAlive").onchange =e => { S.keepAlive = e.target.value; saveSettings(); };
 $("#preset").onchange = e => {
   const p = PRESETS[e.target.value]; if (!p) return;
   Object.assign(S.params, p); saveSettings();
