@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Burrow — Local AI</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%230B1F3A'/%3E%3Cpath d='M5 21c0-5 4-9 9-9s9 4 9 9M10 21c0-2.2 1.8-4 4-4s4 1.8 4 4M4 21h20' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%230A0A0A'/%3E%3Cg fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' transform='translate(3.5 3.5) scale(.75)'%3E%3Cpath d='M3 23V13a11 11 0 0 1 22 0v10M8 23v-8a6 6 0 0 1 12 0v8M1.5 23h25'/%3E%3Cpath d='M12.6 23v-4.4a1.4 1.4 0 0 1 2.8 0V23z' fill='white' stroke='none'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root {
   /* Light: white frosted glass on a soft grey backdrop */
@@ -61,22 +61,30 @@ aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .res, .th
 }
 
 /* ---------- Intro animation ---------- */
-#splash { position: fixed; inset: 0; z-index: 100; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; clip-path: inset(0 0 0 0); transition: clip-path .8s cubic-bezier(.77,0,.18,1); }
-#splash.done { clip-path: inset(0 0 100% 0); }
-#splash .wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; }
-#splash .logo { width: 120px; height: 120px; }
-#splash .logo path { fill: none; stroke: #fff; stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw .9s cubic-bezier(.65,0,.35,1) forwards; }
-#splash .logo path:nth-child(2) { animation-delay: .25s; }
-#splash .logo path:nth-child(3) { animation-delay: .5s; }
-#splash .word { display: flex; overflow: hidden; font-size: 54px; font-weight: 600; letter-spacing: -2px; }
-#splash .word span { display: inline-block; transform: translateY(110%); animation: rise .6s cubic-bezier(.2,.8,.2,1) forwards; }
-#splash .tag { font-size: 13px; letter-spacing: 5px; text-transform: uppercase; color: rgba(255,255,255,.5); opacity: 0; animation: fade .6s ease 1.3s forwards; }
-#splash .glow { position: absolute; width: 520px; height: 520px; border-radius: 50%; border: 1px solid rgba(255,255,255,.08); animation: pulse 2.4s ease-out infinite; }
-#splash .glow.b { animation-delay: .8s; }
+#splash { position: fixed; inset: 0; z-index: 100; background: radial-gradient(circle at 50% 46%, #101010 0%, #000 62%); color: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; clip-path: circle(150% at 50% 46%); transition: clip-path .9s cubic-bezier(.7,0,.2,1), opacity .5s ease .4s; }
+#splash.done { clip-path: circle(0% at 50% 46%); opacity: 0; }
+#splash .wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 22px; transition: transform .9s cubic-bezier(.7,0,.2,1), opacity .5s ease; }
+#splash.done .wrap { transform: scale(2.6); opacity: 0; }
+#splash .logo { width: 132px; height: 132px; overflow: visible; filter: drop-shadow(0 0 18px rgba(255,255,255,.18)); }
+#splash .logo path { fill: none; stroke: #fff; stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw .8s cubic-bezier(.65,0,.35,1) forwards; }
+#splash .logo .p1 { animation-delay: .15s; } #splash .logo .p2 { animation-delay: .3s; }
+#splash .logo .g { animation-delay: .75s; stroke-width: 1; opacity: .7; }
+#splash .logo .core { stroke: none; fill: #fff; stroke-dasharray: none; stroke-dashoffset: 0; transform-box: fill-box; transform-origin: 50% 100%; transform: scale(0); animation: core .7s cubic-bezier(.2,1.4,.4,1) .05s forwards, breathe 2s ease-in-out .9s infinite; }
+#splash .word { display: flex; overflow: hidden; padding: 0 4px 6px; font-size: 56px; font-weight: 600; letter-spacing: -2px; line-height: 1.1; }
+#splash .word span { display: inline-block; transform: translateY(115%); opacity: 0; filter: blur(8px); animation: rise .7s cubic-bezier(.2,.8,.2,1) forwards; }
+#splash .tag { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,.55); opacity: 0; animation: tagIn 1s cubic-bezier(.2,.8,.2,1) 1.35s forwards; }
+#splash .halo { position: absolute; left: 50%; top: 66px; width: 420px; height: 420px; margin: -210px 0 0 -210px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.16), transparent 62%); opacity: 0; animation: halo 1.4s ease-out .1s forwards; pointer-events: none; }
+#splash .ring { position: absolute; left: 50%; top: 66px; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; border: 1px solid rgba(255,255,255,.22); opacity: 0; animation: ring 2s cubic-bezier(.2,.6,.3,1) infinite; pointer-events: none; }
+#splash .ring.b { animation-delay: .7s; } #splash .ring.c { animation-delay: 1.4s; }
+#splash .dust { position: absolute; left: 50%; top: 46%; width: 3px; height: 3px; margin: -1.5px; border-radius: 50%; background: #fff; opacity: 0; animation: dust var(--t) cubic-bezier(.3,.1,.6,1) var(--d) infinite; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
-@keyframes rise { to { transform: translateY(0); } }
-@keyframes fade { to { opacity: 1; } }
-@keyframes pulse { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+@keyframes core { to { transform: scale(1); } }
+@keyframes breathe { 50% { opacity: .55; } }
+@keyframes rise { to { transform: translateY(0); opacity: 1; filter: blur(0); } }
+@keyframes tagIn { from { opacity: 0; letter-spacing: 10px; } to { opacity: 1; letter-spacing: 3px; } }
+@keyframes halo { 30% { opacity: 1; } to { opacity: .55; transform: scale(1.15); } }
+@keyframes ring { 0% { transform: scale(.25); opacity: 0; } 15% { opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes dust { 0% { transform: translate(0,0) scale(.3); opacity: 0; } 15% { opacity: .9; } 100% { transform: translate(var(--x), var(--y)) scale(1.6); opacity: 0; } }
 body.intro aside, body.intro main { opacity: 0; transform: translateY(14px); }
 aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8,.2,1) .2s; }
 @media (prefers-reduced-motion: reduce) { #splash { display: none; } body.intro aside, body.intro main { opacity: 1; transform: none; } body::before, body::after { animation: none; } }
@@ -84,7 +92,8 @@ aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8
 /* ---------- Sidebar ---------- */
 aside { width: 272px; flex: 0 0 272px; display: flex; flex-direction: column; gap: 10px; padding: 14px 10px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 28px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 8px; font-weight: 600; font-size: 19px; letter-spacing: -.4px; }
-.brand svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.brand svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.brand svg .core, .avatar svg .core { fill: currentColor; stroke: none; }
 .side-btn { min-height: 42px; border: 1px solid var(--line); background: var(--soft); color: var(--fg); border-radius: 14px; display: flex; align-items: center; gap: 10px; padding: 0 14px; transition: background .15s, transform .1s; }
 .side-btn:hover { background: var(--glass-strong); }
 .side-btn:active { transform: scale(.98); }
@@ -145,7 +154,7 @@ body.compact .inner { gap: 14px; }
 .msg.user .imgs img { width: 120px; height: 120px; object-fit: cover; border-radius: 16px; border: 1px solid var(--line); }
 .msg.bot { display: flex; gap: 12px; }
 .avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
-.avatar svg { width: 17px; height: 17px; fill: none; stroke: var(--accent-fg); stroke-width: 2.2; }
+.avatar svg { width: 19px; height: 19px; fill: none; stroke: var(--accent-fg); color: var(--accent-fg); stroke-width: 2.3; stroke-linecap: round; }
 .bot-body { flex: 1; min-width: 0; padding-top: 4px; }
 .md p { margin: 0 0 12px; } .md p:last-child { margin-bottom: 0; }
 .md h1, .md h2, .md h3 { margin: 18px 0 8px; line-height: 1.3; letter-spacing: -.3px; font-weight: 600; } .md h1 { font-size: 1.35em; } .md h2 { font-size: 1.2em; } .md h3 { font-size: 1.05em; }
@@ -318,9 +327,10 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 
 <!-- ================= INTRO ================= -->
 <div id="splash" aria-hidden="true">
-  <div class="glow"></div><div class="glow b"></div>
+  <div id="dust"></div>
   <div class="wrap">
-    <svg class="logo" viewBox="0 0 28 28"><path pathLength="1" d="M3 22c0-6 5-11 11-11s11 5 11 11"/><path pathLength="1" d="M9 22c0-3 2-5 5-5s5 2 5 5"/><path pathLength="1" d="M2 22h24"/></svg>
+    <div class="halo"></div><div class="ring"></div><div class="ring b"></div><div class="ring c"></div>
+    <svg class="logo" viewBox="0 0 28 28"><path class="p1" pathLength="1" d="M3 23V13a11 11 0 0 1 22 0v10"/><path class="p2" pathLength="1" d="M8 23v-8a6 6 0 0 1 12 0v8"/><path class="core" d="M12.6 23v-4.4a1.4 1.4 0 0 1 2.8 0V23z"/><path class="g" pathLength="1" d="M14 23H1.5"/><path class="g" pathLength="1" d="M14 23h12.5"/></svg>
     <div class="word" id="splashWord"></div>
     <div class="tag">Your AI · Your computer</div>
   </div>
@@ -328,7 +338,7 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 
 <!-- ================= SIDEBAR ================= -->
 <aside id="sidebar">
-  <div class="brand"><svg viewBox="0 0 28 28"><path d="M3 22c0-6 5-11 11-11s11 5 11 11"/><path d="M9 22c0-3 2-5 5-5s5 2 5 5"/><path d="M2 22h24"/></svg>Burrow</div>
+  <div class="brand"><svg viewBox="0 0 28 28"><path d="M3 23V13a11 11 0 0 1 22 0v10"/><path d="M8 23v-8a6 6 0 0 1 12 0v8"/><path class="core" d="M12.6 23v-4.4a1.4 1.4 0 0 1 2.8 0V23z"/><path d="M1.5 23h25"/></svg>Burrow</div>
   <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
   <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
   <div class="chat-list" id="chatList"></div>
@@ -561,7 +571,16 @@ function playIntro() {
   const sp = $("#splash");
   const word = $("#splashWord");
   word.innerHTML = "";
-  [..."Burrow"].forEach((ch, i) => { const s = document.createElement("span"); s.textContent = ch; s.style.animationDelay = (0.55 + i * 0.06) + "s"; word.appendChild(s); });
+  [..."Burrow"].forEach((ch, i) => { const s = document.createElement("span"); s.textContent = ch; s.style.animationDelay = (0.85 + i * 0.07) + "s"; word.appendChild(s); });
+  // dust streaming outward from the tunnel mouth
+  const dust = $("#dust"); dust.innerHTML = "";
+  for (let i = 0; i < 36; i++) {
+    const d = document.createElement("i"); d.className = "dust";
+    const ang = Math.random() * Math.PI * 2, dist = 160 + Math.random() * 520;
+    d.style.setProperty("--x", Math.cos(ang) * dist + "px"); d.style.setProperty("--y", Math.sin(ang) * dist * .7 + "px");
+    d.style.setProperty("--t", (1.6 + Math.random() * 1.4) + "s"); d.style.setProperty("--d", (Math.random() * 2) + "s");
+    dust.appendChild(d);
+  }
   sp.style.display = "flex"; sp.classList.remove("done");
   // restart CSS animations
   $$("#splash *").forEach(el => { el.style.animation = "none"; void el.offsetWidth; el.style.animation = ""; });
@@ -570,10 +589,10 @@ function playIntro() {
     if (sp.classList.contains("done")) return;
     sp.classList.add("done");
     document.body.classList.remove("intro");
-    setTimeout(() => (sp.style.display = "none"), 850);
+    setTimeout(() => (sp.style.display = "none"), 1000);
   };
   sp.onclick = end;
-  setTimeout(end, 2300);
+  setTimeout(end, 3000);
 }
 if (S.intro && !matchMedia("(prefers-reduced-motion: reduce)").matches) playIntro();
 else { $("#splash").style.display = "none"; document.body.classList.remove("intro"); }
@@ -911,7 +930,7 @@ const ICON = {
   speak: '<svg class="i" viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
   trash: '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
 };
-const LOGO = '<svg viewBox="0 0 28 28"><path d="M3 22c0-6 5-11 11-11s11 5 11 11"/><path d="M2 22h24"/></svg>';
+const LOGO = '<svg viewBox="0 0 28 28"><path d="M3 23V13a11 11 0 0 1 22 0v10"/><path d="M8 23v-8a6 6 0 0 1 12 0v8"/><path class="core" d="M12.6 23v-4.4a1.4 1.4 0 0 1 2.8 0V23z"/><path d="M1.5 23h25"/></svg>';
 
 function userBubble(m, idx) {
   const d = document.createElement("div");
