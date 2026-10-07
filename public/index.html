@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Burrow — Local AI</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%230B1F3A'/%3E%3Cpath d='M5 21c0-5 4-9 9-9s9 4 9 9M10 21c0-2.2 1.8-4 4-4s4 1.8 4 4M4 21h20' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
 <style>
@@ -48,7 +48,7 @@ aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8
 @media (prefers-reduced-motion: reduce) { #splash { display: none; } body.intro aside, body.intro main { opacity: 1; transform: none; } }
 
 /* ---------- Sidebar ---------- */
-aside { width: 280px; flex: 0 0 280px; background: var(--side); color: var(--side-fg); display: flex; flex-direction: column; gap: 12px; padding: 16px 12px; height: 100vh; }
+aside { width: 280px; flex: 0 0 280px; background: var(--side); color: var(--side-fg); display: flex; flex-direction: column; gap: 12px; padding: 16px 12px; height: 100vh; height: 100dvh; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 6px; font-weight: 700; font-size: 20px; }
 .brand svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
 .side-btn { min-height: 44px; border: 1px solid rgba(255,255,255,.22); background: transparent; color: #fff; border-radius: 10px; display: flex; align-items: center; gap: 10px; padding: 0 14px; }
@@ -75,8 +75,8 @@ aside { width: 280px; flex: 0 0 280px; background: var(--side); color: var(--sid
 .dot.wait { background: #FFD27A; }
 
 /* ---------- Main ---------- */
-main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
-.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--line); }
+main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 20px; padding-top: max(10px, env(safe-area-inset-top)); border-bottom: 1px solid var(--line); }
 .icon-btn { width: 40px; height: 40px; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--fg); }
 .icon-btn:hover { background: var(--soft); }
 .icon-btn.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
@@ -170,7 +170,7 @@ body.compact .inner { gap: 14px; }
 .md a { color: var(--fg); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
 /* ---------- Composer ---------- */
-.composer { padding: 0 20px 18px; }
+.composer { padding: 0 20px 18px; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
 .composer-inner { max-width: 800px; margin: 0 auto; }
 .img-opts { display: none; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 body.image-mode .img-opts { display: flex; }
@@ -193,11 +193,11 @@ textarea#prompt { flex: 1; border: none; outline: none; resize: none; background
 .hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
 
 /* ---------- Modal ---------- */
-dialog { border: none; border-radius: 18px; padding: 0; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 40px); background: var(--bg); color: var(--fg); box-shadow: 0 30px 80px rgba(5,15,30,.35); }
+dialog { border: none; border-radius: 18px; padding: 0; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 40px); max-height: calc(100dvh - 24px); background: var(--bg); color: var(--fg); box-shadow: 0 30px 80px rgba(5,15,30,.35); }
 dialog::backdrop { background: rgba(5,15,30,.55); }
 dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
 @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.98); } }
-.modal { display: flex; flex-direction: column; max-height: calc(100vh - 40px); }
+.modal { display: flex; flex-direction: column; max-height: calc(100vh - 40px); max-height: calc(100dvh - 24px); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--line); }
 .modal-head h2 { margin: 0; font-size: 20px; }
 .modal-body { display: flex; min-height: 0; flex: 1; }
@@ -251,6 +251,8 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
   .modal-body { flex-direction: column; }
   .model-sel { max-width: 150px; }
   .badge.hide-sm { display: none; }
+  .topbar { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .composer { padding-left: 12px; padding-right: 12px; }
 }
 </style>
 </head>
