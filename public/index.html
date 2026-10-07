@@ -465,8 +465,10 @@ const store = {
 };
 
 let S = deepMerge(structuredClone(DEFAULTS), store.get("settings", {}));
-// Older versions saved the page's own address (e.g. GitHub Pages) as the server; use the real one instead.
-try { if (!S.conn.relay || new URL(S.conn.relay).hostname.endsWith(".github.io")) S.conn.relay = DEFAULT_SERVER; } catch { S.conn.relay = DEFAULT_SERVER; }
+// Older versions saved whatever address the page was opened from as the server.
+// Switch every saved setup to the Render server once; changes made after that are kept.
+if (store.get("settings", {}).serverVersion !== 2) { S.conn.relay = DEFAULT_SERVER; S.serverVersion = 2; store.set("settings", S); }
+if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER;
 let chats = S.persist ? store.get("chats", []) : [];
 let current = null;
 let controller = null;
@@ -513,7 +515,7 @@ else { $("#splash").style.display = "none"; document.body.classList.remove("intr
 // Connection
 // ======================================================================
 function baseUrl() {
-  if (S.conn.mode === "remote") return (S.conn.relay || "").replace(/\/+$/, "") + "/relay/" + S.conn.code;
+  if (S.conn.mode === "remote") return (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "") + "/relay/" + S.conn.code;
   return (S.conn.url || "http://localhost:11434").replace(/\/+$/, "");
 }
 async function api(path, opts = {}) {
@@ -1279,7 +1281,7 @@ $("#connectBtn").onclick = async () => {
   S.conn.mode = $("#connectBtn").dataset.mode || "local";
   S.conn.url = $("#ollamaUrl").value.trim() || "http://localhost:11434";
   S.conn.code = formatCode($("#codeInput").value);
-  S.conn.relay = $("#relayUrl").value.trim().replace(/\/+$/, "");
+  S.conn.relay = $("#relayUrl").value.trim().replace(/\/+$/, "") || DEFAULT_SERVER;
   saveSettings(); applyAppearance();
   $("#connResult").textContent = "Connecting…";
   const ok = await connect(true);
