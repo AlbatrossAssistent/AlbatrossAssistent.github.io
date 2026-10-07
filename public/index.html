@@ -799,7 +799,7 @@ function fillLive(c, m) {
     body.insertAdjacentHTML("beforeend", md(rest.slice(0, cut)));
     L.done += cut; L.n = body.childNodes.length; L.tail = null;
   }
-  const tail = src ? src.slice(L.done) : (blocks.length ? "" : TYPING);
+  const tail = src ? src.slice(L.done) : blocks.length ? "" : m.loading ? `<div class="shimmer" style="font-size:14px">Loading ${esc(m.model)} into memory…</div>` : TYPING;
   if (tail !== L.tail) { trimTail(); body.insertAdjacentHTML("beforeend", src ? md(tail) : tail); L.tail = tail; }
 }
 // Length of the leading part of s that ends at a blank line outside any ``` block.
@@ -1017,6 +1017,21 @@ async function chat(model) {
 
     let system = current.system || S.defaultSystem;
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
+    // If the model isn't in memory yet, Ollama loads it first, which can take a while.
+    // Say so in the bubble and pop a notification once it's ready.
+    let loadStart = 0;
+    try {
+      const running = (await (await api("/api/ps")).json()).models || [];
+      if (!running.some(r => r.name === model)) { loadStart = performance.now(); reply.loading = true; redraw(); }
+    } catch {}
+    const loaded = () => {
+      if (!reply.loading) return;
+      reply.loading = false;
+      const secs = (performance.now() - loadStart) / 1000;
+      toast(`${model} loaded (${secs < 1 ? "<1" : Math.round(secs)} s)`);
+      refreshLoaded();
+    };
+
     const msgs = current.messages.filter(m => m.genImage === undefined).map(m => ({ role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) }));
     if (system) msgs.unshift({ role: "system", content: system });
 
@@ -1030,6 +1045,7 @@ async function chat(model) {
       let think = null, roundText = "", calls = [];
       await readNdjson(res, j => {
         if (j.error) throw new Error(j.error);
+        loaded();
         const m = j.message || {};
         if (m.thinking) {
           if (!think) { think = { type: "thinking", text: "", start: performance.now() }; reply.blocks.push(think); }
@@ -1067,6 +1083,7 @@ async function chat(model) {
     if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message);
   } finally {
     controller = null; setBusy(false);
+    delete reply.loading;
     reply.blocks.forEach(b => { b.active = false; b.done = true; delete b.fresh; delete b.start; delete b.userOpen; });
     if (reply.content || reply.blocks.length) {
       if (!reply.blocks.length) delete reply.blocks;
