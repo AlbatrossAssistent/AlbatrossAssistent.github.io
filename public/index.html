@@ -69,6 +69,12 @@ aside { width: 280px; flex: 0 0 280px; background: var(--side); color: var(--sid
 .chat-row .mini svg { width: 15px; height: 15px; }
 .conn-card { border-top: 1px solid rgba(255,255,255,.14); padding: 12px 8px 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #C9D4E5; }
 .conn-line { display: flex; align-items: center; gap: 8px; }
+.power-box { display: flex; flex-direction: column; gap: 6px; }
+.power-form { display: flex; gap: 6px; }
+.power-form input { flex: 1; min-width: 0; min-height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: inherit; padding: 0 10px; font: inherit; }
+.power-form .side-btn { width: auto; flex: none; }
+#powerMsg { font-size: 12.5px; line-height: 1.4; color: #B8C6DA; }
+#powerMsg:empty { display: none; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #8A97AB; flex: none; }
 .dot.ok { background: #7CC4FF; box-shadow: 0 0 0 4px rgba(124,196,255,.15); }
 .dot.bad { background: #FF8A80; }
@@ -276,6 +282,15 @@ dialog[open] { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
   <div class="chat-list" id="chatList"></div>
   <div class="conn-card">
     <div class="conn-line"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+    <div id="powerBox" class="power-box" hidden>
+      <button class="side-btn" id="powerBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>Turn on PC</button>
+      <form id="powerForm" class="power-form" hidden>
+        <label for="powerPin" class="sr">Power PIN</label>
+        <input id="powerPin" type="password" inputmode="numeric" placeholder="Power PIN" autocomplete="off">
+        <button class="side-btn" id="powerGo" type="submit">Turn on</button>
+      </form>
+      <small id="powerMsg" role="status"></small>
+    </div>
     <button class="side-btn" id="openConn"><svg class="i" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Connect with code</button>
     <button class="side-btn" id="openSettings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
   </div>
@@ -621,11 +636,13 @@ async function connect(quiet) {
       try { const st = await (await api("/status")).json(); where = st.name || "Remote PC"; } catch { where = "Remote PC"; }
     }
     setStatus("ok", `Connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"}`);
+    updatePowerBox(true);
     return true;
   } catch (e) {
     connected = false; models = [];
     fillModelSelect(); renderModelTable();
     setStatus("bad", S.conn.mode === "remote" ? "Remote device not reachable" : "Can't reach Ollama");
+    updatePowerBox(false);
     if (!quiet) showConnHelp(e.message);
     return false;
   }
@@ -695,6 +712,56 @@ async function refreshLoaded() {
   for (const m of models) m.running = running.some(r => r.name === m.name);
   renderModelTable();
 }
+// ---------- turning the remote PC on ----------
+// The Burrow server can switch the PC's smart plug on through an Alexa routine (see README).
+// The button only shows while the remote PC is offline, so it never touches a running PC.
+let powerWait = null;
+async function updatePowerBox(online) {
+  const box = $("#powerBox");
+  if (online || S.conn.mode !== "remote" || !CODE_RE.test(S.conn.code)) {
+    box.hidden = true;
+    if (powerWait) { clearInterval(powerWait); powerWait = null; toast("Your PC is on and connected"); }
+    $("#powerMsg").textContent = "";
+    return;
+  }
+  if (powerWait) return; // already starting, keep showing progress
+  try { box.hidden = !(await (await fetch(toolsBase() + "/power/status")).json()).available; } catch { box.hidden = true; }
+}
+$("#powerBtn").onclick = () => {
+  const f = $("#powerForm");
+  f.hidden = !f.hidden;
+  if (!f.hidden) { $("#powerPin").value = store.get("powerPin", ""); $("#powerPin").focus(); }
+};
+$("#powerForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pin = $("#powerPin").value.trim(), msg = $("#powerMsg");
+  if (!pin) { $("#powerPin").focus(); return; }
+  $("#powerGo").disabled = true;
+  msg.textContent = "Sending…";
+  try {
+    const r = await fetch(toolsBase() + "/power/on", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin, code: splitCode(S.conn.code).route }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 409) { msg.textContent = ""; connect(true); return; } // it's already on
+    if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+    store.set("powerPin", pin);
+    $("#powerForm").hidden = true;
+    msg.textContent = "Power is on. Your PC is starting, which usually takes 1 to 2 minutes. This connects by itself.";
+    // Keep trying to connect for up to 6 minutes.
+    const started = Date.now();
+    clearInterval(powerWait);
+    powerWait = setInterval(async () => {
+      if (Date.now() - started > 6 * 60e3) {
+        clearInterval(powerWait); powerWait = null;
+        msg.textContent = "The PC hasn't come online. Check that it starts when it gets power (BIOS: Restore on AC power loss) and that Burrow starts at boot.";
+        return;
+      }
+      if (await connect(true)) checkSearch();
+    }, 10000);
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally { $("#powerGo").disabled = false; }
+});
+
 function showConnHelp(err) {
   const text = S.conn.mode === "remote"
     ? `Couldn't reach the remote device (${err}).\n\n• Check the code is right and host.js is still running on the other PC.\n• Check the Burrow server address in Settings → Connection.`
