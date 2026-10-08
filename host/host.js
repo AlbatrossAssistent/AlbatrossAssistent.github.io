@@ -22,6 +22,7 @@ const { spawn, execFile } = require("child_process");
 const WebSocket = require("ws");
 const { startPanel } = require("./panel");
 const comfy = require("./comfy");
+const files = require("./files");
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
@@ -237,6 +238,17 @@ function connect() {
     let seq = 0;
     const reply = (frame) => send({ type: "chunk", id, data: seal(aesKey, JSON.stringify(frame), `${rid}:${seq++}`) + "\n" });
     send({ type: "head", id, status: 200, contentType: "text/plain; charset=utf-8" });
+    // Files to and from this PC (see files.js), answered here instead of by Ollama.
+    if (typeof p === "string" && p.startsWith("/files/")) {
+      let status = 500, out;
+      try { [status, out] = files.handle(method, p, body, note); } catch (e) { out = { error: e.message }; note("File transfer failed: " + e.message, "error"); }
+      reply({ k: "m", s: status, c: "application/json" });
+      reply({ k: "d", d: JSON.stringify(out) });
+      reply({ k: "e" });
+      send({ type: "end", id });
+      if (p === "/files/upload-end" || p === "/files/download") changed();
+      return;
+    }
     if (!ALLOWED.has(`${method} ${p}`)) { changed(); reply({ k: "x", error: "Not allowed" }); return send({ type: "end", id }); }
 
     // Model lists, status checks etc. only count; chats and generations get a row in the activity list.
@@ -401,8 +413,9 @@ function openWindow(url) {
 console.log(`Burrow host — sharing Ollama at ${OLLAMA} via ${SERVER}`);
 panel = startPanel({
   port: Number(process.env.BURROW_PANEL_PORT) || 4747,
-  getState: () => ({ ...stats, now: Date.now() }),
-  actions: { "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
+  getState: () => ({ ...stats, files: files.state(), now: Date.now() }),
+  files,
+  actions: { "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; }, "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
   // Only start sharing once we hold the panel's port, so two hosts never fight over the same code.
   onListening: (url) => {
     console.log(`  Control center: ${url}`);

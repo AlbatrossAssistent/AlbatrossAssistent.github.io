@@ -66,7 +66,7 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* One recipe for every glass surface */
-aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-card, .res, .think-block, .search-bar {
+aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-card, .res, .think-block, .search-bar, .home-action, .home-card {
   background-color: var(--glass); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
   border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), var(--shadow);
 }
@@ -356,6 +356,82 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 .toast { position: fixed; bottom: 28px; left: 50%; transform: translate(-50%, 20px); color: var(--fg); padding: 10px 18px; border-radius: 999px; opacity: 0; transition: .3s cubic-bezier(.2,.8,.2,1); z-index: 200; pointer-events: none; font-size: 14px; background-color: var(--glass-strong); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* ---------- Home ---------- */
+#home { flex: 1; overflow-y: auto; padding: 8px 4px 24px; }
+body:not(.home-view) #home { display: none; }
+body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, body.home-view #model { display: none !important; }
+.home-inner { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.home-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 5vh 0 8px; animation: msgIn .6s cubic-bezier(.2,.8,.2,1); }
+.home-hero svg { width: 64px; height: 64px; fill: currentColor; filter: drop-shadow(0 8px 24px rgba(0,0,0,.18)); }
+.home-hero svg .wave { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.home-hero h1 { margin: 6px 0 0; font-size: clamp(30px, 4.4vw, 46px); font-weight: 600; letter-spacing: -1.4px; }
+.home-hero p { margin: 0; color: var(--muted); }
+.home-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.home-action { border-radius: 24px; padding: 16px; text-align: left; color: var(--fg); display: flex; flex-direction: column; gap: 10px; transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s; animation: msgIn .5s cubic-bezier(.2,.8,.2,1) backwards; }
+.home-action:nth-child(2) { animation-delay: .05s; } .home-action:nth-child(3) { animation-delay: .1s; } .home-action:nth-child(4) { animation-delay: .15s; }
+.home-action:hover { transform: translateY(-4px); box-shadow: var(--glass-hi), 0 20px 44px rgba(0,0,0,.14); }
+.home-action .hi { width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background-color: var(--accent); background-image: var(--accent-sheen); color: var(--accent-fg); box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+.home-action .hi svg { width: 21px; height: 21px; }
+.home-action strong { font-size: 16px; font-weight: 600; }
+.home-action small { color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: -6px; }
+.home-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 760px) { .home-grid { grid-template-columns: 1fr; } }
+.home-card { border-radius: 24px; padding: 16px 18px; min-width: 0; }
+.home-card h3 { margin: 0 0 10px; font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.stat-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.stat-row:last-child { border-bottom: none; }
+.stat-row .k { color: var(--muted); width: 92px; flex: none; }
+.stat-row .v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent { display: flex; flex-direction: column; gap: 4px; }
+.recent button { display: flex; align-items: center; gap: 10px; border: 1px solid transparent; background: none; color: var(--fg); border-radius: 14px; padding: 7px 8px; text-align: left; min-width: 0; }
+.recent button:hover { background-color: var(--btn-glass); background-image: var(--sheen); border-color: var(--glass-edge); }
+.recent .ti { width: 28px; height: 28px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center; background-color: var(--btn-glass); border: 1px solid var(--glass-edge); color: var(--muted); }
+.recent .ti svg { width: 15px; height: 15px; }
+.recent .tt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent small { color: var(--muted); font-size: 12px; flex: none; }
+
+/* ---------- Files ---------- */
+#filesDlg { width: min(640px, calc(100vw - 24px)); }
+#filesDlg .body { padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.files-tabs { align-self: flex-start; }
+.files-tabs button { min-height: 36px; padding: 0 16px; }
+.fpane { display: flex; flex-direction: column; gap: 12px; }
+.fpane[hidden] { display: none; }
+.conn-status { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 16px; font-size: 14px; background-color: var(--btn-glass); background-image: var(--sheen); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi); }
+.conn-status .t { flex: 1; min-width: 0; }
+.conn-status .t small { display: block; color: var(--muted); font-size: 12.5px; }
+.btn.small { min-height: 32px; padding: 0 12px; font-size: 13px; }
+.drop { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; border: 1.5px dashed color-mix(in srgb, var(--fg) 22%, transparent); border-radius: 20px; padding: 20px 16px; cursor: pointer; color: var(--muted); font-size: 13px; background-color: var(--btn-glass); transition: border-color .2s, background-color .2s, transform .15s; }
+.drop:hover, .drop.drag { border-color: var(--fg); background-color: var(--glass-strong); color: var(--fg); }
+.drop.drag { transform: scale(1.01); }
+.drop b { color: var(--fg); font-size: 15px; font-weight: 600; }
+.drop svg { width: 26px; height: 26px; margin-bottom: 4px; color: var(--fg); }
+.drop.disabled { opacity: .45; pointer-events: none; }
+.sub-head { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.sub-head h3 { margin: 0; font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.flist, .xfers { display: flex; flex-direction: column; gap: 6px; }
+.fitem { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; border: 1px solid var(--glass-edge); background-color: var(--btn-glass); background-image: var(--sheen); box-shadow: var(--glass-hi); animation: msgIn .3s cubic-bezier(.2,.8,.2,1); }
+.fitem .ic { width: 34px; height: 34px; border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--soft); border: 1px solid var(--line); }
+.fitem .ic svg { width: 17px; height: 17px; }
+.fitem.person .ic { border-radius: 50%; font-weight: 700; font-size: 14px; background-color: var(--accent); background-image: var(--accent-sheen); color: var(--accent-fg); border-color: var(--accent); }
+.fitem .nm { flex: 1; min-width: 0; }
+.fitem .nm b { display: block; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fitem .nm small { color: var(--muted); font-size: 12.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fitem .bar { height: 3px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 5px; }
+.fitem .bar div { height: 100%; background: var(--fg); width: 0; transition: width .2s; }
+.fitem.on { border-color: color-mix(in srgb, var(--fg) 45%, transparent); }
+.empty-note { color: var(--muted); font-size: 13.5px; padding: 4px 2px; }
+.pub-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.pub-row .field { flex: 1 1 200px; }
+.pub-toggle { display: flex; align-items: center; gap: 10px; min-height: 40px; font-weight: 600; font-size: 14px; }
+.side-btn .live { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.offers { position: fixed; right: 18px; bottom: 18px; z-index: 150; display: flex; flex-direction: column; gap: 10px; width: min(360px, calc(100vw - 36px)); }
+.offer { border-radius: 22px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; animation: pop .35s cubic-bezier(.2,.8,.2,1); background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 20px 60px rgba(0,0,0,.25); }
+.offer .top { display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.offer .top .ic { width: 36px; height: 36px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-weight: 700; background-color: var(--accent); background-image: var(--accent-sheen); color: var(--accent-fg); }
+.offer .top small { display: block; color: var(--muted); }
+.offer .acts { display: flex; gap: 8px; justify-content: flex-end; }
+
 /* Browsers without backdrop blur get solid glass so text stays readable */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root { --glass: rgba(255,255,255,.94); --glass-strong: #fff; }
@@ -393,6 +469,7 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 <!-- ================= SIDEBAR ================= -->
 <aside id="sidebar">
   <div class="brand"><svg viewBox="0 0 28 28"><path class="wing" d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path class="wave" d="M6 24q2-1.6 4 0t4 0t4 0t4 0"/></svg>Albatross</div>
+  <button class="side-btn" id="goHome"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Home</button>
   <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
   <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
   <div class="chat-list" id="chatList"></div>
@@ -407,6 +484,7 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
       </form>
       <small id="powerMsg" role="status"></small>
     </div>
+    <button class="side-btn" id="openFiles"><svg class="i" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg>Files<span class="live" id="pubLive" hidden title="You are public"></span></button>
     <button class="side-btn" id="openConn"><svg class="i" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Connect with code</button>
     <button class="side-btn" id="openSettings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
   </div>
@@ -424,6 +502,7 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
     <div class="spacer"></div>
   </div>
 
+  <div id="home"></div>
   <div class="messages" id="messages"><div class="inner" id="inner"></div></div>
 
   <div class="composer">
@@ -587,6 +666,37 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
   </div>
 </dialog>
 
+<!-- files: to and from your PC, and to other people -->
+<dialog id="filesDlg">
+  <div class="modal">
+    <div class="modal-head"><h2>Files</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="body">
+      <div class="seg files-tabs" role="tablist"><button data-ft="pc" class="on">Your PC</button><button data-ft="people">People</button></div>
+
+      <section class="fpane" data-fp="pc">
+        <div class="conn-status" id="hostLine"><span class="dot"></span><span class="t">Checking…</span></div>
+        <label class="drop" id="pcDrop"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><b>Send files to your PC</b><span>Drop files here or click to choose. They're saved in Downloads → Albatross on the PC.</span><input type="file" id="pcPick" multiple hidden></label>
+        <div class="xfers" id="pcXfers"></div>
+        <div class="sub-head"><h3>From your PC</h3><button class="btn small" id="pcRefresh">Refresh</button></div>
+        <div class="flist" id="pcOutbox"></div>
+      </section>
+
+      <section class="fpane" data-fp="people" hidden>
+        <div class="pub-row">
+          <div class="field"><label for="pubName">Your name</label><input id="pubName" maxlength="32" placeholder="How others see you" autocomplete="off"></div>
+          <label class="pub-toggle"><input type="checkbox" class="switch" id="pubOn">Public</label>
+        </div>
+        <div class="conn-status" id="pubLine"><span class="dot"></span><span class="t">Public is off</span></div>
+        <div class="flist" id="peopleList"></div>
+        <label class="drop disabled" id="peerDrop"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><b id="peerDropTitle">Pick someone above</b><span>Files go one at a time, each only after they accept it. End-to-end encrypted.</span><input type="file" id="peerPick" multiple hidden></label>
+        <div class="xfers" id="peerXfers"></div>
+        <div class="note">While Public is on, everyone else who is public can see your name and offer you files. Nothing arrives without your OK.</div>
+      </section>
+    </div>
+  </div>
+</dialog>
+<div class="offers" id="offers" aria-live="polite"></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -611,6 +721,7 @@ const DEFAULTS = {
   theme: "light", fontSize: 16, intro: true, compact: false,
   model: "", imageModel: "", mode: "chat",
   img: { size: "1024x1024", steps: "", seed: "", style: "", history: true, ctxModel: "" },
+  files: { name: "", public: false },
 };
 
 const store = {
@@ -729,7 +840,7 @@ async function e2eFetch(path, opts = {}) {
   const key = await e2eKey();
   const id = crypto.randomUUID();
   const envelope = await seal(key, JSON.stringify({ id, t: Date.now(), method: opts.method || "GET", path, body: opts.body }), "req");
-  const res = await fetch(baseUrl() + "/e2e", { method: "POST", headers: { "Content-Type": "text/plain" }, body: envelope, signal: opts.signal });
+  const res = await fetch((opts.base || baseUrl()) + "/e2e", { method: "POST", headers: { "Content-Type": "text/plain" }, body: envelope, signal: opts.signal });
   if (!res.ok) return res; // the server or PC refused before anything was encrypted (offline, wrong code…)
   // The answer is encrypted lines: meta, data…, end. They're numbered, so nothing can be dropped, swapped or added.
   const reader = res.body.getReader(), dec = new TextDecoder();
@@ -995,6 +1106,7 @@ $("#newChatDlg").addEventListener("keydown", e => {
 $("#ncStart").onclick = () => {
   $("#newChatDlg").close();
   newChat(ncType, ncType === "image" ? $("#ncContext").value.trim() : "", ncReuse);
+  setView("chat");
   $("#sidebar").classList.remove("open");
 };
 function newChat(type, context, reuse) {
@@ -1009,7 +1121,7 @@ function newChat(type, context, reuse) {
   saveChats(); renderAll();
   $("#prompt").focus();
 }
-function openChat(c) { if (controller) controller.abort(); current = c; renderAll(); $("#sidebar").classList.remove("open"); }
+function openChat(c) { if (controller) controller.abort(); current = c; setView("chat"); renderAll(); $("#sidebar").classList.remove("open"); }
 function deleteChat(c) {
   if (!confirmInline(c)) return;
   chats = chats.filter(x => x !== c);
@@ -1770,10 +1882,390 @@ $("#imgCtxModel").onchange = e => { S.img.ctxModel = e.target.value; saveSetting
 loadImgFields();
 
 // ======================================================================
+// Home
+// ======================================================================
+function setView(v) {
+  document.body.classList.toggle("home-view", v === "home");
+  $("#goHome").classList.toggle("on", v === "home");
+  if (v === "home") renderHome();
+}
+const isHome = () => document.body.classList.contains("home-view");
+function greeting() { const h = new Date().getHours(); return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
+function renderHome() {
+  const name = S.files.name ? ", " + S.files.name : "";
+  const home = $("#home");
+  home.innerHTML = `<div class="home-inner">
+    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<h1></h1><p>Your own AI, on your own PC.</p></div>
+    <div class="home-actions">
+      <button class="home-action" data-go="chat"><span class="hi">${TYPE_ICON.chat}</span><strong>New chat</strong><small>Ask, write, plan, code</small></button>
+      <button class="home-action" data-go="image"><span class="hi">${TYPE_ICON.image}</span><strong>New image</strong><small>Describe it, the AI draws it</small></button>
+      <button class="home-action" data-go="files"><span class="hi">${ICON_FILES}</span><strong>Files</strong><small>Send to your PC or to people</small></button>
+      <button class="home-action" data-go="settings"><span class="hi">${$("#openSettings svg").outerHTML}</span><strong>Settings</strong><small>Connection, models, look</small></button>
+    </div>
+    <div class="home-grid">
+      <div class="home-card"><h3>Status</h3><div id="homeStatus"></div></div>
+      <div class="home-card"><h3>Recent chats</h3><div class="recent" id="homeRecent"></div></div>
+    </div>
+  </div>`;
+  home.querySelector("h1").textContent = greeting() + name;
+  home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
+    const g = b.dataset.go;
+    if (g === "chat" || g === "image") { newChat(g, "", false); setView("chat"); }
+    else if (g === "files") openFiles();
+    else openSettings();
+  }));
+  const rec = $("#homeRecent");
+  const list = chats.filter(c => c.messages.length).sort((a, b) => b.updated - a.updated).slice(0, 6);
+  if (!list.length) rec.innerHTML = '<div class="empty-note">No chats yet. Start one above.</div>';
+  for (const c of list) {
+    const b = document.createElement("button");
+    b.innerHTML = `<span class="ti">${chatType(c) === "image" ? TYPE_ICON.image : TYPE_ICON.chat}</span><span class="tt"></span><small></small>`;
+    b.querySelector(".tt").textContent = c.title; b.querySelector("small").textContent = ago(c.updated);
+    b.onclick = () => openChat(c);
+    rec.appendChild(b);
+  }
+  renderHomeStatus();
+}
+function renderHomeStatus() {
+  const el = $("#homeStatus"); if (!el) return;
+  const rows = [
+    ["AI", $("#dot").className.replace("dot", "").trim(), $("#statusText").textContent],
+    ["Model", loadedInfo.length ? "ok" : "", $("#loadedText").textContent],
+    ["Your PC", hostState.kind, hostText().split(" · ")[0]],
+    ["Public", peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "", pubText()],
+  ];
+  el.innerHTML = "";
+  for (const [k, cls, v] of rows) {
+    const r = document.createElement("div"); r.className = "stat-row";
+    r.innerHTML = `<span class="k"></span><span class="dot ${cls}"></span><span class="v"></span>`;
+    r.querySelector(".k").textContent = k; r.querySelector(".v").textContent = v;
+    el.appendChild(r);
+  }
+}
+setInterval(() => { if (isHome()) renderHomeStatus(); }, 2000);
+
+// ======================================================================
+// Files
+// ======================================================================
+const ICON_FILES = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg>';
+const FILE_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
+const fsize = b => b >= 1e9 ? (b / 1e9).toFixed(2) + " GB" : b >= 1e6 ? (b / 1e6).toFixed(1) + " MB" : b >= 1e3 ? Math.round(b / 1e3) + " KB" : b + " B";
+const b64ToU8 = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+function openFiles(tab) {
+  if (tab) filesTab(tab);
+  $("#pubName").value = S.files.name; $("#pubOn").checked = S.files.public;
+  $("#filesDlg").showModal();
+  checkHost(); renderPeople(); renderXfers();
+}
+function filesTab(t) {
+  $$("#filesDlg [data-ft]").forEach(b => b.classList.toggle("on", b.dataset.ft === t));
+  $$("#filesDlg [data-fp]").forEach(p => (p.hidden = p.dataset.fp !== t));
+}
+$$("#filesDlg [data-ft]").forEach(b => (b.onclick = () => filesTab(b.dataset.ft)));
+function fileRow(name, sub, right, cls) {
+  const d = document.createElement("div"); d.className = "fitem" + (cls ? " " + cls : "");
+  d.innerHTML = `<span class="ic">${FILE_ICON}</span><span class="nm"><b></b><small></small></span>`;
+  d.querySelector("b").textContent = name; d.querySelector("small").textContent = sub;
+  if (right) for (const r of [].concat(right)) d.appendChild(r);
+  return d;
+}
+function smallBtn(text, fn, primary) { const b = document.createElement("button"); b.className = "btn small" + (primary ? " primary" : ""); b.textContent = text; b.onclick = fn; return b; }
+function wireDrop(drop, input, onFiles) {
+  input.onchange = e => { onFiles([...e.target.files]); e.target.value = ""; };
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("drag"); onFiles([...e.dataTransfer.files]); });
+}
+
+// ---------- your PC (through the host, end-to-end encrypted with the code) ----------
+let hostState = { kind: "", text: "" };
+const hostBase = () => (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "") + "/relay/" + splitCode(S.conn.code).route;
+async function hostCall(method, path, body) {
+  const res = await e2eFetch(path, { method, body: body ? JSON.stringify(body) : undefined, base: hostBase() });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || "HTTP " + res.status);
+  return j;
+}
+function hostText() { return hostState.text || "Not checked yet"; }
+function setHost(kind, text, sub) {
+  hostState = { kind, text };
+  const l = $("#hostLine");
+  l.querySelector(".dot").className = "dot " + kind;
+  l.querySelector(".t").innerHTML = "<span></span><small></small>";
+  l.querySelector(".t span").textContent = text; l.querySelector(".t small").textContent = sub || "";
+  l.querySelectorAll(".btn").forEach(b => b.remove());
+  if (kind !== "ok") l.appendChild(CODE_RE.test(S.conn.code) ? smallBtn("Check again", checkHost) : smallBtn("Enter code", () => { $("#filesDlg").close(); $("#openConn").click(); }));
+  $("#pcDrop").classList.toggle("disabled", kind !== "ok");
+  if (isHome()) renderHomeStatus();
+}
+async function checkHost() {
+  if (!CODE_RE.test(S.conn.code)) { setHost("", "No PC linked", "Enter your PC's code in Connect with code to send it files."); renderOutbox([]); return; }
+  setHost("wait", "Checking your PC…");
+  try {
+    const st = await (await fetch(hostBase() + "/status")).json();
+    if (!st.online) throw new Error("offline");
+    const list = await hostCall("GET", "/files/list");
+    setHost("ok", "Connected to host · " + (st.name || "PC"), "End-to-end encrypted with your code");
+    renderOutbox(list.outbox || []);
+  } catch (e) {
+    if (/not allowed/i.test(e.message)) setHost("bad", "Your PC runs an older Albatross host", "Restart the PC or burrow-host.bat to update it.");
+    else setHost("bad", "Your PC is offline", "Start it, or check that Albatross runs on it.");
+    renderOutbox([]);
+  }
+}
+function renderOutbox(list) {
+  const el = $("#pcOutbox"); el.innerHTML = "";
+  if (!list.length) { el.innerHTML = '<div class="empty-note">Nothing here. Add files in the control center on your PC (Send to your devices).</div>'; return; }
+  for (const f of list) {
+    const row = fileRow(f.name, fsize(f.size));
+    row.appendChild(smallBtn("Download", () => pullFromPc(f, row), true));
+    el.appendChild(row);
+  }
+}
+async function pullFromPc(f, row) {
+  const btn = row.querySelector(".btn"); btn.disabled = true;
+  const parts = []; let off = 0;
+  try {
+    do {
+      const j = await hostCall("POST", "/files/download", { name: f.name, offset: off });
+      const u = b64ToU8(j.data); parts.push(u); off += u.length;
+      row.querySelector("small").textContent = `${fsize(off)} of ${fsize(j.size)}`;
+      if (!u.length) break;
+      if (off >= j.size) break;
+    } while (true);
+    download(f.name, new Blob(parts));
+    row.querySelector("small").textContent = fsize(off) + " · downloaded";
+  } catch (e) { row.querySelector("small").textContent = "Failed: " + e.message; }
+  btn.disabled = false;
+}
+const xfers = { pc: [], peer: [] };
+function renderXfers() {
+  for (const k of ["pc", "peer"]) {
+    const el = $(k === "pc" ? "#pcXfers" : "#peerXfers"); el.innerHTML = "";
+    for (const x of xfers[k].slice(-8)) {
+      const acts = x.state === "offer" ? [smallBtn("Decline", () => answerOffer(x, false)), smallBtn("Accept", () => answerOffer(x, true), true)]
+        : x.active() ? smallBtn("Cancel", () => x.cancel()) : null;
+      const row = fileRow(x.name, x.label(), acts);
+      if (x.active()) { const bar = document.createElement("div"); bar.className = "bar"; bar.innerHTML = `<div style="width:${x.pct || 0}%"></div>`; row.querySelector(".nm").appendChild(bar); }
+      el.appendChild(row);
+    }
+  }
+}
+let pcBusy = false;
+function sendToPc(list) {
+  if (hostState.kind !== "ok") return toast("Your PC isn't connected");
+  for (const file of list) {
+    const x = { file, name: file.name, size: file.size, state: "waiting", pct: 0, id: null };
+    x.active = () => x.state === "waiting" || x.state === "sending";
+    x.label = () => ({ waiting: "Waiting… · " + fsize(x.size), sending: `Sending… ${Math.round(x.pct)}% of ${fsize(x.size)}`, done: "Sent to your PC · " + fsize(x.size), cancelled: "Cancelled", error: "Failed: " + x.err })[x.state];
+    x.cancel = () => { x.state = "cancelled"; renderXfers(); if (x.id) hostCall("POST", "/files/upload-cancel", { id: x.id }).catch(() => {}); };
+    xfers.pc.push(x);
+  }
+  renderXfers(); runPcQueue();
+}
+async function runPcQueue() {
+  if (pcBusy) return; pcBusy = true;
+  const CH = 4 * 1024 * 1024;
+  for (let x; (x = xfers.pc.find(t => t.state === "waiting"));) {
+    x.state = "sending"; renderXfers();
+    try {
+      x.id = (await hostCall("POST", "/files/upload-start", { name: x.name, size: x.size })).id;
+      for (let off = 0; off < x.size; off += CH) {
+        if (x.state === "cancelled") break;
+        const buf = new Uint8Array(await x.file.slice(off, off + CH).arrayBuffer());
+        await hostCall("POST", "/files/upload-chunk", { id: x.id, offset: off, data: toB64(buf) });
+        x.pct = Math.min(100, (off + buf.length) / x.size * 100); renderXfers();
+      }
+      if (x.state === "cancelled") continue;
+      await hostCall("POST", "/files/upload-end", { id: x.id });
+      x.state = "done";
+    } catch (e) { if (x.state !== "cancelled") { x.state = "error"; x.err = e.message; } }
+    renderXfers();
+  }
+  pcBusy = false;
+}
+wireDrop($("#pcDrop"), $("#pcPick"), sendToPc);
+$("#pcRefresh").onclick = checkHost;
+
+// ---------- people (public users, browser to browser through the server, end-to-end encrypted) ----------
+// Each browser makes an ECDH key pair when it goes public. Two people derive the same AES key from
+// their keys, so the server only passes along data it can't read.
+const peer = { ws: null, id: null, list: [], keys: null, pub: "", status: "off", target: null, retry: 0, sharedKeys: new Map() };
+async function peerKeys() {
+  if (peer.keys) return;
+  peer.keys = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveKey"]);
+  peer.pub = toB64(new Uint8Array(await crypto.subtle.exportKey("raw", peer.keys.publicKey)));
+}
+function keyFor(pub) {
+  if (!peer.sharedKeys.has(pub)) peer.sharedKeys.set(pub, crypto.subtle.importKey("raw", b64ToU8(pub), { name: "ECDH", namedCurve: "P-256" }, false, [])
+    .then(k => crypto.subtle.deriveKey({ name: "ECDH", public: k }, peer.keys.privateKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"])));
+  return peer.sharedKeys.get(pub);
+}
+function pubText() {
+  if (peer.status === "on") { const n = peer.list.length; return `Public as ${S.files.name} · ${n} other${n === 1 ? "" : "s"} online` + (peer.target ? ` · connected to ${peer.target.name}` : ""); }
+  return peer.status === "connecting" ? "Going public…" : "Public is off";
+}
+function setPeerStatus(st) { peer.status = st; renderPeople(); }
+function peerConnect() {
+  if (peer.ws || !S.files.public || !S.files.name) return;
+  if (!crypto.subtle) return toast("Sharing with people needs the page opened over https");
+  setPeerStatus("connecting");
+  peerKeys().then(() => {
+    const ws = new WebSocket((S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "").replace(/^http/, "ws") + "/peer");
+    peer.ws = ws;
+    ws.onopen = () => ws.send(JSON.stringify({ type: "hello", name: S.files.name, pub: peer.pub }));
+    // Decrypting is async, so handle messages strictly one after another to keep file pieces in order.
+    let chain = Promise.resolve();
+    ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } chain = chain.then(() => onPeerMessage(m)).catch(() => {}); };
+    ws.onclose = () => {
+      if (peer.ws !== ws) return;
+      peer.ws = null; peer.id = null; peer.list = [];
+      for (const x of xfers.peer) if (x.active()) x.fail("Connection lost");
+      setPeerStatus("off");
+      if (S.files.public) setTimeout(peerConnect, Math.min(30000, 2000 * ++peer.retry));
+    };
+  }).catch(e => { setPeerStatus("off"); toast("Couldn't go public: " + e.message); });
+}
+function peerDisconnect() { const ws = peer.ws; peer.ws = null; peer.target = null; if (ws) ws.close(); peer.list = []; setPeerStatus("off"); }
+async function peerSend(to, obj) {
+  const p = peer.list.find(x => x.id === to);
+  if (!p || !peer.ws) throw new Error("They aren't online anymore");
+  const sealed = await seal(await keyFor(p.pub), JSON.stringify(obj), "albatross-peer");
+  peer.ws.send(JSON.stringify({ type: "to", to, msg: sealed }));
+}
+async function onPeerMessage(m) {
+  if (m.type === "welcome") { peer.id = m.id; peer.retry = 0; setPeerStatus("on"); return; }
+  if (m.type === "error") { toast(m.error); return; }
+  if (m.type === "peers") {
+    peer.list = m.peers.filter(p => p.id !== peer.id);
+    if (peer.target && !peer.list.some(p => p.id === peer.target.id)) { toast(peer.target.name + " went offline"); peer.target = null; }
+    renderPeople(); return;
+  }
+  if (m.type === "gone") { for (const x of xfers.peer) if (x.peerId === m.id && x.active()) x.fail("They went offline"); return; }
+  if (m.type !== "from") return;
+  const from = peer.list.find(p => p.id === m.from); if (!from) return;
+  let o; try { o = JSON.parse(await unseal(await keyFor(from.pub), m.msg, "albatross-peer")); } catch { return; }
+  const out = xfers.peer.find(x => x.tid === o.tid && x.dir === "out");
+  const inc = xfers.peer.find(x => x.tid === o.tid && x.dir === "in");
+  if (o.t === "offer") return incomingOffer(from, o);
+  if (o.t === "accept" && out) out.onAnswer(true);
+  else if (o.t === "decline" && out) out.onAnswer(false);
+  else if (o.t === "ack" && out) out.onAck();
+  else if (o.t === "chunk" && inc && inc.state === "receiving") {
+    if (o.seq !== inc.parts.length) return inc.fail("A piece of the file went missing");
+    const u = b64ToU8(o.d); inc.parts.push(u); inc.got += u.length; inc.pct = inc.got / inc.size * 100;
+    peerSend(from.id, { t: "ack", tid: o.tid }).catch(() => {}); renderXfers(); renderOffer(inc);
+  } else if (o.t === "done" && inc) {
+    if (inc.got !== inc.size) return inc.fail("The file arrived incomplete");
+    inc.state = "done"; download(inc.name, new Blob(inc.parts)); inc.parts = []; renderXfers(); renderOffer(inc);
+  } else if (o.t === "cancel") { const x = out || inc; if (x && x.active()) x.fail(x.dir === "in" ? "They cancelled" : "They stopped it"); }
+}
+function baseXfer(x) {
+  x.active = () => ["waiting", "asking", "sending", "offer", "receiving"].includes(x.state);
+  x.fail = (why) => { x.state = "error"; x.err = why; x.parts = []; x.abort?.(new Error(why)); renderXfers(); renderOffer(x); };
+  x.cancel = () => { if (!x.active()) return; peerSend(x.peerId, { t: "cancel", tid: x.tid }).catch(() => {}); x.fail("Cancelled"); };
+  return x;
+}
+// incoming: ask first, collect the pieces only after "Accept"
+function incomingOffer(from, o) {
+  const x = baseXfer({ dir: "in", tid: o.tid, peerId: from.id, who: from.name, name: String(o.name || "file").slice(0, 200), size: Number(o.size) || 0, state: "offer", got: 0, pct: 0, parts: [] });
+  x.label = () => ({ offer: `From ${x.who} · ${fsize(x.size)} · waiting for you`, receiving: `From ${x.who} · ${Math.round(x.pct)}% of ${fsize(x.size)}`, done: `From ${x.who} · saved to Downloads`, declined: `From ${x.who} · declined`, error: `From ${x.who} · ${x.err}` })[x.state];
+  if (x.size > 2 * 1024 ** 3) { peerSend(from.id, { t: "decline", tid: x.tid }).catch(() => {}); return toast(`${from.name} tried to send a file over 2 GB`); }
+  xfers.peer.push(x); renderXfers(); renderOffer(x);
+}
+function answerOffer(x, yes) {
+  if (x.state !== "offer") return;
+  x.state = yes ? "receiving" : "declined";
+  peerSend(x.peerId, { t: yes ? "accept" : "decline", tid: x.tid }).catch(e => x.fail(e.message));
+  renderXfers(); renderOffer(x);
+}
+function renderOffer(x) {
+  if (x.dir !== "in") return;
+  let card = $(`#offers [data-tid="${x.tid}"]`);
+  if (!card) { card = document.createElement("div"); card.className = "offer"; card.dataset.tid = x.tid; $("#offers").appendChild(card); }
+  card.innerHTML = `<div class="top"><span class="ic"></span><span><b></b><small></small></span></div><div class="acts"></div>`;
+  card.querySelector(".ic").textContent = (x.who[0] || "?").toUpperCase();
+  card.querySelector("b").textContent = x.state === "offer" ? `${x.who} wants to send you a file` : x.name;
+  card.querySelector("small").textContent = x.state === "offer" ? `${x.name} · ${fsize(x.size)}` : x.label();
+  const acts = card.querySelector(".acts");
+  if (x.state === "offer") acts.append(smallBtn("Decline", () => answerOffer(x, false)), smallBtn("Accept", () => answerOffer(x, true), true));
+  else if (x.state === "receiving") acts.append(smallBtn("Cancel", () => x.cancel()));
+  else { acts.remove(); setTimeout(() => card.remove(), 4000); }
+}
+// outgoing: one file at a time, each waits for "Accept"
+let peerBusy = false;
+function sendToPeer(list) {
+  const t = peer.target;
+  if (!t) return toast("Pick someone first");
+  for (const file of list) {
+    const x = baseXfer({ dir: "out", tid: crypto.randomUUID(), peerId: t.id, who: t.name, file, name: file.name, size: file.size, state: "waiting", pct: 0 });
+    x.label = () => ({ waiting: `To ${x.who} · waiting in line`, asking: `To ${x.who} · waiting for them to accept…`, sending: `To ${x.who} · ${Math.round(x.pct)}% of ${fsize(x.size)}`, done: `To ${x.who} · delivered`, declined: `To ${x.who} · they declined`, error: `To ${x.who} · ${x.err}` })[x.state];
+    xfers.peer.push(x);
+  }
+  renderXfers(); runPeerQueue();
+}
+async function runPeerQueue() {
+  if (peerBusy) return; peerBusy = true;
+  const CH = 192 * 1024, WINDOW = 8;
+  for (let x; (x = xfers.peer.find(t => t.dir === "out" && t.state === "waiting"));) {
+    const stop = new Promise((_, rej) => (x.abort = rej)); stop.catch(() => {});
+    try {
+      x.state = "asking"; renderXfers();
+      await peerSend(x.peerId, { t: "offer", tid: x.tid, name: x.name, size: x.size });
+      const yes = await Promise.race([new Promise(r => (x.onAnswer = r)), stop, new Promise((_, rej) => setTimeout(() => rej(new Error("No answer within 2 minutes")), 120e3))]);
+      if (!yes) { x.state = "declined"; renderXfers(); continue; }
+      x.state = "sending"; renderXfers();
+      let sent = 0, acked = 0, wake = null;
+      x.onAck = () => { acked++; x.pct = Math.min(100, acked * CH / Math.max(1, x.size) * 100); renderXfers(); if (wake) { const w = wake; wake = null; w(); } };
+      for (let off = 0; off < x.size; off += CH) {
+        while (sent - acked >= WINDOW) await Promise.race([new Promise(r => (wake = r)), stop]);
+        const buf = new Uint8Array(await x.file.slice(off, off + CH).arrayBuffer());
+        await peerSend(x.peerId, { t: "chunk", tid: x.tid, seq: sent, d: toB64(buf) }); sent++;
+      }
+      while (acked < sent) await Promise.race([new Promise(r => (wake = r)), stop]);
+      await peerSend(x.peerId, { t: "done", tid: x.tid });
+      x.state = "done"; x.pct = 100;
+    } catch (e) { if (x.state !== "error") { x.state = "error"; x.err = e.message; } }
+    renderXfers();
+  }
+  peerBusy = false;
+}
+function renderPeople() {
+  $("#pubLive").hidden = peer.status !== "on";
+  const l = $("#pubLine");
+  l.querySelector(".dot").className = "dot " + (peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "");
+  l.querySelector(".t").textContent = pubText();
+  const el = $("#peopleList"); el.innerHTML = "";
+  if (peer.status === "on" && !peer.list.length) el.innerHTML = '<div class="empty-note">Nobody else is public right now. Ask them to turn on Public in Files → People.</div>';
+  for (const p of peer.list) {
+    const on = peer.target?.id === p.id;
+    const row = fileRow(p.name, on ? "Connected · send files below" : "#" + p.id.slice(0, 4), smallBtn(on ? "Connected" : "Connect", () => { peer.target = on ? null : p; renderPeople(); }, on), "person" + (on ? " on" : ""));
+    row.querySelector(".ic").textContent = (p.name[0] || "?").toUpperCase();
+    el.appendChild(row);
+  }
+  $("#peerDrop").classList.toggle("disabled", !peer.target);
+  $("#peerDropTitle").textContent = peer.target ? "Send files to " + peer.target.name : "Pick someone above";
+  if (isHome()) renderHomeStatus();
+}
+wireDrop($("#peerDrop"), $("#peerPick"), sendToPeer);
+$("#pubName").onchange = e => {
+  S.files.name = e.target.value.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 32); e.target.value = S.files.name; saveSettings();
+  if (peer.ws) { peerDisconnect(); peerConnect(); }
+};
+$("#pubOn").onchange = e => {
+  if (e.target.checked && !$("#pubName").value.trim()) { e.target.checked = false; toast("Enter your name first"); $("#pubName").focus(); return; }
+  S.files.name = $("#pubName").value.trim().slice(0, 32);
+  S.files.public = e.target.checked; saveSettings();
+  if (S.files.public) peerConnect(); else peerDisconnect();
+};
+
+// ======================================================================
 // Wire up
 // ======================================================================
 $("#send").onclick = () => send();
 $("#newChat").onclick = () => openNewChat();
+$("#goHome").onclick = () => { setView("home"); $("#sidebar").classList.remove("open"); };
+$("#openFiles").onclick = () => { openFiles(); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
 $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#openSettings").onclick = () => openSettings();
@@ -1812,6 +2304,9 @@ if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S
 applyAppearance();
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
+setView("home");
+if (S.files.public && S.files.name) peerConnect();
+checkHost();
 connect();
 checkSearch();
 </script>

@@ -283,8 +283,15 @@ function finish(host, id, errorText) {
 }
 function safeSend(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch {} }
 
-// ---------- WebSocket for host PCs ----------
-const wss = new WebSocketServer({ server, path: "/host", maxPayload: 80 * 1024 * 1024 });
+// ---------- WebSockets: /host for host PCs, /peer for public users sending files ----------
+const wss = new WebSocketServer({ noServer: true, maxPayload: 80 * 1024 * 1024 });
+const peerWss = new WebSocketServer({ noServer: true, maxPayload: 2 * 1024 * 1024 });
+server.on("upgrade", (req, socket, head) => {
+  const p = new URL(req.url, "http://x").pathname;
+  const target = p === "/host" ? wss : p === "/peer" ? peerWss : null;
+  if (!target) return socket.destroy();
+  target.handleUpgrade(req, socket, head, (ws) => target.emit("connection", ws, req));
+});
 
 wss.on("connection", (ws) => {
   let myCode = null;
@@ -339,9 +346,54 @@ wss.on("connection", (ws) => {
   });
 });
 
+// ---------- public users (file sharing between people) ----------
+// Someone who turns "Public" on joins this list with a name and an ECDH public key. Files go from browser
+// to browser through here, encrypted with a key only the two browsers have; the server can't read them.
+// Nothing is stored: a user disappears from the list when the page closes.
+const peers = new Map(); // id -> { ws, name, pub }
+const MAX_PEERS = 500;
+const peerList = () => [...peers].map(([id, p]) => ({ id, name: p.name, pub: p.pub }));
+let peerTimer = 0;
+function broadcastPeers() {
+  if (peerTimer) return;
+  peerTimer = setTimeout(() => {
+    peerTimer = 0;
+    const msg = JSON.stringify({ type: "peers", peers: peerList() });
+    for (const p of peers.values()) { try { p.ws.send(msg); } catch {} }
+  }, 150);
+}
+peerWss.on("connection", (ws, req) => {
+  let myId = null;
+  let budget = { bytes: 0, since: Date.now() }; // about 200 MB per minute per user
+  ws.isAlive = true;
+  ws.on("pong", () => (ws.isAlive = true));
+  ws.on("message", (raw) => {
+    if (Date.now() - budget.since > 60e3) budget = { bytes: 0, since: Date.now() };
+    if ((budget.bytes += raw.length) > 200 * 1024 * 1024) return safeSend(ws, { type: "error", error: "Slow down: too much data this minute." });
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+    if (msg.type === "hello") {
+      const name = String(msg.name || "").replace(/[ -<>]/g, "").trim().slice(0, 32);
+      const pub = String(msg.pub || "");
+      if (!name || !/^[A-Za-z0-9+/=]{40,200}$/.test(pub)) return safeSend(ws, { type: "error", error: "Enter a name first." });
+      if (!myId && peers.size >= MAX_PEERS) return safeSend(ws, { type: "error", error: "Too many people online, try later." });
+      if (!myId) myId = crypto.randomBytes(6).toString("hex");
+      peers.set(myId, { ws, name, pub });
+      safeSend(ws, { type: "welcome", id: myId });
+      return broadcastPeers();
+    }
+    if (msg.type === "to" && myId) {
+      const to = peers.get(String(msg.to));
+      if (!to) return safeSend(ws, { type: "gone", id: msg.to });
+      try { to.ws.send(JSON.stringify({ type: "from", from: myId, name: peers.get(myId)?.name, msg: msg.msg })); } catch {}
+    }
+  });
+  ws.on("close", () => { if (myId && peers.get(myId)?.ws === ws) { peers.delete(myId); broadcastPeers(); } });
+});
+
 // keep connections alive through proxies, drop dead ones
 setInterval(() => {
-  for (const ws of wss.clients) {
+  for (const ws of [...wss.clients, ...peerWss.clients]) {
     if (!ws.isAlive) { ws.terminate(); continue; }
     ws.isAlive = false;
     try { ws.ping(); } catch {}

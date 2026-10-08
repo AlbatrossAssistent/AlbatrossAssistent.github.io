@@ -3,98 +3,136 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow Control Center</title>
+<title>Albatross Control Center</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%230A0A0A'/%3E%3Cpath d='M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z' fill='white' transform='translate(2.8 1.5) scale(.8)'/%3E%3C/svg%3E">
 <style>
 :root {
-  --bg: #08111f; --panel: #0e1b2e; --panel2: #13233a; --line: #1f3350; --fg: #e8eef7; --muted: #8a9bb4;
-  --ok: #3ddc97; --warn: #ffc857; --bad: #ff6b6b; --accent: #5aa9ff;
+  --bg: #000; --fg: #f5f5f5; --muted: #8e8e8e; --line: rgba(255,255,255,.10); --soft: rgba(255,255,255,.06);
+  --glass: rgba(30,30,30,.42); --glass-strong: rgba(36,36,36,.72); --edge: rgba(255,255,255,.14);
+  --hi: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.45);
+  --sheen: linear-gradient(135deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 34%, rgba(255,255,255,0) 58%, rgba(255,255,255,.06) 100%);
+  --shadow: 0 12px 48px rgba(0,0,0,.55);
+  --accent: #f5f5f5; --accent-fg: #0a0a0a;
+  --ok: #3ddc84; --warn: #f2c14e; --bad: #ff6b5e;
+  --blur: blur(30px) saturate(180%);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
-body { padding: 20px clamp(16px, 3vw, 32px) 28px; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { padding: 20px clamp(14px, 3vw, 32px) 28px; position: relative; overflow-x: hidden; }
+/* the "liquid" behind the glass */
+.orbs { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+.orbs i { position: absolute; border-radius: 50%; filter: blur(70px); }
+.orbs i:nth-child(1) { width: 60vmax; height: 60vmax; left: -18vmax; top: -24vmax; background: radial-gradient(circle, rgba(255,255,255,.14), transparent 65%); animation: drift 28s ease-in-out infinite alternate; }
+.orbs i:nth-child(2) { width: 50vmax; height: 50vmax; right: -16vmax; bottom: -22vmax; background: radial-gradient(circle, rgba(255,255,255,.09), transparent 65%); animation: drift 34s ease-in-out infinite alternate-reverse; }
+.orbs i:nth-child(3) { width: 30vmax; height: 30vmax; left: 40%; top: 35%; background: radial-gradient(circle, rgba(255,255,255,.07), transparent 66%); animation: drift 22s ease-in-out -6s infinite alternate; }
+@keyframes drift { to { transform: translate(8vmax, 6vmax) scale(1.12); } }
+
 .wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-header h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: .2px; }
+.glass, header, .card, button, .pill, .drop { background-color: var(--glass); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--hi), var(--shadow); }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; border-radius: 22px; box-shadow: var(--hi); }
+header .logo { width: 30px; height: 30px; fill: currentColor; }
+header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: -.3px; }
 header .sub { color: var(--muted); font-size: 14px; }
 header .spacer { flex: 1; }
-.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--hi); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
-.ok .dot, .dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(61,220,151,.15); }
-.warn .dot, .dot.warn { background: var(--warn); box-shadow: 0 0 0 4px rgba(255,200,87,.15); animation: pulse 1.2s infinite; }
-.bad .dot, .dot.bad { background: var(--bad); box-shadow: 0 0 0 4px rgba(255,107,107,.15); }
+.ok .dot, .dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(61,220,132,.16); }
+.warn .dot, .dot.warn { background: var(--warn); box-shadow: 0 0 0 4px rgba(242,193,78,.16); animation: pulse 1.2s infinite; }
+.bad .dot, .dot.bad { background: var(--bad); box-shadow: 0 0 0 4px rgba(255,107,94,.16); }
 @keyframes pulse { 50% { opacity: .35; } }
 
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; min-width: 0; }
-.card h2 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.card { border-radius: 26px; padding: 18px 20px; min-width: 0; }
+.card h2 { margin: 0 0 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 10px; }
 .card h2 .spacer { flex: 1; }
 
-.hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 26px 20px 22px; background: radial-gradient(120% 140% at 50% 0%, #17345a 0%, var(--panel) 60%); }
-.hero .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 2px; }
-.code { font: 700 clamp(34px, 6.6vw, 104px)/1.1 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; margin: 6px 0 4px; transition: opacity .3s; display: flex; flex-wrap: wrap; justify-content: center; }
+.hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 28px 20px 24px; background-image: radial-gradient(120% 140% at 50% 0%, rgba(255,255,255,.10) 0%, transparent 60%), var(--sheen); }
+.hero .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 3px; }
+.code { font: 600 clamp(34px, 6.4vw, 100px)/1.1 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; margin: 8px 0 6px; transition: opacity .3s; display: flex; flex-wrap: wrap; justify-content: center; }
 .code .half { white-space: nowrap; }
-.code .key { color: #9fd0ff; }
-.code .dash { color: var(--accent); }
+.code .key { color: rgba(255,255,255,.55); }
+.code .dash { color: rgba(255,255,255,.3); }
 .hero.off .code { opacity: .35; }
 .hero .link { color: var(--muted); font-size: 14px; word-break: break-all; }
 .hero .state { margin-top: 6px; font-size: 14px; font-weight: 600; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
-button { font: inherit; font-size: 14px; font-weight: 600; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; min-height: 38px; padding: 0 14px; cursor: pointer; }
-button:hover { border-color: var(--accent); }
-button:disabled { opacity: .5; cursor: default; }
+button { font: inherit; font-size: 14px; font-weight: 600; color: var(--fg); border-radius: 999px; min-height: 38px; padding: 0 16px; cursor: pointer; box-shadow: var(--hi); transition: transform .12s, background-color .15s; }
+button:hover { background-color: var(--glass-strong); }
+button:active { transform: scale(.97); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background-color: var(--accent); color: var(--accent-fg); background-image: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%); }
+button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
 
 .grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
-.tile .big { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+.tile .big { font-size: 21px; font-weight: 600; display: flex; align-items: center; gap: 10px; letter-spacing: -.3px; }
 .tile .small { color: var(--muted); font-size: 13px; margin-top: 4px; min-height: 1.4em; }
-.num { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.num { font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
 
 .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
 @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
-.models { display: flex; flex-direction: column; gap: 8px; }
-.model { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.models, .flist { display: flex; flex-direction: column; gap: 8px; }
+.model, .fitem { background: var(--soft); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; box-shadow: var(--hi); }
 .model b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model small { color: var(--muted); }
 .empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
 
+/* files */
+.fitem { display: flex; align-items: center; gap: 10px; }
+.fitem .ic { width: 34px; height: 34px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--soft); border: 1px solid var(--line); }
+.fitem .ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.fitem .nm { flex: 1; min-width: 0; }
+.fitem .nm b { display: block; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fitem .nm small { color: var(--muted); font-size: 12.5px; }
+.fitem a { color: var(--fg); font-size: 12.5px; font-weight: 600; text-decoration: none; border: 1px solid var(--edge); border-radius: 999px; padding: 5px 12px; background: var(--soft); }
+.fitem a:hover { background: var(--glass-strong); }
+.drop { border-radius: 20px; border-style: dashed; border-color: rgba(255,255,255,.22); padding: 18px; text-align: center; cursor: pointer; color: var(--muted); font-size: 14px; box-shadow: var(--hi); margin-bottom: 12px; transition: border-color .2s, background-color .2s; }
+.drop:hover, .drop.drag { border-color: var(--fg); background-color: var(--glass-strong); color: var(--fg); }
+.drop b { color: var(--fg); display: block; font-size: 15px; margin-bottom: 2px; }
+.path { color: var(--muted); font-size: 12px; margin-top: 10px; word-break: break-all; }
+.prog { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 6px; }
+.prog div { height: 100%; background: var(--fg); width: 0; transition: width .2s; }
+
 .feed { display: flex; flex-direction: column; max-height: 560px; overflow-y: auto; margin: 0 -8px; }
-.ev { display: grid; grid-template-columns: 64px 16px minmax(0, 1fr); gap: 10px; padding: 9px 8px; border-radius: 10px; align-items: start; }
+.ev { display: grid; grid-template-columns: 64px 16px minmax(0, 1fr); gap: 10px; padding: 9px 8px; border-radius: 12px; align-items: start; }
 .ev.new { animation: flash 1.2s ease-out; }
-@keyframes flash { from { background: rgba(90,169,255,.18); } to { background: transparent; } }
+@keyframes flash { from { background: rgba(255,255,255,.12); } to { background: transparent; } }
 .ev time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; padding-top: 1px; }
 .ev .dot { margin-top: 6px; }
 .ev .what { overflow-wrap: anywhere; }
 .ev .model-name { font-weight: 600; }
-.ev .msg { color: #c5d3e6; }
+.ev .msg { color: #cfcfcf; }
 .ev .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .ev.info .what { color: var(--muted); }
-.ev.error .what { color: #ffb3b3; }
-.spin { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 4px; }
+.ev.error .what { color: #ffb3ab; }
+.spin { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--fg); border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.switch { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 17px; font-weight: 700; user-select: none; }
-.switch input { appearance: none; width: 48px; height: 28px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background .2s; flex: none; margin: 0; }
-.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.switch { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 17px; font-weight: 600; user-select: none; }
+.switch input { appearance: none; width: 48px; height: 28px; border-radius: 999px; background: var(--line); border: 1px solid var(--edge); position: relative; cursor: pointer; transition: background .2s; flex: none; margin: 0; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .25s cubic-bezier(.3,1.4,.5,1); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 .switch input:checked { background: var(--ok); }
 .switch input:checked::after { transform: translateX(20px); }
 .switch input:disabled { opacity: .5; cursor: default; }
-.switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.banner { background: #3a1620; border: 1px solid #6b2a36; color: #ffd0d6; border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.switch input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.banner { background: rgba(255,107,94,.12); border: 1px solid rgba(255,107,94,.35); color: #ffd0cb; border-radius: 16px; padding: 10px 14px; font-size: 14px; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
 </style>
 </head>
 <body>
+<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 <div class="wrap">
   <header>
-    <h1>Burrow Control Center</h1>
+    <svg class="logo" viewBox="0 0 28 28"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path d="M6 24q2-1.6 4 0t4 0t4 0t4 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <h1>Albatross Control Center</h1>
     <span class="sub" id="pcName"></span>
     <span class="spacer"></span>
     <span class="sub" id="uptime"></span>
   </header>
 
-  <div class="banner" id="lost" hidden>Lost contact with the Burrow host. Is the Burrow host window still open?</div>
+  <div class="banner" id="lost" hidden>Lost contact with the Albatross host. Is it still running? Double-click burrow-host.bat to start it.</div>
 
   <section class="card hero" id="hero">
     <div class="label">Your code</div>
     <div class="code" id="code">····-····-····-····</div>
-    <div class="link" style="margin-bottom:4px">🔒 End-to-end encrypted. The light blue half is the key, and it's never sent to the server.</div>
+    <div class="link" style="margin-bottom:4px">🔒 End-to-end encrypted. The lighter half is the key, and it's never sent to the server.</div>
     <div class="link" id="link"></div>
     <div class="state" id="heroState"></div>
     <div class="row">
@@ -118,9 +156,23 @@ button:disabled { opacity: .5; cursor: default; }
     <div class="card"><h2>Errors</h2><div class="num" id="nErr">0</div></div>
   </section>
 
+  <section class="cols" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+    <div class="card">
+      <h2>Send to your devices</h2>
+      <div class="drop" id="drop"><b>Drop files here or click to choose</b>Devices with your code can download them in Albatross → Files.</div>
+      <input type="file" id="pick" multiple hidden>
+      <div class="flist" id="outbox"></div>
+    </div>
+    <div class="card">
+      <h2>Received from your devices</h2>
+      <div class="flist" id="received"></div>
+      <div class="path" id="folder"></div>
+    </div>
+  </section>
+
   <section class="cols">
     <div class="card">
-      <h2>In GPU memory <span class="spacer"></span><button id="freeGpu">Free GPU memory</button></h2>
+      <h2>In GPU memory <span class="spacer"></span><button class="small" id="freeGpu">Free GPU memory</button></h2>
       <div class="models" id="models"></div>
     </div>
     <div class="card">
@@ -133,6 +185,7 @@ button:disabled { opacity: .5; cursor: default; }
 <script>
 const $ = (s) => document.querySelector(s);
 let S = null, seen = new Set(), first = true;
+const FILE_ICON = '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
 
 function ago(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -141,6 +194,7 @@ function ago(ms) {
   const h = Math.floor(m / 60); return h + " h " + (m % 60) + " min";
 }
 function gb(b) { return b ? (b / 1e9).toFixed(1) + " GB" : "—"; }
+function size(b) { return b >= 1e9 ? (b / 1e9).toFixed(2) + " GB" : b >= 1e6 ? (b / 1e6).toFixed(1) + " MB" : b >= 1e3 ? Math.round(b / 1e3) + " KB" : b + " B"; }
 function fmt(n) { return Math.round(n).toLocaleString(); }
 function setTile(id, cls, text, sub) {
   const el = $("#" + id);
@@ -148,6 +202,14 @@ function setTile(id, cls, text, sub) {
   el.querySelector(".dot").className = "dot " + cls;
   el.lastElementChild.textContent = text;
   $("#" + id + "Sub").textContent = sub;
+}
+function fileRow(f, right) {
+  const d = document.createElement("div"); d.className = "fitem";
+  d.innerHTML = `<span class="ic">${FILE_ICON}</span><span class="nm"><b></b><small></small></span>`;
+  d.querySelector("b").textContent = f.name;
+  d.querySelector("small").textContent = size(f.size) + " · " + new Date(f.time).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  if (right) d.appendChild(right);
+  return d;
 }
 
 function render() {
@@ -169,7 +231,7 @@ function render() {
   $("#code").append(half(g[0], g[1], "route", "Finds this PC on the server"), dash(), half(g[2] || "····", g[3], "key", "Encryption key: never sent to the server"));
   $("#hero").classList.toggle("off", !online);
   $("#link").textContent = S.link || S.server;
-  $("#heroState").textContent = online ? "Share this code to let a device use this PC's AI" : "Not shared right now, waiting for the server…";
+  $("#heroState").textContent = online ? "Share this code to let a device use this PC's AI and send it files" : "Not shared right now, waiting for the server…";
   $("#heroState").style.color = online ? "var(--ok)" : "var(--warn)";
 
   setTile("srv", online ? "ok" : S.connection === "connecting" ? "warn" : "bad",
@@ -179,7 +241,7 @@ function render() {
   setTile("oll", o.up ? "ok" : "bad", o.up ? "Running" : "Not running",
     o.up ? `v${o.version} · ${o.models.length} model${o.models.length === 1 ? "" : "s"} loaded` : "Start Ollama on this PC");
   setTile("slp", S.awake ? "ok" : "warn", S.awake ? "Blocked" : "Allowed",
-    S.awake ? "PC stays awake while Burrow runs" : "Couldn't block sleep");
+    S.awake ? "PC stays awake while Albatross runs" : "Couldn't block sleep");
   const live = S.log.filter((e) => e.active && e.kind === "chat");
   setTile("act", S.active ? "warn" : "ok", S.active ? `${S.active} request${S.active === 1 ? "" : "s"}` : "Idle",
     live.length ? `Answering with ${live[0].model}…` : "Waiting for messages");
@@ -192,7 +254,7 @@ function render() {
   $("#bootText").textContent = S.autostart === null ? "Not available" : boot.checked ? "On" : "Off";
   $("#bootSub").textContent = bootError || (bootPending
     ? (bootPending.want ? "Confirm in the window that opened: allow admin, then enter your Windows password" : "Confirm in the window that opened (allow admin)")
-    : S.autostart ? "Ollama and Burrow start when the PC boots, even before you sign in" + (S.background ? " (running that way now)" : "")
+    : S.autostart ? "Ollama and Albatross start when the PC boots, even before you sign in" + (S.background ? " (running that way now)" : "")
     : S.autostart === false ? "Only runs when you start burrow-host.bat" : "Needs Windows");
 
   $("#nMsg").textContent = fmt(S.totals.messages);
@@ -200,6 +262,28 @@ function render() {
   $("#nReq").textContent = fmt(S.totals.requests);
   $("#nErr").textContent = fmt(S.totals.errors);
   $("#nErr").style.color = S.totals.errors ? "var(--bad)" : "";
+
+  // files
+  const F = S.files || { outbox: [], received: [] };
+  const ob = $("#outbox"); ob.innerHTML = "";
+  for (const u of uploading) {
+    const d = fileRow({ name: u.name, size: u.size, time: Date.now() });
+    d.querySelector("small").textContent = "Adding… " + Math.round(u.pct) + "%";
+    ob.appendChild(d);
+  }
+  if (!F.outbox.length && !uploading.length) ob.innerHTML = '<div class="empty">Nothing offered yet.</div>';
+  for (const f of F.outbox) {
+    const b = document.createElement("button"); b.className = "small"; b.textContent = "Remove";
+    b.onclick = () => fetch("/action/remove-outbox", { method: "POST", headers: { "X-Burrow": "1", "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name }) });
+    ob.appendChild(fileRow(f, b));
+  }
+  const rc = $("#received"); rc.innerHTML = "";
+  if (!F.received.length) rc.innerHTML = '<div class="empty">Nothing yet. Send files from Albatross → Files → Your PC.</div>';
+  for (const f of F.received) {
+    const a = document.createElement("a"); a.href = "/received/" + encodeURIComponent(f.name); a.textContent = "Save"; a.download = f.name;
+    rc.appendChild(fileRow(f, a));
+  }
+  $("#folder").textContent = F.folder ? "Saved in " + F.folder : "";
 
   const mEl = $("#models"); mEl.innerHTML = "";
   if (!o.models.length) mEl.innerHTML = `<div class="empty">${o.up ? "Nothing loaded, GPU memory is free." : "Ollama isn't running."}</div>`;
@@ -247,6 +331,27 @@ function connect() {
   es.onerror = () => { $("#lost").hidden = false; };
 }
 setInterval(render, 1000);
+
+// ---------- adding files for devices ----------
+const uploading = [];
+function addFiles(list) {
+  for (const f of list) {
+    const u = { name: f.name, size: f.size, pct: 0 };
+    uploading.push(u); render();
+    const x = new XMLHttpRequest();
+    x.open("POST", "/upload?name=" + encodeURIComponent(f.name));
+    x.setRequestHeader("X-Burrow", "1");
+    x.upload.onprogress = (e) => { if (e.lengthComputable) { u.pct = e.loaded / e.total * 100; render(); } };
+    x.onloadend = () => { uploading.splice(uploading.indexOf(u), 1); if (x.status !== 200) alert("Couldn't add " + f.name + ": " + (x.responseText || x.status)); render(); };
+    x.send(f);
+  }
+}
+const drop = $("#drop");
+drop.onclick = () => $("#pick").click();
+$("#pick").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("drag"); addFiles(e.dataTransfer.files); });
 
 async function copy(text, btn) {
   try { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = "Copied"; setTimeout(() => (btn.textContent = t), 1200); } catch {}

@@ -8,7 +8,7 @@ const path = require("path");
 const HTML = path.join(__dirname, "control.html");
 
 // The panel's port doubles as a lock: if it's taken, another Burrow host is already running (onBusy).
-function startPanel({ port, getState, actions, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -27,13 +27,30 @@ function startPanel({ port, getState, actions, onListening, onBusy }) {
       req.on("close", () => clients.delete(res));
       return;
     }
+    // Files: download one that arrived from a device, or add one for devices to download (see files.js).
+    const dl = req.method === "GET" && req.url.match(/^\/received\/(.+)$/);
+    if (dl && files) {
+      const f = files.receivedPath(decodeURIComponent(dl[1]));
+      if (!f) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(f))}` });
+      return fs.createReadStream(f).pipe(res);
+    }
+    const up = req.method === "POST" && req.url.match(/^\/upload\?name=(.+)$/);
+    if (up && files && req.headers["x-burrow"] === "1") {
+      files.saveToOutbox(decodeURIComponent(up[1]), req)
+        .then((r) => { push(); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(r)); })
+        .catch((e) => { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: e.message })); });
+      return;
+    }
     // Actions need a custom header, which other websites can't send without a CORS preflight we never allow.
     const m = req.method === "POST" && req.url.match(/^\/action\/([a-z-]+)$/);
     if (m && actions[m[1]] && req.headers["x-burrow"] === "1") {
-      Promise.resolve()
-        .then(() => actions[m[1]]())
+      let raw = "";
+      req.on("data", (c) => { raw += c; if (raw.length > 10000) req.destroy(); });
+      req.on("end", () => Promise.resolve()
+        .then(() => { let b = {}; try { b = JSON.parse(raw || "{}"); } catch {} return actions[m[1]](b); })
         .then((r) => { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(r || { ok: true })); })
-        .catch((e) => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: e.message })); });
+        .catch((e) => { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: e.message })); }));
       return;
     }
     res.writeHead(404); res.end();
