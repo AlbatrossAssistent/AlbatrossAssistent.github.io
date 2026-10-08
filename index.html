@@ -54,15 +54,10 @@ a { color: inherit; }
 .scroll-hint i::after { content: ""; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; border-radius: 2px; background: #fff; transform: translateX(-50%); animation: wheel 1.6s ease-in-out infinite; }
 @keyframes wheel { 0% { opacity: 0; transform: translate(-50%, 0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 12px); } }
 
-/* ocean planet */
-.planet { width: min(64vmin, 640px); aspect-ratio: 1; border-radius: 50%; }
-.planet .body { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: #031338;
-  box-shadow: 0 0 140px 24px rgba(40,120,255,.28), 0 0 50px 4px rgba(120,190,255,.22), inset 0 0 0 1px rgba(150,200,255,.12); }
-.planet .surface { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
-.planet .shade { display: none; }
-.planet .rim { position: absolute; inset: -1px; border-radius: 50%; background: conic-gradient(from 200deg, transparent 0 30%, rgba(150,215,255,.8) 44%, rgba(90,170,255,.4) 54%, transparent 66% 100%);
-  -webkit-mask: radial-gradient(circle, transparent 69.4%, #000 70%); mask: radial-gradient(circle, transparent 69.4%, #000 70%); filter: blur(1.5px); }
-.planet .glow { position: absolute; inset: -18%; border-radius: 50%; background: radial-gradient(circle, transparent 45%, rgba(70,150,255,.22) 52%, transparent 68%); pointer-events: none; }
+/* ocean planet: drawn in 3D on the GPU (WebGL) on a full-stage canvas; .planet only gives its size */
+.planet { width: min(64vmin, 640px); aspect-ratio: 1; border-radius: 50%; pointer-events: none; }
+#ocean { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+.planet.fallback { background: radial-gradient(circle at 35% 30%, #3f86e8, #0b3a8a 55%, #041a45 80%); box-shadow: 0 0 140px 24px rgba(40,120,255,.28); }
 #bluefill { position: absolute; inset: 0; z-index: 9; background: #0b3a8a; opacity: 0; pointer-events: none; }
 
 /* features */
@@ -171,7 +166,8 @@ footer a:hover { color: var(--fg); }
     </section>
     <div class="scroll-hint" id="hint"><i></i>Scroll</div>
 
-    <div class="layer planet" id="planet"><div class="glow"></div><div class="body"><canvas class="surface" id="surface" width="448" height="448"></canvas><div class="shade"></div></div><div class="rim"></div></div>
+    <div class="layer planet" id="planet"></div>
+    <canvas id="ocean" aria-hidden="true"></canvas>
 
     <!-- 1: sparkle -->
     <div class="layer icon" id="sparkle"><svg class="sparkle-svg" viewBox="-50 -50 100 100"><defs>
@@ -296,7 +292,7 @@ const story = $(".story");
 let progress = 0;
 function readProgress() { const r = story.getBoundingClientRect(); return clamp(-r.top / (r.height - innerHeight)); }
 const el = (id) => document.getElementById(id);
-const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), surface: el("surface"), rocket: el("rocket"), bluefill: el("bluefill"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
+const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), ocean: el("ocean"), rocket: el("rocket"), bluefill: el("bluefill"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
 // like place(), but x/y in pixels from the centre of the screen
 function placePx(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
@@ -317,90 +313,123 @@ function feature(icon, cap, p, a) {
   place(cap, { x: -30 * co, y: 22 + 4 * (1 - ci), o: ci * (1 - co) });
 }
 
-// ---------- the ocean planet: a sphere covered in water, with small moving waves ----------
-// Per pixel (computed once): where on the globe it is (longitude/latitude), how the sun lights it, the
-// atmosphere glow at the edge. Every frame: two layers of small waves (a tiling wave map scrolling in
-// different directions) tilt the surface a little, which makes the sun glitter on the water and adds white crests.
-const PS = 448, TW = 512, TH = 256, WT = 128;
-const pctx = L.surface.getContext("2d");
-const pimg = pctx.createImageData(PS, PS);
-function hash(x, y, z) { let h = x * 374761393 + y * 668265263 + z * 2147483647; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
-function vnoise(x, y, z) {
-  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
-  const l = (a, b, t) => a + (b - a) * t;
-  return l(l(l(hash(xi, yi, zi), hash(xi + 1, yi, zi), u), l(hash(xi, yi + 1, zi), hash(xi + 1, yi + 1, zi), u), v),
-           l(l(hash(xi, yi, zi + 1), hash(xi + 1, yi, zi + 1), u), l(hash(xi, yi + 1, zi + 1), hash(xi + 1, yi + 1, zi + 1), u), v), w);
+// ---------- the ocean planet: a real 3D sphere drawn by the graphics card (WebGL) ----------
+// Every pixel shoots a camera ray at a sphere. The water is 3D noise over the whole globe (so nothing repeats):
+// a slow swell plus five layers of small waves drifting in different directions. Lighting: the sun glitters on
+// the waves, the water reflects the sky at the edges, light shines through crests, and the atmosphere glows.
+const OCEAN_FS = `precision highp float;
+uniform vec2 uRes;      // canvas size in pixels
+uniform vec3 uC;        // planet centre x, y (from the top) and radius, in canvas pixels
+uniform float uTime, uTurn, uAlpha;
+// 3D simplex noise (Ian McEwan / Stefan Gustavson, MIT licence)
+vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+  i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_);
+  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
 }
-// ocean depth: soft lighter and darker currents (seamless around the globe)
-const depth = new Float32Array(TW * TH);
-for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) {
-  const a = i / TW * Math.PI * 2, x = Math.cos(a) * 2, z = Math.sin(a) * 2, y = j / TH * 3;
-  let n = 0, amp = .55, f = 1;
-  for (let o = 0; o < 4; o++) { n += vnoise(x * f + 5, y * f * 1.6, z * f + 9) * amp; amp *= .5; f *= 2.1; }
-  depth[j * TW + i] = Math.min(1, Math.max(0, (n - .25) * 1.5));
-}
-// small waves: a tiling map of slopes (dx, dy) and crest height, built from a few wave trains
-const wdx = new Float32Array(WT * WT), wdy = new Float32Array(WT * WT), wh = new Float32Array(WT * WT);
-const WAVES = [[3, 1, .5], [-2, 3, .4], [5, -2, .25], [1, 6, .2], [-6, -1, .15], [7, 4, .1]];
-for (let y = 0; y < WT; y++) for (let x = 0; x < WT; x++) {
-  let h = 0, dx = 0, dy = 0;
-  for (const [kx, ky, am] of WAVES) {
-    const ph = (kx * x + ky * y) / WT * Math.PI * 2 + kx * 1.7;
-    h += am * Math.sin(ph); dx += am * kx * Math.cos(ph); dy += am * ky * Math.cos(ph);
+mat3 rotY(float a){float c=cos(a),s=sin(a);return mat3(c,0.,-s,0.,1.,0.,s,0.,c);}
+mat3 rotX(float a){float c=cos(a),s=sin(a);return mat3(1.,0.,0.,0.,c,s,0.,-s,c);}
+// the water surface: a slow warped swell plus five layers of small waves, each drifting its own way
+float waves(vec3 q, float t){
+  float h = .5 * snoise(q * 2.6 + vec3(t * .02, 0., t * .015) + .7 * snoise(q * 1.3 + t * .008));
+  float a = .3, f = 13.;
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    vec3 dir = vec3(sin(fi * 2.1 + .3), cos(fi * 1.3), sin(fi * 3.7 + 1.));
+    h += a * snoise(q * f + dir * t * (.22 + .06 * fi));
+    a *= .55; f *= 2.13;
   }
-  const k = y * WT + x; wh[k] = h; wdx[k] = dx / 6; wdy[k] = dy / 6;
+  return h;
 }
-const lonMap = new Float32Array(PS * PS), latF = new Float32Array(PS * PS), light = new Float32Array(PS * PS).fill(-1);
-const rimT = new Float32Array(PS * PS), N = new Float32Array(PS * PS * 3), shrink = new Float32Array(PS * PS);
-const SUN = [-.42, -.5, .76], sl = Math.hypot(...SUN); SUN[0] /= sl; SUN[1] /= sl; SUN[2] /= sl;
-for (let py = 0; py < PS; py++) for (let px = 0; px < PS; px++) {
-  const nx = (px + .5) / PS * 2 - 1, ny = (py + .5) / PS * 2 - 1, r2 = nx * nx + ny * ny;
-  if (r2 > 1) continue;
-  const nz = Math.sqrt(1 - r2), k = py * PS + px;
-  lonMap[k] = Math.atan2(nx, nz) / (Math.PI * 2);
-  latF[k] = Math.min(TH - 1.001, Math.max(0, (Math.asin(ny) / Math.PI + .5) * TH - .5));
-  light[k] = Math.max(0, nx * SUN[0] + ny * SUN[1] + nz * SUN[2]);
-  rimT[k] = Math.pow(1 - nz, 2.6);
-  N[k * 3] = nx; N[k * 3 + 1] = ny; N[k * 3 + 2] = nz;
-  shrink[k] = nz;                                       // waves look flatter towards the edge
-}
-function sampD(u, v) {
-  const fu = u * TW, i0 = fu | 0, fx = fu - i0, i1 = (i0 + 1) % TW, j0 = v | 0, fy = v - j0, r0 = j0 * TW, r1 = r0 + TW;
-  const a = depth[r0 + i0] + (depth[r0 + i1] - depth[r0 + i0]) * fx, b = depth[r1 + i0] + (depth[r1 + i1] - depth[r1 + i0]) * fx;
-  return a + (b - a) * fy;
-}
-function drawPlanet(turn, time) {
-  const d = pimg.data, off = ((turn % 1) + 1) % 1, T = time / 1000;
-  const o1x = T * 9, o1y = T * 4, o2x = -T * 6, o2y = T * 7;      // the two wave layers drift in different directions
-  for (let k = 0; k < PS * PS; k++) {
-    const L0 = light[k], q = k * 4;
-    if (L0 < 0) { d[q + 3] = 0; continue; }
-    let u = lonMap[k] + off; u -= Math.floor(u);
-    const v = latF[k];
-    // wave lookups: many small waves around the globe (tile repeats 14x around, 7x pole to pole)
-    const wx = u * WT * 14, wy = v / TH * WT * 7;
-    const a1 = ((((wx + o1x) | 0) % WT + WT) % WT) + ((((wy + o1y) | 0) % WT + WT) % WT) * WT;
-    const a2 = ((((wx * 1.7 + o2x) | 0) % WT + WT) % WT) + ((((wy * 1.7 + o2y) | 0) % WT + WT) % WT) * WT;
-    const sh = shrink[k] * .34;
-    let nx = N[k * 3] + (wdx[a1] + wdx[a2] * .6) * sh, ny = N[k * 3 + 1] + (wdy[a1] + wdy[a2] * .6) * sh, nz = N[k * 3 + 2];
-    const il = 1 / Math.hypot(nx, ny, nz); nx *= il; ny *= il; nz *= il;
-    const dif = Math.max(0, nx * SUN[0] + ny * SUN[1] + nz * SUN[2]);
-    // sun glitter: reflect the view ray off the tilted water
-    const rx = 2 * nz * nx, ry = 2 * nz * ny, rz = 2 * nz * nz - 1;
-    const rs = Math.max(0, rx * SUN[0] + ry * SUN[1] + rz * SUN[2]);
-    const glint = Math.pow(rs, 90) * 255 + Math.pow(rs, 12) * 40;
-    const dep0 = sampD(u, v);
-    const crest = Math.max(0, wh[a1] + wh[a2] * .6 - 1.25) * 70 * (.3 + L0) * Math.max(0, dep0 - .55) * 2.2;   // rare white wave tops, only in some areas
-    const dep = dep0, lit = .12 + dif * .95, rim = rimT[k];
-    const fres = Math.pow(1 - nz, 4);                                       // sky reflection at grazing angles
-    d[q] = (6 + dep * 10) * lit + glint + crest + rim * 60 + fres * 70;
-    d[q + 1] = (36 + dep * 62) * lit + glint + crest + rim * 140 + fres * 120;
-    d[q + 2] = (105 + dep * 95) * lit + glint * .95 + crest + rim * 255 + fres * 160;
-    d[q + 3] = 255;
+void main(){
+  vec2 frag = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
+  vec2 d = (frag - uC.xy) / uC.z;
+  float r = length(d);
+  vec3 haloCol = vec3(.28, .58, 1.);
+  if (r > 1.) {                                   // outside: the atmosphere's glow
+    float g = exp(-(r - 1.) * 7.) * smoothstep(1.45, 1., r) * .8;
+    gl_FragColor = vec4(haloCol * g, g) * uAlpha;
+    return;
   }
-  pctx.putImageData(pimg, 0, 0);
-}
+  // a real camera ray hitting a real sphere (perspective)
+  const float D = 3.6; float tanA = 1. / sqrt(D * D - 1.);
+  vec3 ro = vec3(0., 0., D), rd = normalize(vec3(d.x * tanA, -d.y * tanA, -1.));
+  float b = dot(ro, rd), c = dot(ro, ro) - 1.;
+  float tt = -b - sqrt(max(b * b - c, 0.));
+  vec3 n0 = normalize(ro + rd * tt), V = -rd;
+  vec3 L = normalize(vec3(-.55, .62, .56));      // the sun, upper left, in front
+  mat3 R = rotX(.38) * rotY(uTurn);
+  vec3 q = R * n0;
+  float t = uTime, e = .0018;
+  float h0 = waves(q, t);
+  vec3 g = vec3(waves(q + vec3(e, 0., 0.), t) - h0, waves(q + vec3(0., e, 0.), t) - h0, waves(q + vec3(0., 0., e), t) - h0) / e;
+  g -= dot(g, q) * q;                             // only the slope along the surface
+  vec3 n = normalize(n0 - (g * R) * .0052);       // tilt the sphere's normal by the waves (back to view space)
+  float terminator = clamp(dot(n0, L) * 1.1 + .15, 0., 1.);
+  float diff = max(dot(n, L), 0.);
+  float cur = .5 + .5 * snoise(q * 1.8 + vec3(0., t * .006, 0.));    // slow lighter and darker currents
+  vec3 deep = mix(vec3(.006, .04, .14), vec3(.025, .16, .40), cur);
+  vec3 col = deep * (.05 + .95 * diff);
+  col += vec3(0., .09, .16) * smoothstep(.15, .9, h0) * terminator * .7;   // light through the wave crests
+  float NV = max(dot(n, V), 0.);
+  float F = .02 + .98 * pow(1. - NV, 5.);                               // water reflects more at grazing angles
+  col = mix(col, vec3(.36, .62, 1.) * (.18 + .82 * terminator), F * .8);
+  vec3 H = normalize(L + V); float NH = max(dot(n, H), 0.);
+  col += vec3(1., .97, .9) * (pow(NH, 1100.) * 7. + pow(NH, 120.) * .35 + pow(NH, 18.) * .05) * terminator;   // sun glitter
+  float rim = pow(1. - max(dot(n0, V), 0.), 3.);
+  col += vec3(.2, .5, 1.) * rim * (.2 + .9 * terminator);                // atmosphere seen through at the edge
+  col = 1. - exp(-col * 1.7);                                           // soft highlights
+  float aa = smoothstep(1., 1. - 1.6 / uC.z, r);                        // smooth outline
+  gl_FragColor = vec4(col * aa + haloCol * .8 * (1. - aa), mix(.8, 1., aa)) * uAlpha;
+}`;
+const ocean = (() => {
+  const cv = L.ocean, gl = cv.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true });
+  if (!gl) { L.planet.classList.add("fallback"); return null; }
+  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+  const prog = gl.createProgram();
+  try {
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }"));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, OCEAN_FS));
+    gl.linkProgram(prog);
+  } catch (e) { console.error(e); L.planet.classList.add("fallback"); return null; }
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = (n) => gl.getUniformLocation(prog, n);
+  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha");
+  let scale = Math.min(1.5, devicePixelRatio || 1), slow = 0, last = 0;
+  return function draw(cx, cy, R, turn, time, alpha) {
+    // resolution follows the screen; if frames get slow, draw fewer pixels (and back up when there's room)
+    const dt = last ? time - last : 16; last = time;
+    if (dt > 30) { if (++slow > 20 && scale > .5) { scale *= .85; slow = 0; } } else slow = Math.max(0, slow - 1);
+    const px = Math.min(scale, Math.sqrt(2.4e6 / (innerWidth * innerHeight)));
+    const w = Math.round(innerWidth * px), h = Math.round(innerHeight * px);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.uniform2f(uRes, w, h); gl.uniform3f(uC, cx * px, cy * px, Math.max(1, R * px));
+    gl.uniform1f(uTime, time / 1000); gl.uniform1f(uTurn, turn * Math.PI * 2); gl.uniform1f(uAlpha, alpha);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+})();
 
 function render(t) {
   const P = progress, p = Math.min(1, P / .84);       // p: the story as before, P: whole scroll
@@ -414,11 +443,13 @@ function render(t) {
   const rise = easeOut(seg(p, .04, .2)), sink = ease(seg(p, .8, .93));
   // finally it grows from the bottom until it covers the whole screen
   const baseS = (.55 + .45 * rise) * (1 + .5 * sink), r0 = L.planet.offsetWidth / 2 * baseS || 1;
-  const cover = Math.hypot(innerWidth, innerHeight) / 2 * 1.08 / r0;
-  place(L.planet, { y: (75 * (1 - rise) + 52 * sink) * (1 - grow), s: baseS * (1 + (cover - 1) * grow), o: Math.min(1, rise * 1.4) });
+  const cover = Math.hypot(innerWidth, innerHeight) / 2 * 1.04 / r0;
+  const planetY = (75 * (1 - rise) + 52 * sink) * (1 - grow), planetS = baseS * (1 + (cover - 1) * grow), planetO = Math.min(1, rise * 1.4);
+  place(L.planet, { y: planetY, s: planetS, o: ocean ? 0 : planetO });
   L.bluefill.style.opacity = seg(P, .95, 1);
   // the planet turns slowly by itself and faster while you scroll
-  drawPlanet((reduce ? 0 : t * .00002) + p * 1.4, reduce ? 0 : t);
+  if (ocean) ocean(innerWidth / 2, innerHeight / 2 + planetY * innerHeight / 100, L.planet.offsetWidth / 2 * planetS,
+                   (reduce ? 0 : t * .000012) + p * .9, reduce ? 0 : t, planetO);
   // features
   feature(L.sparkle, L.cap1, p, .2);
   L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60 + p * 220) % 360}deg) scale(${1 + Math.sin(t / 700) * .04})`;
