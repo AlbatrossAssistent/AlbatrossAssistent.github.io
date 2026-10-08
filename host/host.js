@@ -164,6 +164,16 @@ async function modelBytes(model) {
   if (!sizes[model]) { try { for (const m of (await (await fetch(OLLAMA + "/api/tags")).json()).models || []) sizes[m.name] = m.size; } catch {} }
   return sizes[model] || 0;
 }
+// Bytes read from disk so far by the processes that load models (Ollama's llama-server, ComfyUI's python).
+// On a slow disk this is what takes the time, so it's the best measure of progress.
+function diskRead(comfyToo) {
+  if (process.platform !== "win32") return Promise.resolve(null);
+  const names = ["llama-server.exe", "ollama.exe", "ollama_llama_server.exe"].concat(comfyToo ? ["python.exe"] : []);
+  const filter = names.map((n) => `Name='${n}'`).join(" or ");
+  return new Promise((res) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+    `(Get-CimInstance Win32_Process -Filter "${filter}" | Measure-Object ReadTransferCount -Sum).Sum`],
+    { windowsHide: true, timeout: 4000 }, (err, out) => res(err ? null : Number(String(out).trim()) || 0)));
+}
 async function isLoaded(model) {
   if (comfy.isComfy(model)) return false;
   try { return ((await (await fetch(OLLAMA + "/api/ps", { signal: AbortSignal.timeout(2000) })).json()).models || []).some((m) => m.name === model); } catch { return false; }
@@ -172,15 +182,21 @@ async function watchLoad(model) {
   if (!model || (loading && loading.model === model && !loading.done)) return;
   if (await isLoaded(model)) { loading = { model, pct: 100, done: true }; return; }
   const me = (loading = { model, pct: 0, done: false, since: Date.now() });
-  const [g0, bytes] = await Promise.all([gpuMem(), modelBytes(model)]);
+  const cz = comfy.isComfy(model);
+  const [g0, bytes, r0] = await Promise.all([gpuMem(), modelBytes(model), diskRead(cz)]);
   const expect = g0 && bytes ? Math.min(bytes / 1048576, Math.max(512, g0.total - g0.used - 400)) : 0;
-  if (!expect) me.pct = null; // can't measure on this PC (no NVIDIA card or unknown size)
+  if (!bytes) me.pct = null; // unknown size: the website then shows no number
+  // Two measures, whichever is further: bytes read from disk, and graphics memory filled.
   const tick = async () => {
     if (loading !== me || me.done) return;
-    if (Date.now() - me.since > 10 * 60e3) { me.done = true; return; }
+    if (Date.now() - me.since > 15 * 60e3) { me.done = true; return; }
     if (await isLoaded(model)) return markLoaded(model);
-    if (expect) { const g = await gpuMem(); if (g) me.pct = Math.max(me.pct || 0, Math.min(99, Math.round(((g.used - g0.used) / expect) * 100))); }
-    setTimeout(tick, 500);
+    const [g, r] = await Promise.all([expect ? gpuMem() : null, r0 != null && bytes ? diskRead(cz) : null]);
+    let pct = me.pct || 0;
+    if (g) pct = Math.max(pct, ((g.used - g0.used) / expect) * 100);
+    if (r != null) pct = Math.max(pct, ((r - r0) / bytes) * 100);
+    if (bytes) me.pct = Math.min(99, Math.round(pct));
+    setTimeout(tick, 800);
   };
   tick();
 }
