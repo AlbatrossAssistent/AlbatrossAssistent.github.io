@@ -1,0 +1,27 @@
+/* Shared look for terms.html and privacy.html: dark glass, like the landing page. */
+:root { --fg: #f5f5f5; --muted: rgba(245,245,245,.62); --edge: rgba(255,255,255,.16); color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; color: var(--fg); font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { min-height: 100vh; background: radial-gradient(60% 40% at 80% 0%, rgba(140,150,200,.12), transparent 70%), radial-gradient(50% 40% at 0% 100%, rgba(160,160,180,.08), transparent 70%), #000; background-attachment: fixed; }
+a { color: var(--fg); }
+.nav { position: sticky; top: 14px; z-index: 5; margin: 14px auto 0; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 999px; width: min(900px, calc(100vw - 24px));
+  background: rgba(20,20,20,.45); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+.nav .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; text-decoration: none; }
+.nav .brand svg { width: 26px; height: 26px; fill: currentColor; }
+.nav .sp, .foot .sp { flex: 1; }
+.nav a:not(.brand):not(.btn) { color: var(--muted); text-decoration: none; font-size: 14px; }
+.btn { text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 999px; padding: 9px 18px; color: #0a0a0a; background: #f5f5f5; }
+.doc { width: min(820px, calc(100vw - 32px)); margin: 40px auto; padding: clamp(22px, 4vw, 44px); border-radius: 28px;
+  background: rgba(255,255,255,.05); background-image: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,0) 40%); border: 1px solid var(--edge);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); line-height: 1.65; }
+.doc h1 { margin: 0; font-size: clamp(30px, 5vw, 44px); font-weight: 600; letter-spacing: -.03em; }
+.doc .meta { color: var(--muted); margin: 6px 0 24px; font-size: 14px; }
+.doc .lead { font-size: 17px; padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid var(--edge); }
+.doc h2 { margin: 30px 0 8px; font-size: 19px; font-weight: 600; }
+.doc p, .doc li { color: rgba(245,245,245,.85); font-size: 15.5px; }
+.doc ul { padding-left: 22px; }
+.doc li { margin: 6px 0; }
+.doc code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 6px; }
+.foot { width: min(900px, calc(100vw - 32px)); margin: 0 auto 30px; display: flex; flex-wrap: wrap; gap: 12px 22px; color: var(--muted); font-size: 13.5px; }
+.foot a { color: var(--muted); text-decoration: none; }
+.foot a:hover { color: var(--fg); }

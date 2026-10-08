@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Albatross</title>
+<link rel="icon" href="public/icon.svg">
+<link rel="stylesheet" href="legal.css">
+</head>
+<body>
+<nav class="nav"><a class="brand" href="./"><svg viewBox="0 0 28 28"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/></svg>Albatross</a><span class="sp"></span><a href="terms.html">Terms</a><a class="btn" href="public/">Open app</a></nav>
+<main class="doc">
+  <h1>Privacy Policy</h1>
+  <p class="meta">Last updated: 8 October 2026</p>
+
+  <p class="lead">Short version: Albatross has no accounts, no analytics, no ads and no tracking cookies. Your chats are stored in your own browser and processed on your own computer. What passes through our relay server is encrypted so that the server can't read it.</p>
+
+  <h2>1. What stays on your devices</h2>
+  <ul>
+    <li><b>Chats, settings and generated images</b> are saved only in your browser's local storage on the device you use. We never receive them. You can export or delete them in Settings → Data, or by clearing the site's data in your browser.</li>
+    <li><b>AI processing</b> happens in Ollama or ComfyUI on the computer you connect, not on our servers.</li>
+    <li><b>Files you send to your PC</b> are saved on that PC (in Downloads → Albatross). Files your PC offers stay on your PC until a device downloads them.</li>
+  </ul>
+
+  <h2>2. What goes through the relay server</h2>
+  <p>When you use your PC's AI from another device, or send files, the data travels through our relay server (hosted by Render in the cloud).</p>
+  <ul>
+    <li><b>Chats and files between your devices</b> are end-to-end encrypted (AES-256-GCM) with a key made from the second half of your device code. That half never leaves your devices, so the server can't read or change the content.</li>
+    <li><b>Files between people</b> are end-to-end encrypted between the two browsers (ECDH key exchange plus AES-256-GCM).</li>
+    <li><b>What the server does see:</b> the first half of your device code (to find your PC), your PC's name, the name you choose when you turn on "Public", your IP address, the time and size of the encrypted messages, and technical data that any web server receives. It keeps this only in memory while connections are open. Render may keep standard access logs for a limited time under its own policy.</li>
+    <li><b>Public names</b> are shown to everyone else who is public at the same time, and disappear when you close the page or turn Public off.</li>
+  </ul>
+
+  <h2>3. Optional features that use other services</h2>
+  <ul>
+    <li><b>Web search:</b> if you turn on web search, the search queries and page addresses the AI looks up are sent through our server to Ollama's web search API (ollama.com). Don't turn it on for questions you want to keep fully private.</li>
+    <li><b>Cloud models:</b> models whose names end in "-cloud" run on Ollama's servers, not your PC, so your messages to those models are processed by Ollama under its privacy policy.</li>
+    <li><b>Turn on PC:</b> if set up, the server calls the smart-plug link you configured. It stores no data about you for this.</li>
+    <li><b>Hosting:</b> the website is served by GitHub Pages, and the landing page loads a scrolling library from jsDelivr. Like any website, these services receive your IP address and browser details when you load the page.</li>
+  </ul>
+
+  <h2>4. What we don't do</h2>
+  <ul>
+    <li>We don't use analytics, tracking pixels, advertising or tracking cookies.</li>
+    <li>We don't sell or share personal data.</li>
+    <li>We don't use your chats or files to train AI.</li>
+  </ul>
+
+  <h2>5. Legal basis (EU/UK)</h2>
+  <p>We process the limited technical data in section 2 because it's necessary to provide the service you ask for (Art. 6(1)(b) GDPR) and for our legitimate interest in keeping the server secure and working (Art. 6(1)(f) GDPR).</p>
+
+  <h2>6. Your rights</h2>
+  <p>Depending on where you live, you may have the right to access, correct, delete or restrict processing of your personal data, to object, and to complain to a data protection authority. Because we store almost nothing, most data can be deleted by you directly: clear the website's data in your browser and uninstall the host from your PC. For anything else, contact us (below).</p>
+
+  <h2>7. Children</h2>
+  <p>Albatross isn't meant for children under 16 without a parent's or guardian's permission.</p>
+
+  <h2>8. Changes</h2>
+  <p>If this policy changes, we update the date at the top. Big changes will be pointed out on the website.</p>
+
+  <h2>9. Contact</h2>
+  <p>Questions about privacy: open an issue on <a href="https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io/issues">GitHub</a>.</p>
+</main>
+<footer class="foot"><span>© 2026 Albatross</span><span class="sp"></span><a href="terms.html">Terms of Use</a><a href="privacy.html">Privacy Policy</a><a href="./">Home</a></footer>
+</body>
+</html>

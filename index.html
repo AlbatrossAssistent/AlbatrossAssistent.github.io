@@ -1,6 +1,277 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<title>Albatross</title>
-<meta http-equiv="refresh" content="0; url=public/">
-<link rel="canonical" href="public/">
-<p><a href="public/">Open Albatross</a></p>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Albatross — Your own AI</title>
+<meta name="description" content="Albatross: a private AI chat that runs on your own PC. No accounts, no tracking, end-to-end encrypted.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="public/icon.svg">
+<script>
+  // Old links like …/#code=XXXX go straight to the app (the code stays after the #, never sent anywhere).
+  if (/code=/.test(location.hash) || /code=/.test(location.search)) location.replace("public/" + location.search + location.hash);
+</script>
+<style>
+:root { --fg: #f5f5f5; --muted: rgba(245,245,245,.6); --edge: rgba(255,255,255,.16); --glass: rgba(255,255,255,.06); color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; color: var(--fg); font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+a { color: inherit; }
+
+/* night sky */
+#sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; }
+.nebula { position: fixed; inset: -20%; z-index: 0; pointer-events: none; background:
+  radial-gradient(40% 30% at 70% 30%, rgba(120,130,170,.10), transparent 70%),
+  radial-gradient(35% 30% at 25% 70%, rgba(150,150,170,.07), transparent 70%); transform: translateY(calc(var(--p, 0) * -12vh)); }
+
+/* top bar */
+.nav { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 999px; width: min(960px, calc(100vw - 24px));
+  background: rgba(20,20,20,.35); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+.nav .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -.3px; text-decoration: none; }
+.nav .brand svg { width: 26px; height: 26px; fill: currentColor; }
+.nav .sp { flex: 1; }
+.nav a.lk { color: var(--muted); text-decoration: none; font-size: 14px; }
+.nav a.lk:hover { color: var(--fg); }
+.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 999px; padding: 9px 18px; color: #0a0a0a; background: #f5f5f5;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,0) 55%); box-shadow: 0 6px 24px rgba(255,255,255,.18), inset 0 1px 0 #fff; transition: transform .15s, box-shadow .2s; }
+.btn:hover { transform: translateY(-1px) scale(1.02); box-shadow: 0 10px 34px rgba(255,255,255,.28), inset 0 1px 0 #fff; }
+@media (max-width: 620px) { .nav a.lk { display: none; } }
+
+/* the scroll story: one tall section with a sticky stage */
+.story { position: relative; height: 900vh; z-index: 1; }
+.stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
+.layer { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; }
+
+.hero { width: min(900px, 92vw); text-align: center; transform: translate(-50%, -50%); }
+.hero .eyebrow { font-size: 13px; letter-spacing: 6px; text-transform: uppercase; color: var(--muted); }
+.hero h1 { margin: 14px 0 10px; font-size: clamp(42px, 8.4vw, 118px); font-weight: 300; letter-spacing: -.02em; line-height: 1.02; }
+.hero h1 b { font-weight: 700; letter-spacing: .06em; display: block; background: linear-gradient(180deg, #fff 30%, rgba(255,255,255,.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p { color: var(--muted); font-size: clamp(15px, 1.6vw, 19px); margin: 0; }
+.scroll-hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; letter-spacing: 3px; text-transform: uppercase; }
+.scroll-hint i { width: 22px; height: 36px; border: 1.5px solid rgba(255,255,255,.4); border-radius: 12px; position: relative; }
+.scroll-hint i::after { content: ""; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; border-radius: 2px; background: #fff; transform: translateX(-50%); animation: wheel 1.6s ease-in-out infinite; }
+@keyframes wheel { 0% { opacity: 0; transform: translate(-50%, 0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* black planet */
+.planet { width: min(64vmin, 640px); aspect-ratio: 1; border-radius: 50%; }
+.planet .body { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: #050505;
+  box-shadow: 0 0 120px 10px rgba(180,190,255,.10), 0 0 40px 2px rgba(255,255,255,.08), inset 0 0 0 1px rgba(255,255,255,.05); }
+.planet .surface { position: absolute; inset: -2px; border-radius: 50%; opacity: .55;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.03' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 -0.55'/%3E%3C/filter%3E%3Crect width='600' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: auto 100%; background-repeat: repeat-x; mix-blend-mode: screen; filter: contrast(1.4) brightness(.35); }
+.planet .shade { position: absolute; inset: 0; border-radius: 50%; background:
+  radial-gradient(circle at 32% 28%, rgba(255,255,255,.10), transparent 38%),
+  radial-gradient(circle at 70% 75%, rgba(0,0,0,.95), transparent 60%),
+  radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,.9) 72%); }
+.planet .rim { position: absolute; inset: -1px; border-radius: 50%; background: conic-gradient(from 200deg, transparent 0 35%, rgba(255,255,255,.55) 45%, rgba(200,210,255,.25) 52%, transparent 62% 100%);
+  -webkit-mask: radial-gradient(circle, transparent 69.4%, #000 70%); mask: radial-gradient(circle, transparent 69.4%, #000 70%); filter: blur(1.5px); }
+.planet .glow { position: absolute; inset: -18%; border-radius: 50%; background: radial-gradient(circle, transparent 46%, rgba(200,210,255,.10) 52%, transparent 66%); pointer-events: none; }
+
+/* features */
+.icon { width: min(30vmin, 260px); aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+.icon svg { width: 100%; height: 100%; overflow: visible; }
+.caption { width: min(720px, 90vw); text-align: center; }
+.caption h2 { margin: 0 0 8px; font-size: clamp(32px, 5.6vw, 72px); font-weight: 600; letter-spacing: -.03em; line-height: 1.05; }
+.caption h2 span { background: linear-gradient(180deg, #fff 35%, rgba(255,255,255,.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.caption p { margin: 0 auto; color: var(--muted); font-size: clamp(15px, 1.6vw, 19px); line-height: 1.55; max-width: 560px; }
+.sparkle-svg { filter: drop-shadow(0 0 30px rgba(170,190,255,.55)) drop-shadow(0 0 80px rgba(170,190,255,.25)); }
+.ghost-svg { filter: drop-shadow(0 0 40px rgba(255,255,255,.25)); animation: bob 3.2s ease-in-out infinite; }
+.shield-svg { filter: drop-shadow(0 0 40px rgba(200,220,255,.3)); }
+@keyframes bob { 50% { transform: translateY(-4%); } }
+
+/* finale */
+.bird { width: min(34vmin, 300px); }
+.bird svg { width: 100%; fill: #fff; filter: drop-shadow(0 0 26px rgba(255,255,255,.35)); animation: glide 4s ease-in-out infinite; overflow: visible; }
+@keyframes glide { 50% { transform: translateY(-5%) rotate(-1.5deg); } }
+.finale-title { width: min(820px, 92vw); text-align: center; }
+.finale-title h2 { margin: 0; font-size: clamp(30px, 5vw, 64px); font-weight: 600; letter-spacing: -.03em; }
+.finale-title p { margin: 6px 0 0; color: var(--muted); }
+.start { font-size: clamp(15px, 1.6vw, 18px); padding: 14px 30px; }
+
+/* after the story */
+.after { position: relative; z-index: 2; padding: 12vh 20px 40px; background: linear-gradient(180deg, transparent, rgba(0,0,0,.85) 30%, #000); }
+.grid { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.card { border-radius: 24px; padding: 22px; background: var(--glass); background-image: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,0) 50%); border: 1px solid var(--edge);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+.card h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
+.card p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+footer { max-width: 1040px; margin: 60px auto 0; display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; color: var(--muted); font-size: 13.5px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 22px; }
+footer .sp { flex: 1; }
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--fg); }
+
+@media (prefers-reduced-motion: reduce) { .planet .surface, .ghost-svg, .bird svg, .scroll-hint i::after { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div class="nebula" aria-hidden="true"></div>
+
+<nav class="nav">
+  <a class="brand" href="#top"><svg viewBox="0 0 28 28"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/></svg>Albatross</a>
+  <span class="sp"></span>
+  <a class="lk" href="#features">Features</a>
+  <a class="lk" href="terms.html">Terms</a>
+  <a class="lk" href="privacy.html">Privacy</a>
+  <a class="btn" href="public/">Open app</a>
+</nav>
+
+<main class="story" id="top">
+  <div class="stage">
+    <section class="layer hero" id="hero">
+      <div class="eyebrow">Your own AI · on your own PC</div>
+      <h1>Welcome to <b>ALBATROSS</b></h1>
+      <p>Private, fast, and entirely yours. Scroll to take off.</p>
+    </section>
+    <div class="scroll-hint" id="hint"><i></i>Scroll</div>
+
+    <div class="layer planet" id="planet"><div class="glow"></div><div class="body"><div class="surface" id="surface"></div><div class="shade"></div></div><div class="rim"></div></div>
+
+    <!-- 1: sparkle -->
+    <div class="layer icon" id="sparkle"><svg class="sparkle-svg" viewBox="-50 -50 100 100"><defs>
+      <linearGradient id="sg" x1="0" y1="-1" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#cfd8ff"/><stop offset="1" stop-color="#8fa2ff"/></linearGradient></defs>
+      <path id="sparkPath" fill="url(#sg)" d="M0-46C3-18 18-3 46 0C18 3 3 18 0 46C-3 18-18 3-46 0C-18-3-3-18 0-46z"/></svg></div>
+    <div class="layer caption" id="cap1"><h2><span>Albatross AI</span></h2><p>Chat, write, code and create images with AI models that run on your own computer. Use it from your phone, anywhere.</p></div>
+
+    <!-- 2: ghost -->
+    <div class="layer icon" id="ghost"><svg class="ghost-svg" viewBox="0 0 100 110"><defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity=".55"/></linearGradient></defs>
+      <path fill="url(#gg)" d="M50 6C27 6 14 23 14 45v52c0 4 4 6 7 3l8-7 8 7c3 2 6 2 8 0l5-5 5 5c2 2 5 2 8 0l8-7 8 7c3 3 7 1 7-3V45C86 23 73 6 50 6z"/>
+      <ellipse cx="38" cy="46" rx="6" ry="8" fill="#000"/><ellipse cx="62" cy="46" rx="6" ry="8" fill="#000"/><ellipse cx="50" cy="64" rx="5" ry="3.5" fill="#000" opacity=".8"/></svg></div>
+    <div class="layer caption" id="cap2"><h2><span>100% Incognito</span></h2><p>No accounts, no tracking, no ads. Your chats live in your browser and on your PC, not on someone else's server.</p></div>
+
+    <!-- 3: shield -->
+    <div class="layer icon" id="shield"><svg class="shield-svg" viewBox="0 0 100 110"><defs><linearGradient id="shg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#9fb0ff"/></linearGradient></defs>
+      <path fill="rgba(255,255,255,.07)" stroke="url(#shg)" stroke-width="3" d="M50 5l38 14v30c0 27-17 46-38 56C29 95 12 76 12 49V19z"/>
+      <path fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M33 55l12 12 23-25"/></svg></div>
+    <div class="layer caption" id="cap3"><h2><span>100% Protected</span></h2><p>Everything between your devices is end-to-end encrypted with your own code. The server only passes along data it can't read.</p></div>
+
+    <!-- finale -->
+    <div class="layer finale-title" id="final"><h2>Ready when you are.</h2><p>Free. Open source. Yours.</p></div>
+    <div class="layer bird" id="bird"><svg viewBox="0 0 28 22"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/></svg></div>
+    <a class="layer btn start" id="start" href="public/">Start now →</a>
+  </div>
+</main>
+
+<section class="after" id="features">
+  <div class="grid">
+    <div class="card"><h3>Runs on your PC</h3><p>Albatross uses Ollama and the AI models you choose. Your graphics card does the work, so nothing goes to an AI company.</p></div>
+    <div class="card"><h3>Use it anywhere</h3><p>Enter your PC's 16-character code on your phone or laptop and chat with your own AI from wherever you are.</p></div>
+    <div class="card"><h3>Images and files</h3><p>Generate images with context, send files to your PC, and share files with other people only after they accept.</p></div>
+    <div class="card"><h3>Open source</h3><p>The whole app is public on GitHub. You can read exactly what it does, or run your own server.</p></div>
+  </div>
+  <footer>
+    <span>© 2026 Albatross</span>
+    <span class="sp"></span>
+    <a href="terms.html">Terms of Use</a>
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io">GitHub</a>
+    <a href="public/">Open app</a>
+  </footer>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const seg = (p, a, b) => clamp((p - a) / (b - a));          // 0..1 while p goes from a to b
+const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+// ---------- night sky ----------
+const sky = $("#sky"), ctx = sky.getContext("2d");
+let stars = [], W = 0, H = 0, DPR = 1, shooting = null;
+function resize() {
+  DPR = Math.min(2, devicePixelRatio || 1);
+  W = sky.width = innerWidth * DPR; H = sky.height = innerHeight * DPR;
+  const n = Math.round(innerWidth * innerHeight / 2600);
+  stars = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H * 1.6, r: (Math.random() ** 3 * 1.6 + .3) * DPR, a: Math.random() * .7 + .2, s: Math.random() * 2 + .5, d: Math.random() * .6 + .2 }));
+}
+addEventListener("resize", resize); resize();
+
+// ---------- scroll story ----------
+const story = $(".story");
+let progress = 0;
+function readProgress() { const r = story.getBoundingClientRect(); return clamp(-r.top / (r.height - innerHeight)); }
+const el = (id) => document.getElementById(id);
+const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), surface: el("surface"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), bird: el("bird"), start: el("start") };
+function place(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
+  node.style.transform = `translate(-50%, -50%) translate(${x}vw, ${y}vh) scale(${s}) rotate(${r}deg)`;
+  node.style.opacity = o;
+  node.style.pointerEvents = o > .5 ? "auto" : "none";
+  node.style.visibility = o <= .001 ? "hidden" : "visible";
+}
+// an icon that pops in at the centre, then slides off to the left
+function feature(icon, cap, p, a) {
+  const inn = easeOut(seg(p, a, a + .07)), out = ease(seg(p, a + .15, a + .22));
+  place(icon, { x: -46 * out, y: -9 - 4 * (1 - inn), s: (.4 + .6 * inn) * (1 - .45 * out), r: (1 - inn) * -40, o: inn * (1 - out) });
+  const ci = easeOut(seg(p, a + .04, a + .1)), co = ease(seg(p, a + .13, a + .19));
+  place(cap, { x: -30 * co, y: 22 + 4 * (1 - ci), o: ci * (1 - co) });
+}
+function render(t) {
+  const p = progress;
+  document.documentElement.style.setProperty("--p", p);
+  // hero
+  const h = ease(seg(p, .015, .09));
+  place(L.hero, { y: -14 * h, s: 1 - .08 * h, o: 1 - h });
+  L.hint.style.opacity = 1 - seg(p, 0, .03);
+  // planet: rises in, sits behind the features, then sinks to the bottom as the "ball"
+  const rise = easeOut(seg(p, .04, .2)), sink = ease(seg(p, .8, .93));
+  place(L.planet, { y: 75 * (1 - rise) + 52 * sink, s: (.55 + .45 * rise) * (1 + .5 * sink), o: Math.min(1, rise * 1.4) });
+  // the planet turns slowly by itself and faster while you scroll (the texture is twice as wide as it is tall and repeats)
+  const sw = L.surface.offsetHeight * 2 || 1;
+  L.surface.style.backgroundPosition = `${-((reduce ? 0 : t * .012) + p * sw * 1.5) % sw}px 0`;
+  // features
+  feature(L.sparkle, L.cap1, p, .2);
+  L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60 + p * 220) % 360}deg) scale(${1 + Math.sin(t / 700) * .04})`;
+  feature(L.ghost, L.cap2, p, .4);
+  feature(L.shield, L.cap3, p, .6);
+  // finale: albatross lands above the ball, start button on the ball
+  const f = easeOut(seg(p, .86, .95)), b = easeOut(seg(p, .88, .97)), st = easeOut(seg(p, .9, .98));
+  place(L.final, { y: -30 + 4 * (1 - f), o: f });
+  place(L.bird, { y: -6 - 30 * (1 - b), x: 20 * (1 - b), s: .6 + .4 * b, r: -12 * (1 - b), o: b });
+  place(L.start, { y: 30 + 6 * (1 - st), o: st });
+}
+function drawSky(t) {
+  ctx.clearRect(0, 0, W, H);
+  const shift = progress * H * .5;
+  for (const s of stars) {
+    const y = ((s.y - shift * s.d) % (H * 1.6) + H * 1.6) % (H * 1.6);
+    if (y > H) continue;
+    const tw = reduce ? s.a : s.a * (.65 + .35 * Math.sin(t / 1000 * s.s + s.x));
+    ctx.globalAlpha = tw; ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(s.x, y, s.r, 0, Math.PI * 2); ctx.fill();
+  }
+  // a shooting star now and then
+  if (!reduce) {
+    if (!shooting && Math.random() < .004) shooting = { x: Math.random() * W * .8, y: Math.random() * H * .4, vx: (6 + Math.random() * 6) * DPR, vy: (2 + Math.random() * 2) * DPR, life: 1 };
+    if (shooting) {
+      const g = ctx.createLinearGradient(shooting.x, shooting.y, shooting.x - shooting.vx * 14, shooting.y - shooting.vy * 14);
+      g.addColorStop(0, `rgba(255,255,255,${shooting.life})`); g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 1.6 * DPR;
+      ctx.beginPath(); ctx.moveTo(shooting.x, shooting.y); ctx.lineTo(shooting.x - shooting.vx * 14, shooting.y - shooting.vy * 14); ctx.stroke();
+      shooting.x += shooting.vx; shooting.y += shooting.vy; shooting.life -= .015;
+      if (shooting.life <= 0) shooting = null;
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---------- smooth scrolling ----------
+let lenis = null;
+if (!reduce && window.Lenis) {
+  lenis = new Lenis({ duration: 1.35, smoothWheel: true, wheelMultiplier: .9, touchMultiplier: 1.4 });
+  document.querySelectorAll('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); lenis.scrollTo(a.getAttribute("href") === "#top" ? 0 : a.getAttribute("href")); }));
+}
+function frame(t) {
+  if (lenis) lenis.raf(t);
+  progress = readProgress();
+  render(t); drawSky(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
