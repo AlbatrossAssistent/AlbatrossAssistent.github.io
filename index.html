@@ -54,15 +54,12 @@ a { color: inherit; }
 .scroll-hint i::after { content: ""; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; border-radius: 2px; background: #fff; transform: translateX(-50%); animation: wheel 1.6s ease-in-out infinite; }
 @keyframes wheel { 0% { opacity: 0; transform: translate(-50%, 0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 12px); } }
 
-/* blue planet */
-.planet { width: min(64vmin, 640px); aspect-ratio: 1; border-radius: 50%; }
-.planet .body { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: #04102e;
-  box-shadow: 0 0 140px 24px rgba(40,120,255,.28), 0 0 50px 4px rgba(120,190,255,.22), inset 0 0 0 1px rgba(150,200,255,.12); }
-.planet .surface { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
-.planet .shade { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 50% 50%, transparent 64%, rgba(2,8,30,.35) 76%); }
-.planet .rim { position: absolute; inset: -1px; border-radius: 50%; background: conic-gradient(from 200deg, transparent 0 30%, rgba(150,215,255,.8) 44%, rgba(90,170,255,.4) 54%, transparent 66% 100%);
-  -webkit-mask: radial-gradient(circle, transparent 69.4%, #000 70%); mask: radial-gradient(circle, transparent 69.4%, #000 70%); filter: blur(1.5px); }
-.planet .glow { position: absolute; inset: -18%; border-radius: 50%; background: radial-gradient(circle, transparent 45%, rgba(70,150,255,.22) 52%, transparent 68%); pointer-events: none; }
+/* liquid mercury blob */
+.planet { width: min(64vmin, 640px); aspect-ratio: 1; }
+.planet .body { position: absolute; inset: 0; }
+.planet .surface { position: absolute; inset: 0; width: 100%; height: 100%; }
+.planet .shade, .planet .rim { display: none; }
+.planet .glow { position: absolute; inset: -12%; border-radius: 50%; background: radial-gradient(circle, rgba(90,150,255,.20) 30%, rgba(60,120,255,.08) 50%, transparent 68%); pointer-events: none; filter: blur(10px); }
 #bluefill { position: absolute; inset: 0; z-index: 9; background: #0a3596; opacity: 0; pointer-events: none; }
 
 /* features */
@@ -317,69 +314,56 @@ function feature(icon, cap, p, a) {
   place(cap, { x: -30 * co, y: 22 + 4 * (1 - ci), o: ci * (1 - co) });
 }
 
-// ---------- the black planet: a real rotating sphere ----------
-// A seamless "cloud" texture is made once from 3D noise sampled around a cylinder (so its left and right
-// edges meet perfectly), then every frame each pixel of the disc looks up its longitude/latitude.
-const PS = 448, TW = 768, TH = 384;
+// ---------- liquid mercury: a wobbling chrome drop floating in zero gravity ----------
+// Each pixel knows its angle and distance from the centre (computed once). Every frame the outline wobbles
+// (a few sine waves around the edge), the surface gets slow ripples, and each pixel reflects a studio-lit
+// "environment" (bright sky, a horizon line, soft light strips, a blue floor), which is what makes chrome look like chrome.
+const PS = 448, AB = 720;                               // canvas size, angle steps around the edge
 const pctx = L.surface.getContext("2d");
 const pimg = pctx.createImageData(PS, PS);
-function hash(x, y, z) { let h = x * 374761393 + y * 668265263 + z * 2147483647; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
-function vnoise(x, y, z) {
-  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi;
-  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
-  const l = (a, b, t) => a + (b - a) * t;
-  return l(l(l(hash(xi, yi, zi), hash(xi + 1, yi, zi), u), l(hash(xi, yi + 1, zi), hash(xi + 1, yi + 1, zi), u), v),
-           l(l(hash(xi, yi, zi + 1), hash(xi + 1, yi, zi + 1), u), l(hash(xi, yi + 1, zi + 1), hash(xi + 1, yi + 1, zi + 1), u), v), w);
-}
-// colour texture: deep and shallow oceans, lighter-blue continents, and a separate cloud layer
-const baseR = new Uint8Array(TW * TH), baseG = new Uint8Array(TW * TH), baseB = new Uint8Array(TW * TH), oceanT = new Uint8Array(TW * TH), cloudT = new Uint8Array(TW * TH);
-const mix = (a, b, t) => a + (b - a) * t, cl = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
-for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) {
-  const a = i / TW * Math.PI * 2, R = 2.2, x = Math.cos(a) * R, z = Math.sin(a) * R, y = j / TH * 3.2, k = j * TW + i;
-  let n1 = 0, amp = .55, f = .8;
-  for (let o = 0; o < 6; o++) { n1 += vnoise(x * f + 3.1, y * f * 1.3, z * f + 8.2) * amp; amp *= .5; f *= 2.05; }
-  let n2 = 0; amp = .6; f = 1.6;
-  for (let o = 0; o < 5; o++) { n2 += vnoise(x * f + 20.5 + Math.sin(y * 3) * .6, y * f * 2.6, z * f + 1.7) * amp; amp *= .5; f *= 2.1; }
-  const lt = cl((n1 - .51) / .05), land = lt * lt * (3 - 2 * lt);                   // smooth coast
-  const th = cl((n1 - .53) / .17), to = cl((n1 - .3) / .23) ** 2;
-  baseR[k] = mix(mix(6, 22, to), mix(46, 140, th), land);
-  baseG[k] = mix(mix(34, 98, to), mix(124, 200, th), land);
-  baseB[k] = mix(mix(112, 214, to), mix(232, 255, th), land);
-  oceanT[k] = (1 - land) * 255;
-  cloudT[k] = cl((n2 - .55) / .2) ** 1.3 * 230;
-}
-// per pixel of the disc: latitude row, longitude offset and lighting, computed once
-const lonMap = new Float32Array(PS * PS), latF = new Float32Array(PS * PS), light = new Float32Array(PS * PS).fill(-1), rimT = new Float32Array(PS * PS), specT = new Float32Array(PS * PS);
+const cosA = new Float32Array(PS * PS), sinA = new Float32Array(PS * PS), rho = new Float32Array(PS * PS), angI = new Uint16Array(PS * PS);
 for (let py = 0; py < PS; py++) for (let px = 0; px < PS; px++) {
-  const nx = (px + .5) / PS * 2 - 1, ny = (py + .5) / PS * 2 - 1, r2 = nx * nx + ny * ny;
-  if (r2 > 1) continue;
-  const nz = Math.sqrt(1 - r2), k = py * PS + px;
-  lonMap[k] = Math.atan2(nx, nz) / (Math.PI * 2);              // -0.5..0.5
-  latF[k] = Math.min(TH - 1.001, Math.max(0, (Math.asin(ny) / Math.PI + .5) * TH - .5));
-  light[k] = Math.max(0, -.55 * nx - .6 * ny + .58 * nz);      // light from the upper left
-  rimT[k] = Math.pow(1 - nz, 2.6);                              // atmosphere glows towards the edge
-  specT[k] = Math.pow(Math.max(0, -.4 * nx - .45 * ny + .8 * nz), 40); // sun glint on the oceans
+  const nx = (px + .5) / PS * 2 - 1, ny = (py + .5) / PS * 2 - 1, k = py * PS + px, a = Math.atan2(ny, nx);
+  rho[k] = Math.hypot(nx, ny); cosA[k] = Math.cos(a); sinA[k] = Math.sin(a);
+  angI[k] = ((a + Math.PI) / (Math.PI * 2) * AB | 0) % AB;
 }
-// bilinear lookup: blends the four nearest texels, so edges stay smooth even when the planet is huge
-function samp(arr, u, v) {
-  const fu = u * TW, i0 = fu | 0, fx = fu - i0, i1 = (i0 + 1) % TW, j0 = v | 0, fy = v - j0, r0 = j0 * TW, r1 = r0 + TW;
-  const a = arr[r0 + i0] + (arr[r0 + i1] - arr[r0 + i0]) * fx, b = arr[r1 + i0] + (arr[r1 + i1] - arr[r1 + i0]) * fx;
-  return a + (b - a) * fy;
+const edge = new Float32Array(AB);
+const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function env(rx, ry, rz) {
+  const e = -ry;                                        // up is positive
+  let c = e > 0 ? .05 + .55 * Math.pow(e, 1.5) : .035;
+  c += .85 * Math.exp(-(e * 17) * (e * 17));             // sharp horizon line
+  c += 1.15 * sm(.32, .16, Math.abs(rx + .55)) * sm(.08, .26, e) * sm(.92, .72, e);  // tall softbox left
+  c += .7 * sm(.2, .09, Math.abs(rx - .62)) * sm(0, .16, e) * sm(.6, .42, e);        // smaller one right
+  c += .18 * sm(.5, .1, Math.abs(e + .25)) * (e < 0 ? 1 : 0);                          // faint room reflection below
+  const floor = e < 0 ? Math.min(1, -e * 1.6) : 0;      // blue light from below
+  return [c * 232 + floor * 20, c * 238 + floor * 70, c * 255 + floor * 190];
 }
-function drawPlanet(turn) {
-  const d = pimg.data, off = ((turn % 1) + 1) % 1, coff = ((turn * 1.35 % 1) + 1) % 1; // clouds drift a bit faster
+function drawPlanet(turn, time) {
+  const d = pimg.data, T = time / 1000, spin = turn * Math.PI * 2;
+  for (let i = 0; i < AB; i++) {
+    const a = i / AB * Math.PI * 2 - Math.PI;
+    edge[i] = .84 + .045 * Math.sin(2 * a + 1.1 * T) + .03 * Math.sin(3 * a - .8 * T + 1)
+            + .018 * Math.sin(5 * a + 1.9 * T + 2) + .01 * Math.sin(7 * a - 1.5 * T) + .012 * Math.sin(4 * a + turn * 9);
+  }
+  const cs = Math.cos(spin), sn = Math.sin(spin);
   for (let k = 0; k < PS * PS; k++) {
-    const L0 = light[k], q = k * 4;
-    if (L0 < 0) { d[q + 3] = 0; continue; }
-    let u = lonMap[k] + off; u -= Math.floor(u);
-    let uc = lonMap[k] + coff; uc -= Math.floor(uc);
-    const v = latF[k], cc = samp(cloudT, uc, v) / 255;
-    const br = samp(baseR, u, v), bg = samp(baseG, u, v), bb = samp(baseB, u, v);
-    const lit = .16 + L0 * .95, sp = specT[k] * 190 * (1 - cc) * samp(oceanT, u, v) / 255, rim = rimT[k];
-    d[q] = (br + (235 - br) * cc) * lit + sp + rim * 70;
-    d[q + 1] = (bg + (245 - bg) * cc) * lit + sp + rim * 150;
-    d[q + 2] = (bb + (255 - bb) * cc) * lit + sp + rim * 255;
-    d[q + 3] = 255;
+    const q = k * 4, R = edge[angI[k]], r = rho[k];
+    if (r > R + .01) { d[q + 3] = 0; continue; }
+    const s1 = Math.min(.999, r / R), ca = cosA[k], sa = sinA[k];
+    let nx = ca * s1, ny = sa * s1, nz = Math.sqrt(1 - s1 * s1);
+    // slow ripples running over the surface
+    const w = .09 * (1 - s1 * .6);
+    nx += w * Math.sin(ny * 7 + T * 1.3 + turn * 4); ny += w * Math.sin(nx * 6 - T * 1.1);
+    const nl = 1 / Math.hypot(nx, ny, nz); nx *= nl; ny *= nl; nz *= nl;
+    // reflect the view ray (0,0,1) and turn the environment slowly
+    let rx = 2 * nz * nx, ry = 2 * nz * ny, rz = 2 * nz * nz - 1;
+    const rx2 = rx * cs - rz * sn; rz = rx * sn + rz * cs; rx = rx2;
+    const [er, eg, eb] = env(rx, ry, rz);
+    const fr = Math.pow(1 - nz, 3);                     // edges reflect more
+    const k2 = .8 + .45 * fr;
+    const alpha = Math.min(1, (R - r) * PS * .5 + .5);  // smooth outline
+    d[q] = er * k2; d[q + 1] = eg * k2; d[q + 2] = eb * k2 + 12; d[q + 3] = alpha * 255;
   }
   pctx.putImageData(pimg, 0, 0);
 }
@@ -396,11 +380,11 @@ function render(t) {
   const rise = easeOut(seg(p, .04, .2)), sink = ease(seg(p, .8, .93));
   // finally it grows from the bottom until it covers the whole screen
   const baseS = (.55 + .45 * rise) * (1 + .5 * sink), r0 = L.planet.offsetWidth / 2 * baseS || 1;
-  const cover = Math.hypot(innerWidth, innerHeight) / 2 * 1.08 / r0;
+  const cover = Math.hypot(innerWidth, innerHeight) / 2 * 1.3 / r0;   // the drop's edge wobbles, so go a bit bigger
   place(L.planet, { y: (75 * (1 - rise) + 52 * sink) * (1 - grow), s: baseS * (1 + (cover - 1) * grow), o: Math.min(1, rise * 1.4) });
   L.bluefill.style.opacity = seg(P, .95, 1);
   // the planet turns slowly by itself and faster while you scroll
-  drawPlanet((reduce ? 0 : t * .000035) + p * 2.2);
+  drawPlanet((reduce ? 0 : t * .00002) + p * 1.2, reduce ? 0 : t);
   // features
   feature(L.sparkle, L.cap1, p, .2);
   L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60 + p * 220) % 360}deg) scale(${1 + Math.sin(t / 700) * .04})`;
