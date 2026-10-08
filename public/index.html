@@ -483,11 +483,6 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
     <div class="conn-line"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
     <div id="powerBox" class="power-box" hidden>
       <button class="side-btn" id="powerBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>Turn on PC</button>
-      <form id="powerForm" class="power-form" hidden>
-        <label for="powerPin" class="sr">Power PIN</label>
-        <input id="powerPin" type="password" inputmode="numeric" placeholder="Power PIN" autocomplete="off">
-        <button class="side-btn" id="powerGo" type="submit">Turn on</button>
-      </form>
       <small id="powerMsg" role="status"></small>
     </div>
     <button class="side-btn" id="openFiles"><svg class="i" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg>Files<span class="live" id="pubLive" hidden title="You are public"></span></button>
@@ -559,6 +554,9 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
             <div class="field"><label for="relayUrl">Albatross server</label><input id="relayUrl" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
           </div>
           <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
+          <h3>Turn on your PC</h3>
+          <div class="field"><label for="powerUrl">Turn-on link</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input id="powerUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://… (your smart plug or Alexa routine link)" style="flex:1;min-width:0"><button class="btn" id="powerUrlShow" type="button">Show</button></div>
+            <small>When your PC is offline, a <b>Turn on PC</b> button appears in the sidebar and opens this link, for example a Voice Monkey or smart-plug link that switches the PC's plug on. Saved on this device and, if you're signed in, in your account encrypted with your passphrase. It never goes to the Albatross server.</small></div>
           <div class="note">
             <strong style="color:var(--fg)">Share this PC's AI with another device</strong><br>
             On this PC, with Ollama running, open a terminal in the Albatross folder and run<br>
@@ -636,7 +634,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
         <!-- Account (optional sign-in, settings sync) -->
         <section class="pane" data-pane="account">
           <div id="accOut">
-            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.55">Optional. Sign in to keep your settings, your PC's code and your power PIN on every device. Your code and PIN are encrypted with a passphrase only you know before they're saved, so nobody else can read them, not even Google.</p>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.55">Optional. Sign in to keep your settings, your PC's code and your turn-on link on every device. Your code and link are encrypted with a passphrase only you know before they're saved, so nobody else can read them, not even Google.</p>
             <div class="row" style="margin-top:14px"><button class="btn primary" id="accGoogle"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.7-1.6 2.7-4 2.7-7z"/><path d="M12 21c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-2 .9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5A9 9 0 0 0 12 21z"/><path d="M6.7 13.3a5.4 5.4 0 0 1 0-3.5V7.3H3.5a9 9 0 0 0 0 8.1z"/><path d="M12 6.6c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9 9 0 0 0 3.5 7.3l3.2 2.5C7.4 8.3 9.5 6.6 12 6.6z"/></svg>Continue with Google</button></div>
             <div class="note" style="margin-top:14px">
               <div class="field"><label for="accEmail">Or with email</label><input id="accEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
@@ -646,7 +644,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
           </div>
           <div id="accIn" hidden>
             <div class="conn-status"><span class="dot ok"></span><span class="t"><span id="accWho"></span><small id="accSync">Settings sync is on</small></span><button class="btn small" id="accSignOut">Sign out</button></div>
-            <h3>Passphrase for your code and PIN</h3>
+            <h3>Passphrase for your code and turn-on link</h3>
             <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.55" id="vaultText"></p>
             <div class="row"><div class="field" style="flex:1"><label for="vaultPass" class="sr">Passphrase</label><input id="vaultPass" type="password" autocomplete="new-password" placeholder="Passphrase"></div><button class="btn primary" id="vaultBtn" style="align-self:flex-end">Unlock</button></div>
             <div class="row"><button class="btn danger" id="accDelete">Delete my cloud data</button></div>
@@ -1046,54 +1044,50 @@ function updateLoadedPill() {
 }
 setInterval(() => { if (connected && !document.hidden && !controller) refreshLoaded(); }, 10000);
 // ---------- turning the remote PC on ----------
-// The Albatross server can switch the PC's smart plug on through an Alexa routine (see README).
-// The button only shows while the remote PC is offline, so it never touches a running PC.
+// Your own turn-on link (Settings → Connection), e.g. a smart-plug or Alexa routine link. The browser opens it
+// directly, so the Albatross server never sees it. The button only shows while the remote PC is offline.
 let powerWait = null;
-async function updatePowerBox(online) {
+function updatePowerBox(online) {
   const box = $("#powerBox");
-  if (online || S.conn.mode !== "remote" || !CODE_RE.test(S.conn.code)) {
+  if (online || S.conn.mode !== "remote" || !CODE_RE.test(S.conn.code) || !store.get("powerUrl", "")) {
     box.hidden = true;
     if (powerWait) { clearInterval(powerWait); powerWait = null; toast("Your PC is on and connected"); }
     $("#powerMsg").textContent = "";
     return;
   }
-  if (powerWait) return; // already starting, keep showing progress
-  try { box.hidden = !(await (await fetch(toolsBase() + "/power/status")).json()).available; } catch { box.hidden = true; }
+  box.hidden = false;
 }
-$("#powerBtn").onclick = () => {
-  const f = $("#powerForm");
-  f.hidden = !f.hidden;
-  if (!f.hidden) { $("#powerPin").value = store.get("powerPin", ""); $("#powerPin").focus(); }
-};
-$("#powerForm").addEventListener("submit", async e => {
-  e.preventDefault();
-  const pin = $("#powerPin").value.trim(), msg = $("#powerMsg");
-  if (!pin) { $("#powerPin").focus(); return; }
-  $("#powerGo").disabled = true;
+$("#powerBtn").onclick = async () => {
+  const url = store.get("powerUrl", ""), msg = $("#powerMsg");
+  if (!/^https:\/\//i.test(url)) { msg.textContent = "Add an https turn-on link in Settings → Connection first."; return; }
+  $("#powerBtn").disabled = true;
   msg.textContent = "Sending…";
   try {
-    const r = await fetch(toolsBase() + "/power/on", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin, code: splitCode(S.conn.code).route }) });
-    const j = await r.json().catch(() => ({}));
-    if (r.status === 409) { msg.textContent = ""; connect(true); return; } // it's already on
-    if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
-    store.set("powerPin", pin);
-    $("#powerForm").hidden = true;
-    msg.textContent = "Power is on. Your PC is starting, which usually takes 1 to 2 minutes. This connects by itself.";
-    // Keep trying to connect for up to 6 minutes.
+    // "no-cors": the trigger services don't allow reading their answer, but the request still goes through.
+    await fetch(url, { mode: "no-cors", cache: "no-store", referrerPolicy: "no-referrer", credentials: "omit" });
+    msg.textContent = "Turn-on link opened. Your PC is starting, which usually takes 1 to 2 minutes. This connects by itself.";
     const started = Date.now();
     clearInterval(powerWait);
     powerWait = setInterval(async () => {
       if (Date.now() - started > 6 * 60e3) {
         clearInterval(powerWait); powerWait = null;
-        msg.textContent = "The PC hasn't come online. Check that it starts when it gets power (BIOS: Restore on AC power loss) and that Albatross starts at boot.";
+        msg.textContent = "The PC hasn't come online. Check the link, that the PC starts when it gets power (BIOS: Restore on AC power loss), and that Albatross starts at boot.";
         return;
       }
       if (await connect(true)) checkSearch();
     }, 10000);
   } catch (err) {
-    msg.textContent = err.message;
-  } finally { $("#powerGo").disabled = false; }
-});
+    msg.textContent = "Couldn't open the turn-on link: " + err.message;
+  } finally { $("#powerBtn").disabled = false; }
+};
+$("#powerUrl").onchange = e => {
+  const v = e.target.value.trim();
+  if (v && !/^https:\/\//i.test(v)) { toast("The link has to start with https://"); e.target.value = store.get("powerUrl", ""); return; }
+  if (v) store.set("powerUrl", v); else store.del("powerUrl");
+  toast(v ? "Turn-on link saved" : "Turn-on link removed");
+  updatePowerBox(connected);
+};
+$("#powerUrlShow").onclick = () => { const i = $("#powerUrl"); i.type = i.type === "password" ? "text" : "password"; $("#powerUrlShow").textContent = i.type === "password" ? "Show" : "Hide"; };
 
 function showConnHelp(err) {
   const text = S.conn.mode === "remote"
@@ -1811,6 +1805,7 @@ function openSettings(tab) {
   setConnCards(S.conn.mode);
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay;
   $("#serverHint").textContent = S.conn.relay || DEFAULT_SERVER;
+  $("#powerUrl").value = store.get("powerUrl", ""); $("#powerUrl").type = "password"; $("#powerUrlShow").textContent = "Show";
   $("#connResult").textContent = "";
   // params
   for (const k of ["temperature", "top_p", "top_k", "repeat_penalty"]) { const r = $("#p_" + k); r.value = S.params[k]; r.nextElementSibling.textContent = r.value; }
@@ -2367,7 +2362,7 @@ checkSearch();
 </script>
 <script type="module">
 // Optional account (Firebase Auth + Firestore): syncs settings between devices.
-// Secrets (the PC code, the power PIN) are encrypted in the browser with a passphrase before upload,
+// Secrets (the PC code, the turn-on link) are encrypted in the browser with a passphrase before upload,
 // so the database only ever holds ciphertext for them. No analytics.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -2398,7 +2393,7 @@ async function deriveVault(pass, salt) {
   const base = await crypto.subtle.importKey("raw", te.encode(pass), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 600000 }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
-const secrets = () => ({ code: S.conn.code || "", powerPin: store.get("powerPin", "") });
+const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl", "") });
 function publicSettings() {
   const c = structuredClone(S);
   c.conn = { ...c.conn, code: "" };           // the code only travels inside the vault
@@ -2418,7 +2413,7 @@ const schedulePush = () => { clearTimeout(pushTimer); pushTimer = setTimeout(pus
 const _save = saveSettings;
 saveSettings = function () { _save(); schedulePush(); };
 const _set = store.set;
-store.set = function (k, v) { const r = _set.call(store, k, v); if (k === "powerPin") schedulePush(); return r; };
+store.set = function (k, v) { const r = _set.call(store, k, v); if (k === "powerUrl") schedulePush(); return r; };
 
 function applyCloud(settings) {
   applying = true;
@@ -2445,7 +2440,8 @@ async function openVault(pass) {
     const sec = JSON.parse(await unseal(key, v.data, "albatross-vault"));
     applying = true;
     if (sec.code) S.conn.code = sec.code;
-    if (sec.powerPin) _set.call(store, "powerPin", sec.powerPin);
+    if (sec.powerUrl) _set.call(store, "powerUrl", sec.powerUrl);
+    updatePowerBox(connected);
     _save(); applying = false;
     connect(true); checkSearch(); checkHost();
   }
@@ -2454,9 +2450,9 @@ async function openVault(pass) {
 function renderVault() {
   const has = !!cloud?.vault?.salt;
   $("#vaultText").textContent = vaultKey
-    ? "Unlocked on this device. Your PC code and power PIN are saved encrypted with your passphrase."
-    : has ? "Enter your passphrase to restore your PC code and power PIN on this device."
-          : "Choose a passphrase to also save your PC code and power PIN, encrypted. Write it down: it can't be recovered, and nobody can reset it for you.";
+    ? "Unlocked on this device. Your PC code and turn-on link are saved encrypted with your passphrase."
+    : has ? "Enter your passphrase to restore your PC code and turn-on link on this device."
+          : "Choose a passphrase to also save your PC code and turn-on link, encrypted. Write it down: it can't be recovered, and nobody can reset it for you.";
   $("#vaultBtn").textContent = vaultKey ? "Unlocked" : has ? "Unlock" : "Set passphrase";
   $("#vaultBtn").disabled = !!vaultKey; $("#vaultPass").disabled = !!vaultKey;
 }
@@ -2486,7 +2482,7 @@ $("#vaultBtn").onclick = async () => {
   const pass = $("#vaultPass").value;
   if (pass.length < 8) return msg("Use at least 8 characters for the passphrase.", true);
   $("#vaultBtn").disabled = true;
-  try { if (await openVault(pass)) { msg(""); $("#vaultPass").value = ""; toast("Code and PIN unlocked"); } else msg("Wrong passphrase.", true); }
+  try { if (await openVault(pass)) { msg(""); $("#vaultPass").value = ""; toast("Code and turn-on link unlocked"); } else msg("Wrong passphrase.", true); }
   catch (e) { msg(nice(e), true); }
   renderVault();
 };

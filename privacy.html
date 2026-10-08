@@ -13,7 +13,7 @@
   <h1>Privacy Policy</h1>
   <p class="meta">Last updated: 8 October 2026</p>
 
-  <p class="lead">Short version: Albatross works without an account and has no analytics, no ads and no tracking cookies. If you choose to sign in, only your settings are stored, and your PC code and power PIN are encrypted with your own passphrase first. Your chats are stored in your own browser and processed on your own computer. What passes through our relay server is encrypted so that the server can't read it.</p>
+  <p class="lead">Short version: Albatross works without an account and has no analytics, no ads and no tracking cookies. If you choose to sign in, only your settings are stored, and your PC code and turn-on link are encrypted with your own passphrase first. Your chats are stored in your own browser and processed on your own computer. What passes through our relay server is encrypted so that the server can't read it.</p>
 
   <h2>1. What stays on your devices</h2>
   <ul>
@@ -36,7 +36,7 @@
   <ul>
     <li><b>Sign you in:</b> Firebase stores your email address, your name and picture if you use Google sign-in, and when you signed in.</li>
     <li><b>Sync your settings:</b> your app settings (look, models, image options, connection type, your public name) are saved under your account so they appear on your other devices.</li>
-    <li><b>Keep your secrets secret:</b> your PC code and power PIN are only saved if you set a passphrase, and are encrypted in your browser (PBKDF2 + AES-256-GCM) before upload. We and Google only see scrambled data. If you forget the passphrase, nobody can recover them.</li>
+    <li><b>Keep your secrets secret:</b> your PC code and turn-on link are only saved if you set a passphrase, and are encrypted in your browser (PBKDF2 + AES-256-GCM) before upload. We and Google only see scrambled data. If you forget the passphrase, nobody can recover them.</li>
     <li><b>Not stored:</b> your chats, images and files are never uploaded to your account.</li>
   </ul>
   <p>You can delete your cloud data at any time in Settings → Account → Delete my cloud data, and sign out to stop syncing. Firebase may process data outside the EU under Google's terms and safeguards.</p>
@@ -45,7 +45,7 @@
   <ul>
     <li><b>Web search:</b> if you turn on web search, the search queries and page addresses the AI looks up are sent through our server to Ollama's web search API (ollama.com). Don't turn it on for questions you want to keep fully private.</li>
     <li><b>No cloud models:</b> Ollama also offers "cloud" models that run on its servers. Albatross hides and blocks them, so your messages are only ever processed by models on your own PC.</li>
-    <li><b>Turn on PC:</b> if set up, the server calls the smart-plug link you configured. It stores no data about you for this.</li>
+    <li><b>Turn on PC:</b> the turn-on link you save in the settings is opened directly by your browser. It never goes to the Albatross server. If you're signed in, it's stored in your account only encrypted with your passphrase.</li>
     <li><b>Hosting:</b> the website is served by GitHub Pages, and the landing page loads a scrolling library from jsDelivr. Like any website, these services receive your IP address and browser details when you load the page.</li>
   </ul>
 

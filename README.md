@@ -53,17 +53,17 @@ Flip **Start at boot** in the control center, or double-click `autostart-on.bat`
 
 ### Turn the PC on from the website (smart plug + Alexa)
 
-When your PC is off, the website can show a **Turn on PC** button. It switches the PC's smart plug on through an Alexa routine. The PC boots by itself when it gets power, and Burrow starts at boot.
+When your PC is off, the website can show a **Turn on PC** button. It opens your own turn-on link, which switches the PC's smart plug on (for example through an Alexa routine). The PC boots by itself when it gets power, and Albatross starts at boot.
 
-1. **PC:** in the BIOS/UEFI, set *Restore on AC power loss* (sometimes called *AC Back* or *Power On after power failure*) to **Power On**. Plug the PC into a smart plug that works with Alexa.
-2. **Alexa:** create a routine that turns the plug **on** (only on, never off). Start it with a URL trigger from a service like [Voice Monkey](https://voicemonkey.io) or [Virtual Smart Home](https://www.virtualsmarthome.xyz). The service gives you a secret link that runs the routine.
-3. **Render:** in your service's *Environment* settings, add `POWER_ON_URL` (that link) and `POWER_PIN` (a PIN of at least 6 digits). The link stays on the server and never reaches the website.
-4. Turn on **Start at boot** (above), so Burrow comes online after the PC boots.
+1. **PC:** in the BIOS/UEFI, set *Restore on AC power loss* (sometimes called *AC Back* or *Power On after power failure*) to **Power On**. Plug the PC into a smart plug.
+2. **Link:** create a routine that turns the plug **on** (only on, never off), started by a URL trigger from a service like [Voice Monkey](https://voicemonkey.io) or [Virtual Smart Home](https://www.virtualsmarthome.xyz). The service gives you a secret https link.
+3. **Website:** paste that link in **Settings → Connection → Turn-on link**. It's saved on that device, and in your account encrypted with your passphrase if you're signed in. It never goes to the Albatross server.
+4. Turn on **Start at boot** (above), so Albatross comes online after the PC boots.
 
-On the website, when the PC is offline, press **Turn on PC** under the connection status and enter the PIN. The page connects by itself once the PC is up, usually within 1 to 2 minutes.
+When the PC is offline, press **Turn on PC** under the connection status. The page connects by itself once the PC is up, usually within 1 to 2 minutes.
 
-- The button only shows while the PC is offline. The server also refuses while the PC is online, so it never cuts power to a running PC.
-- After 20 wrong PINs (from anyone) the button is locked for up to an hour.
+- The button only shows while the PC is offline, so it never touches a running PC.
+- Treat the link like a password: anyone who has it can switch the plug on.
 - After you shut the PC down, switch the plug off (for example "Alexa, turn off PC plug"), so turning it on next time actually gives it power.
 
 ## 3. Connect from another device

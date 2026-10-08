@@ -91,71 +91,6 @@ function searchLimited(ip) {
 }
 const clip = (s, n) => (typeof s === "string" && s.length > n ? s.slice(0, n) + " …" : s || "");
 
-// ---------- turning the host PC on (smart plug + Alexa routine) ----------
-// POWER_ON_URL: a secret link that runs an Alexa routine turning the PC's smart plug on
-//   (for example from Voice Monkey or Virtual Smart Home). With "Restore on AC power loss"
-//   set to On in the PC's BIOS, the PC then boots by itself.
-// POWER_PIN: a PIN you choose; the website asks for it before turning the PC on.
-// Pasted values often carry quotes or a trailing space/line break; a browser forgives that, fetch doesn't.
-const clean = (v) => String(v || "").trim().replace(/^["']+|["']+$/g, "").trim();
-const POWER_ON_URL = clean(process.env.POWER_ON_URL);
-const POWER_PIN = clean(process.env.POWER_PIN);
-let powerUrlHost = "";
-try { const u = new URL(POWER_ON_URL); if (/^https?:$/.test(u.protocol)) powerUrlHost = u.hostname; } catch {}
-let lastPowerResult = null; // shown in /power/status to help with setup (never the link itself)
-let lastPowerOn = 0;
-const powerFails = []; // times of wrong PINs, from anyone; counted together so faked addresses don't help
-function handlePower(req, res, url) {
-  cors(res);
-  if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
-  const available = !!(powerUrlHost && POWER_PIN);
-  // Says which setting is missing or wrong, and how the last attempt went (never the link or PIN).
-  if (url.pathname === "/power/status") {
-    return sendJson(res, 200, { available, url: !!POWER_ON_URL, urlValid: !!powerUrlHost, urlHost: powerUrlHost, pin: !!POWER_PIN, last: lastPowerResult });
-  }
-  if (url.pathname !== "/power/on" || req.method !== "POST") return sendJson(res, 404, { error: "Not found" });
-  if (!available) return sendJson(res, 501, { error: "Turning the PC on isn't set up on the server (POWER_ON_URL and POWER_PIN)." });
-
-  let raw = "";
-  req.on("data", (c) => { raw += c; if (raw.length > 2048) req.destroy(); });
-  req.on("end", async () => {
-    const ip = clientIp(req);
-    while (powerFails.length && Date.now() - powerFails[0] > 60 * 60 * 1000) powerFails.shift();
-    if (tooManyFailures(ip) || powerFails.length >= 20) {
-      return sendJson(res, 429, { error: "Too many wrong PINs. Turning the PC on is locked for up to an hour." });
-    }
-    let body = {};
-    try { body = JSON.parse(raw || "{}"); } catch {}
-    const pinOk = typeof body.pin === "string" && crypto.timingSafeEqual(Buffer.from(sha(body.pin), "hex"), Buffer.from(sha(POWER_PIN), "hex"));
-    if (!pinOk) { noteFailure(ip); powerFails.push(Date.now()); return sendJson(res, 403, { error: "Wrong PIN" }); }
-
-    // Never needed while the PC is online, and the routine should only ever turn power ON.
-    const code = String(body.code || "").toUpperCase();
-    if (CODE_RE.test(code) && hosts.has(code)) return sendJson(res, 409, { error: "The PC is already on and connected." });
-    if (Date.now() - lastPowerOn < 60 * 1000) return sendJson(res, 200, { ok: true, again: true });
-
-    let answer = "";
-    try {
-      const r = await fetch(POWER_ON_URL, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; BurrowServer/1.0)", Accept: "application/json, text/html;q=0.9, */*;q=0.8" },
-        signal: AbortSignal.timeout(20000),
-      });
-      answer = (await r.text()).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
-      if (!r.ok) throw new Error("HTTP " + r.status + (answer ? ": " + answer : ""));
-      // Trigger services can answer 200 and still report a failure in the text.
-      if (/\b(fail(ed|ure)?|invalid|error|not found)\b/i.test(answer) && !/\bsuccess/i.test(answer)) throw new Error(answer);
-    } catch (e) {
-      lastPowerResult = { ok: false, at: new Date().toISOString(), error: e.message };
-      console.log("[power] trigger failed:", e.message);
-      return sendJson(res, 502, { error: "The Alexa trigger didn't work: " + e.message });
-    }
-    lastPowerOn = Date.now();
-    lastPowerResult = { ok: true, at: new Date().toISOString() };
-    console.log("[power] PC turn-on triggered:", answer);
-    sendJson(res, 200, { ok: true });
-  });
-}
-
 function handleTools(req, res, url) {
   cors(res);
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
@@ -204,7 +139,6 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname.startsWith("/relay/")) return handleRelay(req, res, url);
   if (url.pathname.startsWith("/tools/")) return handleTools(req, res, url);
-  if (url.pathname.startsWith("/power/")) return handlePower(req, res, url);
 
   // static files
   if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }

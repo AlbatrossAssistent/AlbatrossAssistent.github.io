@@ -9,7 +9,3 @@ services:
     envVars:
       - key: OLLAMA_API_KEY
         sync: false
-      - key: POWER_ON_URL
-        sync: false
-      - key: POWER_PIN
-        sync: false
