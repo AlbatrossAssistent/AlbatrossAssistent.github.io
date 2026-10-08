@@ -13,7 +13,7 @@
   <h1>Privacy Policy</h1>
   <p class="meta">Last updated: 8 October 2026</p>
 
-  <p class="lead">Short version: Albatross has no accounts, no analytics, no ads and no tracking cookies. Your chats are stored in your own browser and processed on your own computer. What passes through our relay server is encrypted so that the server can't read it.</p>
+  <p class="lead">Short version: Albatross works without an account and has no analytics, no ads and no tracking cookies. If you choose to sign in, only your settings are stored, and your PC code and power PIN are encrypted with your own passphrase first. Your chats are stored in your own browser and processed on your own computer. What passes through our relay server is encrypted so that the server can't read it.</p>
 
   <h2>1. What stays on your devices</h2>
   <ul>
@@ -31,7 +31,17 @@
     <li><b>Public names</b> are shown to everyone else who is public at the same time, and disappear when you close the page or turn Public off.</li>
   </ul>
 
-  <h2>3. Optional features that use other services</h2>
+  <h2>3. Optional account</h2>
+  <p>You can use Albatross without signing in. If you sign in (with Google or with email and password), we use <b>Google Firebase</b> (Firebase Authentication and Cloud Firestore, operated by Google) to:</p>
+  <ul>
+    <li><b>Sign you in:</b> Firebase stores your email address, your name and picture if you use Google sign-in, and when you signed in.</li>
+    <li><b>Sync your settings:</b> your app settings (look, models, image options, connection type, your public name) are saved under your account so they appear on your other devices.</li>
+    <li><b>Keep your secrets secret:</b> your PC code and power PIN are only saved if you set a passphrase, and are encrypted in your browser (PBKDF2 + AES-256-GCM) before upload. We and Google only see scrambled data. If you forget the passphrase, nobody can recover them.</li>
+    <li><b>Not stored:</b> your chats, images and files are never uploaded to your account.</li>
+  </ul>
+  <p>You can delete your cloud data at any time in Settings → Account → Delete my cloud data, and sign out to stop syncing. Firebase may process data outside the EU under Google's terms and safeguards.</p>
+
+  <h2>4. Optional features that use other services</h2>
   <ul>
     <li><b>Web search:</b> if you turn on web search, the search queries and page addresses the AI looks up are sent through our server to Ollama's web search API (ollama.com). Don't turn it on for questions you want to keep fully private.</li>
     <li><b>No cloud models:</b> Ollama also offers "cloud" models that run on its servers. Albatross hides and blocks them, so your messages are only ever processed by models on your own PC.</li>
@@ -39,26 +49,26 @@
     <li><b>Hosting:</b> the website is served by GitHub Pages, and the landing page loads a scrolling library from jsDelivr. Like any website, these services receive your IP address and browser details when you load the page.</li>
   </ul>
 
-  <h2>4. What we don't do</h2>
+  <h2>5. What we don't do</h2>
   <ul>
     <li>We don't use analytics, tracking pixels, advertising or tracking cookies.</li>
     <li>We don't sell or share personal data.</li>
     <li>We don't use your chats or files to train AI.</li>
   </ul>
 
-  <h2>5. Legal basis (EU/UK)</h2>
+  <h2>6. Legal basis (EU/UK)</h2>
   <p>We process the limited technical data in section 2 because it's necessary to provide the service you ask for (Art. 6(1)(b) GDPR) and for our legitimate interest in keeping the server secure and working (Art. 6(1)(f) GDPR).</p>
 
-  <h2>6. Your rights</h2>
+  <h2>7. Your rights</h2>
   <p>Depending on where you live, you may have the right to access, correct, delete or restrict processing of your personal data, to object, and to complain to a data protection authority. Because we store almost nothing, most data can be deleted by you directly: clear the website's data in your browser and uninstall the host from your PC. For anything else, contact us (below).</p>
 
-  <h2>7. Children</h2>
+  <h2>8. Children</h2>
   <p>Albatross isn't meant for children under 16 without a parent's or guardian's permission.</p>
 
-  <h2>8. Changes</h2>
+  <h2>9. Changes</h2>
   <p>If this policy changes, we update the date at the top. Big changes will be pointed out on the website.</p>
 
-  <h2>9. Contact</h2>
+  <h2>10. Contact</h2>
   <p>Questions about privacy: open an issue on <a href="https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io/issues">GitHub</a>.</p>
 </main>
 <footer class="foot"><span>© 2026 Albatross</span><span class="sp"></span><a href="terms.html">Terms of Use</a><a href="privacy.html">Privacy Policy</a><a href="./">Home</a></footer>
