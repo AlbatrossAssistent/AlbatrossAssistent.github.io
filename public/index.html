@@ -254,11 +254,12 @@ body.compact .inner { gap: 14px; }
 .progress div { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .25s; }
 .typing span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 4px; animation: blink 1.2s infinite; }
 .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
-.rk-load { display: inline-flex; align-items: center; gap: 2px; height: 30px; }
-.rk-load svg { width: 22px; height: 22px; fill: var(--fg); margin-right: 8px; animation: rkhover 1.2s ease-in-out infinite; }
+.rk-load { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 34px; border-radius: 12px; overflow: hidden; }
+.rk-load svg { position: relative; z-index: 1; width: 22px; height: 22px; fill: var(--fg); animation: rkhover 1.2s ease-in-out infinite; filter: drop-shadow(0 0 4px var(--bg)); }
 .rk-load svg .flame { transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; opacity: .7; }
-.rk-load span { width: 4px; height: 4px; margin-right: 6px; background: var(--fg); animation: twinkle 1.4s ease-in-out infinite; }
-.rk-load span:nth-of-type(2) { width: 3px; height: 3px; transform: translateY(-6px); } .rk-load span:nth-of-type(3) { transform: translateY(5px); }
+.rk-load span { position: absolute; top: -4px; width: 3px; height: 3px; margin: 0; border-radius: 50%; background: var(--fg); opacity: 0; animation: rkstar 1.3s linear infinite; }
+.rk-load span:nth-of-type(1) { left: 9px; } .rk-load span:nth-of-type(2) { left: 22px; width: 2px; height: 2px; animation-delay: .45s; } .rk-load span:nth-of-type(3) { left: 35px; animation-delay: .9s; }
+@keyframes rkstar { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .8; } 100% { transform: translateY(42px); opacity: 0; } }
 @keyframes twinkle { 0%, 100% { opacity: .15; scale: .6; } 50% { opacity: 1; scale: 1.2; } }
 @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 .msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); border-radius: 18px; padding: 14px 16px; white-space: pre-wrap; font-size: .95em; }
