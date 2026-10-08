@@ -20,4 +20,4 @@ exit /b 1
 
 :run
 rem Uses the server from last time. If Burrow already runs (e.g. start at boot), this just opens its control center.
-node "%~dp0hosthost.js" || pause
+node "%~dp0host\host.js" || pause
