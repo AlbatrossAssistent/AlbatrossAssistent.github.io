@@ -40,11 +40,11 @@ a { color: inherit; }
 @media (max-width: 620px) { .nav a.lk { display: none; } }
 
 /* the scroll story: one tall section with a sticky stage */
-.story { position: relative; height: 1150vh; z-index: 1; }
-.stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
+.story { position: relative; height: 1150vh; }   /* just scroll distance: the stage below stays pinned for the whole page */
+.stage { position: fixed; inset: 0; height: 100vh; height: 100svh; overflow: hidden; z-index: 1; }   /* pinned; the ocean keeps moving behind the sections */
 .layer { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; }
 
-.hero { width: min(900px, 92vw); text-align: center; transform: translate(-50%, -50%); }
+.hero { width: min(900px, 92vw); text-align: center; transform: translate(-50%, -50%); z-index: 4; }
 .hero .eyebrow { font-size: 13px; letter-spacing: 6px; text-transform: uppercase; color: var(--muted); }
 .hero h1 { margin: 14px 0 10px; font-size: clamp(42px, 8.4vw, 118px); font-weight: 300; letter-spacing: -.02em; line-height: 1.02; }
 .hero h1 b { font-weight: 700; letter-spacing: .06em; display: block; background: linear-gradient(180deg, #fff 30%, rgba(255,255,255,.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -58,7 +58,6 @@ a { color: inherit; }
 .planet { width: min(64vmin, 640px); aspect-ratio: 1; border-radius: 50%; pointer-events: none; }
 #ocean { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
 .planet.fallback { background: radial-gradient(circle at 35% 30%, #3f86e8, #0b3a8a 55%, #041a45 80%); box-shadow: 0 0 140px 24px rgba(40,120,255,.28); }
-#bluefill { position: absolute; inset: 0; z-index: 9; background: #0b3a8a; opacity: 0; pointer-events: none; }
 
 /* features */
 .icon { width: min(30vmin, 260px); aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
@@ -88,7 +87,7 @@ a { color: inherit; }
 .start { font-size: clamp(15px, 1.6vw, 18px); padding: 14px 30px; }
 
 /* after the story */
-.after { position: relative; z-index: 2; padding: 12vh 20px 40px; background: linear-gradient(180deg, #0b3a8a 0%, #22324f 22%, #2a2c31 48%, #17181b 100%); }
+.after { position: relative; z-index: 3; padding: 12vh 20px 40px; background: linear-gradient(180deg, rgba(0,8,26,0) 0%, rgba(0,8,26,.32) 14%, rgba(0,8,26,.42) 100%); }   /* the water shows through */
 .grid { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
 .card { border-radius: 24px; padding: 22px; background: var(--glass); background-image: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,0) 50%); border: 1px solid var(--edge);
   -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
@@ -199,7 +198,6 @@ footer a:hover { color: var(--fg); }
       <circle cx="20" cy="27" r="5.2" fill="#0b0d12" stroke="#c9d3ea" stroke-width="2"/><circle cx="18.4" cy="25.4" r="1.4" fill="#9fb4ff" opacity=".8"/>
       <path fill="#5d6577" d="M18.5 40h3v18h-3z" opacity=".55"/></svg></div>
     <a class="layer btn start" id="start" href="public/">Start now →</a>
-    <div id="bluefill" aria-hidden="true"></div>
   </div>
 </main>
 
@@ -292,7 +290,7 @@ const story = $(".story");
 let progress = 0;
 function readProgress() { const r = story.getBoundingClientRect(); return clamp(-r.top / (r.height - innerHeight)); }
 const el = (id) => document.getElementById(id);
-const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), ocean: el("ocean"), rocket: el("rocket"), bluefill: el("bluefill"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
+const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), ocean: el("ocean"), rocket: el("rocket"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
 // like place(), but x/y in pixels from the centre of the screen
 function placePx(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
@@ -349,8 +347,8 @@ mat3 rotY(float a){float c=cos(a),s=sin(a);return mat3(c,0.,-s,0.,1.,0.,s,0.,c);
 mat3 rotX(float a){float c=cos(a),s=sin(a);return mat3(1.,0.,0.,0.,c,s,0.,-s,c);}
 // the water surface: a slow warped swell plus five layers of small waves, each drifting its own way
 float waves(vec3 q, float t){
-  float h = .5 * snoise(q * 2.6 + vec3(t * .02, 0., t * .015) + .7 * snoise(q * 1.3 + t * .008));
-  float a = .3, f = 13.;
+  float h = .55 * snoise(q * 2.0 + vec3(t * .02, 0., t * .015) + .7 * snoise(q * 1.1 + t * .008));
+  float a = .34, f = 8.5;
   for (int i = 0; i < 5; i++) {
     float fi = float(i);
     vec3 dir = vec3(sin(fi * 2.1 + .3), cos(fi * 1.3), sin(fi * 3.7 + 1.));
@@ -382,7 +380,7 @@ void main(){
   float h0 = waves(q, t);
   vec3 g = vec3(waves(q + vec3(e, 0., 0.), t) - h0, waves(q + vec3(0., e, 0.), t) - h0, waves(q + vec3(0., 0., e), t) - h0) / e;
   g -= dot(g, q) * q;                             // only the slope along the surface
-  vec3 n = normalize(n0 - (g * R) * .0052);       // tilt the sphere's normal by the waves (back to view space)
+  vec3 n = normalize(n0 - (g * R) * .0072);       // tilt the sphere's normal by the waves (back to view space)
   float terminator = clamp(dot(n0, L) * 1.1 + .15, 0., 1.);
   float diff = max(dot(n, L), 0.);
   float cur = .5 + .5 * snoise(q * 1.8 + vec3(0., t * .006, 0.));    // slow lighter and darker currents
@@ -446,7 +444,6 @@ function render(t) {
   const cover = Math.hypot(innerWidth, innerHeight) / 2 * 1.04 / r0;
   const planetY = (75 * (1 - rise) + 52 * sink) * (1 - grow), planetS = baseS * (1 + (cover - 1) * grow), planetO = Math.min(1, rise * 1.4);
   place(L.planet, { y: planetY, s: planetS, o: ocean ? 0 : planetO });
-  L.bluefill.style.opacity = seg(P, .95, 1);
   // the planet turns slowly by itself and faster while you scroll
   if (ocean) ocean(innerWidth / 2, innerHeight / 2 + planetY * innerHeight / 100, L.planet.offsetWidth / 2 * planetS,
                    (reduce ? 0 : t * .000012) + p * .9, reduce ? 0 : t, planetO);
