@@ -429,6 +429,13 @@ const ocean = (() => {
   };
 })();
 
+// the planet's own slow turning, which eases to a stop while it zooms in at the end
+let spinAcc = 0, spinLast = 0;
+function spinAt(t, grow) {
+  const dt = spinLast ? Math.min(100, t - spinLast) : 0; spinLast = t;
+  if (!reduce) spinAcc += dt * .000012 * (1 - grow) * (1 - grow);
+  return spinAcc;
+}
 function render(t) {
   const P = progress, p = Math.min(1, P / .84);       // p: the story as before, P: whole scroll
   const grow = ease(seg(P, .86, .99)), gone = 1 - seg(P, .86, .92);
@@ -441,12 +448,12 @@ function render(t) {
   const rise = easeOut(seg(p, .04, .2)), sink = ease(seg(p, .8, .93));
   // finally it grows from the bottom until it covers the whole screen
   const baseS = (.55 + .45 * rise) * (1 + .5 * sink), r0 = L.planet.offsetWidth / 2 * baseS || 1;
-  const cover = Math.hypot(innerWidth, innerHeight) / 2 * 1.04 / r0;
+  const cover = Math.hypot(innerWidth, innerHeight) / 2 * 3.2 / r0;   // dive in close to the water
   const planetY = (75 * (1 - rise) + 52 * sink) * (1 - grow), planetS = baseS * (1 + (cover - 1) * grow), planetO = Math.min(1, rise * 1.4);
   place(L.planet, { y: planetY, s: planetS, o: ocean ? 0 : planetO });
   // the planet turns slowly by itself and faster while you scroll
   if (ocean) ocean(innerWidth / 2, innerHeight / 2 + planetY * innerHeight / 100, L.planet.offsetWidth / 2 * planetS,
-                   (reduce ? 0 : t * .000012) + p * .9, reduce ? 0 : t, planetO);
+                   spinAt(t, grow) + p * .9, reduce ? 0 : t, planetO);
   // features
   feature(L.sparkle, L.cap1, p, .2);
   L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60 + p * 220) % 360}deg) scale(${1 + Math.sin(t / 700) * .04})`;
@@ -468,11 +475,12 @@ function render(t) {
   const lx = 0, ly = -5 * vh + Math.sin(t / 520) * 7 * land;   // hovering just under the closing title
   let dAng = ((0 - oAng) % 360 + 540) % 360 - 180;         // turn upright the short way
   L.rocket.style.zIndex = land > .3 || depth > 0 ? 5 : 1;
+  const away = easeOut(seg(p, .85, .93));                  // flies up and away as "Ready when you are." appears
   placePx(L.rocket, {
-    x: ox + (lx - ox) * land, y: oy + (ly - oy) * land,
+    x: ox + (lx - ox) * land, y: oy + (ly - oy) * land - away * away * innerHeight * .7,
     s: (.62 + .38 * (depth + 1) / 2) * (1 - land) + 1.15 * land,
     r: oAng + dAng * land,
-    o: easeOut(seg(p, .1, .16)) * (land > .3 ? 1 : .55 + .45 * (depth + 1) / 2) * gone,
+    o: easeOut(seg(p, .1, .16)) * (land > .3 ? 1 : .55 + .45 * (depth + 1) / 2) * gone * (1 - away),
   });
 
 
