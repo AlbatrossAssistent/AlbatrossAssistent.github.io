@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Albatross — Local AI</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0A0A0A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%230A0A0A'/%3E%3Cpath d='M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z' fill='white' transform='translate(2.8 1.5) scale(.8)'/%3E%3C/svg%3E">
 <style>
 :root {
@@ -500,6 +506,8 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
     <button class="badge loaded" id="loadedPill" title="Model currently loaded in memory (click to manage)"><span class="ld"></span><span id="loadedText">Nothing loaded</span></button>
     <span class="badge hide-sm" id="connBadge">This device</span>
     <div class="spacer"></div>
+    <button class="icon-btn" id="fullBtn" aria-label="Full screen" title="Full screen (F11)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
+    
   </div>
 
   <div id="home"></div>
@@ -620,7 +628,8 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
           <div class="field"><label>Text size</label><div class="range-row"><input type="range" id="fontSize" min="13" max="20" step="1"><output></output></div></div>
           <label class="check"><span>Opening animation<small>Plays when the site loads.</small></span><input type="checkbox" class="switch" id="intro"></label>
           <label class="check"><span>Compact messages<small>Less space between messages.</small></span><input type="checkbox" class="switch" id="compact"></label>
-          <div class="row"><button class="btn" id="replayIntro">Replay animation</button></div>
+          <div class="row"><button class="btn" id="replayIntro">Replay animation</button><button class="btn" id="fullBtn2">Full screen</button><button class="btn" id="installBtn" hidden>Install as app</button></div>
+          <div class="note" id="installNote">Tip: install Albatross as an app to open it in its own window without browser bars. In Chrome or Edge: menu ⋮ → Cast, save and share → Install page as app. On iPhone: Share → Add to Home Screen.</div>
         </section>
 
         <!-- Data -->
@@ -2258,6 +2267,28 @@ $("#pubOn").onchange = e => {
   S.files.public = e.target.checked; saveSettings();
   if (S.files.public) peerConnect(); else peerDisconnect();
 };
+
+// ---------- full screen & install as app ----------
+const FS_ON = '<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>', FS_OFF = '<path d="M9 4v4a1 1 0 0 1-1 1H4M20 9h-4a1 1 0 0 1-1-1V4M15 20v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4"/>';
+const canFull = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function toggleFull() {
+  const d = document, el = d.documentElement;
+  if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  else (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch?.(() => toast("Full screen isn't allowed here"));
+}
+function syncFull() {
+  const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  $("#fullBtn svg").innerHTML = on ? FS_OFF : FS_ON;
+  $("#fullBtn").title = on ? "Leave full screen (Esc)" : "Full screen (F11)";
+  $("#fullBtn2").textContent = on ? "Leave full screen" : "Full screen";
+}
+if (!canFull) { $("#fullBtn").hidden = true; $("#fullBtn2").hidden = true; } // iPhone: use "Add to Home Screen" instead
+$("#fullBtn").onclick = toggleFull; $("#fullBtn2").onclick = toggleFull;
+document.addEventListener("fullscreenchange", syncFull); document.addEventListener("webkitfullscreenchange", syncFull);
+let installPrompt = null;
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("#installBtn").hidden = false; });
+$("#installBtn").onclick = async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("#installBtn").hidden = true; };
+if (matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) $("#installNote").hidden = true;
 
 // ======================================================================
 // Wire up
