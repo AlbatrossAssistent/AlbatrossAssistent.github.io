@@ -30,6 +30,7 @@ a { color: inherit; }
   background: rgba(20,20,20,.35); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
 .nav .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -.3px; text-decoration: none; }
 .nav .brand svg { width: 26px; height: 26px; fill: currentColor; }
+.nav .brand svg .flame { opacity: .55; }
 .nav .sp { flex: 1; }
 .nav a.lk { color: var(--muted); text-decoration: none; font-size: 14px; }
 .nav a.lk:hover { color: var(--fg); }
@@ -154,7 +155,7 @@ footer a:hover { color: var(--fg); }
 <div class="nebula" aria-hidden="true"></div>
 
 <nav class="nav">
-  <a class="brand" href="#top"><svg viewBox="0 0 28 28"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/></svg>Albatross</a>
+  <a class="brand" href="#top"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>Albatross</a>
   <span class="sp"></span>
   <a class="lk" href="#how">How it works</a>
   <a class="lk" href="#features">Features</a>
@@ -203,7 +204,6 @@ footer a:hover { color: var(--fg); }
       <path fill="#5d6577" d="M14 58h12l-1 4H15z"/>
       <circle cx="20" cy="27" r="5.2" fill="#0b0d12" stroke="#c9d3ea" stroke-width="2"/><circle cx="18.4" cy="25.4" r="1.4" fill="#9fb4ff" opacity=".8"/>
       <path fill="#5d6577" d="M18.5 40h3v18h-3z" opacity=".55"/></svg></div>
-    <div class="layer bird" id="bird"><svg viewBox="0 0 28 22"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/></svg></div>
     <a class="layer btn start" id="start" href="public/">Start now →</a>
   </div>
 </main>
@@ -297,7 +297,7 @@ const story = $(".story");
 let progress = 0;
 function readProgress() { const r = story.getBoundingClientRect(); return clamp(-r.top / (r.height - innerHeight)); }
 const el = (id) => document.getElementById(id);
-const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), surface: el("surface"), rocket: el("rocket"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), bird: el("bird"), start: el("start") };
+const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), surface: el("surface"), rocket: el("rocket"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
 // like place(), but x/y in pixels from the centre of the screen
 function placePx(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
@@ -403,11 +403,10 @@ function render(t) {
   });
   L.rocket.querySelector(".flame").style.opacity = 1 - seg(p, .92, .96);
 
-  // finale: the albatross glides in above the rocket, start button on the ball
+  // finale: title above, start button on the ball
   const f = easeOut(seg(p, .86, .95)), b = easeOut(seg(p, .88, .97)), st = easeOut(seg(p, .9, .98));
-  place(L.final, { y: -34 + 4 * (1 - f), o: f });
-  const bh = L.bird.offsetHeight, birdY = ly - rh / 2 - bh / 2 + 4;
-  placePx(L.bird, { y: birdY - 30 * vh * (1 - b), x: 20 * vh * (1 - b), s: .6 + .4 * b, r: -12 * (1 - b), o: b });
+  place(L.final, { y: -26 + 4 * (1 - f), o: f });
+
   place(L.start, { y: 30 + 6 * (1 - st), o: st });
 }
 function drawSky(t) {

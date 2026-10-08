@@ -8,7 +8,7 @@ const path = require("path");
 const HTML = path.join(__dirname, "control.html");
 
 // The panel's port doubles as a lock: if it's taken, another Burrow host is already running (onBusy).
-function startPanel({ port, getState, actions, files, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, load, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -26,6 +26,12 @@ function startPanel({ port, getState, actions, files, onListening, onBusy }) {
       clients.add(res);
       req.on("close", () => clients.delete(res));
       return;
+    }
+    // Loading progress for the website on this PC (only a model name and a percentage, so any page may read it).
+    const lp = req.method === "GET" && req.url.match(/^\/load(?:\?model=([^&]*))?$/);
+    if (lp && load) {
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+      return res.end(JSON.stringify(load(lp[1] ? decodeURIComponent(lp[1]) : "")));
     }
     // Files: download one that arrived from a device, or add one for devices to download (see files.js).
     const dl = req.method === "GET" && req.url.match(/^\/received\/(.+)$/);

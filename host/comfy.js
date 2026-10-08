@@ -134,4 +134,13 @@ async function free() {
   return was;
 }
 
-module.exports = { MODEL, isComfy, models, generate, free, installed };
+// Size of the model files ComfyUI loads, for the loading percentage.
+function bytes() {
+  let t = 0;
+  for (const [dir, f] of [["diffusion_models", FILES.unet], ["text_encoders", FILES.clip], ["vae", FILES.vae]]) {
+    try { t += fs.statSync(path.join(COMFY_DIR, "ComfyUI", "models", dir, f)).size; } catch {}
+  }
+  return t;
+}
+
+module.exports = { MODEL, isComfy, models, generate, free, installed, bytes };

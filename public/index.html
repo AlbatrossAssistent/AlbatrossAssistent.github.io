@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon.svg">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%230A0A0A'/%3E%3Cpath d='M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z' fill='white' transform='translate(2.8 1.5) scale(.8)'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root {
   /* Light: white frosted glass on a soft grey backdrop */
@@ -91,22 +91,24 @@ aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-car
 #splash.done { clip-path: inset(0 0 100% 0); }
 #splash .wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px; transition: transform .9s cubic-bezier(.6,0,.2,1), opacity .6s ease; }
 #splash.done .wrap { transform: translateY(-140px) scale(1.2); opacity: 0; }
-#splash .logo { width: 150px; height: 150px; overflow: visible; animation: bob 4s ease-in-out 1.4s infinite; }
-#splash .logo .wing { fill: #fff; transform-box: fill-box; transform-origin: 50% 80%; opacity: 0; transform: translateY(46px) scale(.3, 1.5) rotate(-8deg); animation: soar 1.3s cubic-bezier(.2,.9,.25,1) .1s forwards; filter: drop-shadow(0 0 14px rgba(255,255,255,.28)); }
-#splash .logo .wave { fill: none; stroke: #fff; stroke-width: 1; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: .55; animation: draw .9s cubic-bezier(.65,0,.35,1) 1s forwards; }
+#splash .logo { width: 120px; height: 120px; overflow: visible; fill: #fff; opacity: 0; filter: drop-shadow(0 0 18px rgba(200,215,255,.35));
+  animation: launch 1.2s cubic-bezier(.2,.9,.25,1) .1s forwards, rkhover 1.6s ease-in-out 1.3s infinite; }
+#splash .logo .flame { fill: #cfdcff; transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; }
+#splash.done .logo { animation: blast .8s cubic-bezier(.6,0,.9,.4) forwards; }
 #splash .word { display: flex; overflow: visible; font-size: 52px; font-weight: 300; line-height: 1.15; text-transform: uppercase; animation: spread 1.8s cubic-bezier(.2,.8,.2,1) .7s both; }
 #splash .word span { display: inline-block; opacity: 0; filter: blur(10px); transform: translateX(-14px); animation: settle .9s cubic-bezier(.2,.8,.2,1) forwards; }
 #splash .tag { font-size: 12px; letter-spacing: 6px; text-transform: uppercase; color: rgba(255,255,255,.5); opacity: 0; animation: fade 1s ease 1.8s forwards; }
-#splash .horizon { position: absolute; left: 0; right: 0; top: 62%; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent); transform: scaleX(0); animation: grow 1.6s cubic-bezier(.2,.8,.2,1) .3s forwards; }
-#splash .wind { position: absolute; left: -240px; height: 1px; width: var(--w); background: linear-gradient(90deg, transparent, rgba(255,255,255,.35)); opacity: 0; animation: wind var(--t) linear var(--d) infinite; }
+#splash .sdot { position: absolute; top: -12px; width: var(--s); height: var(--s); border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.7); opacity: 0; animation: fall var(--t) linear var(--d) infinite; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
-@keyframes soar { 55% { opacity: 1; transform: translateY(-6px) scale(1.06, .95) rotate(2deg); } to { opacity: 1; transform: none; } }
-@keyframes bob { 50% { transform: translateY(-7px) rotate(-1.5deg); } }
 @keyframes spread { from { letter-spacing: 26px; } to { letter-spacing: 12px; } }
 @keyframes settle { to { opacity: 1; filter: blur(0); transform: none; } }
 @keyframes fade { to { opacity: 1; } }
 @keyframes grow { to { transform: scaleX(1); } }
-@keyframes wind { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateX(calc(100vw + 480px)); opacity: 0; } }
+@keyframes fall { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: var(--o); } 100% { transform: translateY(calc(100vh + 24px)); opacity: 0; } }
+@keyframes launch { from { opacity: 0; transform: translateY(120px) scale(.7); } 60% { opacity: 1; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@keyframes rkhover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+@keyframes flick { from { transform: scaleY(.65); } to { transform: scaleY(1.25); } }
+@keyframes blast { from { opacity: 1; } to { opacity: 1; transform: translateY(-85vh) scale(.85); } }
 body.intro aside, body.intro main { opacity: 0; transform: translateY(14px); }
 aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8,.2,1) .2s; }
 @media (prefers-reduced-motion: reduce) { #splash { display: none; } body.intro aside, body.intro main { opacity: 1; transform: none; } body::before, body::after { animation: none; } }
@@ -115,6 +117,8 @@ aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8
 aside { width: 272px; flex: 0 0 272px; display: flex; flex-direction: column; gap: 10px; padding: 14px 10px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 28px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 8px; font-weight: 600; font-size: 19px; letter-spacing: -.4px; }
 .brand svg { width: 28px; height: 28px; fill: currentColor; stroke: none; }
+.brand svg .flame, .home-hero svg .flame { opacity: .55; }
+.avatar svg .flame { opacity: .6; }
 .brand svg .wave, .avatar svg .wave { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
 .side-btn { min-height: 42px; color: var(--fg); border-radius: 14px; display: flex; align-items: center; gap: 10px; padding: 0 14px; transition: background .15s, transform .1s; }
 .side-btn:hover { background-color: var(--glass-strong); transform: translateY(-1px); }
@@ -233,11 +237,29 @@ body.compact .inner { gap: 14px; }
 .actions button:hover { background: var(--soft); color: var(--fg); }
 .actions svg { width: 15px; height: 15px; }
 .actions .stat { margin-left: 6px; }
+.gen-wait { position: relative; width: min(340px, 100%); border-radius: 28px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background-color: var(--glass); background-image: radial-gradient(70% 60% at 50% 40%, rgba(160,175,255,.14), transparent 70%), var(--sheen);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), var(--shadow); }
+[data-theme="dark"] .gen-wait { background-color: rgba(10,10,14,.6); }
+.gen-wait .grk svg { width: 64px; height: 64px; fill: var(--fg); filter: drop-shadow(0 0 14px rgba(170,190,255,.35)); animation: rkhover 1.4s ease-in-out infinite; }
+.gen-wait .grk .flame { transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; opacity: .8; }
+.gen-wait .gstars { position: absolute; inset: 0; }
+.gen-wait .gstars i { position: absolute; top: -6px; width: 3px; height: 3px; border-radius: 50%; background: var(--fg); opacity: 0; animation: gfall 2s linear infinite; }
+.gen-wait .gstars i:nth-child(3n) { width: 2px; height: 2px; }
+@keyframes gfall { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: .7; } 100% { transform: translateY(380px); opacity: 0; } }
+.gen-wait .gfoot { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.gen-wait .progress { width: 100%; margin: 0; }
 .gen-img { max-width: 100%; width: 512px; border-radius: 20px; border: 1px solid var(--line); display: block; box-shadow: var(--shadow); }
 .progress { height: 4px; background: var(--soft); border-radius: 999px; overflow: hidden; width: 320px; max-width: 100%; margin: 10px 0; }
 .progress div { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .25s; }
 .typing span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 4px; animation: blink 1.2s infinite; }
 .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+.rk-load { display: inline-flex; align-items: center; gap: 2px; height: 30px; }
+.rk-load svg { width: 22px; height: 22px; fill: var(--fg); margin-right: 8px; animation: rkhover 1.2s ease-in-out infinite; }
+.rk-load svg .flame { transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; opacity: .7; }
+.rk-load span { width: 4px; height: 4px; margin-right: 6px; background: var(--fg); animation: twinkle 1.4s ease-in-out infinite; }
+.rk-load span:nth-of-type(2) { width: 3px; height: 3px; transform: translateY(-6px); } .rk-load span:nth-of-type(3) { transform: translateY(5px); }
+@keyframes twinkle { 0%, 100% { opacity: .15; scale: .6; } 50% { opacity: 1; scale: 1.2; } }
 @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 .msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); border-radius: 18px; padding: 14px 16px; white-space: pre-wrap; font-size: .95em; }
 .empty { text-align: center; margin-top: 12vh; display: flex; flex-direction: column; align-items: center; gap: 10px; }
@@ -304,6 +326,7 @@ textarea#prompt::placeholder { color: var(--muted); white-space: nowrap; overflo
 .send:active { transform: scale(.94); }
 .attach-btn { width: 42px; height: 42px; flex: none; border: none; border-radius: 50%; background: none; color: var(--muted); display: flex; align-items: center; justify-content: center; }
 .attach-btn:hover { background: var(--soft); color: var(--fg); }
+.attach-btn.img-btn.on { background-color: var(--accent); background-image: var(--accent-sheen); color: var(--accent-fg); }
 .attach-btn.web-btn { width: auto; padding: 0 14px; gap: 6px; font-size: 14px; border: 1px solid var(--line); height: 38px; margin-bottom: 2px; border-radius: 999px; }
 .attach-btn.web-btn.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .attach-btn.web-btn[disabled] { opacity: .35; cursor: not-allowed; }
@@ -464,9 +487,9 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 
 <!-- ================= INTRO ================= -->
 <div id="splash" aria-hidden="true">
-  <div id="wind"></div><div class="horizon"></div>
+  <div id="stars"></div>
   <div class="wrap">
-    <svg class="logo" viewBox="0 0 28 28"><path class="wing" d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path class="wave" pathLength="1" d="M6 24q2-1.6 4 0t4 0t4 0t4 0"/></svg>
+    <svg class="logo" viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>
     <div class="word" id="splashWord"></div>
     <div class="tag">Your AI &middot; Your computer</div>
   </div>
@@ -474,7 +497,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 
 <!-- ================= SIDEBAR ================= -->
 <aside id="sidebar">
-  <div class="brand"><svg viewBox="0 0 28 28"><path class="wing" d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path class="wave" d="M6 24q2-1.6 4 0t4 0t4 0t4 0"/></svg>Albatross</div>
+  <div class="brand"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>Albatross</div>
   <button class="side-btn" id="goHome"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Home</button>
   <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
   <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
@@ -513,6 +536,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 <div class="attachments" id="attachments"></div>
       <div class="box" id="box">
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <button class="attach-btn img-btn" id="imgBtn" aria-pressed="false" title="Make a picture (otherwise Albatross notices by itself when you ask for one)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></button>
         <button class="attach-btn" id="attachBtn" aria-label="Attach image" title="Attach image (for vision models)"><svg class="i" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
         <label for="prompt" class="sr">Message</label>
         <textarea id="prompt" rows="1" placeholder="Message your local AI…"></textarea>
@@ -588,6 +612,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
         <!-- Image -->
         <section class="pane" data-pane="image">
           <div class="row">
+            <div class="field"><label for="imgModel">Image model</label><select id="imgModel"></select></div>
             <div class="field"><label for="imgSize">Size</label><select id="imgSize"><option value="512x512">512²</option><option value="768x768">768²</option><option value="1024x1024">1024²</option><option value="1024x768">1024×768</option><option value="768x1024">768×1024</option><option value="1280x720">1280×720</option></select></div>
             <div class="field"><label for="imgSteps">Steps</label><input id="imgSteps" type="number" min="1" max="100" placeholder="auto"></div>
             <div class="field"><label for="imgSeed">Seed</label><input id="imgSeed" type="number" placeholder="random"></div>
@@ -791,15 +816,16 @@ function playIntro() {
   const word = $("#splashWord");
   word.innerHTML = "";
   [..."Albatross"].forEach((ch, i) => { const s = document.createElement("span"); s.textContent = ch; s.style.animationDelay = (0.9 + i * 0.08) + "s"; word.appendChild(s); });
-  // wind streaks gliding across the sky
-  const wind = $("#wind"); wind.innerHTML = "";
-  for (let i = 0; i < 14; i++) {
-    const w = document.createElement("i"); w.className = "wind";
-    w.style.top = (8 + Math.random() * 84) + "%";
-    w.style.setProperty("--w", (80 + Math.random() * 220) + "px");
-    w.style.setProperty("--t", (1.4 + Math.random() * 1.6) + "s");
-    w.style.setProperty("--d", (Math.random() * 2) + "s");
-    wind.appendChild(w);
+  // star dots streaming down past the rocket, so it looks like it's flying up
+  const stars = $("#stars"); stars.innerHTML = "";
+  for (let i = 0; i < 70; i++) {
+    const d = document.createElement("i"); d.className = "sdot";
+    d.style.left = (Math.random() * 100) + "%";
+    d.style.setProperty("--s", (Math.random() < .85 ? 1.5 + Math.random() * 1.5 : 3 + Math.random() * 1.5) + "px");
+    d.style.setProperty("--o", (.35 + Math.random() * .65).toFixed(2));
+    d.style.setProperty("--t", (.9 + Math.random() * 2.2) + "s");
+    d.style.setProperty("--d", (-Math.random() * 3) + "s");
+    stars.appendChild(d);
   }
   sp.style.display = "flex"; sp.classList.remove("done");
   // restart CSS animations
@@ -981,7 +1007,17 @@ function fillModelSelect() {
   if (list.some(m => m.name === want)) sel.value = want;
   fillCtxModels();
 }
+function imageModels() { return models.filter(m => m.kind === "image"); }
+function pickImageModel() { const l = imageModels(); return (l.find(m => m.name === S.imageModel) || l[0])?.name || ""; }
+function fillImgModels() {
+  const sel = $("#imgModel"); if (!sel) return;
+  const l = imageModels();
+  sel.innerHTML = l.length ? "" : '<option value="">No image model on the connected PC</option>';
+  for (const m of l) { const o = document.createElement("option"); o.value = m.name; o.textContent = m.name; sel.appendChild(o); }
+  sel.value = pickImageModel();
+}
 function fillCtxModels() {
+  fillImgModels();
   const sel = $("#imgCtxModel"); if (!sel) return;
   sel.innerHTML = '<option value="">Auto (pick a text model)</option><option value="off">None (just join requests)</option>';
   for (const m of models.filter(m => m.kind === "text" || m.kind === "vision")) {
@@ -1102,10 +1138,11 @@ function showConnHelp(err) {
 // ======================================================================
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 function chatType(c) { return c.type || (c.messages.some(m => m.genImage !== undefined) ? "image" : "chat"); }
-const curMode = () => (current ? chatType(current) : S.mode);
+const curMode = () => "chat"; // chats are no longer split by type: each message picks text or image
 // The type is chosen in a popup when a chat starts and stays fixed once the first message is sent.
 let ncType = "chat", ncReuse = false;
-function openNewChat(forCurrent) {
+function openNewChat() { newChat("chat", "", false); setView("chat"); $("#sidebar").classList.remove("open"); }
+function openTypePickerUnused(forCurrent) {
   ncReuse = !!(forCurrent && current && !current.messages.length);
   ncType = ncReuse ? chatType(current) : S.mode;
   $("#ncTitle").textContent = ncReuse ? "Change chat type" : "New chat";
@@ -1212,10 +1249,10 @@ function renderMessages() {
 function renderAll() { applyType(); renderSidebar(); renderMessages(); }
 
 function renderEmpty() {
-  const imageMode = curMode() === "image";
+  const imageMode = false;
   const sugg = imageMode
     ? [["A lighthouse in a storm", "oil painting, dramatic light"], ["Isometric tiny city", "pastel colors, 3D render"], ["Portrait of a fox astronaut", "studio lighting"], ["Minimal navy logo", "for a coffee shop"]]
-    : [["Explain a concept", "like I'm new to it"], ["Help me write", "an email, essay or message"], ["Debug my code", "paste it in"], ["Plan something", "a trip, a week, a project"]];
+    : [["Explain a concept", "like I'm new to it"], ["Help me write", "an email, essay or message"], ["Debug my code", "paste it in"], ["Draw a picture", "of a lighthouse in a storm, oil painting"]];
   const d = document.createElement("div");
   d.className = "empty";
   d.innerHTML = `<h1>${imageMode ? "What should I draw?" : "What can I help with?"}</h1><p>Everything runs on ${S.conn.mode === "remote" ? "your connected PC" : "this computer"} — nothing goes to the cloud.</p><div class="suggestions"></div>`;
@@ -1226,10 +1263,6 @@ function renderEmpty() {
     btn.onclick = () => { const p = $("#prompt"); p.value = imageMode ? `${a}, ${b}` : `${a} ${b}: `; autosize(); p.focus(); };
     d.querySelector(".suggestions").appendChild(btn);
   }
-  const ct = document.createElement("button");
-  ct.className = "btn change-type"; ct.textContent = (imageMode ? "Image chat" : "Text chat") + " · change type";
-  ct.onclick = () => openNewChat(true);
-  d.insertBefore(ct, d.querySelector(".suggestions"));
   $("#inner").appendChild(d);
 }
 
@@ -1242,7 +1275,7 @@ const ICON = {
   speak: '<svg class="i" viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
   trash: '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
 };
-const LOGO = '<svg viewBox="0 0 28 28"><path class="wing" d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path class="wave" d="M6 24q2-1.6 4 0t4 0t4 0t4 0"/></svg>';
+const LOGO = '<svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>';
 
 function userBubble(m, idx) {
   const d = document.createElement("div");
@@ -1275,13 +1308,15 @@ function fillBot(d, m, idx, live) {
       const im = document.createElement("img"); im.className = "gen-img"; im.alt = m.prompt || "Generated image"; im.src = "data:image/png;base64," + m.genImage; c.appendChild(im);
       if (m.asked && m.prompt && m.asked !== m.prompt) { const pd = document.createElement("details"); pd.style.cssText = "margin-top:8px;color:var(--muted);font-size:13px"; pd.innerHTML = "<summary style='cursor:pointer'>Prompt used (with context)</summary><div style='margin-top:4px'></div>"; pd.lastChild.textContent = m.prompt; c.appendChild(pd); }
     } else if (live) {
-      c.innerHTML = `<div style="color:var(--muted);font-size:14px">Generating image… <span class="pct"></span></div><div class="progress"><div></div></div>`;
+      const [gw, gh] = (S.img.size || "1024x1024").split("x").map(Number);
+      c.innerHTML = `<div class="gen-wait" style="aspect-ratio:${gw}/${gh}"><div class="gstars">${"<i></i>".repeat(18)}</div><div class="grk">${LOGO}</div><div class="gfoot"><span class="pct">Starting…</span><div class="progress"><div></div></div></div></div>`;
+      c.querySelectorAll(".gstars i").forEach((d, k) => { d.style.left = (k * 37 % 100) + "%"; d.style.animationDelay = (-(k * .23) % 2.4) + "s"; d.style.animationDuration = (1.4 + (k % 5) * .35) + "s"; });
     } else c.innerHTML = `<div style="color:var(--muted)">(image not stored)</div>`;
   } else {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
     blocks.forEach((b, bi) => c.appendChild(renderBlock(b, !!live && !b.done && bi === blocks.length - 1)));
     const body = document.createElement("div"); body.className = "md";
-    body.innerHTML = m.content ? md(m.content) : (live && !blocks.length ? '<div class="typing"><span></span><span></span><span></span></div>' : "");
+    body.innerHTML = m.content ? md(m.content) : (live && !blocks.length ? TYPING : "");
     c.appendChild(body);
   }
   const a = d.querySelector(".actions");
@@ -1299,7 +1334,7 @@ function fillBot(d, m, idx, live) {
 // While a reply streams, update the bubble in place instead of rebuilding it every frame:
 // thinking text is appended, finished paragraphs are rendered once, and only the
 // paragraph still being written is re-rendered. Keeps long replies smooth.
-const TYPING = '<div class="typing"><span></span><span></span><span></span></div>';
+const TYPING = '<div class="typing rk-load">' + LOGO + '<span></span><span></span><span></span></div>';
 function fillLive(c, m) {
   let L = c._live;
   if (!L) {
@@ -1329,7 +1364,7 @@ function fillLive(c, m) {
     body.insertAdjacentHTML("beforeend", md(rest.slice(0, cut)));
     L.done += cut; L.n = body.childNodes.length; L.tail = null;
   }
-  const tail = src ? src.slice(L.done) : blocks.length ? "" : m.loading ? `<div class="shimmer" style="font-size:14px">Loading ${esc(m.model)} into memory…</div>` : TYPING;
+  const tail = src ? src.slice(L.done) : blocks.length ? "" : m.loading ? `<div class="shimmer" style="font-size:14px">Loading ${esc(m.model)} into memory…${m.loadPct != null ? " " + m.loadPct + "%" : ""}</div>${m.loadPct != null ? `<div class="progress" style="width:220px"><div style="width:${m.loadPct}%"></div></div>` : ""}` : TYPING;
   if (tail !== L.tail) { trimTail(); body.insertAdjacentHTML("beforeend", src ? md(tail) : tail); L.tail = tail; }
 }
 // Length of the leading part of s that ends at a blank line outside any ``` block.
@@ -1463,26 +1498,46 @@ document.addEventListener("click", e => {
 // ======================================================================
 // Sending
 // ======================================================================
+// Does this message ask for a picture? English and German phrasings, plus short follow-ups
+// right after a picture ("now at night", "mach es blau").
+function wantsImage(text) {
+  const t = text.toLowerCase().trim();
+  if (!t) return false;
+  const noun = "(image|picture|pic|photo|photograph|drawing|painting|illustration|artwork|art|wallpaper|poster|logo|icon|sketch|portrait|render|bild|foto|zeichnung|gemälde|grafik|illustration|hintergrundbild)";
+  if (new RegExp(`^(please |can you |could you |bitte |kannst du )?(draw|paint|sketch|illustrate|render|zeichne|male|skizziere)\\b`).test(t)) return true;
+  if (new RegExp(`\\b(generate|create|make|design|produce|give me|show me|erstelle|generiere|mach|mache|erzeuge|entwirf|zeig mir)\\b[^.?!]{0,40}\\b${noun}\\b`).test(t)) return true;
+  if (new RegExp(`^(an? |the |ein |eine |einen )?${noun} (of|von|with|mit)\\b`).test(t)) return true;
+  const last = [...current.messages].reverse().find(m => m.role === "assistant");
+  if (last && last.genImage !== undefined && t.length < 90 && /^(now|then|again|but|make it|make him|make her|add|remove|change|same|more|less|jetzt|nun|und|mach|füge|entferne|ändere|nochmal|gleich|mehr|weniger)\b/.test(t)) return true;
+  return false;
+}
+let forceImage = false;
+function setForceImage(on) { forceImage = on; $("#imgBtn").classList.toggle("on", on); $("#imgBtn").setAttribute("aria-pressed", String(on)); applyType(); }
+
 async function send(textOverride) {
   if (controller) { controller.abort(); return; }
   const p = $("#prompt");
   const text = (textOverride ?? p.value).trim();
-  const model = $("#model").value;
   if (!text && !attachments.length) return;
   if (!connected) { await connect(); if (!connected) return; }
-  if (!model) { toast(curMode() === "image" ? "No image model installed on the connected device" : "Pick a model first"); return; }
+  let asImage = !!text && !attachments.length && (forceImage || wantsImage(text));
+  const imgModel = pickImageModel();
+  if (asImage && !imgModel) { if (forceImage) { toast("No image model on the connected PC"); return; } asImage = false; }
+  const model = asImage ? imgModel : $("#model").value;
+  if (!model) { toast("Pick a model first"); return; }
+  if (forceImage) setForceImage(false);
 
   const userMsg = { role: "user", content: text, images: attachments.length ? attachments.slice() : undefined };
   if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; renderAttachments(); }
   current.messages.push(userMsg);
   if (!current.type) current.type = curMode();
   applyType();
-  if (S.autoTitle && current.title === "New chat") current.title = text.slice(0, 48) || "Image chat";
+  if (S.autoTitle && current.title === "New chat") current.title = text.slice(0, 48) || "New chat";
   current.updated = Date.now();
   if (current.messages.length === 1) $("#inner").innerHTML = "";
   $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
   renderSidebar();
-  await (curMode() === "image" ? generateImage(model, text) : chat(model));
+  await (asImage ? generateImage(model, text) : chat(model));
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -1553,7 +1608,10 @@ async function chat(model) {
     let loadStart = 0;
     try {
       const running = (await (await api("/api/ps")).json()).models || [];
-      if (!running.some(r => r.name === model)) { loadStart = performance.now(); reply.loading = true; redraw(); }
+      if (!running.some(r => r.name === model)) {
+        loadStart = performance.now(); reply.loading = true; redraw();
+        watchLoading(model, pct => { reply.loadPct = pct; redraw(); }, () => !reply.loading || !controller);
+      }
     } catch {}
     const loaded = () => {
       if (!reply.loading) return;
@@ -1563,7 +1621,9 @@ async function chat(model) {
       refreshLoaded();
     };
 
-    const msgs = current.messages.filter(m => m.genImage === undefined).map(m => ({ role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) }));
+    const msgs = current.messages.map(m => m.genImage !== undefined
+      ? { role: "assistant", content: `(I made a picture for that: ${m.prompt || m.asked || ""})` }
+      : { role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) });
     if (system) msgs.unshift({ role: "system", content: system });
 
     for (let round = 0; round < 6; round++) {
@@ -1639,8 +1699,8 @@ async function buildImagePrompt(text, bubble) {
   const ctx = [current.context, style].filter(Boolean).join(" ").trim();
   let last = current.messages.length - 1;
   while (last >= 0 && current.messages[last].role !== "user") last--;
-  const earlier = S.img.history ? current.messages.slice(0, Math.max(last, 0))
-    .filter(m => m.role === "user" && m.content).map(m => m.content).slice(-6) : [];
+  const before = current.messages.slice(0, Math.max(last, 0));
+  const earlier = S.img.history ? before.filter((m, i) => m.role === "user" && m.content && before[i + 1]?.genImage !== undefined).map(m => m.content).slice(-6) : [];
   if (!earlier.length && !ctx) return text;
   const writer = S.img.ctxModel === "off" ? null : (models.find(m => m.name === S.img.ctxModel) || autoWriter());
   if (writer) {
@@ -1658,6 +1718,27 @@ async function buildImagePrompt(text, bubble) {
     } catch (e) { if (e.name === "AbortError") throw e; toast("Prompt writer failed, joining your requests instead"); }
   }
   return [...earlier.slice(-2), text].join(". ") + (ctx ? `. ${ctx}` : "");
+}
+
+// How far the PC has loaded a model into memory. The host measures the graphics memory filling up.
+async function loadStatus(model) {
+  try {
+    if (S.conn.mode === "remote") {
+      if (!CODE_RE.test(S.conn.code)) return null;
+      const r = await e2eFetch("/load");
+      return r.ok ? await r.json() : null;
+    }
+    if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(S.conn.url)) return null;
+    return await (await fetch("http://127.0.0.1:4747/load?model=" + encodeURIComponent(model), { signal: AbortSignal.timeout(1500) })).json();
+  } catch { return null; }
+}
+function watchLoading(model, onPct, isDone) {
+  const t = setInterval(async () => {
+    if (isDone()) return clearInterval(t);
+    const st = await loadStatus(model);
+    if (!isDone() && st && st.model === model && st.state === "loading" && st.pct != null) onPct(st.pct);
+  }, 700);
+  return () => clearInterval(t);
 }
 
 async function generateImage(model, prompt) {
@@ -1678,13 +1759,19 @@ async function generateImage(model, prompt) {
   if (seed) body.seed = Number(seed);
   const t0 = performance.now();
   try {
+    let drawing = false;
+    const show = (label, pct) => {
+      const bar = bubble.querySelector(".gen-wait .progress div"); if (bar) bar.style.width = pct + "%";
+      const t = bubble.querySelector(".gen-wait .pct"); if (t) t.textContent = `${label} ${pct}%`;
+    };
+    show("Starting " + model + "…", 0);
+    const stopWatch = watchLoading(model, pct => show("Loading " + model + " into memory…", pct), () => drawing || !controller);
     const res = await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
     await readNdjson(res, j => {
       if (j.error) throw new Error(j.error);
       if (j.total) {
-        const pct = Math.round((j.completed || 0) / j.total * 100);
-        const bar = bubble.querySelector(".progress div"); if (bar) bar.style.width = pct + "%";
-        const t = bubble.querySelector(".pct"); if (t) t.textContent = pct + "%";
+        drawing = true; stopWatch();
+        show("Drawing…", Math.round((j.completed || 0) / j.total * 100));
       }
       const img = j.image || j.images?.[0];
       if (img) reply.genImage = img;
@@ -1723,12 +1810,14 @@ function buildOptions() {
 function regenerate() {
   if (controller) return;
   const msgs = current.messages;
-  if (msgs.length && msgs[msgs.length - 1].role === "assistant") msgs.pop();
+  regenerate.lastReply = msgs.length && msgs[msgs.length - 1].role === "assistant" ? msgs[msgs.length - 1] : null;
+  if (regenerate.lastReply) msgs.pop();
   const lastUser = msgs[msgs.length - 1];
   if (!lastUser || lastUser.role !== "user") return;
   renderMessages();
   const model = $("#model").value;
-  (lastUser.genImage === undefined && curMode() === "image") ? generateImage(model, lastUser.content) : chat(model);
+  const prevReply = regenerate.lastReply;
+  (prevReply && prevReply.genImage !== undefined && pickImageModel()) ? generateImage(pickImageModel(), lastUser.content) : chat(model);
 }
 function editFrom(idx) {
   if (controller) return;
@@ -1787,12 +1876,9 @@ function applyAppearance() {
   $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
 }
 function applyType() {
-  const mode = curMode();
-  document.body.classList.toggle("image-mode", mode === "image");
-  $("#typeBadge").innerHTML = (mode === "image" ? TYPE_ICON.image : TYPE_ICON.chat) + (mode === "image" ? "Image chat" : "Text chat");
-  $("#prompt").placeholder = mode === "image" ? "Describe the image you want…" : "Message your local AI…";
-  $("#attachBtn").style.display = mode === "image" ? "none" : "";
-  $("#ctxFieldChat").hidden = mode !== "image";
+  $("#typeBadge").hidden = true;
+  $("#prompt").placeholder = forceImage ? "Describe the picture you want…" : "Message your AI, or ask it to draw something…";
+  $("#ctxFieldChat").hidden = false;
   fillModelSelect();
 }
 
@@ -1816,7 +1902,7 @@ function openSettings(tab) {
   loadImgFields(); fillCtxModels();
   $("#chatTitle").value = current.title; $("#chatContext").value = current.context || ""; $("#chatSystem").value = current.system || "";
   $("#chatSystem").placeholder = S.defaultSystem ? "Default: " + S.defaultSystem.slice(0, 80) : "Leave empty for none";
-  $("#chatTypeLine").textContent = "This is " + (curMode() === "image" ? "an image" : "a text") + " chat. The type is chosen when a chat starts and can't change afterwards.";
+  $("#chatTypeLine").hidden = true;
   $("#webSearch").checked = searchAvailable && S.webSearch;
   for (const k of ["enterSends", "showStats", "think", "autoTitle", "persist", "intro", "compact"]) $("#" + k).checked = !!S[k];
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
@@ -1906,6 +1992,7 @@ $("#imgSteps").onchange = e => { S.img.steps = e.target.value; saveSettings(); }
 $("#imgSeed").onchange = e => { S.img.seed = e.target.value; saveSettings(); };
 $("#imgStyle").onchange = e => { S.img.style = e.target.value; saveSettings(); };
 $("#imgHistory").onchange = e => { S.img.history = e.target.checked; saveSettings(); };
+$("#imgModel").onchange = e => { S.imageModel = e.target.value; saveSettings(); };
 $("#imgCtxModel").onchange = e => { S.img.ctxModel = e.target.value; saveSettings(); };
 loadImgFields();
 
@@ -2321,7 +2408,8 @@ $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#openSettings").onclick = () => openSettings();
 $("#openConn").onclick = () => { openSettings("connection"); setConnCards("remote"); setTimeout(() => $("#codeInput").focus(), 50); };
 $("#search").addEventListener("input", renderSidebar);
-$("#model").onchange = e => { if (curMode() === "image") S.imageModel = e.target.value; else S.model = e.target.value; saveSettings(); };
+$("#model").onchange = e => { S.model = e.target.value; saveSettings(); };
+$("#imgBtn").onclick = () => setForceImage(!forceImage);
 $("#exportChat").onclick = () => {
   if (!current.messages.length) return toast("This chat is empty");
   const mdText = `# ${current.title}\n\n` + current.messages.map(m => `**${m.role === "user" ? "You" : "Albatross" + (m.model ? " (" + m.model + ")" : "")}:**\n\n${m.genImage !== undefined ? "[generated image: " + (m.prompt || "") + "]" : m.content}`).join("\n\n---\n\n");
@@ -2333,8 +2421,8 @@ $("#fileInput").onchange = e => { addFiles(e.target.files); e.target.value = "";
 const box = $("#box");
 box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("drag"); });
 box.addEventListener("dragleave", () => box.classList.remove("drag"));
-box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("drag"); if (curMode() === "chat") addFiles(e.dataTransfer.files); });
-$("#prompt").addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])]; if (f.length && curMode() === "chat") { e.preventDefault(); addFiles(f); } });
+box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("drag"); addFiles(e.dataTransfer.files); });
+$("#prompt").addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])]; if (f.length) { e.preventDefault(); addFiles(f); } });
 $("#prompt").addEventListener("input", autosize);
 $("#prompt").addEventListener("keydown", e => {
   if (e.key !== "Enter" || e.isComposing) return;

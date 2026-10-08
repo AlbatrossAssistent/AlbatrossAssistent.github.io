@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Albatross Control Center</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%230A0A0A'/%3E%3Cpath d='M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z' fill='white' transform='translate(2.8 1.5) scale(.8)'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root {
   --bg: #000; --fg: #f5f5f5; --muted: #8e8e8e; --line: rgba(255,255,255,.10); --soft: rgba(255,255,255,.06);
@@ -32,6 +32,7 @@ body { padding: 20px clamp(14px, 3vw, 32px) 28px; position: relative; overflow-x
 .glass, header, .card, button, .pill, .drop { background-color: var(--glass); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--hi), var(--shadow); }
 header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; border-radius: 22px; box-shadow: var(--hi); }
 header .logo { width: 30px; height: 30px; fill: currentColor; }
+header .logo .flame { opacity: .55; }
 header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: -.3px; }
 header .sub { color: var(--muted); font-size: 14px; }
 header .spacer { flex: 1; }
@@ -120,7 +121,7 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
 <div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 <div class="wrap">
   <header>
-    <svg class="logo" viewBox="0 0 28 28"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path d="M6 24q2-1.6 4 0t4 0t4 0t4 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <svg class="logo" viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>
     <h1>Albatross Control Center</h1>
     <span class="sub" id="pcName"></span>
     <span class="spacer"></span>

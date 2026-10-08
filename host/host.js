@@ -144,8 +144,48 @@ async function onlyThisModel(model) {
   const others = loaded.filter((n) => n !== model);
   await Promise.all(others.map((m) => fetch(OLLAMA + "/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: m, keep_alive: 0 }) }).catch(() => {})));
   if (!comfy.isComfy(model) && (await comfy.free())) others.push("ComfyUI");
-  if (others.length) note(`Unloaded ${others.join(", ")} to make room for ${model}`);
+  if (others.length) { note(`Unloaded ${others.join(", ")} to make room for ${model}`); await new Promise((r) => setTimeout(r, 1200)); }
 }
+
+// ---------- how far a model has loaded (shown as a percentage on the website) ----------
+// Ollama doesn't report loading progress, so we watch the graphics memory fill up
+// compared with the model's size (nvidia-smi). Capped at 99% until the model is really ready.
+let loading = null; // { model, pct, done, since }
+const sizes = {};
+function gpuMem() {
+  return new Promise((res) => execFile("nvidia-smi", ["--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"], { windowsHide: true, timeout: 2500 }, (err, out) => {
+    if (err) return res(null);
+    const [used, total] = String(out).split("\n")[0].split(",").map(Number);
+    res(used >= 0 && total > 0 ? { used, total } : null);
+  }));
+}
+async function modelBytes(model) {
+  if (comfy.isComfy(model)) return comfy.bytes();
+  if (!sizes[model]) { try { for (const m of (await (await fetch(OLLAMA + "/api/tags")).json()).models || []) sizes[m.name] = m.size; } catch {} }
+  return sizes[model] || 0;
+}
+async function isLoaded(model) {
+  if (comfy.isComfy(model)) return false;
+  try { return ((await (await fetch(OLLAMA + "/api/ps", { signal: AbortSignal.timeout(2000) })).json()).models || []).some((m) => m.name === model); } catch { return false; }
+}
+async function watchLoad(model) {
+  if (!model || (loading && loading.model === model && !loading.done)) return;
+  if (await isLoaded(model)) { loading = { model, pct: 100, done: true }; return; }
+  const me = (loading = { model, pct: 0, done: false, since: Date.now() });
+  const [g0, bytes] = await Promise.all([gpuMem(), modelBytes(model)]);
+  const expect = g0 && bytes ? Math.min(bytes / 1048576, Math.max(512, g0.total - g0.used - 400)) : 0;
+  if (!expect) me.pct = null; // can't measure on this PC (no NVIDIA card or unknown size)
+  const tick = async () => {
+    if (loading !== me || me.done) return;
+    if (Date.now() - me.since > 10 * 60e3) { me.done = true; return; }
+    if (await isLoaded(model)) return markLoaded(model);
+    if (expect) { const g = await gpuMem(); if (g) me.pct = Math.max(me.pct || 0, Math.min(99, Math.round(((g.used - g0.used) / expect) * 100))); }
+    setTimeout(tick, 500);
+  };
+  tick();
+}
+function markLoaded(model) { if (loading && loading.model === model && !loading.done) { loading.done = true; loading.pct = 100; } }
+const loadProgress = () => (!loading ? { state: "idle" } : { model: loading.model, pct: loading.pct, state: loading.done ? "loaded" : "loading" });
 
 const isCloud = (name) => typeof name === "string" && /-cloud$|:cloud$|-cloud:/.test(name);
 
@@ -157,7 +197,7 @@ async function upstream(method, p, body, signal) {
   const unload = p === "/api/generate" && j && !j.prompt && j.keep_alive === 0;
   // Cloud models run on Ollama's servers, not this PC, so messages would leave the house: never pass them on.
   if (isCloud(j?.model)) return Response.json({ error: "Cloud models are turned off on this PC. Pick a local model." }, { status: 403 });
-  if (!unload && j?.model && (p === "/api/chat" || p === "/api/generate")) await onlyThisModel(j.model);
+  if (!unload && j?.model && (p === "/api/chat" || p === "/api/generate")) { await onlyThisModel(j.model); watchLoad(j.model); }
   if (comfy.isComfy(j?.model)) {
     if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
     if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models()[0]?.details || {} });
@@ -165,7 +205,7 @@ async function upstream(method, p, body, signal) {
       const enc = new TextEncoder();
       return new Response(new ReadableStream({
         async start(c) {
-          const emit = (o) => c.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+          const emit = (o) => { if (o.total) markLoaded(j.model); c.enqueue(enc.encode(JSON.stringify(o) + "\n")); };
           try { await comfy.generate(j, emit, signal, (t) => note(t)); }
           catch (e) { if (e.name === "AbortError") return c.error(e); emit({ error: e.message }); }
           c.close();
@@ -243,6 +283,10 @@ function connect() {
     const reply = (frame) => send({ type: "chunk", id, data: seal(aesKey, JSON.stringify(frame), `${rid}:${seq++}`) + "\n" });
     send({ type: "head", id, status: 200, contentType: "text/plain; charset=utf-8" });
     // Files to and from this PC (see files.js), answered here instead of by Ollama.
+    if (method === "GET" && p === "/load") {
+      reply({ k: "m", s: 200, c: "application/json" }); reply({ k: "d", d: JSON.stringify(loadProgress()) }); reply({ k: "e" });
+      return send({ type: "end", id });
+    }
     if (typeof p === "string" && p.startsWith("/files/")) {
       let status = 500, out;
       try { [status, out] = files.handle(method, p, body, note); } catch (e) { out = { error: e.message }; note("File transfer failed: " + e.message, "error"); }
@@ -276,6 +320,7 @@ function connect() {
         if (done) break;
         const data = dec.decode(value, { stream: true });
         reply({ k: "d", d: data });
+        if (entry?.model && !entry.image) markLoaded(entry.model); // first words arrived: the model is in memory
         if (entry) {
           tail = (tail + data).slice(-8192);
           if (!entry.image) entry.tokens += (data.match(/\n/g) || []).length; // ~1 streamed line per token, exact count comes at the end
@@ -419,6 +464,8 @@ panel = startPanel({
   port: Number(process.env.BURROW_PANEL_PORT) || 4747,
   getState: () => ({ ...stats, files: files.state(), now: Date.now() }),
   files,
+  // the website on this PC talks to Ollama directly, so it asks here to watch a model load
+  load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },
   actions: { "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; }, "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
   // Only start sharing once we hold the panel's port, so two hosts never fight over the same code.
   onListening: (url) => {
