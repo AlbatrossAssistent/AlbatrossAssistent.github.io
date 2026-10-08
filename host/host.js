@@ -147,12 +147,16 @@ async function onlyThisModel(model) {
   if (others.length) note(`Unloaded ${others.join(", ")} to make room for ${model}`);
 }
 
+const isCloud = (name) => typeof name === "string" && /-cloud$|:cloud$|-cloud:/.test(name);
+
 // Ollama, with the ComfyUI image model mixed in (see comfy.js): it shows up in the model list
 // and /api/generate for it makes an image, answered in Ollama's format.
 async function upstream(method, p, body, signal) {
   let j = null;
   if (method === "POST") { try { j = JSON.parse(body || "{}"); } catch {} }
   const unload = p === "/api/generate" && j && !j.prompt && j.keep_alive === 0;
+  // Cloud models run on Ollama's servers, not this PC, so messages would leave the house: never pass them on.
+  if (isCloud(j?.model)) return Response.json({ error: "Cloud models are turned off on this PC. Pick a local model." }, { status: 403 });
   if (!unload && j?.model && (p === "/api/chat" || p === "/api/generate")) await onlyThisModel(j.model);
   if (comfy.isComfy(j?.model)) {
     if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
@@ -172,7 +176,7 @@ async function upstream(method, p, body, signal) {
   const r = await fetch(OLLAMA + p, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body, signal });
   if (p === "/api/tags" && r.ok) {
     const t = await r.json();
-    t.models = [...(t.models || []), ...comfy.models()];
+    t.models = [...(t.models || []).filter((m) => !isCloud(m.name)), ...comfy.models()];
     return Response.json(t);
   }
   if (unload) comfy.free(); // "Free GPU memory" on the website frees ComfyUI's memory too

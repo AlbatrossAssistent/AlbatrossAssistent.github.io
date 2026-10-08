@@ -921,10 +921,12 @@ async function connect(quiet) {
   }
 }
 // Ollama can list one model several times (old and new copies, internal "llamacpp:" aliases): show each once.
+const isCloud = (name) => /-cloud$|:cloud$|-cloud:/.test(name);
 function cleanModels(list) {
   const seen = new Map();
   for (const m of list) {
     if (/^llamacpp:/.test(m.name)) continue;
+    if (isCloud(m.name)) continue; // cloud models run on Ollama's servers, not this PC: never offered, so chats stay private
     const prev = seen.get(m.name);
     const vision = (x) => (x.details?.families || []).includes("clip");
     if (!prev || (vision(m) && !vision(prev))) seen.set(m.name, m);
