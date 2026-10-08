@@ -79,7 +79,13 @@ a { color: inherit; }
 @keyframes bob { 50% { transform: translateY(-4%); } }
 
 /* finale */
-.bird { width: min(34vmin, 300px); }
+.bird { width: min(26vmin, 230px); z-index: 6; }
+/* the rocket that orbits the planet */
+.rocket { width: min(7vmin, 62px); z-index: 5; }
+.rocket svg { width: 100%; display: block; overflow: visible; filter: drop-shadow(0 0 14px rgba(200,215,255,.35)); }
+.rocket .flame { transform-origin: 20px 66px; animation: flame .12s ease-in-out infinite alternate; transition: opacity .3s; }
+@keyframes flame { from { transform: scaleY(.85) scaleX(.95); } to { transform: scaleY(1.15) scaleX(1.05); } }
+.planet { z-index: 2; } .icon, .caption { z-index: 4; } .finale-title, .start { z-index: 7; }
 .bird svg { width: 100%; fill: #fff; filter: drop-shadow(0 0 26px rgba(255,255,255,.35)); animation: glide 4s ease-in-out infinite; overflow: visible; }
 @keyframes glide { 50% { transform: translateY(-5%) rotate(-1.5deg); } }
 .finale-title { width: min(820px, 92vw); text-align: center; }
@@ -188,6 +194,15 @@ footer a:hover { color: var(--fg); }
 
     <!-- finale -->
     <div class="layer finale-title" id="final"><h2>Ready when you are.</h2><p>Free. Open source. Yours.</p></div>
+    <div class="layer rocket" id="rocket"><svg viewBox="0 0 40 84"><defs>
+      <linearGradient id="rb" x1="0" x2="1"><stop offset="0" stop-color="#9aa3b8"/><stop offset=".45" stop-color="#ffffff"/><stop offset="1" stop-color="#8d95aa"/></linearGradient>
+      <linearGradient id="rf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#cfe0ff"/><stop offset="1" stop-color="#7f9cff" stop-opacity="0"/></linearGradient></defs>
+      <path class="flame" fill="url(#rf)" d="M13 60c0 8 3 16 7 22c4-6 7-14 7-22z"/>
+      <path fill="#5d6577" d="M11 44L3 58l1 4 9-5zM29 44l8 14-1 4-9-5z"/>
+      <path fill="url(#rb)" d="M20 2C11 12 9 26 9 40v18h22V40C31 26 29 12 20 2z"/>
+      <path fill="#5d6577" d="M14 58h12l-1 4H15z"/>
+      <circle cx="20" cy="27" r="5.2" fill="#0b0d12" stroke="#c9d3ea" stroke-width="2"/><circle cx="18.4" cy="25.4" r="1.4" fill="#9fb4ff" opacity=".8"/>
+      <path fill="#5d6577" d="M18.5 40h3v18h-3z" opacity=".55"/></svg></div>
     <div class="layer bird" id="bird"><svg viewBox="0 0 28 22"><path d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/></svg></div>
     <a class="layer btn start" id="start" href="public/">Start now →</a>
   </div>
@@ -282,7 +297,13 @@ const story = $(".story");
 let progress = 0;
 function readProgress() { const r = story.getBoundingClientRect(); return clamp(-r.top / (r.height - innerHeight)); }
 const el = (id) => document.getElementById(id);
-const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), surface: el("surface"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), bird: el("bird"), start: el("start") };
+const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), surface: el("surface"), rocket: el("rocket"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), bird: el("bird"), start: el("start") };
+// like place(), but x/y in pixels from the centre of the screen
+function placePx(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
+  node.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
+  node.style.opacity = o;
+  node.style.visibility = o <= .001 ? "hidden" : "visible";
+}
 function place(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.transform = `translate(-50%, -50%) translate(${x}vw, ${y}vh) scale(${s}) rotate(${r}deg)`;
   node.style.opacity = o;
@@ -358,10 +379,35 @@ function render(t) {
   L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60 + p * 220) % 360}deg) scale(${1 + Math.sin(t / 700) * .04})`;
   feature(L.ghost, L.cap2, p, .4);
   feature(L.shield, L.cap3, p, .6);
-  // finale: albatross lands above the ball, start button on the ball
+  // ---- rocket: orbits the planet (passing behind and in front), then lands on top of it ----
+  const vh = innerHeight / 100;
+  const pScale = (.55 + .45 * rise) * (1 + .5 * sink);
+  const R = L.planet.offsetWidth / 2 * pScale, cy = (75 * (1 - rise) + 52 * sink) * vh;
+  const tilt = -14 * Math.PI / 180, A = R * 1.3, B = A * .3;
+  const th = Math.PI * 2 * 2.6 * seg(p, .1, .84) + (reduce ? 0 : t * .00025) + Math.PI * .15;
+  const ex = A * Math.cos(th), ey = B * Math.sin(th);
+  const ox = ex * Math.cos(tilt) - ey * Math.sin(tilt), oy = ex * Math.sin(tilt) + ey * Math.cos(tilt) + cy;
+  const tx = -A * Math.sin(th), ty = B * Math.cos(th);   // direction of travel
+  const oAng = Math.atan2(tx * Math.sin(tilt) + ty * Math.cos(tilt), tx * Math.cos(tilt) - ty * Math.sin(tilt)) * 180 / Math.PI + 90;
+  const depth = Math.sin(th);                              // > 0: in front of the planet
+  const land = ease(seg(p, .82, .94));
+  const rh = L.rocket.offsetHeight;
+  const lx = 0, ly = cy - R - rh / 2 + rh * .25;                  // standing on the top of the planet
+  let dAng = ((0 - oAng) % 360 + 540) % 360 - 180;         // turn upright the short way
+  L.rocket.style.zIndex = land > .3 || depth > 0 ? 5 : 1;
+  placePx(L.rocket, {
+    x: ox + (lx - ox) * land, y: oy + (ly - oy) * land,
+    s: (.62 + .38 * (depth + 1) / 2) * (1 - land) + land,
+    r: oAng + dAng * land,
+    o: easeOut(seg(p, .1, .16)) * (land > .3 ? 1 : .55 + .45 * (depth + 1) / 2),
+  });
+  L.rocket.querySelector(".flame").style.opacity = 1 - seg(p, .92, .96);
+
+  // finale: the albatross glides in above the rocket, start button on the ball
   const f = easeOut(seg(p, .86, .95)), b = easeOut(seg(p, .88, .97)), st = easeOut(seg(p, .9, .98));
-  place(L.final, { y: -30 + 4 * (1 - f), o: f });
-  place(L.bird, { y: -6 - 30 * (1 - b), x: 20 * (1 - b), s: .6 + .4 * b, r: -12 * (1 - b), o: b });
+  place(L.final, { y: -34 + 4 * (1 - f), o: f });
+  const bh = L.bird.offsetHeight, birdY = ly - rh / 2 - bh / 2 + 4;
+  placePx(L.bird, { y: birdY - 30 * vh * (1 - b), x: 20 * vh * (1 - b), s: .6 + .4 * b, r: -12 * (1 - b), o: b });
   place(L.start, { y: 30 + 6 * (1 - st), o: st });
 }
 function drawSky(t) {
