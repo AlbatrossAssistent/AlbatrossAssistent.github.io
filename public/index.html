@@ -137,6 +137,12 @@ select option { background: var(--bg); color: var(--fg); }
 .seg button { border: none; background: transparent; padding: 0 14px; min-height: 34px; border-radius: 999px; display: flex; align-items: center; gap: 6px; color: var(--muted); transition: background .2s, color .2s; }
 .seg button.on { background: var(--accent); color: var(--accent-fg); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
 .spacer { flex: 1; }
+.badge.loaded { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; max-width: 230px; color: var(--fg); }
+.badge.loaded span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.badge.loaded .ld { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); opacity: .5; }
+.badge.loaded.on .ld { background: var(--ok); opacity: 1; box-shadow: 0 0 0 3px rgba(31,168,85,.22); }
+.seg.locked { opacity: .7; } .seg.locked button { cursor: default; }
+.type-pick { margin-bottom: 8px; }
 .badge { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; white-space: nowrap; background: var(--soft); }
 
 .messages { flex: 1; overflow-y: auto; padding: 24px 16px; border-radius: 22px; }
@@ -335,6 +341,7 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 <aside id="sidebar">
   <div class="brand"><svg viewBox="0 0 28 28"><path class="wing" d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path class="wave" d="M6 24q2-1.6 4 0t4 0t4 0t4 0"/></svg>Albatross</div>
   <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
+  <button class="side-btn" id="newImageChat"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>New image chat</button>
   <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
   <div class="chat-list" id="chatList"></div>
   <div class="conn-card">
@@ -357,34 +364,26 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 <main>
   <div class="topbar">
     <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open chats"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-    <div class="seg" role="group" aria-label="Mode">
+    <div class="seg" id="typeSeg" role="group" aria-label="Chat type">
       <button id="modeChat" class="on"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Chat</button>
       <button id="modeImage"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>Image</button>
     </div>
     <label for="model" class="sr">Model</label>
     <select id="model" class="model-sel"><option>Loading…</option></select>
+    <button class="badge loaded" id="loadedPill" title="Model currently loaded in memory (click to manage)"><span class="ld"></span><span id="loadedText">Nothing loaded</span></button>
     <span class="badge hide-sm" id="connBadge">This device</span>
     <div class="spacer"></div>
-    <button class="icon-btn" id="freeGpuBtn" aria-label="Free GPU memory" title="Free GPU memory (unload all models)"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></button>
-    <button class="icon-btn" id="chatSettingsBtn" aria-label="System prompt for this chat" title="System prompt for this chat"><svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></button>
-    <button class="icon-btn" id="exportChat" aria-label="Download this chat" title="Download this chat (Markdown)"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg></button>
-    <button class="icon-btn" id="themeBtn" aria-label="Toggle dark mode" title="Toggle dark mode"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    <button class="icon-btn" id="topSettings" aria-label="Settings" title="Settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </div>
 
   <div class="messages" id="messages"><div class="inner" id="inner"></div></div>
 
   <div class="composer">
     <div class="composer-inner">
-      <div class="img-opts">
-        <label>Size <select id="imgSize"><option value="512x512">512²</option><option value="768x768">768²</option><option value="1024x1024" selected>1024²</option><option value="1024x768">1024×768</option><option value="768x1024">768×1024</option><option value="1280x720">1280×720</option></select></label>
-        <label>Steps <input id="imgSteps" type="number" min="1" max="100" placeholder="auto"></label>
-        <label>Seed <input id="imgSeed" type="number" placeholder="random"></label>
-      </div>
-      <div class="attachments" id="attachments"></div>
+\1 id="attachments"></div>
       <div class="box" id="box">
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
         <button class="attach-btn" id="attachBtn" aria-label="Attach image" title="Attach image (for vision models)"><svg class="i" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
-        <button class="attach-btn web-btn" id="webBtn" aria-pressed="false" title="Let the AI search the web"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Search</span></button>
         <label for="prompt" class="sr">Message</label>
         <textarea id="prompt" rows="1" placeholder="Message your local AI…"></textarea>
         <button class="send" id="send" aria-label="Send"><svg class="i" id="sendIcon" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
@@ -401,9 +400,10 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
     <div class="modal-body">
       <div class="tabs" role="tablist">
         <button data-tab="connection" class="on">Connection</button>
+        <button data-tab="chat">Chat</button>
+        <button data-tab="image">Image</button>
         <button data-tab="model">Model</button>
         <button data-tab="models">Installed models</button>
-        <button data-tab="chat">Chat</button>
         <button data-tab="appearance">Appearance</button>
         <button data-tab="data">Data</button>
       </div>
@@ -451,6 +451,18 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
           <div class="row"><button class="btn" id="resetParams">Reset to defaults</button></div>
         </section>
 
+        <!-- Image -->
+        <section class="pane" data-pane="image">
+          <div class="row">
+            <div class="field"><label for="imgSize">Size</label><select id="imgSize"><option value="512x512">512²</option><option value="768x768">768²</option><option value="1024x1024">1024²</option><option value="1024x768">1024×768</option><option value="768x1024">768×1024</option><option value="1280x720">1280×720</option></select></div>
+            <div class="field"><label for="imgSteps">Steps</label><input id="imgSteps" type="number" min="1" max="100" placeholder="auto"></div>
+            <div class="field"><label for="imgSeed">Seed</label><input id="imgSeed" type="number" placeholder="random"></div>
+          </div>
+          <div class="field"><label for="imgStyle">Context for the image AI</label><textarea id="imgStyle" placeholder="e.g. Watercolor style, soft light. The main character is a small red fox called Remy."></textarea><small>Added to every image prompt in every image chat: your style, characters, setting, anything it should always keep in mind.</small></div>
+          <label class="check"><span>Use this chat as context<small>Earlier requests in the same chat carry over, so "make it night" or "now with a hat" works.</small></span><input type="checkbox" class="switch" id="imgHistory"></label>
+          <div class="field"><label for="imgCtxModel">Prompt writer</label><select id="imgCtxModel"></select><small>A text model that merges the chat and your context into one clear image prompt, then unloads so the image model gets the memory. Without one, recent requests are simply joined.</small></div>
+        </section>
+
         <!-- Installed models -->
         <section class="pane" data-pane="models">
           <div class="row" style="justify-content:space-between;align-items:center"><h3>On the connected device</h3><div class="row"><button class="btn" id="unloadAll">Free GPU memory</button><button class="btn" id="refreshModels">Refresh</button></div></div>
@@ -460,6 +472,12 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 
         <!-- Chat -->
         <section class="pane" data-pane="chat">
+          <h3 style="margin:0">This chat</h3>
+          <div class="note" id="chatTypeLine" style="margin-top:0"></div>
+          <div class="field"><label for="chatTitle">Title</label><input id="chatTitle"></div>
+          <div class="field"><label for="chatSystem">System prompt for this chat</label><textarea id="chatSystem" placeholder="Leave empty to use the default"></textarea></div>
+          <label class="check"><span>Web search<small id="webNote">The AI can look things up online.</small></span><input type="checkbox" class="switch" id="webSearch"></label>
+          <h3 style="margin:10px 0 0">All chats</h3>
           <div class="field"><label for="defaultSystem">Default system prompt</label><textarea id="defaultSystem" placeholder="e.g. You are a helpful assistant. Answer briefly."></textarea><small>Used for new chats. Each chat can override it (sliders icon in the top bar).</small></div>
           <label class="check"><span>Enter sends the message<small>Off: Ctrl+Enter sends, Enter makes a new line.</small></span><input type="checkbox" class="switch" id="enterSends"></label>
           <label class="check"><span>Show speed & token stats<small>Tokens per second under each answer.</small></span><input type="checkbox" class="switch" id="showStats"></label>
@@ -480,26 +498,13 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
         <!-- Data -->
         <section class="pane" data-pane="data">
           <div class="row">
+            <button class="btn" id="exportChat">Download this chat (Markdown)</button>
             <button class="btn" id="exportAll">Export all chats (JSON)</button>
             <button class="btn" id="importBtn">Import chats</button><input type="file" id="importFile" accept="application/json" hidden>
           </div>
           <div class="row"><button class="btn danger" id="deleteAll">Delete all chats</button><button class="btn danger" id="resetAll">Reset all settings</button></div>
           <div class="note">Chats are stored only in this browser — never on the server.</div>
         </section>
-      </div>
-    </div>
-  </div>
-</dialog>
-
-<!-- per-chat system prompt -->
-<dialog id="chatSettings">
-  <div class="modal">
-    <div class="modal-head"><h2>This chat</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div class="panes" style="padding:20px 22px">
-      <div class="pane on">
-        <div class="field"><label for="chatTitle">Title</label><input id="chatTitle"></div>
-        <div class="field"><label for="chatSystem">System prompt</label><textarea id="chatSystem" placeholder="Leave empty to use the default"></textarea></div>
-        <div class="row"><button class="btn primary" id="saveChatSettings">Save</button></div>
       </div>
     </div>
   </div>
@@ -528,6 +533,7 @@ const DEFAULTS = {
   defaultSystem: "", enterSends: true, showStats: true, think: true, webSearch: false, autoTitle: true, persist: true,
   theme: "light", fontSize: 16, intro: true, compact: false,
   model: "", imageModel: "", mode: "chat",
+  img: { size: "1024x1024", steps: "", seed: "", style: "", history: true, ctxModel: "" },
 };
 
 const store = {
@@ -547,6 +553,7 @@ let controller = null;
 let attachments = []; // base64 strings (no prefix)
 let models = [];      // [{name, size, details, kind}]
 let connected = false;
+let loadedInfo = []; // from /api/ps: what is in memory right now
 
 function deepMerge(a, b) { for (const k in b) { if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) && a[k]) deepMerge(a[k], b[k]); else a[k] = b[k]; } return a; }
 function saveSettings() { store.set("settings", S); }
@@ -694,7 +701,8 @@ async function connect(quiet) {
     const tags = await (await api("/api/tags")).json();
     let running = [];
     try { running = (await (await api("/api/ps")).json()).models || []; } catch {}
-    models = (tags.models || []).map(m => ({ ...m, kind: guessKind(m), running: running.some(r => r.name === m.name) }));
+    models = cleanModels(tags.models || []).map(m => ({ ...m, kind: guessKind(m), cloud: /-cloud$|:cloud$/.test(m.name), running: running.some(r => r.name === m.name) }));
+    loadedInfo = running;
     connected = true;
     fillModelSelect();
     renderModelTable();
@@ -702,11 +710,12 @@ async function connect(quiet) {
     if (S.conn.mode === "remote") {
       try { const st = await (await api("/status")).json(); where = st.name || "Remote PC"; } catch { where = "Remote PC"; }
     }
+    updateLoadedPill();
     setStatus("ok", `Connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"}`);
     updatePowerBox(true);
     return true;
   } catch (e) {
-    connected = false; models = [];
+    connected = false; models = []; loadedInfo = []; updateLoadedPill();
     fillModelSelect(); renderModelTable();
     setStatus("bad", S.conn.mode === "remote" ? "Remote device not reachable" : "Can't reach Ollama");
     updatePowerBox(false);
@@ -714,17 +723,29 @@ async function connect(quiet) {
     return false;
   }
 }
+// Ollama can list one model several times (old and new copies, internal "llamacpp:" aliases): show each once.
+function cleanModels(list) {
+  const seen = new Map();
+  for (const m of list) {
+    if (/^llamacpp:/.test(m.name)) continue;
+    const prev = seen.get(m.name);
+    const vision = (x) => (x.details?.families || []).includes("clip");
+    if (!prev || (vision(m) && !vision(prev))) seen.set(m.name, m);
+  }
+  return [...seen.values()];
+}
 function guessKind(m) {
   const n = (m.name + " " + (m.details?.family || "") + " " + (m.details?.families || []).join(" ")).toLowerCase();
   if (/flux|z-image|zimage|stable-diffusion|sdxl|image-turbo/.test(n)) return "image";
-  if (/llava|vision|bakllava|moondream|minicpm-v|gemma3|qwen2\.5vl|qwen2-vl|qwen3-vl|llama3\.2-vision|mllama|clip/.test(n)) return "vision";
+  if (/llava|vision|bakllava|moondream|minicpm-v|gemma3|gemma4|gemma-?3n|llama4|pixtral|mistral-small3|qwen2\.5vl|qwen2-vl|qwen3-vl|llama3\.2-vision|mllama|clip/.test(n)) return "vision";
+  if ((m.details?.families || []).includes("clip")) return "vision";
   if (/embed|bge|nomic-embed|mxbai/.test(n)) return "embed";
   return "text";
 }
 function fillModelSelect() {
   const sel = $("#model");
   sel.innerHTML = "";
-  const imageMode = S.mode === "image";
+  const imageMode = curMode() === "image";
   const list = models.filter(m => m.kind !== "embed" && (imageMode ? m.kind === "image" : m.kind !== "image"));
   if (!connected) { sel.innerHTML = "<option value=''>Not connected</option>"; return; }
   if (!list.length) {
@@ -734,11 +755,20 @@ function fillModelSelect() {
   for (const m of list) {
     const o = document.createElement("option");
     o.value = m.name;
-    o.textContent = m.name + (m.kind === "vision" ? " (vision)" : "");
+    o.textContent = (m.running ? "● " : "") + m.name + (m.kind === "vision" ? " (vision)" : "") + (m.cloud ? " (cloud)" : "");
     sel.appendChild(o);
   }
   const want = imageMode ? S.imageModel : S.model;
   if (list.some(m => m.name === want)) sel.value = want;
+  fillCtxModels();
+}
+function fillCtxModels() {
+  const sel = $("#imgCtxModel"); if (!sel) return;
+  sel.innerHTML = '<option value="">Join recent requests (no AI)</option>';
+  for (const m of models.filter(m => m.kind === "text" || m.kind === "vision")) {
+    const o = document.createElement("option"); o.value = m.name; o.textContent = m.name; sel.appendChild(o);
+  }
+  sel.value = models.some(m => m.name === S.img.ctxModel) ? S.img.ctxModel : "";
 }
 function renderModelTable() {
   const tb = $("#modelRows");
@@ -747,7 +777,7 @@ function renderModelTable() {
   for (const m of models) {
     const tr = document.createElement("tr");
     const size = m.size ? (m.size / 1e9).toFixed(1) + " GB" : "—";
-    const kind = { text: "Text", vision: "Text + images", image: "Image generation", embed: "Embeddings" }[m.kind];
+    const kind = ({ text: "Text", vision: "Text + images", image: "Image generation", embed: "Embeddings" }[m.kind]) + (m.cloud ? " · cloud" : "");
     tr.innerHTML = `<td><strong></strong><span class="pill"></span></td><td>${size}</td><td>${kind}</td><td>${m.running ? '● Loaded <button class="btn unload" style="min-height:28px;padding:0 10px;margin-left:6px">Unload</button>' : "—"}</td>`;
     tr.querySelector("strong").textContent = m.name;
     tr.querySelector(".pill").textContent = m.details?.parameter_size || "";
@@ -776,9 +806,24 @@ async function freeGpu(names) {
 async function refreshLoaded() {
   let running = [];
   try { running = (await (await api("/api/ps")).json()).models || []; } catch { return; }
+  loadedInfo = running;
   for (const m of models) m.running = running.some(r => r.name === m.name);
   renderModelTable();
+  const keep = $("#model").value;
+  fillModelSelect();
+  if ([...$("#model").options].some(o => o.value === keep)) $("#model").value = keep;
+  updateLoadedPill();
 }
+function updateLoadedPill() {
+  const pill = $("#loadedPill"), txt = $("#loadedText");
+  const on = connected && loadedInfo.length;
+  pill.classList.toggle("on", !!on);
+  if (!on) { txt.textContent = connected ? "Nothing loaded" : "Not connected"; pill.title = "No model is in memory right now (click to manage)"; return; }
+  const gb = (m) => ((m.size_vram || m.size || 0) / 1e9).toFixed(1) + " GB";
+  txt.textContent = loadedInfo[0].name + " · " + gb(loadedInfo[0]) + (loadedInfo.length > 1 ? ` +${loadedInfo.length - 1}` : "");
+  pill.title = "In memory: " + loadedInfo.map(m => `${m.name} (${gb(m)})`).join(", ") + " (click to manage)";
+}
+setInterval(() => { if (connected && !document.hidden && !controller) refreshLoaded(); }, 10000);
 // ---------- turning the remote PC on ----------
 // The Albatross server can switch the PC's smart plug on through an Alexa routine (see README).
 // The button only shows while the remote PC is offline, so it never touches a running PC.
@@ -841,10 +886,17 @@ function showConnHelp(err) {
 // Chats
 // ======================================================================
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-function newChat() {
+function chatType(c) { return c.type || (c.messages.some(m => m.genImage !== undefined) ? "image" : "chat"); }
+const curMode = () => (current ? chatType(current) : S.mode);
+// The type is chosen when a chat starts and stays fixed once the first message is sent.
+function newChat(type) {
   if (controller) controller.abort();
-  if (current && !current.messages.length) { renderAll(); $("#prompt").focus(); return; }
-  current = { id: uid(), title: "New chat", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
+  type = type === "image" || type === "chat" ? type : null;
+  if (current && !current.messages.length) {
+    if (type) { current.type = type; S.mode = type; saveSettings(); }
+    saveChats(); renderAll(); $("#prompt").focus(); return;
+  }
+  current = { id: uid(), title: "New chat", type: type || S.mode, system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
   chats.unshift(current);
   saveChats(); renderAll();
   $("#prompt").focus();
@@ -897,16 +949,17 @@ function renderMessages() {
   current.messages.forEach((m, i) => inner.appendChild(m.role === "user" ? userBubble(m, i) : botBubble(m, i)));
   scrollDown(true);
 }
-function renderAll() { renderSidebar(); renderMessages(); }
+function renderAll() { applyType(); renderSidebar(); renderMessages(); }
 
 function renderEmpty() {
-  const imageMode = S.mode === "image";
+  const imageMode = curMode() === "image";
   const sugg = imageMode
     ? [["A lighthouse in a storm", "oil painting, dramatic light"], ["Isometric tiny city", "pastel colors, 3D render"], ["Portrait of a fox astronaut", "studio lighting"], ["Minimal navy logo", "for a coffee shop"]]
     : [["Explain a concept", "like I'm new to it"], ["Help me write", "an email, essay or message"], ["Debug my code", "paste it in"], ["Plan something", "a trip, a week, a project"]];
   const d = document.createElement("div");
   d.className = "empty";
-  d.innerHTML = `<h1>${imageMode ? "What should I draw?" : "What can I help with?"}</h1><p>Everything runs on ${S.conn.mode === "remote" ? "your connected PC" : "this computer"} — nothing goes to the cloud.</p><div class="suggestions"></div>`;
+  d.innerHTML = `<div class="seg type-pick"><button data-t="chat" class="${imageMode ? "" : "on"}">Chat</button><button data-t="image" class="${imageMode ? "on" : ""}">Image</button></div><h1>${imageMode ? "What should I draw?" : "What can I help with?"}</h1><p>Everything runs on ${S.conn.mode === "remote" ? "your connected PC" : "this computer"} — nothing goes to the cloud.</p><div class="suggestions"></div>`;
+  d.querySelectorAll(".type-pick button").forEach(b => (b.onclick = () => setMode(b.dataset.t)));
   for (const [a, b] of sugg) {
     const btn = document.createElement("button");
     btn.innerHTML = "<strong></strong><small></small>";
@@ -1153,17 +1206,19 @@ async function send(textOverride) {
   const model = $("#model").value;
   if (!text && !attachments.length) return;
   if (!connected) { await connect(); if (!connected) return; }
-  if (!model) { toast(S.mode === "image" ? "No image model installed on the connected device" : "Pick a model first"); return; }
+  if (!model) { toast(curMode() === "image" ? "No image model installed on the connected device" : "Pick a model first"); return; }
 
   const userMsg = { role: "user", content: text, images: attachments.length ? attachments.slice() : undefined };
   if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; renderAttachments(); }
   current.messages.push(userMsg);
+  if (!current.type) current.type = curMode();
+  applyType();
   if (S.autoTitle && current.title === "New chat") current.title = text.slice(0, 48) || "Image chat";
   current.updated = Date.now();
   if (current.messages.length === 1) $("#inner").innerHTML = "";
   $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
   renderSidebar();
-  await (S.mode === "image" ? generateImage(model, text) : chat(model));
+  await (curMode() === "image" ? generateImage(model, text) : chat(model));
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -1186,11 +1241,10 @@ async function checkSearch() {
   if (toolsBase()) {
     try { searchAvailable = !!(await (await fetch(toolsBase() + "/tools/status")).json()).webSearch; } catch {}
   }
-  const b = $("#webBtn");
-  b.disabled = !searchAvailable;
-  b.title = searchAvailable ? "Let the AI search the web" : "Web search needs the Albatross server with OLLAMA_API_KEY set (see README)";
-  b.classList.toggle("on", searchAvailable && S.webSearch);
-  b.setAttribute("aria-pressed", String(searchAvailable && S.webSearch));
+  const sw = $("#webSearch");
+  sw.disabled = !searchAvailable;
+  sw.checked = searchAvailable && S.webSearch;
+  $("#webNote").textContent = searchAvailable ? "The AI can look things up online (needs a model with tool support, e.g. qwen3)." : "Needs the Albatross server with OLLAMA_API_KEY set (see README).";
 }
 const TOOLS = [
   { type: "function", function: { name: "web_search", description: "Search the web for up-to-date information: news, recent events, prices, facts you are not sure about.", parameters: { type: "object", properties: { query: { type: "string", description: "The search query" } }, required: ["query"] } } },
@@ -1310,6 +1364,36 @@ async function chat(model) {
   }
 }
 
+// Image models only read one text prompt, so "context" is folded into that prompt:
+// the standing notes from Settings → Image plus (optionally) earlier requests from this chat.
+async function buildImagePrompt(text, bubble) {
+  const style = (S.img.style || "").trim();
+  let prompt = text;
+  let last = current.messages.length - 1;
+  while (last >= 0 && current.messages[last].role !== "user") last--;
+  const earlier = S.img.history ? current.messages.slice(0, Math.max(last, 0))
+    .filter(m => m.role === "user" && m.content).map(m => m.content).slice(-6) : [];
+  if (earlier.length) {
+    const writer = S.img.ctxModel && models.find(m => m.name === S.img.ctxModel);
+    if (writer) {
+      const note = bubble.querySelector(".pct"); if (note) note.textContent = "writing prompt…";
+      try {
+        const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify({
+          model: writer.name, stream: false, keep_alive: 0, options: { temperature: 0.4 },
+          messages: [
+            { role: "system", content: "You write prompts for a text-to-image model. Given the earlier image requests from one conversation and a new request, write ONE self-contained image prompt (at most 80 words) that applies the new request in the context of the earlier ones, keeping every detail the user did not change. Reply with only the prompt." },
+            { role: "user", content: `Earlier requests:\n${earlier.map((e, i) => `${i + 1}. ${e}`).join("\n")}\n\n${style ? `Always keep in mind: ${style}\n\n` : ""}New request: ${text}` },
+          ] }) });
+        const j = await res.json();
+        const out = (j.message?.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim().replace(/^["']|["']$/g, "");
+        if (out) return out;
+      } catch (e) { if (e.name === "AbortError") throw e; toast("Prompt writer failed, joining your requests instead"); }
+    }
+    prompt = [...earlier.slice(-2), text].join(". ");
+  }
+  return style ? `${prompt}. ${style}` : prompt;
+}
+
 async function generateImage(model, prompt) {
   const reply = { role: "assistant", content: "", genImage: "", prompt, model };
   const bubble = botBubble(reply, -1);
@@ -1318,9 +1402,12 @@ async function generateImage(model, prompt) {
   scrollDown(true);
   setBusy(true);
   controller = new AbortController();
-  const [w, h] = $("#imgSize").value.split("x").map(Number);
-  const body = { model, prompt, stream: true, width: w, height: h };
-  const steps = $("#imgSteps").value, seed = $("#imgSeed").value;
+  const [w, h] = (S.img.size || "1024x1024").split("x").map(Number);
+  let finalPrompt = prompt;
+  try { finalPrompt = await buildImagePrompt(prompt, bubble); } catch (e) { if (e.name === "AbortError") { controller = null; setBusy(false); renderMessages(); return; } }
+  reply.prompt = finalPrompt; reply.asked = prompt;
+  const body = { model, prompt: finalPrompt, stream: true, width: w, height: h };
+  const steps = S.img.steps, seed = S.img.seed;
   if (steps) body.steps = Number(steps);
   if (seed) body.seed = Number(seed);
   const t0 = performance.now();
@@ -1342,7 +1429,7 @@ async function generateImage(model, prompt) {
   } finally {
     controller = null; setBusy(false);
     if (reply.genImage) {
-      reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+      reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s` + (finalPrompt !== prompt ? ` · prompt: ${finalPrompt.length > 200 ? finalPrompt.slice(0, 200) + "…" : finalPrompt}` : "");
       current.messages.push(reply); current.updated = Date.now(); saveChats();
     }
     renderMessages();
@@ -1375,7 +1462,7 @@ function regenerate() {
   if (!lastUser || lastUser.role !== "user") return;
   renderMessages();
   const model = $("#model").value;
-  (lastUser.genImage === undefined && S.mode === "image") ? generateImage(model, lastUser.content) : chat(model);
+  (lastUser.genImage === undefined && curMode() === "image") ? generateImage(model, lastUser.content) : chat(model);
 }
 function editFrom(idx) {
   if (controller) return;
@@ -1385,6 +1472,7 @@ function editFrom(idx) {
   $("#prompt").value = m.content; attachments = m.images ? m.images.slice() : []; renderAttachments(); autosize(); $("#prompt").focus();
 }
 function setBusy(b) {
+  if (!b) setTimeout(refreshLoaded, 600);
   $("#send").setAttribute("aria-label", b ? "Stop" : "Send");
   $("#sendIcon").innerHTML = b ? '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>';
 }
@@ -1433,15 +1521,23 @@ function applyAppearance() {
   $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
 }
 function setMode(mode) {
-  S.mode = mode; saveSettings();
+  if (!current || current.messages.length) { toast("The chat type is set when a chat starts. Start a new chat for " + (mode === "image" ? "images" : "text") + "."); return; }
+  current.type = mode; S.mode = mode; saveSettings(); saveChats();
+  applyType(); renderMessages();
+}
+function applyType() {
+  const mode = curMode();
+  const locked = !!(current && current.messages.length);
   document.body.classList.toggle("image-mode", mode === "image");
   $("#modeChat").classList.toggle("on", mode === "chat");
   $("#modeImage").classList.toggle("on", mode === "image");
+  $("#typeSeg").classList.toggle("locked", locked);
+  $("#typeSeg").title = locked ? "Chat type is set when the chat starts" : "Choose what this chat is for";
   $("#prompt").placeholder = mode === "image" ? "Describe the image you want…" : "Message your local AI…";
   $("#attachBtn").style.display = mode === "image" ? "none" : "";
-  $("#webBtn").style.display = mode === "image" ? "none" : "";
+  const keep = $("#model").value;
   fillModelSelect();
-  if (current && !current.messages.length) renderMessages();
+  if ([...$("#model").options].some(o => o.value === keep) && keep === (mode === "image" ? S.imageModel : S.model)) $("#model").value = keep;
 }
 
 // ======================================================================
@@ -1460,6 +1556,11 @@ function openSettings(tab) {
   $("#keepAlive").value = S.keepAlive; $("#preset").value = "";
   // chat
   $("#defaultSystem").value = S.defaultSystem;
+  loadImgFields(); fillCtxModels();
+  $("#chatTitle").value = current.title; $("#chatSystem").value = current.system || "";
+  $("#chatSystem").placeholder = S.defaultSystem ? "Default: " + S.defaultSystem.slice(0, 80) : "Leave empty for none";
+  $("#chatTypeLine").textContent = "This is " + (curMode() === "image" ? "an image" : "a text") + " chat. The type is chosen when a chat starts and can't change afterwards.";
+  $("#webSearch").checked = searchAvailable && S.webSearch;
   for (const k of ["enterSends", "showStats", "think", "autoTitle", "persist", "intro", "compact"]) $("#" + k).checked = !!S[k];
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
   if (tab) switchTab(tab);
@@ -1499,7 +1600,6 @@ for (const k of ["temperature", "top_p", "top_k", "repeat_penalty"]) {
   $("#p_" + k).addEventListener("input", e => { S.params[k] = Number(e.target.value); e.target.nextElementSibling.textContent = e.target.value; $("#preset").value = ""; saveSettings(); });
 }
 for (const k of ["num_ctx", "num_predict", "seed"]) $("#p_" + k).addEventListener("change", e => { S.params[k] = e.target.value; saveSettings(); });
-$("#freeGpuBtn").onclick = () => freeGpu();
 $("#unloadAll").onclick = () => freeGpu();
 $("#keepAlive").onchange =e => { S.keepAlive = e.target.value; saveSettings(); };
 $("#preset").onchange = e => {
@@ -1529,41 +1629,56 @@ $("#importFile").onchange = async e => {
 let armed = {};
 function armed2(key, fn) { if (armed[key]) { armed[key] = 0; fn(); } else { armed[key] = 1; toast("Click again to confirm"); setTimeout(() => (armed[key] = 0), 3000); } }
 $("#deleteAll").onclick = () => armed2("del", () => { chats = []; current = null; saveChats(); newChat(); toast("All chats deleted"); });
-$("#resetAll").onclick = () => armed2("reset", () => { S = structuredClone(DEFAULTS); saveSettings(); applyAppearance(); setMode("chat"); openSettings("appearance"); toast("Settings reset"); });
+$("#resetAll").onclick = () => armed2("reset", () => { S = structuredClone(DEFAULTS); saveSettings(); applyAppearance(); loadImgFields(); applyType(); openSettings("appearance"); toast("Settings reset"); });
 $$("dialog [data-close]").forEach(b => (b.onclick = () => b.closest("dialog").close()));
 $$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));
 
-// per-chat
-function openChatSettings() { $("#chatTitle").value = current.title; $("#chatSystem").value = current.system || ""; $("#chatSystem").placeholder = S.defaultSystem ? "Default: " + S.defaultSystem.slice(0, 80) : "Leave empty for none"; $("#chatSettings").showModal(); }
-$("#chatSettingsBtn").onclick = openChatSettings;
-$("#saveChatSettings").onclick = () => { current.title = $("#chatTitle").value.trim() || current.title; current.system = $("#chatSystem").value; saveChats(); renderSidebar(); $("#chatSettings").close(); toast("Saved"); };
+// per-chat (lives in Settings → Chat)
+function openChatSettings() { openSettings("chat"); setTimeout(() => $("#chatTitle").focus(), 50); }
+$("#chatTitle").onchange = e => { current.title = e.target.value.trim() || current.title; saveChats(); renderSidebar(); };
+$("#chatSystem").onchange = e => { current.system = e.target.value; saveChats(); };
+
+// image options
+function loadImgFields() {
+  $("#imgSize").value = S.img.size; $("#imgSteps").value = S.img.steps; $("#imgSeed").value = S.img.seed;
+  $("#imgStyle").value = S.img.style; $("#imgHistory").checked = !!S.img.history;
+}
+$("#imgSize").onchange = e => { S.img.size = e.target.value; saveSettings(); };
+$("#imgSteps").onchange = e => { S.img.steps = e.target.value; saveSettings(); };
+$("#imgSeed").onchange = e => { S.img.seed = e.target.value; saveSettings(); };
+$("#imgStyle").onchange = e => { S.img.style = e.target.value; saveSettings(); };
+$("#imgHistory").onchange = e => { S.img.history = e.target.checked; saveSettings(); };
+$("#imgCtxModel").onchange = e => { S.img.ctxModel = e.target.value; saveSettings(); };
+loadImgFields();
 
 // ======================================================================
 // Wire up
 // ======================================================================
 $("#send").onclick = () => send();
-$("#newChat").onclick = newChat;
+$("#newChat").onclick = () => newChat();
+$("#newImageChat").onclick = () => { newChat("image"); $("#sidebar").classList.remove("open"); };
+$("#topSettings").onclick = () => openSettings();
+$("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
 $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#openSettings").onclick = () => openSettings();
 $("#openConn").onclick = () => { openSettings("connection"); setConnCards("remote"); setTimeout(() => $("#codeInput").focus(), 50); };
 $("#search").addEventListener("input", renderSidebar);
 $("#modeChat").onclick = () => setMode("chat");
 $("#modeImage").onclick = () => setMode("image");
-$("#model").onchange = e => { if (S.mode === "image") S.imageModel = e.target.value; else S.model = e.target.value; saveSettings(); };
-$("#themeBtn").onclick = () => { const cur = document.documentElement.dataset.theme; S.theme = cur === "dark" ? "light" : "dark"; saveSettings(); applyAppearance(); };
+$("#model").onchange = e => { if (curMode() === "image") S.imageModel = e.target.value; else S.model = e.target.value; saveSettings(); };
 $("#exportChat").onclick = () => {
   if (!current.messages.length) return toast("This chat is empty");
   const mdText = `# ${current.title}\n\n` + current.messages.map(m => `**${m.role === "user" ? "You" : "Albatross" + (m.model ? " (" + m.model + ")" : "")}:**\n\n${m.genImage !== undefined ? "[generated image: " + (m.prompt || "") + "]" : m.content}`).join("\n\n---\n\n");
   download(slug(current.title) + ".md", new Blob([mdText], { type: "text/markdown" }));
 };
-$("#webBtn").onclick = () => { S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on — the AI can look things up" : "Web search off"); };
+$("#webSearch").onchange = e => { S.webSearch = e.target.checked; saveSettings(); };
 $("#attachBtn").onclick = () => $("#fileInput").click();
 $("#fileInput").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 const box = $("#box");
 box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("drag"); });
 box.addEventListener("dragleave", () => box.classList.remove("drag"));
-box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("drag"); if (S.mode === "chat") addFiles(e.dataTransfer.files); });
-$("#prompt").addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])]; if (f.length && S.mode === "chat") { e.preventDefault(); addFiles(f); } });
+box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("drag"); if (curMode() === "chat") addFiles(e.dataTransfer.files); });
+$("#prompt").addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])]; if (f.length && curMode() === "chat") { e.preventDefault(); addFiles(f); } });
 $("#prompt").addEventListener("input", autosize);
 $("#prompt").addEventListener("keydown", e => {
   if (e.key !== "Enter" || e.isComposing) return;
@@ -1583,7 +1698,6 @@ if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S
 applyAppearance();
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
-setMode(S.mode);
 connect();
 checkSearch();
 </script>
