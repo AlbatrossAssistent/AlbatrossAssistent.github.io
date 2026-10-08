@@ -482,6 +482,14 @@ panel = startPanel({
   files,
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },
+  proxy: (method, p, body, signal) => {
+    if (!ALLOWED.has(`${method} ${p}`)) return Response.json({ error: "Not allowed" }, { status: 403 });
+    if (method === "POST" && (p === "/api/chat" || p === "/api/generate")) {
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      if (j.prompt || j.messages) note(`This PC's website: ${j.model}${comfy.isComfy(j.model) ? " (image)" : ""}`);
+    }
+    return upstream(method, p, body, signal);
+  },
   actions: { "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; }, "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
   // Only start sharing once we hold the panel's port, so two hosts never fight over the same code.
   onListening: (url) => {

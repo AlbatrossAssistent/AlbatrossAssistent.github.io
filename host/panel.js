@@ -8,7 +8,10 @@ const path = require("path");
 const HTML = path.join(__dirname, "control.html");
 
 // The panel's port doubles as a lock: if it's taken, another Burrow host is already running (onBusy).
-function startPanel({ port, getState, actions, files, load, onListening, onBusy }) {
+// Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
+const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.github\.io|burrow-uu7e\.onrender\.com)$|^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+function startPanel({ port, getState, actions, files, load, proxy, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -25,6 +28,36 @@ function startPanel({ port, getState, actions, files, load, onListening, onBusy 
       res.write(`data: ${JSON.stringify(getState())}\n\n`);
       clients.add(res);
       req.on("close", () => clients.delete(res));
+      return;
+    }
+    // The website on this PC talks to Ollama through here, so it also gets ComfyUI image models,
+    // one-model-at-a-time and the loading percentage, just like devices that connect with the code.
+    const px = req.url.match(/^\/ollama(\/api\/[a-z]+)$/);
+    if (px && proxy) {
+      const origin = req.headers.origin || "";
+      if (origin && !ORIGINS.test(origin)) { res.writeHead(403); return res.end(); }
+      const cors = origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {};
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, { ...cors, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Allow-Private-Network": "true", "Access-Control-Max-Age": "600" });
+        return res.end();
+      }
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 80e6) req.destroy(); });
+      req.on("end", async () => {
+        const ac = new AbortController();
+        res.on("close", () => { if (!res.writableEnded) ac.abort(); });
+        try {
+          const r = await proxy(req.method, px[1], req.method === "POST" ? body : undefined, ac.signal);
+          res.writeHead(r.status, { ...cors, "Content-Type": r.headers.get("content-type") || "application/json", "Cache-Control": "no-store" });
+          if (!r.body) return res.end();
+          const reader = r.body.getReader();
+          for (;;) { const { value, done } = await reader.read(); if (done) break; res.write(Buffer.from(value)); }
+          res.end();
+        } catch (e) {
+          if (!res.headersSent) { res.writeHead(502, { ...cors, "Content-Type": "application/json" }); res.end(JSON.stringify({ error: e.message })); }
+          else res.end();
+        }
+      });
       return;
     }
     // Loading progress for the website on this PC (only a model name and a percentage, so any page may read it).

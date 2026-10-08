@@ -847,8 +847,14 @@ else { $("#splash").style.display = "none"; document.body.classList.remove("intr
 // ======================================================================
 // Connection
 // ======================================================================
+// "This device": if the Albatross host runs on this PC, go through it (127.0.0.1:4747/ollama), so ComfyUI image
+// models, one-model-at-a-time and the loading percentage work here too. Otherwise talk to Ollama directly.
+const HOST_LOCAL = "http://127.0.0.1:4747/ollama";
+let viaHost = false;
+const isLocalOllama = () => /^https?:\/\/(localhost|127\.0\.0\.1):11434\/?$/.test(S.conn.url || "http://localhost:11434");
 function baseUrl() {
   if (S.conn.mode === "remote") return (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "") + "/relay/" + splitCode(S.conn.code).route;
+  if (viaHost) return HOST_LOCAL;
   return (S.conn.url || "http://localhost:11434").replace(/\/+$/, "");
 }
 async function api(path, opts = {}) {
@@ -941,6 +947,10 @@ async function connect(quiet) {
         ? "Codes now have 16 characters, like K7QM-4XPT-9F2C-HW3D. Get the full code from the control center on the PC."
         : "Enter the full 16-character code, like K7QM-4XPT-9F2C-HW3D");
       if (!S.conn.relay) throw new Error("Enter your Albatross server address");
+    }
+    viaHost = false;
+    if (S.conn.mode !== "remote" && isLocalOllama()) {
+      try { viaHost = (await fetch(HOST_LOCAL + "/api/version", { signal: AbortSignal.timeout(1500) })).ok; } catch {}
     }
     const tags = await (await api("/api/tags")).json();
     let running = [];
