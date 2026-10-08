@@ -10,8 +10,8 @@ Your PC connects out to the server, so you don't need any port forwarding on you
 
 **Live:**
 - Server: https://burrow-uu7e.onrender.com
-- Web page: https://burrowgeneral.github.io/burrow/
-- Repo: https://github.com/BurrowGeneral/burrow
+- Web page: https://albatrossassistent.github.io/
+- Repo: https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io
 
 ## 1. Put it on a server
 
@@ -68,7 +68,7 @@ On the website, when the PC is offline, press **Turn on PC** under the connectio
 
 ## 3. Connect from another device
 
-Open `https://burrow-uu7e.onrender.com` (or https://burrowgeneral.github.io/burrow/), go to **Connect with code**, enter the code and press **Connect**. Or open the link that host.js printed.
+Open `https://burrow-uu7e.onrender.com` (or https://albatrossassistent.github.io/), go to **Connect with code**, enter the code and press **Connect**. Or open the link that host.js printed.
 
 ## Using it only on your own PC (no server)
 
@@ -79,7 +79,7 @@ Open `public/index.html` in your browser. It talks to `http://localhost:11434`. 
 - **End-to-end encrypted.** The code has two halves. `K7QM-4XPT` tells the server which PC to connect to. `9F2C-HW3D` is an encryption key that never leaves the browser or your PC (in links it comes after `#`, which browsers never send to a server). Messages and answers are encrypted with AES-256-GCM, using a key made from it with PBKDF2 (600,000 rounds). The server only passes along data it can't read or change.
 - Your PC only accepts encrypted requests, so knowing the first half isn't enough to use it. Each request can only be used once and expires after 10 minutes. Each piece of an answer is numbered, so a dropped, swapped or changed piece is detected.
 - Anyone with the full code can chat with your PC's AI. Only share it with people you trust, and use `--new` to replace it.
-- Open the website from GitHub Pages (https://burrowgeneral.github.io/burrow/) for the strongest protection. The page that does the encryption then doesn't come from the relay server.
+- Open the website from GitHub Pages (https://albatrossassistent.github.io/) for the strongest protection. The page that does the encryption then doesn't come from the relay server.
 - The relay only allows: list models, show model, chat, generate. It can't delete or download models.
 - After 30 wrong codes, the server blocks that IP for 10 minutes.
 
