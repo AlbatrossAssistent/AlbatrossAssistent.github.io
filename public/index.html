@@ -141,8 +141,11 @@ select option { background: var(--bg); color: var(--fg); }
 .badge.loaded span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .badge.loaded .ld { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); opacity: .5; }
 .badge.loaded.on .ld { background: var(--ok); opacity: 1; box-shadow: 0 0 0 3px rgba(31,168,85,.22); }
-.seg.locked { opacity: .7; } .seg.locked button { cursor: default; }
-.type-pick { margin-bottom: 8px; }
+.badge.type-badge { font-weight: 600; color: var(--fg); background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.empty .change-type { margin-top: 4px; }
+#newChatDlg { width: min(520px, calc(100vw - 24px)); }
+#newChatDlg .body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 14px; }
+#newChatDlg textarea { min-height: 88px; }
 .badge { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; white-space: nowrap; background: var(--soft); }
 
 .messages { flex: 1; overflow-y: auto; padding: 24px 16px; border-radius: 22px; }
@@ -341,7 +344,6 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 <aside id="sidebar">
   <div class="brand"><svg viewBox="0 0 28 28"><path class="wing" d="M1 12C7 8 12 9.5 14 14.5C16 9.5 21 8 27 12C21.5 11 17.5 13.5 14 19.5C10.5 13.5 6.5 11 1 12z"/><path class="wave" d="M6 24q2-1.6 4 0t4 0t4 0t4 0"/></svg>Albatross</div>
   <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
-  <button class="side-btn" id="newImageChat"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>New image chat</button>
   <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
   <div class="chat-list" id="chatList"></div>
   <div class="conn-card">
@@ -364,23 +366,19 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
 <main>
   <div class="topbar">
     <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open chats"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-    <div class="seg" id="typeSeg" role="group" aria-label="Chat type">
-      <button id="modeChat" class="on"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Chat</button>
-      <button id="modeImage"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>Image</button>
-    </div>
+    <span class="badge type-badge" id="typeBadge" title="The chat type is chosen when the chat starts">Chat</span>
     <label for="model" class="sr">Model</label>
     <select id="model" class="model-sel"><option>Loading…</option></select>
     <button class="badge loaded" id="loadedPill" title="Model currently loaded in memory (click to manage)"><span class="ld"></span><span id="loadedText">Nothing loaded</span></button>
     <span class="badge hide-sm" id="connBadge">This device</span>
     <div class="spacer"></div>
-    <button class="icon-btn" id="topSettings" aria-label="Settings" title="Settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </div>
 
   <div class="messages" id="messages"><div class="inner" id="inner"></div></div>
 
   <div class="composer">
     <div class="composer-inner">
-\1 id="attachments"></div>
+<div class="attachments" id="attachments"></div>
       <div class="box" id="box">
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
         <button class="attach-btn" id="attachBtn" aria-label="Attach image" title="Attach image (for vision models)"><svg class="i" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
@@ -460,7 +458,7 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
           </div>
           <div class="field"><label for="imgStyle">Context for the image AI</label><textarea id="imgStyle" placeholder="e.g. Watercolor style, soft light. The main character is a small red fox called Remy."></textarea><small>Added to every image prompt in every image chat: your style, characters, setting, anything it should always keep in mind.</small></div>
           <label class="check"><span>Use this chat as context<small>Earlier requests in the same chat carry over, so "make it night" or "now with a hat" works.</small></span><input type="checkbox" class="switch" id="imgHistory"></label>
-          <div class="field"><label for="imgCtxModel">Prompt writer</label><select id="imgCtxModel"></select><small>A text model that merges the chat and your context into one clear image prompt, then unloads so the image model gets the memory. Without one, recent requests are simply joined.</small></div>
+          <div class="field"><label for="imgCtxModel">Prompt writer</label><select id="imgCtxModel"></select><small>A text model that merges the chat and your context into one clear image prompt, then unloads so the image model gets the memory. "Auto" uses your smallest installed text model.</small></div>
         </section>
 
         <!-- Installed models -->
@@ -474,6 +472,7 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
         <section class="pane" data-pane="chat">
           <h3 style="margin:0">This chat</h3>
           <div class="note" id="chatTypeLine" style="margin-top:0"></div>
+          <div class="field" id="ctxFieldChat" hidden><label for="chatContext">Context for the image AI (this chat)</label><textarea id="chatContext" placeholder="e.g. Watercolor style. The main character is a small red fox called Remy."></textarea><small>Every picture in this chat is drawn with this in mind.</small></div>
           <div class="field"><label for="chatTitle">Title</label><input id="chatTitle"></div>
           <div class="field"><label for="chatSystem">System prompt for this chat</label><textarea id="chatSystem" placeholder="Leave empty to use the default"></textarea></div>
           <label class="check"><span>Web search<small id="webNote">The AI can look things up online.</small></span><input type="checkbox" class="switch" id="webSearch"></label>
@@ -506,6 +505,22 @@ dialog[open] { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
           <div class="note">Chats are stored only in this browser — never on the server.</div>
         </section>
       </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- new chat: pick the type first -->
+<dialog id="newChatDlg">
+  <div class="modal">
+    <div class="modal-head"><h2 id="ncTitle">New chat</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="body">
+      <div class="mode-cards">
+        <button class="mode-card" data-nc="chat"><strong>Chat</strong><small>Talk with a text AI. Ask, write, code, read images.</small></button>
+        <button class="mode-card" data-nc="image"><strong>Image</strong><small>Describe pictures and an image AI draws them.</small></button>
+      </div>
+      <div class="field" id="ncCtxField" hidden><label for="ncContext">Context for the image AI (optional)</label><textarea id="ncContext" placeholder="e.g. Watercolor style. The main character is a small red fox called Remy. Keep the same look in every picture."></textarea><small>Every picture in this chat is drawn with this in mind. You can change it later in Settings → Chat.</small></div>
+      <div class="row"><button class="btn primary" id="ncStart">Start chat</button></div>
+      <small style="color:var(--muted)">The type is fixed once the chat starts.</small>
     </div>
   </div>
 </dialog>
@@ -764,11 +779,11 @@ function fillModelSelect() {
 }
 function fillCtxModels() {
   const sel = $("#imgCtxModel"); if (!sel) return;
-  sel.innerHTML = '<option value="">Join recent requests (no AI)</option>';
+  sel.innerHTML = '<option value="">Auto (pick a text model)</option><option value="off">None (just join requests)</option>';
   for (const m of models.filter(m => m.kind === "text" || m.kind === "vision")) {
     const o = document.createElement("option"); o.value = m.name; o.textContent = m.name; sel.appendChild(o);
   }
-  sel.value = models.some(m => m.name === S.img.ctxModel) ? S.img.ctxModel : "";
+  sel.value = models.some(m => m.name === S.img.ctxModel) ? S.img.ctxModel : S.img.ctxModel === "off" ? "off" : "";
 }
 function renderModelTable() {
   const tb = $("#modelRows");
@@ -888,15 +903,35 @@ function showConnHelp(err) {
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 function chatType(c) { return c.type || (c.messages.some(m => m.genImage !== undefined) ? "image" : "chat"); }
 const curMode = () => (current ? chatType(current) : S.mode);
-// The type is chosen when a chat starts and stays fixed once the first message is sent.
-function newChat(type) {
+// The type is chosen in a popup when a chat starts and stays fixed once the first message is sent.
+let ncType = "chat", ncReuse = false;
+function openNewChat(forCurrent) {
+  ncReuse = !!(forCurrent && current && !current.messages.length);
+  ncType = ncReuse ? chatType(current) : S.mode;
+  $("#ncTitle").textContent = ncReuse ? "Change chat type" : "New chat";
+  $("#ncStart").textContent = ncReuse ? "Apply" : "Start chat";
+  $("#ncContext").value = ncReuse ? (current.context || "") : "";
+  syncNcCards();
+  $("#newChatDlg").showModal();
+}
+function syncNcCards() {
+  $$("#newChatDlg [data-nc]").forEach(c => c.classList.toggle("on", c.dataset.nc === ncType));
+  $("#ncCtxField").hidden = ncType !== "image";
+}
+$$("#newChatDlg [data-nc]").forEach(c => (c.onclick = () => { ncType = c.dataset.nc; syncNcCards(); }));
+$("#ncStart").onclick = () => {
+  $("#newChatDlg").close();
+  newChat(ncType, ncType === "image" ? $("#ncContext").value.trim() : "", ncReuse);
+  $("#sidebar").classList.remove("open");
+};
+function newChat(type, context, reuse) {
   if (controller) controller.abort();
-  type = type === "image" || type === "chat" ? type : null;
-  if (current && !current.messages.length) {
-    if (type) { current.type = type; S.mode = type; saveSettings(); }
-    saveChats(); renderAll(); $("#prompt").focus(); return;
+  type = type === "image" || type === "chat" ? type : S.mode;
+  S.mode = type; saveSettings();
+  if (current && !current.messages.length && (reuse || !arguments.length)) {
+    current.type = type; current.context = context || ""; saveChats(); renderAll(); $("#prompt").focus(); return;
   }
-  current = { id: uid(), title: "New chat", type: type || S.mode, system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
+  current = { id: uid(), title: "New chat", type, context: context || "", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
   chats.unshift(current);
   saveChats(); renderAll();
   $("#prompt").focus();
@@ -958,8 +993,7 @@ function renderEmpty() {
     : [["Explain a concept", "like I'm new to it"], ["Help me write", "an email, essay or message"], ["Debug my code", "paste it in"], ["Plan something", "a trip, a week, a project"]];
   const d = document.createElement("div");
   d.className = "empty";
-  d.innerHTML = `<div class="seg type-pick"><button data-t="chat" class="${imageMode ? "" : "on"}">Chat</button><button data-t="image" class="${imageMode ? "on" : ""}">Image</button></div><h1>${imageMode ? "What should I draw?" : "What can I help with?"}</h1><p>Everything runs on ${S.conn.mode === "remote" ? "your connected PC" : "this computer"} — nothing goes to the cloud.</p><div class="suggestions"></div>`;
-  d.querySelectorAll(".type-pick button").forEach(b => (b.onclick = () => setMode(b.dataset.t)));
+  d.innerHTML = `<h1>${imageMode ? "What should I draw?" : "What can I help with?"}</h1><p>Everything runs on ${S.conn.mode === "remote" ? "your connected PC" : "this computer"} — nothing goes to the cloud.</p><div class="suggestions"></div>`;
   for (const [a, b] of sugg) {
     const btn = document.createElement("button");
     btn.innerHTML = "<strong></strong><small></small>";
@@ -967,6 +1001,10 @@ function renderEmpty() {
     btn.onclick = () => { const p = $("#prompt"); p.value = imageMode ? `${a}, ${b}` : `${a} ${b}: `; autosize(); p.focus(); };
     d.querySelector(".suggestions").appendChild(btn);
   }
+  const ct = document.createElement("button");
+  ct.className = "btn change-type"; ct.textContent = (imageMode ? "Image chat" : "Text chat") + " · change type";
+  ct.onclick = () => openNewChat(true);
+  d.insertBefore(ct, d.querySelector(".suggestions"));
   $("#inner").appendChild(d);
 }
 
@@ -1010,6 +1048,7 @@ function fillBot(d, m, idx, live) {
   if (m.genImage !== undefined) {
     if (m.genImage) {
       const im = document.createElement("img"); im.className = "gen-img"; im.alt = m.prompt || "Generated image"; im.src = "data:image/png;base64," + m.genImage; c.appendChild(im);
+      if (m.asked && m.prompt && m.asked !== m.prompt) { const pd = document.createElement("details"); pd.style.cssText = "margin-top:8px;color:var(--muted);font-size:13px"; pd.innerHTML = "<summary style='cursor:pointer'>Prompt used (with context)</summary><div style='margin-top:4px'></div>"; pd.lastChild.textContent = m.prompt; c.appendChild(pd); }
     } else if (live) {
       c.innerHTML = `<div style="color:var(--muted);font-size:14px">Generating image… <span class="pct"></span></div><div class="progress"><div></div></div>`;
     } else c.innerHTML = `<div style="color:var(--muted)">(image not stored)</div>`;
@@ -1366,32 +1405,34 @@ async function chat(model) {
 
 // Image models only read one text prompt, so "context" is folded into that prompt:
 // the standing notes from Settings → Image plus (optionally) earlier requests from this chat.
+function autoWriter() {
+  const c = models.filter(m => m.kind === "text" && !m.cloud).sort((a, b) => (a.size || 1e15) - (b.size || 1e15));
+  return c[0] || models.find(m => m.kind === "vision" && !m.cloud) || null;
+}
 async function buildImagePrompt(text, bubble) {
   const style = (S.img.style || "").trim();
-  let prompt = text;
+  const ctx = [current.context, style].filter(Boolean).join(" ").trim();
   let last = current.messages.length - 1;
   while (last >= 0 && current.messages[last].role !== "user") last--;
   const earlier = S.img.history ? current.messages.slice(0, Math.max(last, 0))
     .filter(m => m.role === "user" && m.content).map(m => m.content).slice(-6) : [];
-  if (earlier.length) {
-    const writer = S.img.ctxModel && models.find(m => m.name === S.img.ctxModel);
-    if (writer) {
-      const note = bubble.querySelector(".pct"); if (note) note.textContent = "writing prompt…";
-      try {
-        const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify({
-          model: writer.name, stream: false, keep_alive: 0, options: { temperature: 0.4 },
-          messages: [
-            { role: "system", content: "You write prompts for a text-to-image model. Given the earlier image requests from one conversation and a new request, write ONE self-contained image prompt (at most 80 words) that applies the new request in the context of the earlier ones, keeping every detail the user did not change. Reply with only the prompt." },
-            { role: "user", content: `Earlier requests:\n${earlier.map((e, i) => `${i + 1}. ${e}`).join("\n")}\n\n${style ? `Always keep in mind: ${style}\n\n` : ""}New request: ${text}` },
-          ] }) });
-        const j = await res.json();
-        const out = (j.message?.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim().replace(/^["']|["']$/g, "");
-        if (out) return out;
-      } catch (e) { if (e.name === "AbortError") throw e; toast("Prompt writer failed, joining your requests instead"); }
-    }
-    prompt = [...earlier.slice(-2), text].join(". ");
+  if (!earlier.length && !ctx) return text;
+  const writer = S.img.ctxModel === "off" ? null : (models.find(m => m.name === S.img.ctxModel) || autoWriter());
+  if (writer) {
+    const note = bubble.querySelector(".pct"); if (note) note.textContent = "· writing the prompt with " + writer.name + "…";
+    try {
+      const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify({
+        model: writer.name, stream: false, keep_alive: 0, think: false, options: { temperature: 0.4 },
+        messages: [
+          { role: "system", content: "You write prompts for a text-to-image model. You get background about the picture series, the earlier image requests from the conversation, and a new request. Write ONE self-contained image prompt (at most 90 words) that fulfils the new request, applies the background, and keeps every detail from earlier requests that the user did not change. Reply with only the prompt, no quotes." },
+          { role: "user", content: `${ctx ? `Background: ${ctx}\n\n` : ""}${earlier.length ? `Earlier requests:\n${earlier.map((e, i) => `${i + 1}. ${e}`).join("\n")}\n\n` : ""}New request: ${text}` },
+        ] }) });
+      const j = await res.json();
+      const out = (j.message?.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim().replace(/^["']|["']$/g, "");
+      if (out) return out;
+    } catch (e) { if (e.name === "AbortError") throw e; toast("Prompt writer failed, joining your requests instead"); }
   }
-  return style ? `${prompt}. ${style}` : prompt;
+  return [...earlier.slice(-2), text].join(". ") + (ctx ? `. ${ctx}` : "");
 }
 
 async function generateImage(model, prompt) {
@@ -1429,7 +1470,7 @@ async function generateImage(model, prompt) {
   } finally {
     controller = null; setBusy(false);
     if (reply.genImage) {
-      reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s` + (finalPrompt !== prompt ? ` · prompt: ${finalPrompt.length > 200 ? finalPrompt.slice(0, 200) + "…" : finalPrompt}` : "");
+      reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
       current.messages.push(reply); current.updated = Date.now(); saveChats();
     }
     renderMessages();
@@ -1520,24 +1561,14 @@ function applyAppearance() {
   document.body.classList.toggle("compact", S.compact);
   $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
 }
-function setMode(mode) {
-  if (!current || current.messages.length) { toast("The chat type is set when a chat starts. Start a new chat for " + (mode === "image" ? "images" : "text") + "."); return; }
-  current.type = mode; S.mode = mode; saveSettings(); saveChats();
-  applyType(); renderMessages();
-}
 function applyType() {
   const mode = curMode();
-  const locked = !!(current && current.messages.length);
   document.body.classList.toggle("image-mode", mode === "image");
-  $("#modeChat").classList.toggle("on", mode === "chat");
-  $("#modeImage").classList.toggle("on", mode === "image");
-  $("#typeSeg").classList.toggle("locked", locked);
-  $("#typeSeg").title = locked ? "Chat type is set when the chat starts" : "Choose what this chat is for";
+  $("#typeBadge").textContent = mode === "image" ? "Image chat" : "Text chat";
   $("#prompt").placeholder = mode === "image" ? "Describe the image you want…" : "Message your local AI…";
   $("#attachBtn").style.display = mode === "image" ? "none" : "";
-  const keep = $("#model").value;
+  $("#ctxFieldChat").hidden = mode !== "image";
   fillModelSelect();
-  if ([...$("#model").options].some(o => o.value === keep) && keep === (mode === "image" ? S.imageModel : S.model)) $("#model").value = keep;
 }
 
 // ======================================================================
@@ -1557,7 +1588,7 @@ function openSettings(tab) {
   // chat
   $("#defaultSystem").value = S.defaultSystem;
   loadImgFields(); fillCtxModels();
-  $("#chatTitle").value = current.title; $("#chatSystem").value = current.system || "";
+  $("#chatTitle").value = current.title; $("#chatContext").value = current.context || ""; $("#chatSystem").value = current.system || "";
   $("#chatSystem").placeholder = S.defaultSystem ? "Default: " + S.defaultSystem.slice(0, 80) : "Leave empty for none";
   $("#chatTypeLine").textContent = "This is " + (curMode() === "image" ? "an image" : "a text") + " chat. The type is chosen when a chat starts and can't change afterwards.";
   $("#webSearch").checked = searchAvailable && S.webSearch;
@@ -1635,6 +1666,7 @@ $$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d)
 
 // per-chat (lives in Settings → Chat)
 function openChatSettings() { openSettings("chat"); setTimeout(() => $("#chatTitle").focus(), 50); }
+$("#chatContext").onchange = e => { current.context = e.target.value.trim(); saveChats(); };
 $("#chatTitle").onchange = e => { current.title = e.target.value.trim() || current.title; saveChats(); renderSidebar(); };
 $("#chatSystem").onchange = e => { current.system = e.target.value; saveChats(); };
 
@@ -1655,16 +1687,12 @@ loadImgFields();
 // Wire up
 // ======================================================================
 $("#send").onclick = () => send();
-$("#newChat").onclick = () => newChat();
-$("#newImageChat").onclick = () => { newChat("image"); $("#sidebar").classList.remove("open"); };
-$("#topSettings").onclick = () => openSettings();
+$("#newChat").onclick = () => openNewChat();
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
 $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#openSettings").onclick = () => openSettings();
 $("#openConn").onclick = () => { openSettings("connection"); setConnCards("remote"); setTimeout(() => $("#codeInput").focus(), 50); };
 $("#search").addEventListener("input", renderSidebar);
-$("#modeChat").onclick = () => setMode("chat");
-$("#modeImage").onclick = () => setMode("image");
 $("#model").onchange = e => { if (curMode() === "image") S.imageModel = e.target.value; else S.model = e.target.value; saveSettings(); };
 $("#exportChat").onclick = () => {
   if (!current.messages.length) return toast("This chat is empty");
@@ -1686,7 +1714,7 @@ $("#prompt").addEventListener("keydown", e => {
   if (sendNow) { e.preventDefault(); if (!controller) send(); }
 });
 document.addEventListener("keydown", e => {
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "o") { e.preventDefault(); newChat(); }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "o") { e.preventDefault(); openNewChat(); }
   if (e.key === "Escape" && controller) controller.abort();
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppearance);
