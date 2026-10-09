@@ -34,6 +34,8 @@ a { color: inherit; }
 .nav .sp { flex: 1; }
 .nav a.lk { color: var(--muted); text-decoration: none; font-size: 14px; }
 .nav a.lk:hover { color: var(--fg); }
+.nav { transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .35s; }
+.nav.hide { transform: translate(-50%, calc(-100% - 26px)); opacity: 0; }
 .btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 999px; padding: 9px 18px; color: #0a0a0a; background: #f5f5f5;
   background-image: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,0) 55%); box-shadow: 0 6px 24px rgba(255,255,255,.18), inset 0 1px 0 #fff; transition: transform .15s, box-shadow .2s; }
 .btn:hover { transform: translateY(-1px) scale(1.02); box-shadow: 0 10px 34px rgba(255,255,255,.28), inset 0 1px 0 #fff; }
@@ -41,7 +43,7 @@ a { color: inherit; }
 
 /* the scroll story: one tall section with a sticky stage */
 .story { position: relative; height: 1150vh; }   /* just scroll distance: the stage below stays pinned for the whole page */
-.stage { position: fixed; inset: 0; height: 100vh; height: 100svh; overflow: hidden; z-index: 1; }   /* pinned; the ocean keeps moving behind the sections */
+.stage { position: fixed; inset: 0; overflow: hidden; z-index: 1; }   /* pinned; the ocean keeps moving behind the sections */
 .layer { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; }
 
 .hero { width: min(900px, 92vw); text-align: center; transform: translate(-50%, -50%); z-index: 4; }
@@ -139,6 +141,9 @@ footer a:hover { color: var(--fg); }
 .grid > .reveal:nth-child(5) { transition-delay: .08s; } .grid > .reveal:nth-child(6) { transition-delay: .16s; }
 @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
 
+@media (pointer: coarse), (max-width: 820px) {
+  .card, .chip, .faq details, .nav { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: rgba(8, 16, 34, .74); }
+}
 @media (prefers-reduced-motion: reduce) { .planet .surface, .ghost-svg, .bird svg, .scroll-hint i::after { animation: none; } }
 </style>
 </head>
@@ -297,8 +302,14 @@ function placePx(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.opacity = o;
   node.style.visibility = o <= .001 ? "hidden" : "visible";
 }
+// the stage's size in pixels; every position is worked out from it, so nothing shifts when a phone's address bar moves
+const stageEl = document.querySelector(".stage");
+let SW = innerWidth, SH = innerHeight;
+const measure = () => { SW = stageEl.clientWidth || innerWidth; SH = stageEl.clientHeight || innerHeight; };
+measure(); addEventListener("resize", measure);
+if (window.ResizeObserver) new ResizeObserver(measure).observe(stageEl);
 function place(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
-  node.style.transform = `translate(-50%, -50%) translate(${x}vw, ${y}vh) scale(${s}) rotate(${r}deg)`;
+  node.style.transform = `translate(-50%, -50%) translate(${x * SW / 100}px, ${y * SH / 100}px) scale(${s}) rotate(${r}deg)`;
   node.style.opacity = o;
   node.style.pointerEvents = o > .5 ? "auto" : "none";
   node.style.visibility = o <= .001 ? "hidden" : "visible";
@@ -315,6 +326,7 @@ function feature(icon, cap, p, a) {
 // Every pixel shoots a camera ray at a sphere. The water is 3D noise over the whole globe (so nothing repeats):
 // a slow swell plus five layers of small waves drifting in different directions. Lighting: the sun glitters on
 // the waves, the water reflects the sky at the edges, light shines through crests, and the atmosphere glows.
+const MOBILE = matchMedia("(pointer: coarse)").matches || innerWidth < 820;
 const OCEAN_FS = `precision highp float;
 uniform vec2 uRes;      // canvas size in pixels
 uniform vec3 uC;        // planet centre x, y (from the top) and radius, in canvas pixels
@@ -343,16 +355,49 @@ float snoise(vec3 v){
   vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m;
   return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
 }
+// the same noise, also returning its gradient (webgl-noise "noise3Dgrad", MIT licence)
+float snoiseG(vec3 v, out vec3 gradient){
+  const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+  i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_);
+  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
+  vec4 m2=m*m, m4=m2*m2;
+  vec4 pdotx=vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3));
+  vec4 temp=m2*m*pdotx;
+  gradient=-8.*(temp.x*x0+temp.y*x1+temp.z*x2+temp.w*x3);
+  gradient+=m4.x*p0+m4.y*p1+m4.z*p2+m4.w*p3;
+  gradient*=42.;
+  return 42.*dot(m4,pdotx);
+}
 mat3 rotY(float a){float c=cos(a),s=sin(a);return mat3(c,0.,-s,0.,1.,0.,s,0.,c);}
 mat3 rotX(float a){float c=cos(a),s=sin(a);return mat3(1.,0.,0.,0.,c,s,0.,-s,c);}
-// the water surface: a slow warped swell plus five layers of small waves, each drifting its own way
-float waves(vec3 q, float t){
-  float h = .55 * snoise(q * 2.0 + vec3(t * .02, 0., t * .015) + .7 * snoise(q * 1.1 + t * .008));
+// the water surface: a slow warped swell plus layers of small waves, each drifting its own way.
+// Returns the height and its slope (gradient), which tilts the surface for the lighting.
+uniform float uOct;     // how many wave layers: more when zoomed in close, fewer on phones
+float waves(vec3 q, float t, out vec3 grad){
+  vec3 gg;
+  vec3 warp = .7 * vec3(snoise(q * 1.1 + t * .008));
+  float h = .55 * snoiseG(q * 2.0 + vec3(t * .02, 0., t * .015) + warp, gg);
+  grad = .55 * 2.0 * gg;
   float a = .34, f = 8.5;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 7; i++) {
+    if (float(i) >= uOct) break;
     float fi = float(i);
     vec3 dir = vec3(sin(fi * 2.1 + .3), cos(fi * 1.3), sin(fi * 3.7 + 1.));
-    h += a * snoise(q * f + dir * t * (.22 + .06 * fi));
+    h += a * snoiseG(q * f + dir * t * (.22 + .06 * fi), gg);
+    grad += a * f * gg;
     a *= .55; f *= 2.13;
   }
   return h;
@@ -376,9 +421,9 @@ void main(){
   vec3 L = normalize(vec3(-.55, .62, .56));      // the sun, upper left, in front
   mat3 R = rotX(.38) * rotY(uTurn);
   vec3 q = R * n0;
-  float t = uTime, e = .0018;
-  float h0 = waves(q, t);
-  vec3 g = vec3(waves(q + vec3(e, 0., 0.), t) - h0, waves(q + vec3(0., e, 0.), t) - h0, waves(q + vec3(0., 0., e), t) - h0) / e;
+  float t = uTime;
+  vec3 g;
+  float h0 = waves(q, t, g);
   g -= dot(g, q) * q;                             // only the slope along the surface
   vec3 n = normalize(n0 - (g * R) * .0072);       // tilt the sphere's normal by the waves (back to view space)
   float terminator = clamp(dot(n0, L) * 1.1 + .15, 0., 1.);
@@ -413,18 +458,24 @@ const ocean = (() => {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = (n) => gl.getUniformLocation(prog, n);
-  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha");
-  let scale = Math.min(1.5, devicePixelRatio || 1), slow = 0, last = 0;
-  return function draw(cx, cy, R, turn, time, alpha) {
-    // resolution follows the screen; if frames get slow, draw fewer pixels (and back up when there's room)
+  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha"), uOct = U("uOct");
+  // computers: the screen's full sharpness (up to 2x); phones: fewer pixels and 30 frames a second, so scrolling stays smooth
+  let scale = MOBILE ? Math.min(1.5, devicePixelRatio || 1) * .6 : Math.min(2, devicePixelRatio || 1);
+  const budget = MOBILE ? 1.1e6 : 7e6, minScale = MOBILE ? .45 : .9;
+  let slow = 0, last = 0, odd = false;
+  return function draw(W, H, cx, cy, R, turn, time, alpha) {
+    if (MOBILE && (odd = !odd)) return;
     const dt = last ? time - last : 16; last = time;
-    if (dt > 30) { if (++slow > 20 && scale > .5) { scale *= .85; slow = 0; } } else slow = Math.max(0, slow - 1);
-    const px = Math.min(scale, Math.sqrt(2.4e6 / (innerWidth * innerHeight)));
-    const w = Math.round(innerWidth * px), h = Math.round(innerHeight * px);
+    if (dt > (MOBILE ? 50 : 34)) { if (++slow > 30 && scale > minScale) { scale = Math.max(minScale, scale * .9); slow = 0; } } else slow = Math.max(0, slow - 1);
+    const px = Math.min(scale, Math.sqrt(budget / (W * H)));
+    const w = Math.round(W * px), h = Math.round(H * px);
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     gl.viewport(0, 0, w, h);
     gl.uniform2f(uRes, w, h); gl.uniform3f(uC, cx * px, cy * px, Math.max(1, R * px));
     gl.uniform1f(uTime, time / 1000); gl.uniform1f(uTurn, turn * Math.PI * 2); gl.uniform1f(uAlpha, alpha);
+    // close to the surface the waves get extra fine layers, so it stays sharp and detailed
+    const zoom = R / Math.max(W, H);
+    gl.uniform1f(uOct, MOBILE ? (zoom > .8 ? 5 : 4) : (zoom > 1.6 ? 7 : zoom > .7 ? 6 : 5));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
 })();
@@ -448,11 +499,11 @@ function render(t) {
   const rise = easeOut(seg(p, .04, .2)), sink = ease(seg(p, .8, .93));
   // finally it grows from the bottom until it covers the whole screen
   const baseS = (.55 + .45 * rise) * (1 + .5 * sink), r0 = L.planet.offsetWidth / 2 * baseS || 1;
-  const cover = Math.hypot(innerWidth, innerHeight) / 2 * 3.2 / r0;   // dive in close to the water
+  const cover = Math.hypot(SW, SH) / 2 * 3.2 / r0;   // dive in close to the water
   const planetY = (75 * (1 - rise) + 52 * sink) * (1 - grow), planetS = baseS * (1 + (cover - 1) * grow), planetO = Math.min(1, rise * 1.4);
   place(L.planet, { y: planetY, s: planetS, o: ocean ? 0 : planetO });
   // the planet turns slowly by itself and faster while you scroll
-  if (ocean) ocean(innerWidth / 2, innerHeight / 2 + planetY * innerHeight / 100, L.planet.offsetWidth / 2 * planetS,
+  if (ocean) ocean(SW, SH, SW / 2, SH / 2 + planetY * SH / 100, L.planet.offsetWidth / 2 * planetS,
                    spinAt(t, grow) + p * .9, reduce ? 0 : t, planetO);
   // features
   feature(L.sparkle, L.cap1, p, .2);
@@ -460,7 +511,7 @@ function render(t) {
   feature(L.ghost, L.cap2, p, .4);
   feature(L.shield, L.cap3, p, .6);
   // ---- rocket: orbits the planet (passing behind and in front), then lands on top of it ----
-  const vh = innerHeight / 100;
+  const vh = SH / 100;
   const pScale = (.55 + .45 * rise) * (1 + .5 * sink);
   const R = L.planet.offsetWidth / 2 * pScale, cy = (75 * (1 - rise) + 52 * sink) * vh;
   const tilt = -14 * Math.PI / 180, A = R * 1.3, B = A * .3;
@@ -477,7 +528,7 @@ function render(t) {
   L.rocket.style.zIndex = land > .3 || depth > 0 ? 5 : 1;
   const away = easeOut(seg(p, .85, .93));                  // flies up and away as "Ready when you are." appears
   placePx(L.rocket, {
-    x: ox + (lx - ox) * land, y: oy + (ly - oy) * land - away * away * innerHeight * .7,
+    x: ox + (lx - ox) * land, y: oy + (ly - oy) * land - away * away * SH * .7,
     s: (.62 + .38 * (depth + 1) / 2) * (1 - land) + 1.15 * land,
     r: oAng + dAng * land,
     o: easeOut(seg(p, .1, .16)) * (land > .3 ? 1 : .55 + .45 * (depth + 1) / 2) * gone * (1 - away),
@@ -521,8 +572,14 @@ if (!reduce && window.Lenis) {
   lenis = new Lenis({ duration: 1.35, smoothWheel: true, wheelMultiplier: .9, touchMultiplier: 1.4 });
   document.querySelectorAll('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); lenis.scrollTo(a.getAttribute("href") === "#top" ? 0 : a.getAttribute("href")); }));
 }
+const navEl = document.querySelector(".nav");
+let lastY = 0;
 function frame(t) {
   if (lenis) lenis.raf(t);
+  const y = scrollY;                                    // top bar: away when scrolling down, back when scrolling up
+  if (y > lastY + 3 && y > 60) navEl.classList.add("hide");
+  else if (y < lastY - 3 || y < 60) navEl.classList.remove("hide");
+  lastY = y;
   progress = readProgress();
   render(t); drawSky(t);
   requestAnimationFrame(frame);
