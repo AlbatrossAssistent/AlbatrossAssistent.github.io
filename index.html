@@ -12,13 +12,11 @@
   if (/code=/.test(location.hash) || /code=/.test(location.search)) location.replace("public/" + location.search + location.hash);
 </script>
 <style>
-:root { --bg: #000; --fg: #f5f5f5; --muted: rgba(245,245,245,.6); --edge: rgba(255,255,255,.16); --glass: rgba(255,255,255,.06); --hi: #fff; --hi2: rgba(255,255,255,.55); --navbg: rgba(20,20,20,.35); --btn-bg: #f5f5f5; --btn-fg: #0a0a0a; --star: #fff; --icon: #fff; color-scheme: dark; }
+:root { --mark: #0b0b0d; --mark2: #f2f3f5; --bg: #000; --fg: #f5f5f5; --muted: rgba(245,245,245,.6); --edge: rgba(255,255,255,.16); --glass: rgba(255,255,255,.06); --hi: #fff; --hi2: rgba(255,255,255,.55); --navbg: rgba(20,20,20,.35); --btn-bg: #f5f5f5; --btn-fg: #0a0a0a; --star: #fff; --icon: #fff; color-scheme: dark; }
 @media (prefers-color-scheme: light) {
-  :root { --bg: #f3f4f6; --fg: #0b0b0d; --muted: rgba(11,11,13,.58); --edge: rgba(0,0,0,.10); --glass: rgba(255,255,255,.55); --hi: #0b0b0d; --hi2: rgba(11,11,13,.55); --navbg: rgba(255,255,255,.55); --btn-bg: #0b0b0d; --btn-fg: #fff; --star: #0b0b0d; --icon: #0b0b0d; color-scheme: light; }
+  :root { --mark: #f2f3f5; --mark2: #0b0b0d; --bg: #f3f4f6; --fg: #0b0b0d; --muted: rgba(11,11,13,.58); --edge: rgba(0,0,0,.10); --glass: rgba(255,255,255,.55); --hi: #0b0b0d; --hi2: rgba(11,11,13,.55); --navbg: rgba(255,255,255,.55); --btn-bg: #0b0b0d; --btn-fg: #fff; --star: #0b0b0d; --icon: #0b0b0d; color-scheme: light; }
   .nebula { opacity: .35; }
   .card, .chip, .faq details { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 24px rgba(0,0,0,.06) !important; }
-  .ghost-svg path[fill="url(#gg)"] { fill: #0b0b0d; }
-  .ghost-svg ellipse { fill: #fff; }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
@@ -76,9 +74,12 @@ a { color: inherit; }
 .caption h2 { margin: 0 0 8px; font-size: clamp(32px, 5.6vw, 72px); font-weight: 600; letter-spacing: -.03em; line-height: 1.05; }
 .caption h2 span { background: linear-gradient(180deg, var(--hi) 35%, var(--hi2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .caption p { margin: 0 auto; color: var(--muted); font-size: clamp(15px, 1.6vw, 19px); line-height: 1.55; max-width: 560px; }
-.sparkle-svg { filter: drop-shadow(0 0 30px rgba(170,190,255,.55)) drop-shadow(0 0 80px rgba(170,190,255,.25)); }
-.ghost-svg { filter: drop-shadow(0 0 40px rgba(255,255,255,.25)); animation: bob 3.2s ease-in-out infinite; }
-.shield-svg { filter: drop-shadow(0 0 40px rgba(200,220,255,.3)); }
+.sparkle-svg path, .ghost-svg path { fill: var(--mark); }
+.ghost-svg ellipse { fill: var(--mark2); }
+.shield-svg path:first-of-type { fill: none; stroke: var(--mark); stroke-width: 7; }
+.shield-svg path:last-of-type { stroke: var(--mark); stroke-width: 9; }
+.ghost-svg { animation: bob 3.2s ease-in-out infinite; }
+
 @keyframes bob { 50% { transform: translateY(-4%); } }
 
 /* finale */
@@ -315,20 +316,21 @@ function place(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
 // behind the planet, turns to face you at the front, and swings away behind it again (3D, with perspective).
 const ORBIT_STEP = Math.PI * 2 / 3;
 function ringAngle(p) { return (p - .27) / .2 * ORBIT_STEP; }          // icon k faces front at p = .27 + .2k
-function orbitIcon(icon, cap, k, p, cx, cy, R, show) {
-  let th = ringAngle(p) - k * ORBIT_STEP;
-  th = Math.atan2(Math.sin(th), Math.cos(th));                         // -PI..PI, 0 = front
-  const front = Math.cos(th), side = Math.sin(th);
-  const x = side * R * 1.45, y = cy - R * (.15 + 1.15 * Math.max(0, front));   // over the top of its head at the front, beside it at the sides
-  const sc = (.3 + .45 * (front + 1) / 2) * (R / 260);
-  icon.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${sc})`;
-  const o = show * (front > -.2 ? 1 : Math.max(0, 1 + (front + .2) * 2));
-  icon.style.opacity = o;
-  icon.style.visibility = o < .01 ? "hidden" : "visible";
-  icon.style.zIndex = front > 0 ? 4 : 1;                               // behind the globe on the far side
-  const c = show * Math.max(0, 1 - Math.abs(th) / .55);                 // caption only while it faces you
-  place(cap, { x: side * 8, y: (cy + R) / (SH / 100) + 9 + 4 * (1 - c), o: c });   // below the orb
+// Each symbol takes the eyes' place: it grows in at the centre of the ball, holds, and shrinks away again.
+// Returns how visible it is, so the eyes can fade out while it shows.
+function centerIcon(icon, cap, k, p, cy, R) {
+  const mid = .27 + .2 * k, d = Math.abs(p - mid);
+  const v = 1 - smooth(seg(d, .045, .085));              // 1 while near its moment, 0 away from it
+  const sc = (.25 + .75 * easeOut(v)) * (R * 1.05 / 260);
+  icon.style.transform = `translate(-50%, -50%) translate(0px, ${cy}px) scale(${sc})`;
+  icon.style.opacity = v;
+  icon.style.visibility = v < .01 ? "hidden" : "visible";
+  icon.style.zIndex = 4;
+  const c = 1 - smooth(seg(d, .03, .07));
+  place(cap, { y: (cy + R) / (SH / 100) + 9 + 4 * (1 - c), o: c });   // below the orb
+  return v;
 }
+const smooth = (x) => x * x * (3 - 2 * x);
 
 // ---------- the ocean planet: a real 3D sphere drawn by the graphics card (WebGL) ----------
 // Every pixel shoots a camera ray at a sphere. The water is 3D noise over the whole globe (so nothing repeats):
@@ -367,15 +369,16 @@ function render(t) {
   const planetY = (75 * (1 - rise) + 52 * sink) * (1 - grow), planetS = baseS * (1 + (cover - 1) * grow), planetO = Math.min(1, rise * 1.4);
   place(L.planet, { y: planetY, s: planetS, o: orb ? 0 : planetO * orbFade });
   // the planet turns slowly by itself and faster while you scroll
-  if (orb) orb({ W: SW, H: SH, cx: SW / 2, cy: SH / 2 + planetY * SH / 100, R: L.planet.offsetWidth / 2 * planetS, t,
+  const eyesOn = 1 - Math.max(...[0, 1, 2].map((k) => 1 - smooth(seg(Math.abs(p - (.27 + .2 * k)), .045, .085))));
+  if (orb) orb({ W: SW, H: SH, cx: SW / 2, cy: SH / 2 + planetY * SH / 100, R: L.planet.offsetWidth / 2 * planetS, t, eyes: eyesOn,
                  look: mouse.on ? mouse : null, dark: darkPage(), alpha: planetO * orbFade, mood: p > .8 && p < .95 ? 1 : 0 });
   // features: the icons orbit the globe on a ring that turns with it
   const showIcons = easeOut(seg(p, .14, .2)) * (1 - ease(seg(p, .76, .82)));
   const pcx = SW / 2, pcy = SH / 2 + planetY * SH / 100, pR = L.planet.offsetWidth / 2 * planetS;
-  orbitIcon(L.sparkle, L.cap1, 0, p, pcx, pcy - SH / 2, pR, showIcons);
-  orbitIcon(L.ghost, L.cap2, 1, p, pcx, pcy - SH / 2, pR, showIcons);
-  orbitIcon(L.shield, L.cap3, 2, p, pcx, pcy - SH / 2, pR, showIcons);
-  L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60) % 360}deg)`;
+  const iconShow = Math.max(centerIcon(L.sparkle, L.cap1, 0, p, pcy - SH / 2, pR),
+                            centerIcon(L.ghost, L.cap2, 1, p, pcy - SH / 2, pR),
+                            centerIcon(L.shield, L.cap3, 2, p, pcy - SH / 2, pR));
+  L.sparkle.querySelector("svg").style.transform = `rotate(${Math.sin(t / 900) * 8}deg)`;
   // finale: title above, start button on the ball
   const f = easeOut(seg(p, .86, .95)), b = easeOut(seg(p, .88, .97)), st = easeOut(seg(p, .9, .98));
   place(L.final, { y: -26 + 4 * (1 - f), o: f * gone });
