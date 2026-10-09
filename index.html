@@ -321,17 +321,29 @@ const ORBIT_STEP = Math.PI * 2 / 3;
 function ringAngle(p) { return (p - .27) / .2 * ORBIT_STEP; }          // icon k faces front at p = .27 + .2k
 // Each symbol takes the eyes' place: it grows in at the centre of the ball, holds, and shrinks away again.
 // Returns how visible it is, so the eyes can fade out while it shows.
+// Everything shown on the ball moves along one conveyor, right to left: it comes in small from the right edge,
+// grows to full size in the middle, then shrinks away to the left as the next one arrives.
+// Order: the eyes, the three symbols, the eyes again. u = 0 is the middle, -1 the right edge, +1 the left.
+const SLOT = .14, SLOTS = [.2, .34, .48, .62, .76];
+function slotU(k, p) {
+  let u = (p - SLOTS[k]) / SLOT;
+  if (k === 0) u = Math.max(0, u);                     // the eyes wait in the middle until the symbols start
+  if (k === 4) u = Math.min(0, u);                     // and stay there once they are done
+  return u;
+}
+function conveyor(u, R) {
+  const a = Math.min(1, Math.abs(u));
+  return { x: u * R * .95, scale: 1 - .72 * a, o: Math.abs(u) > 1.15 ? 0 : 1 - smooth(seg(Math.abs(u), .75, 1.15)) };
+}
 function centerIcon(icon, cap, k, p, cy, R) {
-  const mid = .27 + .2 * k, d = Math.abs(p - mid);
-  const v = 1 - smooth(seg(d, .045, .085));              // 1 while near its moment, 0 away from it
-  const sc = (.25 + .75 * easeOut(v)) * (R * 1.05 / 260);
-  icon.style.transform = `translate(-50%, -50%) translate(0px, ${cy}px) scale(${sc})`;
-  icon.style.opacity = v;
-  icon.style.visibility = v < .01 ? "hidden" : "visible";
+  const u = slotU(k + 1, p), c = conveyor(u, R);
+  icon.style.transform = `translate(-50%, -50%) translate(${-c.x}px, ${cy}px) scale(${c.scale * R * 1.05 / 260})`;
+  icon.style.opacity = c.o;
+  icon.style.visibility = c.o < .01 ? "hidden" : "visible";
   icon.style.zIndex = 4;
-  const c = 1 - smooth(seg(d, .03, .07));
-  place(cap, { y: (cy + R) / (SH / 100) + 9 + 4 * (1 - c), o: c });   // below the orb
-  return v;
+  const cv = 1 - smooth(seg(Math.abs(u), .25, .55));     // caption only while it is in the middle
+  place(cap, { y: (cy + R) / (SH / 100) + 9 + 4 * (1 - cv), o: cv });
+  return c.o;
 }
 const smooth = (x) => x * x * (3 - 2 * x);
 
@@ -372,8 +384,9 @@ function render(t) {
   const planetY = (75 * (1 - rise) + 52 * sink) * (1 - grow), planetS = baseS * (1 + (cover - 1) * grow), planetO = Math.min(1, rise * 1.4);
   place(L.planet, { y: planetY, s: planetS, o: orb ? 0 : planetO * orbFade });
   // the planet turns slowly by itself and faster while you scroll
-  const eyesOn = 1 - Math.max(...[0, 1, 2].map((k) => 1 - smooth(seg(Math.abs(p - (.27 + .2 * k)), .045, .085))));
-  if (orb) orb({ W: SW, H: SH, cx: SW / 2, cy: SH / 2 + planetY * SH / 100, R: L.planet.offsetWidth / 2 * planetS, t, eyes: eyesOn,
+  // the eyes ride the same conveyor: out to the left when the first symbol comes, back in from the right after the last
+  const eu = p < .55 ? slotU(0, p) : slotU(4, p), ec = conveyor(eu, 1);
+  if (orb) orb({ W: SW, H: SH, cx: SW / 2, cy: SH / 2 + planetY * SH / 100, R: L.planet.offsetWidth / 2 * planetS, t, eyes: ec.o, eyeX: -eu * .95, eyeScale: ec.scale,
                  look: mouse.on ? mouse : null, dark: darkPage(), alpha: planetO * orbFade, mood: p > .8 && p < .95 ? 1 : 0 });
   // features: the icons orbit the globe on a ring that turns with it
   const showIcons = easeOut(seg(p, .14, .2)) * (1 - ease(seg(p, .76, .82)));

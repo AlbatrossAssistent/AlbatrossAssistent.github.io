@@ -10,27 +10,32 @@ uniform vec2 uLook;     // yaw, pitch the orb is turned by
 uniform float uOpen;    // 1 = eyes open, 0 = closed (blink)
 uniform float uDark;    // 1 = dark page (white orb), 0 = light page (black orb)
 uniform float uAlpha;
-uniform float uMood;    // 0 neutral, 1 happy (eyes curve up), 2 thinking (narrow), 3 listening (wide)
+uniform float uMood;    // unused by the shader now: the JS turns it into uExpr
 uniform float uPulse;   // 0..1 glow while busy
 uniform float uEyes;    // 1 = eyes shown, 0 = hidden (something else is shown on the orb)
+uniform vec4 uExpr;     // Jarvis expression: openness, curve, squint, width
+uniform vec2 uExpr2;    // spacing, brow
+uniform vec2 uEyeMove;  // the eyes' sideways offset (radius units) and scale, for sliding them off and on
 mat3 rotY(float a){float c=cos(a),s=sin(a);return mat3(c,0.,-s,0.,1.,0.,s,0.,c);}
 mat3 rotX(float a){float c=cos(a),s=sin(a);return mat3(1.,0.,0.,0.,c,s,0.,-s,c);}
-// Jarvis's eyes: rounded rectangles (proportions from the desktop app: half-size 0.196 x 0.272 of the radius,
-// 0.302 apart), drawn as a signed distance on the sphere's surface so edges stay crisp at any size.
-// Returns the distance (negative inside) in sphere units.
-float eyeSD(vec3 q, vec3 E, out vec2 uv){
-  vec3 t = normalize(cross(vec3(0., 1., 0.), E)), b = cross(E, t);
-  vec3 d = q - E * dot(q, E);                        // onto the eye's tangent plane
-  uv = vec2(dot(d, t), dot(d, b));
-  if (dot(q, E) < .55) return 1.;
-  float hw = .196 * (uMood > 2.5 ? 1.1 : 1.), hh = .272 * max(uOpen, .05);
-  if (uMood > 1.5 && uMood < 2.5) hh *= .5;            // thinking: narrowed
-  if (uMood > 2.5) hh *= 1.08;                         // listening: a little wider open
-  vec2 p = uv;
-  if (uMood > .5 && uMood < 1.5) p.y -= .55 * hh * (1. - pow(clamp(p.x / hw, -1., 1.), 2.));   // happy: bowed into an arc
-  float r = min(hw, hh) * .42;                         // corner: squarish, like the app
-  vec2 k = abs(p) - vec2(hw, hh) + r;
-  return length(max(k, 0.)) + min(max(k.x, k.y), 0.) - r;
+// Jarvis's eyes, exactly as jarvis/render/geometry.py builds them: a rounded rectangle (half-size 0.196 x 0.272
+// of the radius, corner 0.8 of the shorter half-side) whose points go through the app's warp - brow lowers the
+// top edge, squint raises the lower lid, curve tapers the tips and lifts the middle. Here the warp is undone for
+// each pixel (the inverse map), so the pixel can be tested against the plain rectangle. Coordinates are the face
+// plane in radius units, y pointing down like the app's. Returns the distance in radius units (negative inside).
+float jarvisEye(vec2 p, float side){
+  float hw = .196 * uExpr.w, hh = .272 * clamp(uExpr.x * uOpen, .02, 2.);
+  float curve = uExpr.y, squint = uExpr.z, brow = uExpr2.y;
+  float t = clamp(p.x / hw, -1., 1.);
+  float x = p.x, y = p.y;
+  y += curve * hw * .44 * (1. - t * t);                         // undo: bend lifts the middle
+  y /= 1. - min(abs(curve), 1.) * .5 * t * t;                   // undo: taper thins the tips
+  if (squint > 0. && y > 0.) y /= 1. - clamp(squint, 0., 1.) * .62;   // undo: lower lid raised
+  if (brow > 0. && y < 0.) y /= 1. - clamp(brow, 0., .85);       // undo: brow lowered
+  float r = min(hw, hh) * .8;
+  vec2 k = abs(vec2(x, y)) - vec2(hw, hh) + r;
+  float d = length(max(k, 0.)) + min(max(k.x, k.y), 0.) - r;
+  return d * (1. - min(abs(curve), 1.) * .5 * t * t);           // back to (roughly) screen distance
 }
 void main(){
   vec2 frag = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
@@ -51,33 +56,28 @@ void main(){
   float NV = max(dot(n, V), 0.);
   float px = 1. / uC.z / max(NV, .2);                  // one screen pixel, in sphere units, here
   // eyes
-  vec2 uv1, uv2;
-  float s1 = eyeSD(q, normalize(vec3(-.302, .022, .953)), uv1), s2 = eyeSD(q, normalize(vec3(.302, .022, .953)), uv2);
-  float sd = min(s1, s2); vec2 uv = s1 < s2 ? uv1 : uv2;
-  float e = (1. - smoothstep(-px, px, sd)) * uEyes;
+  // the face plane: the orb-frame point seen from the front (so the face wraps over the sphere as it turns)
+  vec2 f = vec2(q.x, -q.y);
+  f = vec2((f.x - uEyeMove.x) / uEyeMove.y, f.y / uEyeMove.y);
+  float sep = .302 * uExpr2.x;
+  float sd = min(jarvisEye(f - vec2(-sep, -.022), -1.), jarvisEye(f - vec2(sep, -.022), 1.)) * uEyeMove.y;
+  float e = (q.z > .1 ? 1. - smoothstep(-px, px, sd) : 0.) * uEyes;
   // body lighting: key light upper left, soft fill from the right, a cool bounce from below
   vec3 K = normalize(vec3(-.55, .7, .55)), Fl = normalize(vec3(.8, .1, .6)), Bn = normalize(vec3(0., -1., .3));
   float key = max(dot(n, K), 0.), fill = max(dot(n, Fl), 0.), bounce = max(dot(n, Bn), 0.);
   float wrap = (dot(n, K) + .45) / 1.45;               // soft wrap-around, like a matte ceramic
-  vec3 baseCol = mix(vec3(.055, .058, .068), vec3(.955, .958, .965), uDark);
+  vec3 baseCol = mix(vec3(.063, .063, .067), vec3(.957, .957, .945), uDark);   // Noir #101011 / Paper #f4f4f1
   vec3 col = baseCol * (mix(.32, .58, uDark) + mix(.55, .4, uDark) * clamp(wrap, 0., 1.) + .12 * fill)
            + mix(vec3(.02, .03, .05), vec3(.08, .1, .14), uDark) * bounce;
   col *= mix(.62, 1., pow(NV, mix(.55, .3, uDark)));   // falls off towards the edge
-  // eyes sit slightly into the surface: a soft dark ring around them on the white orb
-  float ring = exp(-max(sd, 0.) / (px * 3. + .012)) * (1. - e) * uEyes;
-  col *= 1. - ring * mix(.18, .06, uDark);
   vec3 H = normalize(K + V);
   float NH = max(dot(n, H), 0.);
   float spec = pow(NH, 90.) * mix(1.1, .45, uDark) + pow(NH, 14.) * mix(.16, .07, uDark);
   float rim = pow(1. - NV, 3.2);
   col += vec3(spec) + glowCol * rim * mix(.3, .2, uDark);
-  // eye colour, with a little depth and a soft highlight in the upper corner, like the app's
-  vec3 eyeCol = mix(vec3(.94, .97, 1.) * (1.04 + .3 * uPulse), vec3(.035, .04, .052), uDark);
-  float inner = smoothstep(0., -.08, sd);
-  eyeCol *= mix(1., mix(.9, 1.25, uDark) , 1. - inner);
-  float hl = exp(-dot(uv - vec2(-.07, .12), uv - vec2(-.07, .12)) / .0016);
-  eyeCol += vec3(hl) * mix(.15, .55, uDark);
-  col = mix(col, eyeCol + vec3(spec) * .5, e);
+  // eye colour: solid, like the app's flat themes - Paper #141414 on the white orb, Noir #f6f6f3 on the black one
+  vec3 eyeCol = mix(vec3(.965, .965, .953) * (1. + .25 * uPulse), vec3(.078), uDark);
+  col = mix(col, eyeCol, e);
   col = pow(col, vec3(.96));
   float aa = smoothstep(1., 1. - 1.6 / uC.z, r);
   gl_FragColor = vec4(col * aa + glowCol * mix(.16, .3, uDark) * (1. - aa), mix(mix(.16, .3, uDark), 1., aa)) * uAlpha;
@@ -98,7 +98,10 @@ void main(){
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     const U = (n) => gl.getUniformLocation(prog, n);
-    const u = { res: U("uRes"), c: U("uC"), look: U("uLook"), open: U("uOpen"), dark: U("uDark"), alpha: U("uAlpha"), mood: U("uMood"), pulse: U("uPulse"), eyes: U("uEyes") };
+    const u = { res: U("uRes"), c: U("uC"), look: U("uLook"), open: U("uOpen"), dark: U("uDark"), alpha: U("uAlpha"), mood: U("uMood"), pulse: U("uPulse"), eyes: U("uEyes"), expr: U("uExpr"), expr2: U("uExpr2"), move: U("uEyeMove") };
+    // the app's expression presets (jarvis/core/expression.py): openness, curve, squint, width, spacing, brow
+    const PRESETS = { 0: [1, .16, 0, 1, 1, 0], 1: [.5, 1, .3, 1.04, 1, 0], 2: [.7, .05, .5, .97, 1, .3], 3: [1.2, .2, 0, 1.03, 1.02, 0], 4: [.86, .5, .18, 1, 1, 0] };
+    const ex = PRESETS[0].slice();
     const maxScale = opts.maxScale || Math.min(2.5, devicePixelRatio || 1);
     // blinking: every 2-6 s, sometimes twice; looking: eased toward the target, with small idle glances
     const st = { yaw: 0, pitch: 0, nextBlink: 1500, blinkAt: -1, double: false, glance: [0, 0], nextGlance: 3000 };
@@ -115,7 +118,7 @@ void main(){
       }
       return 1;
     }
-    return function draw({ W, H, cx, cy, R, t, look, dark, alpha = 1, mood = 0, pulse = 0, eyes = 1 }) {
+    return function draw({ W, H, cx, cy, R, t, look, dark, alpha = 1, mood = 0, pulse = 0, eyes = 1, eyeX = 0, eyeScale = 1 }) {
       const px = Math.min(maxScale, Math.sqrt((opts.budget || 9e6) / (W * H)));
       const w = Math.round(W * px), h = Math.round(H * px);
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -131,6 +134,10 @@ void main(){
       gl.uniform2f(u.res, w, h); gl.uniform3f(u.c, cx * px, cy * px, Math.max(1, R * px));
       gl.uniform2f(u.look, st.yaw, st.pitch); gl.uniform1f(u.open, openness(t));
       gl.uniform1f(u.dark, dark ? 1 : 0); gl.uniform1f(u.alpha, alpha); gl.uniform1f(u.mood, mood); gl.uniform1f(u.pulse, pulse); gl.uniform1f(u.eyes, eyes);
+      const target = PRESETS[mood] || PRESETS[0];
+      for (let i = 0; i < 6; i++) ex[i] += (target[i] - ex[i]) * .12;   // melt from one expression into the next
+      gl.uniform4f(u.expr, ex[0], ex[1], ex[2], ex[3]); gl.uniform2f(u.expr2, ex[4], ex[5]);
+      gl.uniform2f(u.move, eyeX, Math.max(.05, eyeScale));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     };
   };
