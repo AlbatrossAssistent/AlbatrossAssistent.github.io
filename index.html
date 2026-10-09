@@ -21,6 +21,8 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 html.lenis, html.lenis body { height: auto; }
+/* nothing may be wider than the screen: otherwise phones zoom the whole page out */
+html, body { overflow-x: hidden; overflow-x: clip; max-width: 100%; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
 a { color: inherit; }
 
@@ -47,7 +49,8 @@ a { color: inherit; }
 @media (max-width: 620px) { .nav a.lk { display: none; } }
 
 /* the scroll story: one tall section with a sticky stage */
-.story { position: relative; height: 1400vh; }   /* just scroll distance: the stage below stays pinned for the whole page */
+.story { position: relative; height: 1400vh; }
+@media (pointer: coarse) { .story { height: 760vh; } .hsec { height: 260vh; } .msec { height: 150vh; } }   /* just scroll distance: the stage below stays pinned for the whole page */
 .stage { position: fixed; inset: 0; overflow: hidden; z-index: 1; }   /* pinned for the whole page */
 .layer { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; }
 
@@ -182,6 +185,7 @@ footer a:hover { color: var(--fg); }
   <a class="brand" href="#top"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>Albatross</a>
   <span class="sp"></span>
   <a class="lk" href="#how">How it works</a>
+  <a class="lk" href="#jarvis">Jarvis</a>
   <a class="lk" href="#features">Features</a>
   <a class="lk" href="terms.html">Terms</a>
   <a class="lk" href="privacy.html">Privacy</a>
@@ -216,6 +220,7 @@ footer a:hover { color: var(--fg); }
     <div class="layer icon" id="shield"><svg class="shield-svg" viewBox="0 0 100 110"><defs><linearGradient id="shg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#9fb0ff"/></linearGradient></defs>
       <path fill="rgba(255,255,255,.07)" stroke="url(#shg)" stroke-width="3" d="M50 5l38 14v30c0 27-17 46-38 56C29 95 12 76 12 49V19z"/>
       <path fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M33 55l12 12 23-25"/></svg></div>
+    <div class="layer caption" id="cap4"><h2><span>Meet Jarvis</span></h2><p>Your assistant, living on your PC. Talk to it or type, and it answers, reads your screen, opens apps, types and clicks, always asking first. Watch and stop it from anywhere.</p></div>
     <div class="layer caption" id="cap3"><h2><span>100% Protected</span></h2><p>Everything between your devices is end-to-end encrypted with your own code. The server only passes along data it can't read.</p></div>
 
     <!-- finale -->
@@ -231,6 +236,16 @@ footer a:hover { color: var(--fg); }
       <div class="card step reveal"><h3>Install on your PC</h3><p>Install <a href="https://ollama.com/download">Ollama</a>, download a model like <code>qwen3:14b</code>, and start the Albatross host. It runs quietly in the background, even at boot.</p></div>
       <div class="card step reveal"><h3>Get your code</h3><p>The control center shows a 16-character code. The first half finds your PC, the second half is your encryption key and never leaves your devices.</p></div>
       <div class="card step reveal"><h3>Chat from anywhere</h3><p>Open Albatross on your phone, tablet or laptop, enter the code, and you're talking to your own AI. Install it as an app for full screen.</p></div>
+    </div>
+  </div>
+
+  <div class="sec" id="jarvis">
+    <div class="sec-head reveal"><div class="eyebrow">Jarvis</div><h2><span>An assistant that can actually do things</span></h2><p>Jarvis lives on your PC as a small orb with eyes. It looks around, blinks, follows your cursor, and gets to work when you ask.</p></div>
+    <div class="grid">
+      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><h3>"Hey Jarvis"</h3><p>Say its name or type, in English or German. It answers out loud with a natural voice, all offline on your PC.</p></div>
+      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span><h3>Sees your screen</h3><p>Ask "what does this error say?" and it reads it to you. It only looks when you ask about the screen.</p></div>
+      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1.5L10 20z"/></svg></span><h3>Uses your PC for you</h3><p>Opens apps, arranges windows, types and clicks, and asks before anything with consequences. Off until you switch it on.</p></div>
+      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></span><h3>Watch it, stop it</h3><p>In Albatross you see your PC's screen live, answer its questions, change its settings, and one big red button stops it at once.</p></div>
     </div>
   </div>
 
@@ -315,7 +330,7 @@ const story = $(".story");
 let progress = 0;
 function readProgress() { const r = story.getBoundingClientRect(); return clamp(-r.top / (r.height - innerHeight)); }
 const el = (id) => document.getElementById(id);
-const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), ocean: el("ocean"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
+const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), ocean: el("ocean"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), cap4: el("cap4"), final: el("final"), start: el("start") };
 // like place(), but x/y in pixels from the centre of the screen
 function placePx(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
@@ -353,7 +368,7 @@ function slotU(k, p) {
 }
 function conveyor(u, R) {
   const a = Math.min(1, Math.abs(u));
-  return { x: u * R * .95, scale: 1 - .72 * a, o: Math.abs(u) > 1.15 ? 0 : 1 - smooth(seg(Math.abs(u), .75, 1.15)) };
+  return { x: u * R * .95, scale: 1 - .72 * a, o: 1 - smooth(seg(Math.abs(u), .42, .78)) };
 }
 function centerIcon(icon, cap, k, p, cy, R) {
   const u = slotU(k + 1, p), c = conveyor(u, R);
@@ -408,7 +423,7 @@ function render(t) {
   // the eyes ride the same conveyor: out to the left when the first symbol comes, back in from the right after the last
   const eu = p < .55 ? slotU(0, p) : slotU(4, p), ec = conveyor(eu, 1);
   if (orb) orb({ W: SW, H: SH, cx: SW / 2, cy: SH / 2 + planetY * SH / 100, R: L.planet.offsetWidth / 2 * planetS, t, eyes: ec.o, eyeX: -eu * .95, eyeScale: ec.scale,
-                 look: mouse.on && !TOUCH ? mouse : null, dark: darkPage(), alpha: planetO * orbFade, mood: p > .8 && p < .95 ? 1 : 0 });
+                 look: !TOUCH ? (mouse.on ? mouse : null) : (p > .84 ? { x: SW / 2, y: -SH * .6 } : null), dark: darkPage(), alpha: planetO * orbFade, mood: p > .8 && p < .95 ? 1 : 0 });
   // features: the icons orbit the globe on a ring that turns with it
   const showIcons = easeOut(seg(p, .14, .2)) * (1 - ease(seg(p, .76, .82)));
   const pcx = SW / 2, pcy = SH / 2 + planetY * SH / 100, pR = L.planet.offsetWidth / 2 * planetS;
@@ -418,6 +433,9 @@ function render(t) {
   L.sparkle.querySelector("svg").style.transform = `rotate(${Math.sin(t / 900) * 8}deg)`;
   // finale: title above, start button on the ball
   const f = easeOut(seg(p, .86, .95)), b = easeOut(seg(p, .88, .97)), st = easeOut(seg(p, .9, .98));
+  // when the eyes are back in the middle, Jarvis introduces itself
+  const mj = easeOut(seg(p, .72, .76)) * (1 - ease(seg(p, .82, .85)));
+  place(L.cap4, { y: (pcy - SH / 2 + pR) / (SH / 100) + 9 + 4 * (1 - mj), o: mj });
   place(L.final, { y: -26 + 4 * (1 - f), o: f * gone });
 
   place(L.start, { y: 2 + 6 * (1 - st), o: st * gone });   // between the title and the orb, not on it
@@ -450,7 +468,7 @@ function drawSky(t) {
 // ---------- smooth scrolling ----------
 let lenis = null;
 if (!reduce && window.Lenis) {
-  lenis = new Lenis({ duration: 2.1, smoothWheel: true, wheelMultiplier: .55, touchMultiplier: 1 });
+  lenis = new Lenis({ duration: 2.1, smoothWheel: true, wheelMultiplier: .55, syncTouch: TOUCH, syncTouchLerp: .06, touchInertiaMultiplier: 18, touchMultiplier: TOUCH ? .5 : 1 });
   document.querySelectorAll('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); lenis.scrollTo(a.getAttribute("href") === "#top" ? 0 : a.getAttribute("href")); }));
 }
 const navEl = document.querySelector(".nav");
