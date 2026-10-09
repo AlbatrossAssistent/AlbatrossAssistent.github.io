@@ -42,7 +42,7 @@ a { color: inherit; }
 @media (max-width: 620px) { .nav a.lk { display: none; } }
 
 /* the scroll story: one tall section with a sticky stage */
-.story { position: relative; height: 1150vh; }   /* just scroll distance: the stage below stays pinned for the whole page */
+.story { position: relative; height: 1400vh; }   /* just scroll distance: the stage below stays pinned for the whole page */
 .stage { position: fixed; inset: 0; overflow: hidden; z-index: 1; }   /* pinned; the ocean keeps moving behind the sections */
 .layer { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; }
 
@@ -62,7 +62,7 @@ a { color: inherit; }
 .planet.fallback { background: radial-gradient(circle at 35% 30%, #3f86e8, #0b3a8a 55%, #041a45 80%); box-shadow: 0 0 140px 24px rgba(40,120,255,.28); }
 
 /* features */
-.icon { width: min(30vmin, 260px); aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+.icon { width: 260px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; backface-visibility: hidden; }
 .icon svg { width: 100%; height: 100%; overflow: visible; }
 .caption { width: min(720px, 90vw); text-align: center; }
 .caption h2 { margin: 0 0 8px; font-size: clamp(32px, 5.6vw, 72px); font-weight: 600; letter-spacing: -.03em; line-height: 1.05; }
@@ -75,13 +75,6 @@ a { color: inherit; }
 
 /* finale */
 .bird { width: min(26vmin, 230px); z-index: 6; }
-/* the rocket that orbits the planet */
-.rocket { width: min(8.5vmin, 76px); z-index: 5; }
-.rocket svg { width: 100%; display: block; overflow: visible; filter: drop-shadow(0 6px 18px rgba(0,0,0,.45)) drop-shadow(0 0 10px rgba(140,180,255,.35)); }
-.rocket .flame { transform-origin: 30px 112px; animation: flame .11s ease-in-out infinite alternate; transition: opacity .3s; filter: drop-shadow(0 0 6px rgba(120,170,255,.9)); }
-.rocket .flame .core { transform-origin: 30px 112px; animation: flame .07s ease-in-out infinite alternate-reverse; }
-.rocket .trail { animation: trail 1.4s ease-in-out infinite alternate; transform-origin: 30px 116px; }
-@keyframes trail { from { opacity: .6; transform: scaleY(.85); } to { opacity: 1; transform: scaleY(1.15); } }
 @keyframes flame { from { transform: scaleY(.85) scaleX(.95); } to { transform: scaleY(1.15) scaleX(1.05); } }
 .planet { z-index: 2; } .icon, .caption { z-index: 4; } .finale-title, .start { z-index: 7; }
 .bird svg { width: 100%; fill: #fff; filter: drop-shadow(0 0 26px rgba(255,255,255,.35)); animation: glide 4s ease-in-out infinite; overflow: visible; }
@@ -196,26 +189,6 @@ footer a:hover { color: var(--fg); }
 
     <!-- finale -->
     <div class="layer finale-title" id="final"><h2>Ready when you are.</h2><p>Free. Open source. Yours.</p></div>
-    <div class="layer rocket" id="rocket"><svg viewBox="0 0 60 150" aria-hidden="true"><defs>
-      <linearGradient id="rkBody" x1="0" x2="1"><stop offset="0" stop-color="#6f7a90"/><stop offset=".3" stop-color="#f4f7fc"/><stop offset=".5" stop-color="#ffffff"/><stop offset=".75" stop-color="#c9d1df"/><stop offset="1" stop-color="#5d677c"/></linearGradient>
-      <linearGradient id="rkBlue" x1="0" x2="1"><stop offset="0" stop-color="#173c9e"/><stop offset=".4" stop-color="#4f86f7"/><stop offset=".6" stop-color="#3c6fe4"/><stop offset="1" stop-color="#112c78"/></linearGradient>
-      <linearGradient id="rkFin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f74ea"/><stop offset="1" stop-color="#132f7f"/></linearGradient>
-      <linearGradient id="rkNoz" x1="0" x2="1"><stop offset="0" stop-color="#2a2f3a"/><stop offset=".45" stop-color="#8a93a6"/><stop offset="1" stop-color="#1f232c"/></linearGradient>
-      <radialGradient id="rkGlass" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#9fd0ff"/><stop offset=".35" stop-color="#2e64c9"/><stop offset="1" stop-color="#071a45"/></radialGradient>
-      <linearGradient id="rkFlame" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".25" stop-color="#bfe0ff"/><stop offset=".6" stop-color="#5b9dff" stop-opacity=".8"/><stop offset="1" stop-color="#2f6bff" stop-opacity="0"/></linearGradient>
-      <linearGradient id="rkCore" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#e6f3ff"/><stop offset="1" stop-color="#bcdcff" stop-opacity="0"/></linearGradient>
-      <linearGradient id="rkTrail" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc4ff" stop-opacity=".45"/><stop offset="1" stop-color="#9cc4ff" stop-opacity="0"/></linearGradient>
-      <clipPath id="rkClip"><path d="M30 4C40 16 44 32 44 52V92C44 98 41 102 38 104H22C19 102 16 98 16 92V52C16 32 20 16 30 4Z"/></clipPath></defs>
-      <path class="trail" d="M25 116H35L33 150H27Z" fill="url(#rkTrail)"/>
-      <g class="flame"><path d="M22.5 112C22.5 126 26.5 138 30 147C33.5 138 37.5 126 37.5 112Z" fill="url(#rkFlame)"/><path class="core" d="M26 112C26 120 28 127 30 132C32 127 34 120 34 112Z" fill="url(#rkCore)"/></g>
-      <path d="M16 76C7 83 3 95 3.5 112L16 102Z" fill="url(#rkFin)"/><path d="M44 76C53 83 57 95 56.5 112L44 102Z" fill="url(#rkFin)"/>
-      <path d="M22 104H38L36.5 113H23.5Z" fill="url(#rkNoz)"/>
-      <path d="M30 4C40 16 44 32 44 52V92C44 98 41 102 38 104H22C19 102 16 98 16 92V52C16 32 20 16 30 4Z" fill="url(#rkBody)"/>
-      <g clip-path="url(#rkClip)"><path d="M10 0H50V30C44 26 37 24 30 24C23 24 16 26 10 30Z" fill="url(#rkBlue)"/><rect x="10" y="80" width="40" height="5" fill="url(#rkBlue)"/><rect x="10" y="88" width="40" height="1.6" fill="url(#rkBlue)" opacity=".8"/>
-        <path d="M23.5 30C22.5 52 22.5 78 23.5 103H25.5C24.6 78 24.6 52 25.5 30Z" fill="#fff" opacity=".7"/></g>
-      <circle cx="30" cy="50" r="9.6" fill="url(#rkNoz)"/><circle cx="30" cy="50" r="7.6" fill="url(#rkGlass)"/>
-      <ellipse cx="27.4" cy="47.2" rx="3.2" ry="2" fill="#fff" opacity=".75" transform="rotate(-30 27.4 47.2)"/>
-      <path d="M28.6 94H31.4V110H28.6Z" fill="url(#rkFin)"/></svg></div>
     <a class="layer btn start" id="start" href="public/">Start now →</a>
   </div>
 </main>
@@ -309,7 +282,7 @@ const story = $(".story");
 let progress = 0;
 function readProgress() { const r = story.getBoundingClientRect(); return clamp(-r.top / (r.height - innerHeight)); }
 const el = (id) => document.getElementById(id);
-const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), ocean: el("ocean"), rocket: el("rocket"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
+const L = { hero: el("hero"), hint: el("hint"), planet: el("planet"), ocean: el("ocean"), sparkle: el("sparkle"), cap1: el("cap1"), ghost: el("ghost"), cap2: el("cap2"), shield: el("shield"), cap3: el("cap3"), final: el("final"), start: el("start") };
 // like place(), but x/y in pixels from the centre of the screen
 function placePx(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
@@ -329,11 +302,23 @@ function place(node, { x = 0, y = 0, s = 1, r = 0, o = 1 }) {
   node.style.visibility = o <= .001 ? "hidden" : "visible";
 }
 // an icon that pops in at the centre, then slides off to the left
-function feature(icon, cap, p, a) {
-  const inn = easeOut(seg(p, a, a + .07)), out = ease(seg(p, a + .15, a + .22));
-  place(icon, { x: -46 * out, y: -9 - 4 * (1 - inn), s: (.4 + .6 * inn) * (1 - .45 * out), r: (1 - inn) * -40, o: inn * (1 - out) });
-  const ci = easeOut(seg(p, a + .04, a + .1)), co = ease(seg(p, a + .13, a + .19));
-  place(cap, { x: -30 * co, y: 22 + 4 * (1 - ci), o: ci * (1 - co) });
+// The three icons sit on a ring around the globe that turns together with it: each one swings in from
+// behind the planet, turns to face you at the front, and swings away behind it again (3D, with perspective).
+const ORBIT_STEP = Math.PI * 2 / 3;
+function ringAngle(p) { return (p - .27) / .2 * ORBIT_STEP; }          // icon k faces front at p = .27 + .2k
+function orbitIcon(icon, cap, k, p, cx, cy, R, show) {
+  let th = ringAngle(p) - k * ORBIT_STEP;
+  th = Math.atan2(Math.sin(th), Math.cos(th));                         // -PI..PI, 0 = front
+  const front = Math.cos(th), side = Math.sin(th);
+  const x = side * R * 1.32, y = cy - R * .2 - (1 - front) * R * .1;
+  const sc = (.5 + .5 * (front + 1) / 2) * (R / 260);
+  icon.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) perspective(700px) rotateY(${th}rad) scale(${sc})`;
+  const o = show * (front > -.2 ? 1 : Math.max(0, 1 + (front + .2) * 2));
+  icon.style.opacity = o;
+  icon.style.visibility = o < .01 ? "hidden" : "visible";
+  icon.style.zIndex = front > 0 ? 4 : 1;                               // behind the globe on the far side
+  const c = show * Math.max(0, 1 - Math.abs(th) / .55);                 // caption only while it faces you
+  place(cap, { x: side * 8, y: 22 + 4 * (1 - c), o: c });
 }
 
 // ---------- the ocean planet: a real 3D sphere drawn by the graphics card (WebGL) ----------
@@ -345,6 +330,8 @@ const OCEAN_FS = `precision highp float;
 uniform vec2 uRes;      // canvas size in pixels
 uniform vec3 uC;        // planet centre x, y (from the top) and radius, in canvas pixels
 uniform float uTime, uTurn, uAlpha;
+uniform vec2 uTilt;     // the globe leans toward the mouse
+uniform vec4 uMouse;    // mouse x, y (canvas pixels), strength, ripple time
 // 3D simplex noise (Ian McEwan / Stefan Gustavson, MIT licence)
 vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
 vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
@@ -437,17 +424,31 @@ void main(){
     return;
   }
   // a real camera ray hitting a real sphere (perspective)
-  const float D = 3.6; float tanA = 1. / sqrt(D * D - 1.);
+  const float D = 2.7; float tanA = 1. / sqrt(D * D - 1.);
   vec3 ro = vec3(0., 0., D), rd = normalize(vec3(d.x * tanA, -d.y * tanA, -1.));
   float b = dot(ro, rd), c = dot(ro, ro) - 1.;
   float tt = -b - sqrt(max(b * b - c, 0.));
   vec3 n0 = normalize(ro + rd * tt), V = -rd;
   vec3 L = normalize(vec3(-.55, .62, .56));      // the sun, upper left, in front
-  mat3 R = rotX(.38) * rotY(uTurn);
+  mat3 R = rotX(.38 + uTilt.y) * rotY(uTurn + uTilt.x);
   vec3 q = R * n0;
   float t = uTime;
   vec3 g;
   float h0 = waves(q, t, g);
+  // ripples spreading from the point under the mouse
+  if (uMouse.z > .001) {
+    vec2 dm = (vec2(uMouse.x, uMouse.y) - uC.xy) / uC.z;
+    if (dot(dm, dm) < 1.) {
+      vec3 rdm = normalize(vec3(dm.x * tanA, -dm.y * tanA, -1.));
+      float bm = dot(ro, rdm), tm = -bm - sqrt(max(bm * bm - c, 0.));
+      vec3 qm = R * normalize(ro + rdm * tm);
+      vec3 dv = q - qm; float dist = length(dv) + 1e-4;
+      float k = 46., w = 5.5, fall = exp(-dist * 5.) * uMouse.z;
+      float ph = dist * k - uMouse.w * w;
+      h0 += .35 * sin(ph) * fall;
+      g += .35 * (k * cos(ph) - 5. * sin(ph)) * fall * (dv / dist);
+    }
+  }
   g -= dot(g, q) * q;                             // only the slope along the surface
   vec3 n = normalize(n0 - (g * R) * .012);       // tilt the sphere's normal by the waves (back to view space)
   float terminator = clamp(dot(n0, L) * 1.1 + .15, 0., 1.);
@@ -482,12 +483,12 @@ const ocean = (() => {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = (n) => gl.getUniformLocation(prog, n);
-  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha"), uOct = U("uOct");
+  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha"), uOct = U("uOct"), uTilt = U("uTilt"), uMouse = U("uMouse");
   // computers: the screen's full sharpness (up to 2x); phones: fewer pixels and 30 frames a second, so scrolling stays smooth
   let scale = MOBILE ? Math.min(1.5, devicePixelRatio || 1) * .6 : Math.min(2, devicePixelRatio || 1);
   const budget = MOBILE ? 1.1e6 : 7e6, minScale = MOBILE ? .45 : .9;
   let slow = 0, last = 0, odd = false;
-  return function draw(W, H, cx, cy, R, turn, time, alpha) {
+  return function draw(W, H, cx, cy, R, turn, time, alpha, m) {
     if (MOBILE && (odd = !odd)) return;
     const dt = last ? time - last : 16; last = time;
     if (dt > (MOBILE ? 50 : 34)) { if (++slow > 30 && scale > minScale) { scale = Math.max(minScale, scale * .9); slow = 0; } } else slow = Math.max(0, slow - 1);
@@ -497,6 +498,13 @@ const ocean = (() => {
     gl.viewport(0, 0, w, h);
     gl.uniform2f(uRes, w, h); gl.uniform3f(uC, cx * px, cy * px, Math.max(1, R * px));
     gl.uniform1f(uTime, time / 1000); gl.uniform1f(uTurn, turn * Math.PI * 2); gl.uniform1f(uAlpha, alpha);
+    // mouse: the globe leans toward it a little, and the water ripples where it points
+    const tx = m.on ? Math.max(-1, Math.min(1, (m.x - cx) / R)) : 0, ty = m.on ? Math.max(-1, Math.min(1, (m.y - cy) / R)) : 0;
+    m.tx += (tx * .32 - m.tx) * .06; m.ty += (ty * .22 - m.ty) * .06;
+    const near = m.on && Math.hypot(m.x - cx, m.y - cy) < R * 1.02 ? 1 : 0;
+    m.s += (near - m.s) * .08;
+    gl.uniform2f(uTilt, m.tx, m.ty);
+    gl.uniform4f(uMouse, m.x * px, m.y * px, m.s, time / 1000);
     // close to the surface the waves get extra fine layers, so it stays sharp and detailed
     const zoom = R / Math.max(W, H);
     gl.uniform1f(uOct, MOBILE ? (zoom > .8 ? 5 : 4) : (zoom > 1.6 ? 7 : zoom > .7 ? 6 : 5));
@@ -504,6 +512,10 @@ const ocean = (() => {
   };
 })();
 
+// where the mouse (or finger) is, for the globe's tilt and ripples
+const mouse = { x: 0, y: 0, on: false, tx: 0, ty: 0, s: 0 };
+addEventListener("pointermove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; }, { passive: true });
+document.addEventListener("pointerleave", () => (mouse.on = false));
 // the planet's own slow turning, which eases to a stop while it zooms in at the end
 let spinAcc = 0, spinLast = 0;
 function spinAt(t, grow) {
@@ -528,37 +540,14 @@ function render(t) {
   place(L.planet, { y: planetY, s: planetS, o: ocean ? 0 : planetO });
   // the planet turns slowly by itself and faster while you scroll
   if (ocean) ocean(SW, SH, SW / 2, SH / 2 + planetY * SH / 100, L.planet.offsetWidth / 2 * planetS,
-                   spinAt(t, grow) + p * .9, reduce ? 0 : t, planetO);
-  // features
-  feature(L.sparkle, L.cap1, p, .2);
-  L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60 + p * 220) % 360}deg) scale(${1 + Math.sin(t / 700) * .04})`;
-  feature(L.ghost, L.cap2, p, .4);
-  feature(L.shield, L.cap3, p, .6);
-  // ---- rocket: orbits the planet (passing behind and in front), then lands on top of it ----
-  const vh = SH / 100;
-  const pScale = (.55 + .45 * rise) * (1 + .5 * sink);
-  const R = L.planet.offsetWidth / 2 * pScale, cy = (75 * (1 - rise) + 52 * sink) * vh;
-  const tilt = -14 * Math.PI / 180, A = R * 1.3, B = A * .3;
-  const th = Math.PI * 2 * 2.6 * seg(p, .1, .84) + (reduce ? 0 : t * .00025) + Math.PI * .15;
-  const ex = A * Math.cos(th), ey = B * Math.sin(th);
-  const ox = ex * Math.cos(tilt) - ey * Math.sin(tilt), oy = ex * Math.sin(tilt) + ey * Math.cos(tilt) + cy;
-  const tx = -A * Math.sin(th), ty = B * Math.cos(th);   // direction of travel
-  const oAng = Math.atan2(tx * Math.sin(tilt) + ty * Math.cos(tilt), tx * Math.cos(tilt) - ty * Math.sin(tilt)) * 180 / Math.PI + 90;
-  const depth = Math.sin(th);                              // > 0: in front of the planet
-  const land = ease(seg(p, .82, .94));
-  const rh = L.rocket.offsetHeight;
-  const lx = 0, ly = -5 * vh + Math.sin(t / 520) * 7 * land;   // hovering just under the closing title
-  let dAng = ((0 - oAng) % 360 + 540) % 360 - 180;         // turn upright the short way
-  L.rocket.style.zIndex = land > .3 || depth > 0 ? 5 : 1;
-  const away = easeOut(seg(p, .85, .93));                  // flies up and away as "Ready when you are." appears
-  placePx(L.rocket, {
-    x: ox + (lx - ox) * land, y: oy + (ly - oy) * land - away * away * SH * .7,
-    s: (.62 + .38 * (depth + 1) / 2) * (1 - land) + 1.15 * land,
-    r: oAng + dAng * land,
-    o: easeOut(seg(p, .1, .16)) * (land > .3 ? 1 : .55 + .45 * (depth + 1) / 2) * gone * (1 - away),
-  });
-
-
+                   spinAt(t, grow) - ringAngle(p) / (Math.PI * 2), reduce ? 0 : t, planetO, mouse);
+  // features: the icons orbit the globe on a ring that turns with it
+  const showIcons = easeOut(seg(p, .14, .2)) * (1 - ease(seg(p, .76, .82)));
+  const pcx = SW / 2, pcy = SH / 2 + planetY * SH / 100, pR = L.planet.offsetWidth / 2 * planetS;
+  orbitIcon(L.sparkle, L.cap1, 0, p, pcx, pcy - SH / 2, pR, showIcons);
+  orbitIcon(L.ghost, L.cap2, 1, p, pcx, pcy - SH / 2, pR, showIcons);
+  orbitIcon(L.shield, L.cap3, 2, p, pcx, pcy - SH / 2, pR, showIcons);
+  L.sparkle.querySelector("svg").style.transform = `rotate(${(t / 60) % 360}deg)`;
   // finale: title above, start button on the ball
   const f = easeOut(seg(p, .86, .95)), b = easeOut(seg(p, .88, .97)), st = easeOut(seg(p, .9, .98));
   place(L.final, { y: -26 + 4 * (1 - f), o: f * gone });
@@ -593,7 +582,7 @@ function drawSky(t) {
 // ---------- smooth scrolling ----------
 let lenis = null;
 if (!reduce && window.Lenis) {
-  lenis = new Lenis({ duration: 1.35, smoothWheel: true, wheelMultiplier: .9, touchMultiplier: 1.4 });
+  lenis = new Lenis({ duration: 2.1, smoothWheel: true, wheelMultiplier: .55, touchMultiplier: 1 });
   document.querySelectorAll('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); lenis.scrollTo(a.getAttribute("href") === "#top" ? 0 : a.getAttribute("href")); }));
 }
 const navEl = document.querySelector(".nav");

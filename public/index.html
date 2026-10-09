@@ -15,8 +15,8 @@
 :root {
   /* Light: white frosted glass on a soft grey backdrop */
   --bg: #F2F2F2; --fg: #0A0A0A; --muted: #6B6B6B; --line: rgba(0,0,0,.09); --soft: rgba(0,0,0,.045);
-  --glass: rgba(255,255,255,.42); --glass-strong: rgba(255,255,255,.66); --glass-edge: rgba(255,255,255,.75);
-  --glass-hi: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(0,0,0,.04), inset 0 0 0 1px rgba(255,255,255,.22);
+  --glass: rgba(255,255,255,.30); --glass-strong: rgba(255,255,255,.55); --glass-edge: rgba(255,255,255,.85);
+  --glass-hi: inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -1.5px 1px rgba(255,255,255,.55), inset 0 0 0 1px rgba(255,255,255,.35), inset 0 10px 22px -12px rgba(255,255,255,.9), inset 0 -12px 22px -14px rgba(255,255,255,.6);
   --sheen: linear-gradient(135deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.14) 34%, rgba(255,255,255,0) 58%, rgba(255,255,255,.22) 100%);
   --btn-glass: rgba(255,255,255,.38); --art-glow: rgba(255,255,255,.6);
   --accent-sheen: linear-gradient(180deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%);
@@ -25,15 +25,15 @@
   --bubble: #0A0A0A; --bubble-fg: #FFFFFF;
   --accent: #0A0A0A; --accent-fg: #FFFFFF; --danger: #C0251B; --danger-bg: rgba(192,37,27,.08);
   --ok: #1FA855; --warn: #D89614; --bad: #D93A2B;
-  --blur: blur(30px) saturate(185%) brightness(1.04);
+  --blur: blur(22px) saturate(210%) brightness(1.06);
   --font-size: 16px;
   color-scheme: light;
 }
 [data-theme="dark"] {
   /* Dark: smoky glass on pure black */
   --bg: #000000; --fg: #F5F5F5; --muted: #8E8E8E; --line: rgba(255,255,255,.10); --soft: rgba(255,255,255,.06);
-  --glass: rgba(30,30,30,.40); --glass-strong: rgba(34,34,34,.70); --glass-edge: rgba(255,255,255,.14);
-  --glass-hi: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04);
+  --glass: rgba(40,40,46,.30); --glass-strong: rgba(48,48,56,.62); --glass-edge: rgba(255,255,255,.22);
+  --glass-hi: inset 0 1.5px 0 rgba(255,255,255,.32), inset 0 -1.5px 1px rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,255,255,.07), inset 0 10px 22px -12px rgba(255,255,255,.22), inset 0 -12px 22px -14px rgba(255,255,255,.12);
   --sheen: linear-gradient(135deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 34%, rgba(255,255,255,0) 58%, rgba(255,255,255,.06) 100%);
   --btn-glass: rgba(255,255,255,.07); --art-glow: rgba(255,255,255,.09);
   --accent-sheen: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%);
@@ -114,14 +114,14 @@ aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8
 @media (prefers-reduced-motion: reduce) { #splash { display: none; } body.intro aside, body.intro main { opacity: 1; transform: none; } body::before, body::after { animation: none; } }
 
 /* ---------- Sidebar ---------- */
-aside { width: 272px; flex: 0 0 272px; display: flex; flex-direction: column; gap: 10px; padding: 14px 10px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 28px; }
+aside { width: 272px; flex: 0 0 272px; display: flex; flex-direction: column; gap: 10px; padding: 14px 10px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 34px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 8px; font-weight: 600; font-size: 19px; letter-spacing: -.4px; }
 .brand svg { width: 28px; height: 28px; fill: currentColor; stroke: none; }
 .brand svg .flame, .home-hero svg .flame { opacity: .55; }
 .avatar svg .flame { opacity: .6; }
 .brand svg .wave, .avatar svg .wave { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
-.side-btn { min-height: 42px; color: var(--fg); border-radius: 14px; display: flex; align-items: center; gap: 10px; padding: 0 14px; transition: background .15s, transform .1s; }
-.side-btn:hover { background-color: var(--glass-strong); transform: translateY(-1px); }
+.side-btn { min-height: 44px; color: var(--fg); border-radius: 999px; display: flex; align-items: center; gap: 10px; padding: 0 14px; transition: background .15s, transform .1s; }
+.side-btn:hover { background-color: var(--glass-strong); transform: scale(1.02); }
 .side-btn:active { transform: scale(.98); }
 .side-btn .kbd { margin-left: auto; font-size: 11.5px; color: var(--muted); }
 .search { display: flex; align-items: center; gap: 8px; border-radius: 14px; padding: 0 12px; min-height: 40px; color: var(--muted); }
@@ -159,7 +159,7 @@ aside { width: 272px; flex: 0 0 272px; display: flex; flex-direction: column; ga
 
 /* ---------- Main ---------- */
 main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: calc(100vh - 24px); height: calc(100dvh - 24px); gap: 10px; }
-.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 22px; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 999px; }
 .icon-btn { width: 40px; height: 40px; border: 1px solid transparent; background: transparent; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--fg); transition: background .15s, transform .1s; }
 .icon-btn:hover { background-color: var(--btn-glass); background-image: var(--sheen); border-color: var(--glass-edge); box-shadow: var(--glass-hi); }
 .icon-btn:active { transform: scale(.94); }
@@ -241,12 +241,13 @@ body.compact .inner { gap: 14px; }
   background-color: var(--glass); background-image: radial-gradient(70% 60% at 50% 40%, rgba(160,175,255,.14), transparent 70%), var(--sheen);
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), var(--shadow); }
 [data-theme="dark"] .gen-wait { background-color: rgba(10,10,14,.6); }
-.gen-wait .grk svg { width: 64px; height: 64px; fill: var(--fg); filter: drop-shadow(0 0 14px rgba(170,190,255,.35)); animation: rkhover 1.4s ease-in-out infinite; }
+.gen-wait .grk svg { width: 64px; height: 64px; fill: var(--fg); filter: drop-shadow(0 0 14px rgba(170,190,255,.35)); transform: rotate(90deg); animation: rkside2 2s ease-in-out infinite; }
+@keyframes rkside2 { 0%, 100% { transform: translateX(-26px) rotate(90deg); } 50% { transform: translateX(26px) rotate(90deg); } }
 .gen-wait .grk .flame { transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; opacity: .8; }
 .gen-wait .gstars { position: absolute; inset: 0; }
-.gen-wait .gstars i { position: absolute; top: -6px; width: 3px; height: 3px; border-radius: 50%; background: var(--fg); opacity: 0; animation: gfall 2s linear infinite; }
+.gen-wait .gstars i { position: absolute; right: -6px; width: 3px; height: 3px; border-radius: 50%; background: var(--fg); opacity: 0; animation: gfall 2s linear infinite; }
 .gen-wait .gstars i:nth-child(3n) { width: 2px; height: 2px; }
-@keyframes gfall { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: .7; } 100% { transform: translateY(380px); opacity: 0; } }
+@keyframes gfall { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: .7; } 100% { transform: translateX(-380px); opacity: 0; } }
 .gen-wait .gfoot { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .gen-wait .progress { width: 100%; margin: 0; }
 .gen-img { max-width: 100%; width: 512px; border-radius: 20px; border: 1px solid var(--line); display: block; box-shadow: var(--shadow); }
@@ -254,12 +255,14 @@ body.compact .inner { gap: 14px; }
 .progress div { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .25s; }
 .typing span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 4px; animation: blink 1.2s infinite; }
 .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
-.rk-load { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 34px; border-radius: 12px; overflow: hidden; }
-.rk-load svg { position: relative; z-index: 1; width: 22px; height: 22px; fill: var(--fg); animation: rkhover 1.2s ease-in-out infinite; filter: drop-shadow(0 0 4px var(--bg)); }
+.rk-load { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 30px; border-radius: 999px; overflow: hidden; }
+.rk-load, .rk-load *, .gen-wait, .gen-wait * { animation-delay: var(--sync, 0s); }
+.rk-load svg { position: relative; z-index: 1; width: 22px; height: 22px; fill: var(--fg); transform: rotate(90deg); animation: rkside 1.6s ease-in-out infinite; filter: drop-shadow(0 0 4px var(--bg)); }
 .rk-load svg .flame { transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; opacity: .7; }
-.rk-load span { position: absolute; top: -4px; width: 3px; height: 3px; margin: 0; border-radius: 50%; background: var(--fg); opacity: 0; animation: rkstar 1.3s linear infinite; }
-.rk-load span:nth-of-type(1) { left: 9px; } .rk-load span:nth-of-type(2) { left: 22px; width: 2px; height: 2px; animation-delay: .45s; } .rk-load span:nth-of-type(3) { left: 35px; animation-delay: .9s; }
-@keyframes rkstar { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .8; } 100% { transform: translateY(42px); opacity: 0; } }
+.rk-load span { position: absolute; right: -4px; width: 3px; height: 3px; margin: 0; border-radius: 50%; background: var(--fg); opacity: 0; animation: rkstar 1.2s linear infinite; }
+.rk-load span:nth-of-type(1) { top: 7px; } .rk-load span:nth-of-type(2) { top: 15px; width: 2px; height: 2px; animation-delay: calc(var(--sync, 0s) - .4s); } .rk-load span:nth-of-type(3) { top: 22px; animation-delay: calc(var(--sync, 0s) - .8s); }
+@keyframes rkstar { 0% { transform: translateX(0); opacity: 0; } 20% { opacity: .8; } 100% { transform: translateX(-70px); opacity: 0; } }
+@keyframes rkside { 0%, 100% { transform: translateX(-9px) rotate(90deg); } 50% { transform: translateX(9px) rotate(90deg); } }
 @keyframes twinkle { 0%, 100% { opacity: .15; scale: .6; } 50% { opacity: 1; scale: 1.2; } }
 @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 .msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); border-radius: 18px; padding: 14px 16px; white-space: pre-wrap; font-size: .95em; }
@@ -317,7 +320,7 @@ body.image-mode .img-opts { display: flex; }
 .att { position: relative; }
 .att img { width: 64px; height: 64px; object-fit: cover; border-radius: 16px; border: 1px solid var(--line); display: block; }
 .att button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--accent); color: var(--accent-fg); font-size: 13px; line-height: 1; }
-.box { display: flex; align-items: flex-end; gap: 6px; border-radius: 28px; padding: 7px; transition: box-shadow .2s, border-color .2s; }
+.box { display: flex; align-items: flex-end; gap: 6px; border-radius: 30px; padding: 7px; transition: box-shadow .2s, border-color .2s; }
 .box:focus-within { border-color: color-mix(in srgb, var(--fg) 35%, transparent); box-shadow: var(--glass-hi), var(--shadow), 0 0 0 4px var(--soft); }
 .box.drag { border-style: dashed; border-color: var(--fg); }
 textarea#prompt { flex: 1; border: none; outline: none; resize: none; background: transparent; max-height: 220px; min-height: 28px; padding: 9px 6px; line-height: 1.5; }
@@ -462,6 +465,23 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 .offer .top small { display: block; color: var(--muted); }
 .offer .acts { display: flex; gap: 8px; justify-content: flex-end; }
 
+/* ---------- Liquid glass (Apple-style): the edge bends what's behind it like a lens ----------
+   An SVG displacement filter refracts the backdrop near the rim; browsers that can't use it in backdrop-filter
+   (Safari, Firefox) ignore that line and keep the normal frosted glass above it. */
+.topbar, .box, .side-btn, .btn, .seg, .badge.loaded, .home-action, .send, .icon-btn:hover, dialog, .toast {
+  backdrop-filter: url(#lglass) blur(14px) saturate(210%) brightness(1.06);
+}
+.btn, .side-btn, .home-action, .suggestions button, .send, .icon-btn, .seg button, .chat-row, .type-card {
+  transition: transform .45s cubic-bezier(.3, 1.6, .4, 1), background-color .2s, box-shadow .25s;
+}
+.btn:active, .side-btn:active, .home-action:active, .suggestions button:active, .send:active, .seg button:active { transform: scale(.94); }
+.btn:hover, .home-action:hover, .send:hover { transform: scale(1.04); }
+/* a soft moving highlight, like light rolling over a bubble */
+.topbar, .box, aside { position: relative; isolation: isolate; }
+.topbar::after, .box::after, aside::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  background: radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,.35), transparent 55%); opacity: .9; }
+[data-theme="dark"] .topbar::after, [data-theme="dark"] .box::after, [data-theme="dark"] aside::after { background: radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,.10), transparent 55%); }
+
 /* Browsers without backdrop blur get solid glass so text stays readable */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root { --glass: rgba(255,255,255,.94); --glass-strong: #fff; }
@@ -484,6 +504,11 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 </style>
 </head>
 <body class="intro">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="lglass" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+  <feTurbulence type="fractalNoise" baseFrequency=".008 .012" numOctaves="2" seed="4" result="n"/>
+  <feGaussianBlur in="n" stdDeviation="2" result="nb"/>
+  <feDisplacementMap in="SourceGraphic" in2="nb" scale="38" xChannelSelector="R" yChannelSelector="G"/>
+</filter></svg>
 <div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 
 <!-- ================= INTRO ================= -->
@@ -620,7 +645,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
           </div>
           <div class="field"><label for="imgStyle">Context for the image AI</label><textarea id="imgStyle" placeholder="e.g. Watercolor style, soft light. The main character is a small red fox called Remy."></textarea><small>Added to every image prompt in every image chat: your style, characters, setting, anything it should always keep in mind.</small></div>
           <label class="check"><span>Use this chat as context<small>Earlier requests in the same chat carry over, so "make it night" or "now with a hat" works.</small></span><input type="checkbox" class="switch" id="imgHistory"></label>
-          <div class="field"><label for="imgCtxModel">Prompt writer</label><select id="imgCtxModel"></select><small>A text model that merges the chat and your context into one clear image prompt, then unloads so the image model gets the memory. "Auto" uses your smallest installed text model.</small></div>
+          <div class="field"><label for="imgCtxModel">Prompt writer</label><select id="imgCtxModel"></select><small>A text model that merges the chat and your context into one clear image prompt, then unloads so the image model gets the memory. "Auto" uses your smallest installed text model, except for ComfyUI image models (it would push them out of memory).</small></div>
         </section>
 
         <!-- Installed models -->
@@ -1321,7 +1346,7 @@ function fillBot(d, m, idx, live) {
     } else if (live) {
       const [gw, gh] = (S.img.size || "1024x1024").split("x").map(Number);
       c.innerHTML = `<div class="gen-wait" style="aspect-ratio:${gw}/${gh}"><div class="gstars">${"<i></i>".repeat(18)}</div><div class="grk">${LOGO}</div><div class="gfoot"><span class="pct">Starting…</span><div class="progress"><div></div></div></div></div>`;
-      c.querySelectorAll(".gstars i").forEach((d, k) => { d.style.left = (k * 37 % 100) + "%"; d.style.animationDelay = (-(k * .23) % 2.4) + "s"; d.style.animationDuration = (1.4 + (k % 5) * .35) + "s"; });
+      c.querySelectorAll(".gstars i").forEach((d, k) => { d.style.top = (k * 37 % 100) + "%"; d.style.animationDelay = `calc(var(--sync, 0s) - ${(k * .23) % 2.4}s)`; d.style.animationDuration = (1.4 + (k % 5) * .35) + "s"; });
     } else c.innerHTML = `<div style="color:var(--muted)">(image not stored)</div>`;
   } else {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
@@ -1346,6 +1371,7 @@ function fillBot(d, m, idx, live) {
 // thinking text is appended, finished paragraphs are rendered once, and only the
 // paragraph still being written is re-rendered. Keeps long replies smooth.
 const TYPING = '<div class="typing rk-load">' + LOGO + '<span></span><span></span><span></span></div>';
+setInterval(() => document.documentElement.style.setProperty("--sync", (-(performance.now() % 4800) / 1000).toFixed(3) + "s"), 100);
 function fillLive(c, m) {
   let L = c._live;
   if (!L) {
@@ -1718,6 +1744,7 @@ function autoWriter() {
   const c = models.filter(m => m.kind === "text" && !m.cloud).sort((a, b) => (a.size || 1e15) - (b.size || 1e15));
   return c[0] || models.find(m => m.kind === "vision" && !m.cloud) || null;
 }
+let imageModelForWriter = "";
 async function buildImagePrompt(text, bubble) {
   const style = (S.img.style || "").trim();
   const ctx = [current.context, style].filter(Boolean).join(" ").trim();
@@ -1726,7 +1753,10 @@ async function buildImagePrompt(text, bubble) {
   const before = current.messages.slice(0, Math.max(last, 0));
   const earlier = S.img.history ? before.filter((m, i) => m.role === "user" && m.content && before[i + 1]?.genImage !== undefined).map(m => m.content).slice(-6) : [];
   if (!earlier.length && !ctx) return text;
-  const writer = S.img.ctxModel === "off" ? null : (models.find(m => m.name === S.img.ctxModel) || autoWriter());
+  // "Auto" skips the text-model writer for ComfyUI image models: on one graphics card, loading a text model
+  // would push the image model out of memory and every picture would have to reload it from disk.
+  const chosen = models.find(m => m.name === S.img.ctxModel);
+  const writer = S.img.ctxModel === "off" ? null : chosen || (/:comfyui$/.test(imageModelForWriter || "") ? null : autoWriter());
   if (writer) {
     const note = bubble.querySelector(".pct"); if (note) note.textContent = "· writing the prompt with " + writer.name + "…";
     try {
@@ -1777,7 +1807,7 @@ async function generateImage(model, prompt, refs = []) {
   let finalPrompt = prompt;
   // editing: the picture itself carries the context, so the instruction goes as it is (plus your standing style notes)
   if (refs.length) finalPrompt = [prompt, (S.img.style || "").trim()].filter(Boolean).join(". ");
-  else try { finalPrompt = await buildImagePrompt(prompt, bubble); } catch (e) { if (e.name === "AbortError") { controller = null; setBusy(false); renderMessages(); return; } }
+  else try { imageModelForWriter = model; finalPrompt = await buildImagePrompt(prompt, bubble); } catch (e) { if (e.name === "AbortError") { controller = null; setBusy(false); renderMessages(); return; } }
   reply.prompt = finalPrompt; reply.asked = prompt;
   const body = { model, prompt: finalPrompt, stream: true, width: w, height: h };
   if (refs.length) { body.images = refs; reply.edited = true; }

@@ -51,7 +51,10 @@ function ensureRunning(log) {
     log("Starting ComfyUI for image generation…");
     const out = fs.openSync(path.join(__dirname, "comfyui.log"), "a");
     const child = spawn(path.join(COMFY_DIR, "python_embeded", "python.exe"),
-      ["-s", path.join("ComfyUI", "main.py"), "--windows-standalone-build", "--listen", "127.0.0.1", "--port", new URL(COMFY).port || "8188", "--disable-auto-launch"],
+      ["-s", path.join("ComfyUI", "main.py"), "--windows-standalone-build", "--listen", "127.0.0.1", "--port", new URL(COMFY).port || "8188", "--disable-auto-launch",
+       // keep the image model and its text encoder on the graphics card between pictures: the text encoder is stored
+       // in 8-bit (half the memory, barely any quality difference) so both fit in 12 GB and nothing gets swapped out
+       "--fp8_e4m3fn-text-enc", "--highvram"],
       { cwd: COMFY_DIR, detached: true, stdio: ["ignore", out, out], windowsHide: true });
     child.on("error", () => {});
     child.unref();
