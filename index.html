@@ -140,9 +140,6 @@ footer a:hover { color: var(--fg); }
 .cta p { position: relative; margin: 0 0 26px; color: var(--muted); }
 .cta .btn { position: relative; font-size: 16px; padding: 14px 30px; }
 .reveal { opacity: 0; transform: translateY(60px) scale(.97); transition: opacity 1s cubic-bezier(.2,.8,.2,1), transform 1s cubic-bezier(.2,.8,.2,1); }
-/* the AI models are lifted up into place, one after another */
-.chips .chip { opacity: 0; transform: translateY(70px) scale(.85); transition: opacity .7s cubic-bezier(.2,.8,.2,1), transform .9s cubic-bezier(.3,1.5,.5,1); }
-.chips.in .chip { opacity: 1; transform: none; }
 /* and the start button pops back in */
 .cta .btn { opacity: 0; transform: scale(.6); transition: opacity .5s ease .45s, transform .8s cubic-bezier(.3,1.7,.5,1) .45s; }
 .cta.in .btn { opacity: 1; transform: none; }
@@ -152,6 +149,27 @@ footer a:hover { color: var(--fg); }
 @media (pointer: coarse), (max-width: 820px) {
   .card, .chip, .faq details, .nav { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: rgba(8, 16, 34, .74); }
 }
+/* features: pinned while the cards slide past sideways */
+.hsec { position: relative; height: 330vh; margin: 0 0 80px; }
+.hsticky { position: sticky; top: 0; height: 100vh; height: 100svh; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+.hsticky .sec-head { margin-bottom: 6vh; }
+.htrack { display: flex; gap: clamp(48px, 9vw, 140px); padding: 0 max(10vw, calc(50vw - 230px)); width: max-content; will-change: transform; }
+.hcard { flex: 0 0 min(420px, 78vw); padding: 30px; min-height: 230px; transition: transform .6s cubic-bezier(.2,.8,.2,1), opacity .6s; }
+.hcard h3 { font-size: 20px; } .hcard p { font-size: 15.5px; }
+/* models: three columns drifting up and down */
+.mcols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; max-width: 900px; margin: 0 auto; height: 460px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); }
+.mcol { overflow: hidden; }
+.mtrack { display: flex; flex-direction: column; gap: 12px; align-items: center; animation: mup 46s linear infinite; }
+.mcol:nth-child(2) .mtrack { animation-name: mdown; animation-duration: 52s; }
+.mcol:nth-child(3) .mtrack { animation-duration: 40s; }
+.mcols:hover .mtrack { animation-play-state: paused; }
+.mtrack .chip { white-space: nowrap; }
+@keyframes mup { from { transform: translateY(0); } to { transform: translateY(calc(-50% - 6px)); } }
+@keyframes mdown { from { transform: translateY(calc(-50% - 6px)); } to { transform: translateY(0); } }
+@media (max-width: 620px) { .mcols { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mcol:nth-child(3) { display: none; } }
+@media (prefers-reduced-motion: reduce) { .mtrack { animation: none; } }
+
 @media (prefers-reduced-motion: reduce) { .planet .surface, .ghost-svg, .bird svg, .scroll-hint i::after { animation: none; } }
 </style>
 </head>
@@ -215,24 +233,23 @@ footer a:hover { color: var(--fg); }
     </div>
   </div>
 
-  <div class="sec">
-    <div class="sec-head reveal"><div class="eyebrow">Features</div><h2><span>Everything, on your terms</span></h2></div>
-    <div class="grid">
-      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span><h3>Chat that thinks</h3><p>Watch reasoning models think live, let them search the web if you want, and give every chat its own instructions.</p></div>
-      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></span><h3>Images with context</h3><p>Describe a picture and your PC draws it. Image chats remember earlier requests, so "now make it night" just works.</p></div>
-      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg></span><h3>Files, both ways</h3><p>Send files from your phone to your PC and back. Share with other people too, only after they accept, encrypted end to end.</p></div>
-      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg></span><h3>Turn your PC on</h3><p>PC switched off? Save your smart plug link in the settings and Albatross turns it on for you, then it starts sharing by itself.</p></div>
-      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span><h3>Smart with your GPU</h3><p>One model in memory at a time, see what's loaded, and free your graphics card with one click.</p></div>
-      <div class="card reveal"><span class="ic"><svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></span><h3>Open source</h3><p>The whole app is public on GitHub. Read exactly what it does, change it, or run your own server.</p></div>
+  <div class="hsec" id="hsec">
+   <div class="hsticky">
+    <div class="sec-head"><div class="eyebrow">Features</div><h2><span>Everything, on your terms</span></h2></div>
+    <div class="htrack" id="htrack">
+      <div class="card hcard"><span class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span><h3>Chat that thinks</h3><p>Watch reasoning models think live, let them search the web if you want, and give every chat its own instructions.</p></div>
+      <div class="card hcard"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></span><h3>Images with context</h3><p>Describe a picture and your PC draws it. Image chats remember earlier requests, so "now make it night" just works.</p></div>
+      <div class="card hcard"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg></span><h3>Files, both ways</h3><p>Send files from your phone to your PC and back. Share with other people too, only after they accept, encrypted end to end.</p></div>
+      <div class="card hcard"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg></span><h3>Turn your PC on</h3><p>PC switched off? Save your smart plug link in the settings and Albatross turns it on for you, then it starts sharing by itself.</p></div>
+      <div class="card hcard"><span class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span><h3>Smart with your GPU</h3><p>One model in memory at a time, see what's loaded, and free your graphics card with one click.</p></div>
+      <div class="card hcard"><span class="ic"><svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></span><h3>Open source</h3><p>The whole app is public on GitHub. Read exactly what it does, change it, or run your own server.</p></div>
     </div>
+   </div>
   </div>
 
   <div class="sec">
-    <div class="sec-head reveal"><div class="eyebrow">Models</div><h2><span>Bring your favourite AI</span></h2><p>Anything that runs in Ollama works. A few that run great on a 12 GB graphics card:</p></div>
-    <div class="chips reveal">
-      <span class="chip">Qwen3<small>8B · 14B</small></span><span class="chip">Gemma 3<small>4B · 12B · vision</small></span><span class="chip">Gemma 4</span><span class="chip">gpt-oss<small>20B</small></span>
-      <span class="chip">DeepSeek-R1<small>thinking</small></span><span class="chip">Qwen2.5-VL<small>vision</small></span><span class="chip">Llama 3.1<small>8B</small></span><span class="chip">Z-Image Turbo<small>images</small></span><span class="chip">OmniGen2<small>edits pictures</small></span>
-    </div>
+    <div class="sec-head reveal"><div class="eyebrow">Models</div><h2><span>Bring your favourite AI</span></h2><p>Anything that runs in Ollama works, plus image models through ComfyUI. A few of the models people run with Albatross:</p></div>
+    <div class="mcols reveal"><div class="mcol"><div class="mtrack"><span class="chip">Qwen3<small>0.6B – 14B</small></span><span class="chip">gpt-oss<small>20B</small></span><span class="chip">Llama 3.2<small>1B · 3B</small></span><span class="chip">Qwen2.5-Coder<small>7B · 14B · code</small></span><span class="chip">Phi-4<small>14B</small></span><span class="chip">Mistral NeMo<small>12B</small></span><span class="chip">Granite Vision<small>2B</small></span><span class="chip">Aya Expanse<small>8B · multilingual</small></span><span class="chip">TinyLlama<small>1.1B</small></span><span class="chip">Codestral Mamba<small>7B · code</small></span><span class="chip">LLaVA<small>7B · 13B · vision</small></span><span class="chip">Moondream<small>1.8B · vision</small></span><span class="chip">Dolphin 3<small>8B</small></span><span class="chip">Magistral<small>thinking</small></span><span class="chip">Z-Image Turbo<small>images · ComfyUI</small></span><span class="chip">SDXL<small>images · ComfyUI</small></span><span class="chip">Qwen3<small>0.6B – 14B</small></span><span class="chip">gpt-oss<small>20B</small></span><span class="chip">Llama 3.2<small>1B · 3B</small></span><span class="chip">Qwen2.5-Coder<small>7B · 14B · code</small></span><span class="chip">Phi-4<small>14B</small></span><span class="chip">Mistral NeMo<small>12B</small></span><span class="chip">Granite Vision<small>2B</small></span><span class="chip">Aya Expanse<small>8B · multilingual</small></span><span class="chip">TinyLlama<small>1.1B</small></span><span class="chip">Codestral Mamba<small>7B · code</small></span><span class="chip">LLaVA<small>7B · 13B · vision</small></span><span class="chip">Moondream<small>1.8B · vision</small></span><span class="chip">Dolphin 3<small>8B</small></span><span class="chip">Magistral<small>thinking</small></span><span class="chip">Z-Image Turbo<small>images · ComfyUI</small></span><span class="chip">SDXL<small>images · ComfyUI</small></span></div></div><div class="mcol"><div class="mtrack"><span class="chip">Gemma 3<small>1B – 12B · vision</small></span><span class="chip">DeepSeek-R1<small>7B · 8B · 14B · thinking</small></span><span class="chip">Llama 3.2 Vision<small>11B</small></span><span class="chip">Qwen2.5-VL<small>3B · 7B · vision</small></span><span class="chip">Phi-4 mini<small>3.8B</small></span><span class="chip">Ministral<small>8B</small></span><span class="chip">Cogito<small>8B · 14B</small></span><span class="chip">OLMo 2<small>7B · 13B</small></span><span class="chip">CodeGemma<small>7B · code</small></span><span class="chip">Yi Coder<small>9B · code</small></span><span class="chip">LLaVA-Llama3<small>8B · vision</small></span><span class="chip">BakLLaVA<small>7B · vision</small></span><span class="chip">OpenThinker<small>7B · thinking</small></span><span class="chip">Nomic Embed<small>embeddings</small></span><span class="chip">OmniGen2<small>edits pictures · ComfyUI</small></span><span class="chip">Stable Diffusion 3.5<small>images · ComfyUI</small></span><span class="chip">Gemma 3<small>1B – 12B · vision</small></span><span class="chip">DeepSeek-R1<small>7B · 8B · 14B · thinking</small></span><span class="chip">Llama 3.2 Vision<small>11B</small></span><span class="chip">Qwen2.5-VL<small>3B · 7B · vision</small></span><span class="chip">Phi-4 mini<small>3.8B</small></span><span class="chip">Ministral<small>8B</small></span><span class="chip">Cogito<small>8B · 14B</small></span><span class="chip">OLMo 2<small>7B · 13B</small></span><span class="chip">CodeGemma<small>7B · code</small></span><span class="chip">Yi Coder<small>9B · code</small></span><span class="chip">LLaVA-Llama3<small>8B · vision</small></span><span class="chip">BakLLaVA<small>7B · vision</small></span><span class="chip">OpenThinker<small>7B · thinking</small></span><span class="chip">Nomic Embed<small>embeddings</small></span><span class="chip">OmniGen2<small>edits pictures · ComfyUI</small></span><span class="chip">Stable Diffusion 3.5<small>images · ComfyUI</small></span></div></div><div class="mcol"><div class="mtrack"><span class="chip">Gemma 4<small>12B</small></span><span class="chip">Llama 3.1<small>8B</small></span><span class="chip">Qwen2.5<small>7B · 14B</small></span><span class="chip">Qwen3 30B-A3B<small>MoE</small></span><span class="chip">Mistral<small>7B</small></span><span class="chip">Granite 3.3<small>2B · 8B</small></span><span class="chip">Command R7B<small>7B</small></span><span class="chip">SmolLM2<small>135M – 1.7B</small></span><span class="chip">StarCoder2<small>3B · 7B · code</small></span><span class="chip">DeepCoder<small>14B</small></span><span class="chip">MiniCPM-V<small>8B · vision</small></span><span class="chip">Hermes 3<small>8B</small></span><span class="chip">Exaone Deep<small>7.8B · thinking</small></span><span class="chip">mxbai-embed<small>embeddings</small></span><span class="chip">FLUX.1 schnell<small>images · ComfyUI</small></span><span class="chip">Qwen-Image<small>images · ComfyUI</small></span><span class="chip">Gemma 4<small>12B</small></span><span class="chip">Llama 3.1<small>8B</small></span><span class="chip">Qwen2.5<small>7B · 14B</small></span><span class="chip">Qwen3 30B-A3B<small>MoE</small></span><span class="chip">Mistral<small>7B</small></span><span class="chip">Granite 3.3<small>2B · 8B</small></span><span class="chip">Command R7B<small>7B</small></span><span class="chip">SmolLM2<small>135M – 1.7B</small></span><span class="chip">StarCoder2<small>3B · 7B · code</small></span><span class="chip">DeepCoder<small>14B</small></span><span class="chip">MiniCPM-V<small>8B · vision</small></span><span class="chip">Hermes 3<small>8B</small></span><span class="chip">Exaone Deep<small>7.8B · thinking</small></span><span class="chip">mxbai-embed<small>embeddings</small></span><span class="chip">FLUX.1 schnell<small>images · ComfyUI</small></span><span class="chip">Qwen-Image<small>images · ComfyUI</small></span></div></div></div>
   </div>
 
   <div class="sec">
@@ -352,6 +369,7 @@ const smooth = (x) => x * x * (3 - 2 * x);
 // a slow swell plus five layers of small waves drifting in different directions. Lighting: the sun glitters on
 // the waves, the water reflects the sky at the edges, light shines through crests, and the atmosphere glows.
 const MOBILE = matchMedia("(pointer: coarse)").matches || innerWidth < 820;
+const TOUCH = matchMedia("(hover: none), (pointer: coarse)").matches;   // phones and tablets: no cursor to follow
 // the Jarvis orb (public/orb.js): a 3D sphere with eyes that blink and look toward the mouse
 const orb = window.createOrb ? window.createOrb(L.ocean, { budget: MOBILE ? 1.2e6 : 6e6 }) : null;
 if (!orb) L.planet.classList.add("fallback");
@@ -387,7 +405,7 @@ function render(t) {
   // the eyes ride the same conveyor: out to the left when the first symbol comes, back in from the right after the last
   const eu = p < .55 ? slotU(0, p) : slotU(4, p), ec = conveyor(eu, 1);
   if (orb) orb({ W: SW, H: SH, cx: SW / 2, cy: SH / 2 + planetY * SH / 100, R: L.planet.offsetWidth / 2 * planetS, t, eyes: ec.o, eyeX: -eu * .95, eyeScale: ec.scale,
-                 look: mouse.on ? mouse : null, dark: darkPage(), alpha: planetO * orbFade, mood: p > .8 && p < .95 ? 1 : 0 });
+                 look: mouse.on && !TOUCH ? mouse : null, dark: darkPage(), alpha: planetO * orbFade, mood: p > .8 && p < .95 ? 1 : 0 });
   // features: the icons orbit the globe on a ring that turns with it
   const showIcons = easeOut(seg(p, .14, .2)) * (1 - ease(seg(p, .76, .82)));
   const pcx = SW / 2, pcy = SH / 2 + planetY * SH / 100, pR = L.planet.offsetWidth / 2 * planetS;
@@ -433,9 +451,23 @@ if (!reduce && window.Lenis) {
   document.querySelectorAll('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); lenis.scrollTo(a.getAttribute("href") === "#top" ? 0 : a.getAttribute("href")); }));
 }
 const navEl = document.querySelector(".nav");
+// the features slide sideways while their section is pinned; each card is a little larger near the middle
+const hsec = document.getElementById("hsec"), htrack = document.getElementById("htrack");
+function moveFeatures() {
+  const r = hsec.getBoundingClientRect(), span = r.height - innerHeight;
+  const k = span > 0 ? Math.min(1, Math.max(0, -r.top / span)) : 0;
+  const dist = htrack.scrollWidth - innerWidth;
+  htrack.style.transform = `translateX(${-k * dist}px)`;
+  for (const c of htrack.children) {
+    const b = c.getBoundingClientRect(), off = Math.abs(b.left + b.width / 2 - innerWidth / 2) / innerWidth;
+    c.style.opacity = Math.max(.25, 1 - off * 1.1);
+    c.style.transform = `scale(${1 - Math.min(.12, off * .18)})`;
+  }
+}
 let lastY = 0;
 function frame(t) {
   if (lenis) lenis.raf(t);
+  moveFeatures();
   const y = scrollY;                                    // top bar: away when scrolling down, back when scrolling up
   if (y > lastY + 3 && y > 60) navEl.classList.add("hide");
   else if (y < lastY - 3 || y < 60) navEl.classList.remove("hide");
@@ -447,7 +479,6 @@ function frame(t) {
 requestAnimationFrame(frame);
 
 // sections below the story fade in as they scroll into view
-document.querySelectorAll(".chips .chip").forEach((c, i) => (c.style.transitionDelay = (i * .12) + "s"));
 const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .35, rootMargin: "0px 0px -8% 0px" });
 document.querySelectorAll(".reveal").forEach((n) => io.observe(n));
 </script>

@@ -2546,7 +2546,7 @@ function jarvisOpen() {
     const cv = $("#jvOrb"), box = cv.getBoundingClientRect();
     if (jv.orb && box.width) {
       const W = box.width, H = box.height, st = jv.state?.state || "idle";
-      const look = jv.mouse ? { x: jv.mouse.x - box.left, y: jv.mouse.y - box.top } : null;
+      const look = jv.mouse && !matchMedia("(hover: none), (pointer: coarse)").matches ? { x: jv.mouse.x - box.left, y: jv.mouse.y - box.top } : null;
       jv.orb({ W, H, cx: W / 2, cy: H / 2, R: W / 2 / 1.36, t, look, dark: document.documentElement.dataset.theme === "dark",
                mood: st === "thinking" ? 2 : st === "listening" ? 3 : st === "speaking" ? 4 : 0,
                pulse: jv.state?.busy ? .5 + .5 * Math.sin(t / 260) : 0, alpha: jv.state ? 1 : .55 });
