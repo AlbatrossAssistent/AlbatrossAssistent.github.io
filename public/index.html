@@ -493,6 +493,10 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 .pub-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .pub-row .field { flex: 1 1 200px; }
 .pub-toggle { display: flex; align-items: center; gap: 10px; min-height: 40px; font-weight: 600; font-size: 14px; }
+.pc-btns { display: flex; gap: 6px; } .pc-btns .side-btn { flex: 1; min-width: 0; padding: 0 10px; justify-content: center; font-size: 14px; }
+.sched { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.sched input[type=number], .sched input[type=time], .sched select { min-height: 34px; border-radius: 999px; padding: 0 10px; width: auto; }
+.sched input[type=number] { width: 70px; }
 .side-btn .live { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
 .offers { position: fixed; right: 18px; bottom: 18px; z-index: 150; display: flex; flex-direction: column; gap: 10px; width: min(360px, calc(100vw - 36px)); }
 .offer { border-radius: 22px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; animation: pop .35s cubic-bezier(.2,.8,.2,1); background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 20px 60px rgba(0,0,0,.25); }
@@ -571,7 +575,10 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
       <button class="side-btn" id="powerBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>Turn on PC</button>
       <small id="powerMsg" role="status"></small>
     </div>
-    <button class="side-btn" id="offBtn" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg><span id="offText">Shut down PC</span></button>
+    <div class="pc-btns" id="pcBtns" hidden>
+    <button class="side-btn" id="sleepBtn"><svg class="i" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span id="sleepText">Sleep</span></button>
+    <button class="side-btn" id="offBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg><span id="offText">Shut down</span></button>
+    </div>
     <button class="side-btn" id="openFiles"><svg class="i" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg>Files<span class="live" id="pubLive" hidden title="You are public"></span></button>
     <button class="side-btn" id="openConn"><svg class="i" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Connect with code</button>
     <button class="side-btn" id="openSettings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
@@ -677,6 +684,11 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
             <div class="field" style="flex:1 1 170px"><label for="wakeMac">PC network card (MAC)</label><input id="wakeMac" autocomplete="off" spellcheck="false" placeholder="AA-BB-CC-DD-EE-FF"></div>
           </div>
           <small style="color:var(--muted);font-size:12.5px;margin-top:-8px">FRITZ!Box: Internet → Permit Access → Port Sharing → your PC → add a sharing for this port, and tick <b>"Start this computer automatically when it is accessed from the internet"</b>. In the PC's BIOS, switch on Wake-on-LAN ("Power On By PCI-E"). Saved on this device, and in your account encrypted if you're signed in.</small>
+          <h3>Schedule</h3>
+          <div class="sched"><input type="checkbox" class="switch" id="schedIdleOn"><span>When nobody uses the PC for</span><input id="schedIdleHours" type="number" min="0.25" max="24" step="0.25"><span>hours:</span><select id="schedIdleAction"><option value="sleep">sleep</option><option value="shutdown">shut down</option></select></div>
+          <div class="sched"><input type="checkbox" class="switch" id="schedDailyOn"><span>Every day at</span><input id="schedDailyTime" type="time"><span>:</span><select id="schedDailyAction"><option value="sleep">sleep</option><option value="shutdown">shut down</option></select></div>
+          <div class="sched"><input type="checkbox" class="switch" id="schedWakeOn"><span>Wake up every day at</span><input id="schedWakeTime" type="time"><small style="color:var(--muted)">(from sleep; a PC that is fully off needs Turn on PC)</small></div>
+          <small id="schedNote" style="color:var(--muted);font-size:12.5px;margin-top:-6px">Connect to your PC to change its schedule.</small>
           <details class="note" style="margin:0"><summary style="cursor:pointer;color:var(--fg)">Advanced: smart plug link instead</summary>
           <div class="field" style="margin-top:10px"><label for="powerUrl">Turn-on link</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input id="powerUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://… (your smart plug or Alexa routine link)" style="flex:1;min-width:0"><button class="btn" id="powerUrlShow" type="button">Show</button></div>
             <small>Used when Wake-on-LAN isn't set up: the button opens this link, for example a Voice Monkey or smart-plug link that switches the PC's plug on. It never goes to the Albatross server.</small></div></details>
@@ -1215,7 +1227,8 @@ const remotePC = () => S.conn.mode === "remote" && CODE_RE.test(S.conn.code);
 function updatePowerBox(online) {
   const box = $("#powerBox"), w = wake();
   const canWake = (w.host && w.mac) || store.get("powerUrl", "");
-  $("#offBtn").hidden = !(online && (remotePC() || viaHost));
+  $("#pcBtns").hidden = !(online && (remotePC() || viaHost));
+  if (online && !$("#pcBtns").hidden) loadSchedule();
   if (online || !remotePC() || !canWake) {
     box.hidden = true;
     if (powerWait) { clearInterval(powerWait); powerWait = null; toast("Your PC is on and connected"); }
@@ -1272,25 +1285,53 @@ $("#powerBtn").onclick = async () => {
 };
 // shut down: click once to arm, again within 4 s to confirm; then it can be cancelled for a minute
 let offArmed = 0, offPending = 0;
-async function pcCall(path, body) {
-  const opts = { method: "POST", body: JSON.stringify(body || {}) };
+async function pcCall(path, body, method = "POST") {
+  const opts = method === "GET" ? { method } : { method, body: JSON.stringify(body || {}) };
   const r = remotePC() ? await e2eFetch(path, { ...opts, base: hostBase() }) : await fetch("http://127.0.0.1:4747" + path, { ...opts, headers: { "Content-Type": "application/json" } });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
   return j;
 }
+let sleepArmed = 0;
+$("#sleepBtn").onclick = async () => {
+  if (Date.now() - sleepArmed > 4000) { sleepArmed = Date.now(); $("#sleepText").textContent = "Click again"; setTimeout(() => ($("#sleepText").textContent = "Sleep"), 4000); return; }
+  try { await pcCall("/pc/sleep"); toast("Your PC is going to sleep. Wake it with Turn on PC."); } catch (e) { toast("Couldn't put it to sleep: " + e.message); }
+  $("#sleepText").textContent = "Sleep";
+};
+// ---------- power schedule (runs on the PC) ----------
+let schedLoaded = false;
+async function loadSchedule() {
+  try {
+    const j = await pcCall("/pc/schedule", null, "GET");
+    schedLoaded = true;
+    $("#schedIdleOn").checked = j.idle.on; $("#schedIdleHours").value = j.idle.hours; $("#schedIdleAction").value = j.idle.action;
+    $("#schedDailyOn").checked = j.daily.on; $("#schedDailyTime").value = j.daily.time; $("#schedDailyAction").value = j.daily.action;
+    $("#schedWakeOn").checked = j.wake.on; $("#schedWakeTime").value = j.wake.time;
+    $("#schedNote").textContent = "Runs on your PC, even when no browser is open.";
+  } catch { $("#schedNote").textContent = "Connect to your PC to change its schedule."; }
+}
+async function saveSchedule() {
+  if (!schedLoaded) return;
+  const body = {
+    idle: { on: $("#schedIdleOn").checked, hours: Number($("#schedIdleHours").value), action: $("#schedIdleAction").value },
+    daily: { on: $("#schedDailyOn").checked, time: $("#schedDailyTime").value, action: $("#schedDailyAction").value },
+    wake: { on: $("#schedWakeOn").checked, time: $("#schedWakeTime").value },
+  };
+  try { await pcCall("/pc/schedule", body); toast("Schedule saved on your PC"); } catch (e) { toast("Couldn't save the schedule: " + e.message); }
+}
+for (const id of ["schedIdleOn", "schedIdleHours", "schedIdleAction", "schedDailyOn", "schedDailyTime", "schedDailyAction", "schedWakeOn", "schedWakeTime"]) $("#" + id).onchange = saveSchedule;
 $("#offBtn").onclick = async () => {
   if (offPending) {
     try { await pcCall("/pc/cancel"); toast("Shutdown cancelled"); } catch (e) { toast("Couldn't cancel: " + e.message); }
-    clearTimeout(offPending); offPending = 0; $("#offText").textContent = "Shut down PC"; return;
+    clearTimeout(offPending); offPending = 0; $("#offText").textContent = "Shut down"; return;
   }
-  if (Date.now() - offArmed > 4000) { offArmed = Date.now(); $("#offText").textContent = "Click again to shut down"; setTimeout(() => { if (!offPending) $("#offText").textContent = "Shut down PC"; }, 4000); return; }
+  if (Date.now() - offArmed > 4000) { offArmed = Date.now(); $("#offText").textContent = "Click again"; setTimeout(() => { if (!offPending) $("#offText").textContent = "Shut down"; }, 4000); return; }
   try {
     await pcCall("/pc/shutdown", { seconds: 60 });
     toast("Your PC shuts down in 1 minute");
-    $("#offText").textContent = "Cancel shutdown";
-    offPending = setTimeout(() => { offPending = 0; $("#offText").textContent = "Shut down PC"; }, 60000);
-  } catch (e) { toast("Couldn't shut down: " + e.message); $("#offText").textContent = "Shut down PC"; }
+    $("#offText").textContent = "Cancel";
+    offPending = setTimeout(() => { offPending = 0; $("#offText").textContent = "Shut down"; }, 60000);
+  } catch (e) { toast("Couldn't shut down: " + e.message); $("#offText").textContent = "Shut down"; }
 };
 $("#powerUrl").onchange = e => {
   const v = e.target.value.trim();
@@ -2094,6 +2135,7 @@ function openSettings(tab) {
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay;
   $("#serverHint").textContent = S.conn.relay || DEFAULT_SERVER;
   $("#powerUrl").value = store.get("powerUrl", ""); $("#powerUrl").type = "password"; $("#powerUrlShow").textContent = "Show";
+  loadSchedule();
   $("#wakeHost").value = store.get("wakeHost", ""); $("#wakePort").value = store.get("wakePort", ""); $("#wakeMac").value = store.get("wakeMac", "");
   $("#connResult").textContent = "";
   // params

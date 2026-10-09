@@ -23,6 +23,7 @@ const WebSocket = require("ws");
 const { startPanel } = require("./panel");
 const comfy = require("./comfy");
 const files = require("./files");
+const schedule = require("./schedule");
 // ---------- the PC's own power: what Wake-on-LAN needs to know, and shutting down ----------
 const pcPower = {
   publicIp: "",
@@ -32,7 +33,7 @@ const pcPower = {
     const pick = all.find((a) => a.family === "IPv4" && !a.internal && /^(192\.168|10\.|172\.)/.test(a.address) && !/virtual|vethernet|vmware|hyper|loopback|wsl/i.test(a.name));
     return pick ? pick.mac.toUpperCase() : "";
   },
-  handle(method, p, body, note) {
+  async handle(method, p, body, note) {
     if (method === "GET" && p === "/pc/info") return [200, { mac: this.mac(), publicIp: this.publicIp, name: NAME, platform: process.platform }];
     if (method === "POST" && p === "/pc/shutdown") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
@@ -41,6 +42,17 @@ const pcPower = {
       execFile("shutdown", ["/s", "/t", String(secs), "/c", "Albatross: shutting down, as asked from the website. Cancel it there or run: shutdown /a"], { windowsHide: true }, () => {});
       note(`Shutting down in ${secs} s, as asked from the website`);
       return [200, { ok: true, seconds: secs }];
+    }
+    if (method === "POST" && p === "/pc/sleep") {
+      if (process.platform !== "win32") return [501, { error: "Sleep is only set up for Windows." }];
+      note("Going to sleep, as asked from the website");
+      setTimeout(() => schedule.sleepNow(), 1500);   // answer first, then sleep
+      return [200, { ok: true }];
+    }
+    if (method === "GET" && p === "/pc/schedule") return [200, schedule.get()];
+    if (method === "POST" && p === "/pc/schedule") {
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      return [200, await schedule.set(j)];
     }
     if (method === "POST" && p === "/pc/cancel") {
       execFile("shutdown", ["/a"], { windowsHide: true }, () => {});
@@ -333,7 +345,7 @@ function connect() {
     // Files to and from this PC (see files.js), answered here instead of by Ollama.
     if (typeof p === "string" && p.startsWith("/pc/")) {
       let status = 500, out;
-      try { [status, out] = pcPower.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+      try { [status, out] = await pcPower.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
@@ -341,13 +353,14 @@ function connect() {
       let status = 500, out;
       try { [status, out] = await jarvis.handle(method, p, body, note, freeImageModels); } catch (e) { out = { error: e.message }; }
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      if (method === "POST" && p === "/jarvis/ask") note("Jarvis: a message from the website");
+      if (method === "POST" && p === "/jarvis/ask") { note("Jarvis: a message from the website"); schedule.activity(); }
       return send({ type: "end", id });
     }
     if (method === "GET" && p === "/load") {
       reply({ k: "m", s: 200, c: "application/json" }); reply({ k: "d", d: JSON.stringify(loadProgress()) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
+    if (typeof p === "string" && p.startsWith("/files/")) schedule.activity();
     if (typeof p === "string" && p.startsWith("/files/")) {
       let status = 500, out;
       try { [status, out] = files.handle(method, p, body, note); } catch (e) { out = { error: e.message }; note("File transfer failed: " + e.message, "error"); }
@@ -364,6 +377,7 @@ function connect() {
     const isChat = method === "POST" && (p === "/api/chat" || p === "/api/generate");
     const entry = isChat ? addLog({ ...describe(p, body), active: true, tokens: 0 }) : null;
     if (entry?.kind === "chat") stats.totals.messages++;
+    if (isChat) schedule.activity();
     stats.active++;
     changed();
 
@@ -536,12 +550,13 @@ panel = startPanel({
     }
     return upstream(method, p, body, signal);
   },
-  actions: { "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; }, "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
+  actions: { "idle-tick": () => schedule.idleTick(), "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; }, "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
   // Only start sharing once we hold the panel's port, so two hosts never fight over the same code.
   onListening: (url) => {
     console.log(`  Control center: ${url}`);
     if (!args.includes("--no-panel")) openWindow(url);
     keepAwake();
+    schedule.start(note);
     pollOllama();
     setInterval(pollOllama, 3000);
     checkAutostart();
