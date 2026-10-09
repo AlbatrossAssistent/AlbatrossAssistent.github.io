@@ -76,9 +76,12 @@ a { color: inherit; }
 /* finale */
 .bird { width: min(26vmin, 230px); z-index: 6; }
 /* the rocket that orbits the planet */
-.rocket { width: min(7vmin, 62px); z-index: 5; }
-.rocket svg { width: 100%; display: block; overflow: visible; filter: drop-shadow(0 0 14px rgba(200,215,255,.35)); }
-.rocket .flame { transform-origin: 20px 66px; animation: flame .12s ease-in-out infinite alternate; transition: opacity .3s; }
+.rocket { width: min(8.5vmin, 76px); z-index: 5; }
+.rocket svg { width: 100%; display: block; overflow: visible; filter: drop-shadow(0 6px 18px rgba(0,0,0,.45)) drop-shadow(0 0 10px rgba(140,180,255,.35)); }
+.rocket .flame { transform-origin: 30px 112px; animation: flame .11s ease-in-out infinite alternate; transition: opacity .3s; filter: drop-shadow(0 0 6px rgba(120,170,255,.9)); }
+.rocket .flame .core { transform-origin: 30px 112px; animation: flame .07s ease-in-out infinite alternate-reverse; }
+.rocket .trail { animation: trail 1.4s ease-in-out infinite alternate; transform-origin: 30px 116px; }
+@keyframes trail { from { opacity: .6; transform: scaleY(.85); } to { opacity: 1; transform: scaleY(1.15); } }
 @keyframes flame { from { transform: scaleY(.85) scaleX(.95); } to { transform: scaleY(1.15) scaleX(1.05); } }
 .planet { z-index: 2; } .icon, .caption { z-index: 4; } .finale-title, .start { z-index: 7; }
 .bird svg { width: 100%; fill: #fff; filter: drop-shadow(0 0 26px rgba(255,255,255,.35)); animation: glide 4s ease-in-out infinite; overflow: visible; }
@@ -193,15 +196,26 @@ footer a:hover { color: var(--fg); }
 
     <!-- finale -->
     <div class="layer finale-title" id="final"><h2>Ready when you are.</h2><p>Free. Open source. Yours.</p></div>
-    <div class="layer rocket" id="rocket"><svg viewBox="0 0 40 84"><defs>
-      <linearGradient id="rb" x1="0" x2="1"><stop offset="0" stop-color="#9aa3b8"/><stop offset=".45" stop-color="#ffffff"/><stop offset="1" stop-color="#8d95aa"/></linearGradient>
-      <linearGradient id="rf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#cfe0ff"/><stop offset="1" stop-color="#7f9cff" stop-opacity="0"/></linearGradient></defs>
-      <path class="flame" fill="url(#rf)" d="M13 60c0 8 3 16 7 22c4-6 7-14 7-22z"/>
-      <path fill="#5d6577" d="M11 44L3 58l1 4 9-5zM29 44l8 14-1 4-9-5z"/>
-      <path fill="url(#rb)" d="M20 2C11 12 9 26 9 40v18h22V40C31 26 29 12 20 2z"/>
-      <path fill="#5d6577" d="M14 58h12l-1 4H15z"/>
-      <circle cx="20" cy="27" r="5.2" fill="#0b0d12" stroke="#c9d3ea" stroke-width="2"/><circle cx="18.4" cy="25.4" r="1.4" fill="#9fb4ff" opacity=".8"/>
-      <path fill="#5d6577" d="M18.5 40h3v18h-3z" opacity=".55"/></svg></div>
+    <div class="layer rocket" id="rocket"><svg viewBox="0 0 60 150" aria-hidden="true"><defs>
+      <linearGradient id="rkBody" x1="0" x2="1"><stop offset="0" stop-color="#6f7a90"/><stop offset=".3" stop-color="#f4f7fc"/><stop offset=".5" stop-color="#ffffff"/><stop offset=".75" stop-color="#c9d1df"/><stop offset="1" stop-color="#5d677c"/></linearGradient>
+      <linearGradient id="rkBlue" x1="0" x2="1"><stop offset="0" stop-color="#173c9e"/><stop offset=".4" stop-color="#4f86f7"/><stop offset=".6" stop-color="#3c6fe4"/><stop offset="1" stop-color="#112c78"/></linearGradient>
+      <linearGradient id="rkFin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f74ea"/><stop offset="1" stop-color="#132f7f"/></linearGradient>
+      <linearGradient id="rkNoz" x1="0" x2="1"><stop offset="0" stop-color="#2a2f3a"/><stop offset=".45" stop-color="#8a93a6"/><stop offset="1" stop-color="#1f232c"/></linearGradient>
+      <radialGradient id="rkGlass" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#9fd0ff"/><stop offset=".35" stop-color="#2e64c9"/><stop offset="1" stop-color="#071a45"/></radialGradient>
+      <linearGradient id="rkFlame" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".25" stop-color="#bfe0ff"/><stop offset=".6" stop-color="#5b9dff" stop-opacity=".8"/><stop offset="1" stop-color="#2f6bff" stop-opacity="0"/></linearGradient>
+      <linearGradient id="rkCore" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#e6f3ff"/><stop offset="1" stop-color="#bcdcff" stop-opacity="0"/></linearGradient>
+      <linearGradient id="rkTrail" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc4ff" stop-opacity=".45"/><stop offset="1" stop-color="#9cc4ff" stop-opacity="0"/></linearGradient>
+      <clipPath id="rkClip"><path d="M30 4C40 16 44 32 44 52V92C44 98 41 102 38 104H22C19 102 16 98 16 92V52C16 32 20 16 30 4Z"/></clipPath></defs>
+      <path class="trail" d="M25 116H35L33 150H27Z" fill="url(#rkTrail)"/>
+      <g class="flame"><path d="M22.5 112C22.5 126 26.5 138 30 147C33.5 138 37.5 126 37.5 112Z" fill="url(#rkFlame)"/><path class="core" d="M26 112C26 120 28 127 30 132C32 127 34 120 34 112Z" fill="url(#rkCore)"/></g>
+      <path d="M16 76C7 83 3 95 3.5 112L16 102Z" fill="url(#rkFin)"/><path d="M44 76C53 83 57 95 56.5 112L44 102Z" fill="url(#rkFin)"/>
+      <path d="M22 104H38L36.5 113H23.5Z" fill="url(#rkNoz)"/>
+      <path d="M30 4C40 16 44 32 44 52V92C44 98 41 102 38 104H22C19 102 16 98 16 92V52C16 32 20 16 30 4Z" fill="url(#rkBody)"/>
+      <g clip-path="url(#rkClip)"><path d="M10 0H50V30C44 26 37 24 30 24C23 24 16 26 10 30Z" fill="url(#rkBlue)"/><rect x="10" y="80" width="40" height="5" fill="url(#rkBlue)"/><rect x="10" y="88" width="40" height="1.6" fill="url(#rkBlue)" opacity=".8"/>
+        <path d="M23.5 30C22.5 52 22.5 78 23.5 103H25.5C24.6 78 24.6 52 25.5 30Z" fill="#fff" opacity=".7"/></g>
+      <circle cx="30" cy="50" r="9.6" fill="url(#rkNoz)"/><circle cx="30" cy="50" r="7.6" fill="url(#rkGlass)"/>
+      <ellipse cx="27.4" cy="47.2" rx="3.2" ry="2" fill="#fff" opacity=".75" transform="rotate(-30 27.4 47.2)"/>
+      <path d="M28.6 94H31.4V110H28.6Z" fill="url(#rkFin)"/></svg></div>
     <a class="layer btn start" id="start" href="public/">Start now →</a>
   </div>
 </main>
@@ -389,16 +403,26 @@ uniform float uOct;     // how many wave layers: more when zoomed in close, fewe
 float waves(vec3 q, float t, out vec3 grad){
   vec3 gg;
   vec3 warp = .7 * vec3(snoise(q * 1.1 + t * .008));
-  float h = .55 * snoiseG(q * 2.0 + vec3(t * .02, 0., t * .015) + warp, gg);
-  grad = .55 * 2.0 * gg;
-  float a = .34, f = 8.5;
-  for (int i = 0; i < 7; i++) {
+  float h = .5 * snoiseG(q * 1.3 + vec3(t * .02, 0., t * .015) + warp, gg);
+  grad = .5 * 1.3 * gg;
+  // big waves: "ridged" noise (1 - |n|) makes sharp crest lines with smooth troughs, like real wind waves
+  float a = .55, f = 3.2;
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    vec3 dir = vec3(sin(fi * 2.1 + .3), cos(fi * 1.3), sin(fi * 3.7 + 1.));
+    float n = snoiseG(q * f + dir * t * (.12 + .05 * fi), gg);
+    float sq = sqrt(n * n + .03);                     // a softly rounded crest instead of a sharp crease
+    h += a * (1. - sq); grad -= a * f * (n / sq) * gg;
+    a *= .5; f *= 2.3;
+  }
+  // smaller ripples on top, fading quickly so the surface stays smooth like water
+  for (int i = 2; i < 7; i++) {
     if (float(i) >= uOct) break;
     float fi = float(i);
     vec3 dir = vec3(sin(fi * 2.1 + .3), cos(fi * 1.3), sin(fi * 3.7 + 1.));
     h += a * snoiseG(q * f + dir * t * (.22 + .06 * fi), gg);
     grad += a * f * gg;
-    a *= .55; f *= 2.13;
+    a *= .36; f *= 2.13;
   }
   return h;
 }
@@ -425,7 +449,7 @@ void main(){
   vec3 g;
   float h0 = waves(q, t, g);
   g -= dot(g, q) * q;                             // only the slope along the surface
-  vec3 n = normalize(n0 - (g * R) * .0072);       // tilt the sphere's normal by the waves (back to view space)
+  vec3 n = normalize(n0 - (g * R) * .012);       // tilt the sphere's normal by the waves (back to view space)
   float terminator = clamp(dot(n0, L) * 1.1 + .15, 0., 1.);
   float diff = max(dot(n, L), 0.);
   float cur = .5 + .5 * snoise(q * 1.8 + vec3(0., t * .006, 0.));    // slow lighter and darker currents

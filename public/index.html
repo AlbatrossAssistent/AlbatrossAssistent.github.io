@@ -1525,14 +1525,27 @@ function wantsImage(text) {
 let forceImage = false;
 function setForceImage(on) { forceImage = on; $("#imgBtn").classList.toggle("on", on); $("#imgBtn").setAttribute("aria-pressed", String(on)); applyType(); }
 
+// "draw a new …" / "another picture of …" starts fresh instead of editing the last picture
+function wantsNewPicture(text) { return /(new|another|different|neues?|neuen|anderes?|weiteres?)/i.test(text) || /^(draw|paint|sketch|zeichne|male|generate|create|erstelle|generiere)/i.test(text.trim()); }
 async function send(textOverride) {
   if (controller) { controller.abort(); return; }
   const p = $("#prompt");
   const text = (textOverride ?? p.value).trim();
   if (!text && !attachments.length) return;
   if (!connected) { await connect(); if (!connected) return; }
-  let asImage = !!text && !attachments.length && (forceImage || wantsImage(text));
-  const imgModel = pickImageModel();
+  // Pictures: a new one goes to the chosen image model. Changing a picture (an attached photo, or a follow-up
+  // like "make it night" right after one) goes to a model that can edit, such as OmniGen2, with the picture attached.
+  const editModel = models.find(m => m.kind === "image" && m.details?.edit)?.name || "";
+  const lastPic = [...current.messages].reverse().find(m => m.role === "assistant")?.genImage || "";
+  const editVerb = /^(please |bitte )?(make|turn|change|add|remove|put|give|replace|edit|colou?r|mach|mache|füge|entferne|ändere|verwandle|ersetze|färbe)/i.test(text);
+  let refs = [];
+  let asImage = !!text && (forceImage || wantsImage(text) || (!!attachments.length && !!editModel && editVerb));
+  if (asImage && attachments.length) {
+    if (editModel) refs = attachments.slice(0, 3);
+    else if (forceImage) { toast("The image model on your PC can't use reference pictures. Add OmniGen2 to edit photos."); return; }
+    else asImage = false;                               // a vision model will look at the photo instead
+  } else if (asImage && editModel && lastPic && !wantsNewPicture(text)) refs = [lastPic];
+  const imgModel = refs.length ? editModel : pickImageModel();
   if (asImage && !imgModel) { if (forceImage) { toast("No image model on the connected PC"); return; } asImage = false; }
   const model = asImage ? imgModel : $("#model").value;
   if (!model) { toast("Pick a model first"); return; }
@@ -1548,7 +1561,7 @@ async function send(textOverride) {
   if (current.messages.length === 1) $("#inner").innerHTML = "";
   $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
   renderSidebar();
-  await (asImage ? generateImage(model, text) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : chat(model));
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -1752,7 +1765,7 @@ function watchLoading(model, onPct, isDone) {
   return () => clearInterval(t);
 }
 
-async function generateImage(model, prompt) {
+async function generateImage(model, prompt, refs = []) {
   const reply = { role: "assistant", content: "", genImage: "", prompt, model };
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble);
@@ -1762,9 +1775,12 @@ async function generateImage(model, prompt) {
   controller = new AbortController();
   const [w, h] = (S.img.size || "1024x1024").split("x").map(Number);
   let finalPrompt = prompt;
-  try { finalPrompt = await buildImagePrompt(prompt, bubble); } catch (e) { if (e.name === "AbortError") { controller = null; setBusy(false); renderMessages(); return; } }
+  // editing: the picture itself carries the context, so the instruction goes as it is (plus your standing style notes)
+  if (refs.length) finalPrompt = [prompt, (S.img.style || "").trim()].filter(Boolean).join(". ");
+  else try { finalPrompt = await buildImagePrompt(prompt, bubble); } catch (e) { if (e.name === "AbortError") { controller = null; setBusy(false); renderMessages(); return; } }
   reply.prompt = finalPrompt; reply.asked = prompt;
   const body = { model, prompt: finalPrompt, stream: true, width: w, height: h };
+  if (refs.length) { body.images = refs; reply.edited = true; }
   const steps = S.img.steps, seed = S.img.seed;
   if (steps) body.steps = Number(steps);
   if (seed) body.seed = Number(seed);

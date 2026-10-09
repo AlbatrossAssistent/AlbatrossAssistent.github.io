@@ -160,7 +160,7 @@ function gpuMem() {
   }));
 }
 async function modelBytes(model) {
-  if (comfy.isComfy(model)) return comfy.bytes();
+  if (comfy.isComfy(model)) return comfy.bytes(model);
   if (!sizes[model]) { try { for (const m of (await (await fetch(OLLAMA + "/api/tags")).json()).models || []) sizes[m.name] = m.size; } catch {} }
   return sizes[model] || 0;
 }
@@ -216,7 +216,7 @@ async function upstream(method, p, body, signal) {
   if (!unload && j?.model && (p === "/api/chat" || p === "/api/generate")) { await onlyThisModel(j.model); watchLoad(j.model); }
   if (comfy.isComfy(j?.model)) {
     if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
-    if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models()[0]?.details || {} });
+    if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models().find((m) => m.name === j.model)?.details || {} });
     if (p === "/api/generate") {
       const enc = new TextEncoder();
       return new Response(new ReadableStream({
