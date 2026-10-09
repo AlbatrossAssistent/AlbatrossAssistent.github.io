@@ -23,6 +23,7 @@ const WebSocket = require("ws");
 const { startPanel } = require("./panel");
 const comfy = require("./comfy");
 const files = require("./files");
+const jarvis = require("./jarvis");
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
@@ -203,6 +204,9 @@ async function watchLoad(model) {
 function markLoaded(model) { if (loading && loading.model === model && !loading.done) { loading.done = true; loading.pct = 100; } }
 const loadProgress = () => (!loading ? { state: "idle" } : { model: loading.model, pct: loading.pct, state: loading.done ? "loaded" : "loading" });
 
+// Jarvis talks to Ollama directly, so make room on the graphics card before it thinks.
+async function freeImageModels() { if (await comfy.free()) note("Unloaded ComfyUI to make room for Jarvis"); }
+
 const isCloud = (name) => typeof name === "string" && /-cloud$|:cloud$|-cloud:/.test(name);
 
 // Ollama, with the ComfyUI image model mixed in (see comfy.js): it shows up in the model list
@@ -299,6 +303,13 @@ function connect() {
     const reply = (frame) => send({ type: "chunk", id, data: seal(aesKey, JSON.stringify(frame), `${rid}:${seq++}`) + "\n" });
     send({ type: "head", id, status: 200, contentType: "text/plain; charset=utf-8" });
     // Files to and from this PC (see files.js), answered here instead of by Ollama.
+    if (typeof p === "string" && p.startsWith("/jarvis/")) {
+      let status = 500, out;
+      try { [status, out] = await jarvis.handle(method, p, body, note, freeImageModels); } catch (e) { out = { error: e.message }; }
+      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+      if (method === "POST" && p === "/jarvis/ask") note("Jarvis: a message from the website");
+      return send({ type: "end", id });
+    }
     if (method === "GET" && p === "/load") {
       reply({ k: "m", s: 200, c: "application/json" }); reply({ k: "d", d: JSON.stringify(loadProgress()) }); reply({ k: "e" });
       return send({ type: "end", id });
@@ -482,6 +493,7 @@ panel = startPanel({
   files,
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },
+  jarvis: (method, p, body) => jarvis.handle(method, p, body, note, freeImageModels),
   proxy: (method, p, body, signal) => {
     if (!ALLOWED.has(`${method} ${p}`)) return Response.json({ error: "Not allowed" }, { status: 403 });
     if (method === "POST" && (p === "/api/chat" || p === "/api/generate")) {

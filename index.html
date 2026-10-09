@@ -12,9 +12,16 @@
   if (/code=/.test(location.hash) || /code=/.test(location.search)) location.replace("public/" + location.search + location.hash);
 </script>
 <style>
-:root { --fg: #f5f5f5; --muted: rgba(245,245,245,.6); --edge: rgba(255,255,255,.16); --glass: rgba(255,255,255,.06); color-scheme: dark; }
+:root { --bg: #000; --fg: #f5f5f5; --muted: rgba(245,245,245,.6); --edge: rgba(255,255,255,.16); --glass: rgba(255,255,255,.06); --hi: #fff; --hi2: rgba(255,255,255,.55); --navbg: rgba(20,20,20,.35); --btn-bg: #f5f5f5; --btn-fg: #0a0a0a; --star: #fff; --icon: #fff; color-scheme: dark; }
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f3f4f6; --fg: #0b0b0d; --muted: rgba(11,11,13,.58); --edge: rgba(0,0,0,.10); --glass: rgba(255,255,255,.55); --hi: #0b0b0d; --hi2: rgba(11,11,13,.55); --navbg: rgba(255,255,255,.55); --btn-bg: #0b0b0d; --btn-fg: #fff; --star: #0b0b0d; --icon: #0b0b0d; color-scheme: light; }
+  .nebula { opacity: .35; }
+  .card, .chip, .faq details { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 24px rgba(0,0,0,.06) !important; }
+  .ghost-svg path[fill="url(#gg)"] { fill: #0b0b0d; }
+  .ghost-svg ellipse { fill: #fff; }
+}
 * { box-sizing: border-box; }
-html, body { margin: 0; background: #000; color: var(--fg); font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
 a { color: inherit; }
@@ -27,7 +34,7 @@ a { color: inherit; }
 
 /* top bar */
 .nav { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 999px; width: min(960px, calc(100vw - 24px));
-  background: rgba(20,20,20,.35); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+  background: var(--navbg); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
 .nav .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -.3px; text-decoration: none; }
 .nav .brand svg { width: 26px; height: 26px; fill: currentColor; }
 .nav .brand svg .flame { opacity: .55; }
@@ -36,37 +43,38 @@ a { color: inherit; }
 .nav a.lk:hover { color: var(--fg); }
 .nav { transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .35s; }
 .nav.hide { transform: translate(-50%, calc(-100% - 26px)); opacity: 0; }
-.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 999px; padding: 9px 18px; color: #0a0a0a; background: #f5f5f5;
+.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 999px; padding: 9px 18px; color: var(--btn-fg); background: var(--btn-bg);
   background-image: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,0) 55%); box-shadow: 0 6px 24px rgba(255,255,255,.18), inset 0 1px 0 #fff; transition: transform .15s, box-shadow .2s; }
 .btn:hover { transform: translateY(-1px) scale(1.02); box-shadow: 0 10px 34px rgba(255,255,255,.28), inset 0 1px 0 #fff; }
 @media (max-width: 620px) { .nav a.lk { display: none; } }
 
 /* the scroll story: one tall section with a sticky stage */
 .story { position: relative; height: 1400vh; }   /* just scroll distance: the stage below stays pinned for the whole page */
-.stage { position: fixed; inset: 0; overflow: hidden; z-index: 1; }   /* pinned; the ocean keeps moving behind the sections */
+.stage { position: fixed; inset: 0; overflow: hidden; z-index: 1; }   /* pinned for the whole page */
 .layer { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; }
 
 .hero { width: min(900px, 92vw); text-align: center; transform: translate(-50%, -50%); z-index: 4; }
 .hero .eyebrow { font-size: 13px; letter-spacing: 6px; text-transform: uppercase; color: var(--muted); }
 .hero h1 { margin: 14px 0 10px; font-size: clamp(42px, 8.4vw, 118px); font-weight: 300; letter-spacing: -.02em; line-height: 1.02; }
-.hero h1 b { font-weight: 700; letter-spacing: .06em; display: block; background: linear-gradient(180deg, #fff 30%, rgba(255,255,255,.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero h1 b { font-weight: 700; letter-spacing: .06em; display: block; background: linear-gradient(180deg, var(--hi) 30%, var(--hi2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero p { color: var(--muted); font-size: clamp(15px, 1.6vw, 19px); margin: 0; }
 .scroll-hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; letter-spacing: 3px; text-transform: uppercase; }
-.scroll-hint i { width: 22px; height: 36px; border: 1.5px solid rgba(255,255,255,.4); border-radius: 12px; position: relative; }
-.scroll-hint i::after { content: ""; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; border-radius: 2px; background: #fff; transform: translateX(-50%); animation: wheel 1.6s ease-in-out infinite; }
+.scroll-hint i { width: 22px; height: 36px; border: 1.5px solid var(--muted); border-radius: 12px; position: relative; }
+.scroll-hint i::after { content: ""; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; border-radius: 2px; background: var(--fg); transform: translateX(-50%); animation: wheel 1.6s ease-in-out infinite; }
 @keyframes wheel { 0% { opacity: 0; transform: translate(-50%, 0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 12px); } }
 
-/* ocean planet: drawn in 3D on the GPU (WebGL) on a full-stage canvas; .planet only gives its size */
-.planet { width: min(64vmin, 640px); aspect-ratio: 1; border-radius: 50%; pointer-events: none; }
+/* the Jarvis orb: drawn in 3D on the GPU (public/orb.js) on a full-stage canvas; .planet only gives its size */
+.planet { width: min(50vmin, 500px); aspect-ratio: 1; border-radius: 50%; pointer-events: none; }
 #ocean { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
-.planet.fallback { background: radial-gradient(circle at 35% 30%, #3f86e8, #0b3a8a 55%, #041a45 80%); box-shadow: 0 0 140px 24px rgba(40,120,255,.28); }
+.planet.fallback { background: radial-gradient(circle at 35% 30%, #fff, #d9dbe0 60%, #9a9ca3 100%); box-shadow: 0 0 140px 24px rgba(255,255,255,.18); }
+@media (prefers-color-scheme: light) { .planet.fallback { background: radial-gradient(circle at 35% 30%, #555, #151515 60%, #000 100%); box-shadow: none; } }
 
 /* features */
 .icon { width: 260px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; backface-visibility: hidden; }
 .icon svg { width: 100%; height: 100%; overflow: visible; }
 .caption { width: min(720px, 90vw); text-align: center; }
 .caption h2 { margin: 0 0 8px; font-size: clamp(32px, 5.6vw, 72px); font-weight: 600; letter-spacing: -.03em; line-height: 1.05; }
-.caption h2 span { background: linear-gradient(180deg, #fff 35%, rgba(255,255,255,.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.caption h2 span { background: linear-gradient(180deg, var(--hi) 35%, var(--hi2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .caption p { margin: 0 auto; color: var(--muted); font-size: clamp(15px, 1.6vw, 19px); line-height: 1.55; max-width: 560px; }
 .sparkle-svg { filter: drop-shadow(0 0 30px rgba(170,190,255,.55)) drop-shadow(0 0 80px rgba(170,190,255,.25)); }
 .ghost-svg { filter: drop-shadow(0 0 40px rgba(255,255,255,.25)); animation: bob 3.2s ease-in-out infinite; }
@@ -85,13 +93,13 @@ a { color: inherit; }
 .start { font-size: clamp(15px, 1.6vw, 18px); padding: 14px 30px; }
 
 /* after the story */
-.after { position: relative; z-index: 3; padding: 12vh 20px 40px; background: linear-gradient(180deg, rgba(0,8,26,0) 0%, rgba(0,8,26,.32) 14%, rgba(0,8,26,.42) 100%); }   /* the water shows through */
+.after { position: relative; z-index: 3; padding: 12vh 20px 40px; background: linear-gradient(180deg, transparent 0%, var(--bg) 12%, var(--bg) 100%); }
 .grid { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
 .card { border-radius: 24px; padding: 22px; background: var(--glass); background-image: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,0) 50%); border: 1px solid var(--edge);
   -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
 .card h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
 .card p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
-footer { max-width: 1040px; margin: 60px auto 0; display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; color: var(--muted); font-size: 13.5px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 22px; }
+footer { max-width: 1040px; margin: 60px auto 0; display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--edge); padding-top: 22px; }
 footer .sp { flex: 1; }
 footer a { color: var(--muted); text-decoration: none; }
 footer a:hover { color: var(--fg); }
@@ -101,13 +109,13 @@ footer a:hover { color: var(--fg); }
 .sec-head { text-align: center; margin-bottom: 34px; }
 .sec-head .eyebrow { font-size: 12px; letter-spacing: 5px; text-transform: uppercase; color: var(--muted); }
 .sec-head h2 { margin: 10px 0 8px; font-size: clamp(30px, 4.6vw, 56px); font-weight: 600; letter-spacing: -.03em; line-height: 1.05; }
-.sec-head h2 span { background: linear-gradient(180deg, #fff 35%, rgba(255,255,255,.5)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sec-head h2 span { background: linear-gradient(180deg, var(--hi) 35%, var(--hi2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .sec-head p { margin: 0 auto; color: var(--muted); max-width: 600px; font-size: 16.5px; line-height: 1.55; }
 .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; counter-reset: step; }
 .step { position: relative; padding-top: 58px; }
 .step::before { counter-increment: step; content: counter(step); position: absolute; top: 20px; left: 22px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #0a0a0a; background: #f5f5f5; box-shadow: 0 0 20px rgba(255,255,255,.25); }
 .card .ic { width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; background: rgba(255,255,255,.08); border: 1px solid var(--edge); }
-.card .ic svg { width: 21px; height: 21px; fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.card .ic svg { width: 21px; height: 21px; fill: none; stroke: var(--icon); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .card code { font-family: "Cascadia Code", Consolas, monospace; font-size: 13px; background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 6px; color: var(--fg); }
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .chip { padding: 10px 16px; border-radius: 999px; font-size: 14.5px; background: var(--glass); border: 1px solid var(--edge); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
@@ -257,6 +265,7 @@ footer a:hover { color: var(--fg); }
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="public/orb.js"></script>
 <script>
 "use strict";
 const $ = (s) => document.querySelector(s);
@@ -310,15 +319,15 @@ function orbitIcon(icon, cap, k, p, cx, cy, R, show) {
   let th = ringAngle(p) - k * ORBIT_STEP;
   th = Math.atan2(Math.sin(th), Math.cos(th));                         // -PI..PI, 0 = front
   const front = Math.cos(th), side = Math.sin(th);
-  const x = side * R * 1.32, y = cy - R * .2 - (1 - front) * R * .1;
-  const sc = (.35 + .65 * (front + 1) / 2) * (R / 260);
+  const x = side * R * 1.45, y = cy - R * (.15 + 1.15 * Math.max(0, front));   // over the top of its head at the front, beside it at the sides
+  const sc = (.3 + .45 * (front + 1) / 2) * (R / 260);
   icon.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${sc})`;
   const o = show * (front > -.2 ? 1 : Math.max(0, 1 + (front + .2) * 2));
   icon.style.opacity = o;
   icon.style.visibility = o < .01 ? "hidden" : "visible";
   icon.style.zIndex = front > 0 ? 4 : 1;                               // behind the globe on the far side
   const c = show * Math.max(0, 1 - Math.abs(th) / .55);                 // caption only while it faces you
-  place(cap, { x: side * 8, y: 22 + 4 * (1 - c), o: c });
+  place(cap, { x: side * 8, y: (cy + R) / (SH / 100) + 9 + 4 * (1 - c), o: c });   // below the orb
 }
 
 // ---------- the ocean planet: a real 3D sphere drawn by the graphics card (WebGL) ----------
@@ -326,223 +335,14 @@ function orbitIcon(icon, cap, k, p, cx, cy, R, show) {
 // a slow swell plus five layers of small waves drifting in different directions. Lighting: the sun glitters on
 // the waves, the water reflects the sky at the edges, light shines through crests, and the atmosphere glows.
 const MOBILE = matchMedia("(pointer: coarse)").matches || innerWidth < 820;
-const OCEAN_FS = `precision highp float;
-uniform vec2 uRes;      // canvas size in pixels
-uniform vec3 uC;        // planet centre x, y (from the top) and radius, in canvas pixels
-uniform float uTime, uTurn, uAlpha;
-uniform vec2 uTilt;     // the globe leans toward the mouse
-uniform vec4 uMouse;    // mouse x, y (canvas pixels), hover strength, now
-uniform vec4 uRip[8];   // ripples: x, y (canvas pixels), start time, strength
-// 3D simplex noise (Ian McEwan / Stefan Gustavson, MIT licence)
-vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
-vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
-vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
-vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-.85373472095314*r;}
-float snoise(vec3 v){
-  const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.);
-  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
-  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
-  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
-  i=mod289(i);
-  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
-  float n_=.142857142857; vec3 ns=n_*D.wyz-D.xzx;
-  vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_);
-  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y);
-  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
-  vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.));
-  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
-  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
-  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
-  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m;
-  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
-}
-// the same noise, also returning its gradient (webgl-noise "noise3Dgrad", MIT licence)
-float snoiseG(vec3 v, out vec3 gradient){
-  const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.,2.);
-  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
-  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
-  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
-  i=mod289(i);
-  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
-  float n_=.142857142857; vec3 ns=n_*D.wyz-D.xzx;
-  vec4 j=p-49.*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.*x_);
-  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.-abs(x)-abs(y);
-  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
-  vec4 s0=floor(b0)*2.+1.; vec4 s1=floor(b1)*2.+1.; vec4 sh=-step(h,vec4(0.));
-  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
-  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
-  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
-  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);
-  vec4 m2=m*m, m4=m2*m2;
-  vec4 pdotx=vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3));
-  vec4 temp=m2*m*pdotx;
-  gradient=-8.*(temp.x*x0+temp.y*x1+temp.z*x2+temp.w*x3);
-  gradient+=m4.x*p0+m4.y*p1+m4.z*p2+m4.w*p3;
-  gradient*=42.;
-  return 42.*dot(m4,pdotx);
-}
-mat3 rotY(float a){float c=cos(a),s=sin(a);return mat3(c,0.,-s,0.,1.,0.,s,0.,c);}
-mat3 rotX(float a){float c=cos(a),s=sin(a);return mat3(1.,0.,0.,0.,c,s,0.,-s,c);}
-// the water surface: a slow warped swell plus layers of small waves, each drifting its own way.
-// Returns the height and its slope (gradient), which tilts the surface for the lighting.
-uniform float uOct;     // how many wave layers: more when zoomed in close, fewer on phones
-float waves(vec3 q, float t, out vec3 grad){
-  vec3 gg;
-  vec3 warp = .7 * vec3(snoise(q * 1.1 + t * .008));
-  float h = .5 * snoiseG(q * 1.3 + vec3(t * .02, 0., t * .015) + warp, gg);
-  grad = .5 * 1.3 * gg;
-  // big waves: "ridged" noise (1 - |n|) makes sharp crest lines with smooth troughs, like real wind waves
-  float a = .55, f = 3.2;
-  for (int i = 0; i < 2; i++) {
-    float fi = float(i);
-    vec3 dir = vec3(sin(fi * 2.1 + .3), cos(fi * 1.3), sin(fi * 3.7 + 1.));
-    float n = snoiseG(q * f + dir * t * (.12 + .05 * fi), gg);
-    float sq = sqrt(n * n + .03);                     // a softly rounded crest instead of a sharp crease
-    h += a * (1. - sq); grad -= a * f * (n / sq) * gg;
-    a *= .5; f *= 2.3;
-  }
-  // smaller ripples on top, fading quickly so the surface stays smooth like water
-  for (int i = 2; i < 7; i++) {
-    if (float(i) >= uOct) break;
-    float fi = float(i);
-    vec3 dir = vec3(sin(fi * 2.1 + .3), cos(fi * 1.3), sin(fi * 3.7 + 1.));
-    h += a * snoiseG(q * f + dir * t * (.22 + .06 * fi), gg);
-    grad += a * f * gg;
-    a *= .36; f *= 2.13;
-  }
-  return h;
-}
-void main(){
-  vec2 frag = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
-  vec2 d = (frag - uC.xy) / uC.z;
-  float r = length(d);
-  vec3 haloCol = vec3(.28, .58, 1.);
-  if (r > 1.) {                                   // outside: the atmosphere's glow
-    float g = exp(-(r - 1.) * 7.) * smoothstep(1.45, 1., r) * .8;
-    gl_FragColor = vec4(haloCol * g, g) * uAlpha;
-    return;
-  }
-  // a real camera ray hitting a real sphere (perspective)
-  const float D = 2.7; float tanA = 1. / sqrt(D * D - 1.);
-  vec3 ro = vec3(0., 0., D), rd = normalize(vec3(d.x * tanA, -d.y * tanA, -1.));
-  float b = dot(ro, rd), c = dot(ro, ro) - 1.;
-  float tt = -b - sqrt(max(b * b - c, 0.));
-  vec3 n0 = normalize(ro + rd * tt), V = -rd;
-  vec3 L = normalize(vec3(-.55, .62, .56));      // the sun, upper left, in front
-  mat3 R = rotX(.38 + uTilt.y) * rotY(uTurn + uTilt.x);
-  vec3 q = R * n0;
-  float t = uTime;
-  vec3 g;
-  float h0 = waves(q, t, g);
-  // the water reacts to the mouse: rings spread out from where it moved, and it dips right under the pointer
-  float rl = 0., dipL = 0.;
-  for (int i = 0; i < 8; i++) {
-    vec4 rp = uRip[i];
-    if (rp.w < .001) continue;
-    float age = uMouse.w - rp.z;
-    if (age < 0. || age > 3.5) continue;
-    vec2 dm = (rp.xy - uC.xy) / uC.z;
-    if (dot(dm, dm) >= 1.) continue;
-    vec3 rdm = normalize(vec3(dm.x * tanA, -dm.y * tanA, -1.));
-    float bm = dot(ro, rdm), tm = -bm - sqrt(max(bm * bm - c, 0.));
-    vec3 qm = R * normalize(ro + rdm * tm);
-    vec3 dv = q - qm; float dist = length(dv) + 1e-4;
-    float front = dist - age * .18;                   // the ring's distance from where it started
-    float k = 70., env = exp(-front * front * 900.) * exp(-age * 1.3) * rp.w;
-    float ph = front * k;
-    h0 += .5 * sin(ph) * env;
-    rl += (.6 + .4 * sin(ph)) * env;                  // the ring catches light even on the dark side
-    g += .5 * (k * cos(ph) - 1800. * front * sin(ph)) * env * (dv / dist);
-  }
-  if (uMouse.z > .001) {
-    vec2 dm = (uMouse.xy - uC.xy) / uC.z;
-    if (dot(dm, dm) < 1.) {
-      vec3 rdm = normalize(vec3(dm.x * tanA, -dm.y * tanA, -1.));
-      float bm = dot(ro, rdm), tm = -bm - sqrt(max(bm * bm - c, 0.));
-      vec3 qm = R * normalize(ro + rdm * tm);
-      vec3 dv = q - qm; float d2 = dot(dv, dv);
-      float dip = exp(-d2 * 1400.) * uMouse.z;          // a soft dent in the water under the pointer
-      h0 -= .6 * dip; dipL = dip;
-      g += .6 * 2800. * dip * dv;
-    }
-  }
-  g -= dot(g, q) * q;                             // only the slope along the surface
-  vec3 n = normalize(n0 - (g * R) * .012);       // tilt the sphere's normal by the waves (back to view space)
-  float terminator = clamp(dot(n0, L) * 1.1 + .15, 0., 1.);
-  float diff = max(dot(n, L), 0.);
-  float cur = .5 + .5 * snoise(q * 1.8 + vec3(0., t * .006, 0.));    // slow lighter and darker currents
-  vec3 deep = mix(vec3(.006, .04, .14), vec3(.025, .16, .40), cur);
-  vec3 col = deep * (.05 + .95 * diff);
-  col += vec3(0., .09, .16) * smoothstep(.15, .9, h0) * terminator * .7;   // light through the wave crests
-  float NV = max(dot(n, V), 0.);
-  float F = .02 + .98 * pow(1. - NV, 5.);                               // water reflects more at grazing angles
-  col = mix(col, vec3(.36, .62, 1.) * (.18 + .82 * terminator), F * .8);
-  vec3 H = normalize(L + V); float NH = max(dot(n, H), 0.);
-  col += vec3(1., .97, .9) * (pow(NH, 1100.) * 7. + pow(NH, 120.) * .35 + pow(NH, 18.) * .05) * terminator;   // sun glitter
-  float rim = pow(1. - max(dot(n0, V), 0.), 3.);
-  col += vec3(.2, .5, 1.) * rim * (.2 + .9 * terminator);                // atmosphere seen through at the edge
-  col += vec3(.45, .72, 1.) * rl * .42 - vec3(.02, .05, .08) * dipL;    // mouse ripples
-  col = 1. - exp(-col * 1.7);                                           // soft highlights
-  float aa = smoothstep(1., 1. - 1.6 / uC.z, r);                        // smooth outline
-  gl_FragColor = vec4(col * aa + haloCol * .8 * (1. - aa), mix(.8, 1., aa)) * uAlpha;
-}`;
-const ocean = (() => {
-  const cv = L.ocean, gl = cv.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true });
-  if (!gl) { L.planet.classList.add("fallback"); return null; }
-  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
-  const prog = gl.createProgram();
-  try {
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }"));
-    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, OCEAN_FS));
-    gl.linkProgram(prog);
-  } catch (e) { console.error(e); L.planet.classList.add("fallback"); return null; }
-  gl.useProgram(prog);
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = (n) => gl.getUniformLocation(prog, n);
-  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha"), uOct = U("uOct"), uTilt = U("uTilt"), uMouse = U("uMouse"), uRip = U("uRip");
-  // computers: the screen's full sharpness (up to 2x); phones: fewer pixels and 30 frames a second, so scrolling stays smooth
-  let scale = MOBILE ? Math.min(1.5, devicePixelRatio || 1) * .6 : Math.min(2, devicePixelRatio || 1);
-  const budget = MOBILE ? 1.1e6 : 7e6, minScale = MOBILE ? .45 : .9;
-  let slow = 0, last = 0, odd = false;
-  return function draw(W, H, cx, cy, R, turn, time, alpha, m) {
-    if (MOBILE && (odd = !odd)) return;
-    const dt = last ? time - last : 16; last = time;
-    if (dt > (MOBILE ? 50 : 34)) { if (++slow > 30 && scale > minScale) { scale = Math.max(minScale, scale * .9); slow = 0; } } else slow = Math.max(0, slow - 1);
-    const px = Math.min(scale, Math.sqrt(budget / (W * H)));
-    const w = Math.round(W * px), h = Math.round(H * px);
-    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-    gl.viewport(0, 0, w, h);
-    gl.uniform2f(uRes, w, h); gl.uniform3f(uC, cx * px, cy * px, Math.max(1, R * px));
-    gl.uniform1f(uTime, time / 1000); gl.uniform1f(uTurn, turn * Math.PI * 2); gl.uniform1f(uAlpha, alpha);
-    // mouse: the globe leans toward it a little, and the water ripples where it points
-    const tx = m.on ? Math.max(-1, Math.min(1, (m.x - cx) / R)) : 0, ty = m.on ? Math.max(-1, Math.min(1, (m.y - cy) / R)) : 0;
-    m.tx += (tx * .32 - m.tx) * .06; m.ty += (ty * .22 - m.ty) * .06;
-    const near = m.on && Math.hypot(m.x - cx, m.y - cy) < R * 1.02 ? 1 : 0;
-    m.s += (near - m.s) * .08;
-    gl.uniform2f(uTilt, m.tx, m.ty);
-    gl.uniform4f(uMouse, m.x * px, m.y * px, m.s, time / 1000);
-    // drop a new ripple every ~90 ms while the pointer moves over the globe
-    const now = time / 1000;
-    if (near && m.moved && now - m.lastDrop > .09) {
-      m.rips[m.ri] = [m.x, m.y, now, Math.min(1, .45 + m.speed * .02)]; m.ri = (m.ri + 1) % 8; m.lastDrop = now; m.moved = false;
-    }
-    const ra = new Float32Array(32);
-    m.rips.forEach((r, i) => { if (r) { ra[i * 4] = r[0] * px; ra[i * 4 + 1] = r[1] * px; ra[i * 4 + 2] = r[2]; ra[i * 4 + 3] = r[3]; } });
-    gl.uniform4fv(uRip, ra);
-    // close to the surface the waves get extra fine layers, so it stays sharp and detailed
-    const zoom = R / Math.max(W, H);
-    gl.uniform1f(uOct, MOBILE ? (zoom > .8 ? 5 : 4) : (zoom > 1.6 ? 7 : zoom > .7 ? 6 : 5));
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  };
-})();
+// the Jarvis orb (public/orb.js): a 3D sphere with eyes that blink and look toward the mouse
+const orb = window.createOrb ? window.createOrb(L.ocean, { budget: MOBILE ? 1.2e6 : 6e6 }) : null;
+if (!orb) L.planet.classList.add("fallback");
+const darkPage = () => !matchMedia("(prefers-color-scheme: light)").matches;
 
 // where the mouse (or finger) is, for the globe's tilt and ripples
-const mouse = { x: 0, y: 0, on: false, tx: 0, ty: 0, s: 0, rips: new Array(8).fill(null), ri: 0, lastDrop: 0, moved: false, speed: 0 };
-addEventListener("pointermove", (e) => { mouse.speed = Math.hypot(e.clientX - mouse.x, e.clientY - mouse.y); mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; mouse.moved = true; }, { passive: true });
+const mouse = { x: 0, y: 0, on: false };
+addEventListener("pointermove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; }, { passive: true });
 document.addEventListener("pointerleave", () => (mouse.on = false));
 // the planet's own slow turning, which eases to a stop while it zooms in at the end
 let spinAcc = 0, spinLast = 0;
@@ -553,7 +353,7 @@ function spinAt(t, grow) {
 }
 function render(t) {
   const P = progress, p = Math.min(1, P / .84);       // p: the story as before, P: whole scroll
-  const grow = ease(seg(P, .86, .99)), gone = 1 - seg(P, .86, .92);
+  const grow = 0, gone = 1 - seg(P, .86, .92), orbFade = 1 - seg(P, .88, .97);
   document.documentElement.style.setProperty("--p", p);
   // hero
   const h = ease(seg(p, .015, .09));
@@ -563,12 +363,12 @@ function render(t) {
   const rise = easeOut(seg(p, .04, .2)), sink = ease(seg(p, .8, .93));
   // finally it grows from the bottom until it covers the whole screen
   const baseS = (.55 + .45 * rise) * (1 + .5 * sink), r0 = L.planet.offsetWidth / 2 * baseS || 1;
-  const cover = Math.hypot(SW, SH) / 2 * 3.2 / r0;   // dive in close to the water
+  const cover = 1;
   const planetY = (75 * (1 - rise) + 52 * sink) * (1 - grow), planetS = baseS * (1 + (cover - 1) * grow), planetO = Math.min(1, rise * 1.4);
-  place(L.planet, { y: planetY, s: planetS, o: ocean ? 0 : planetO });
+  place(L.planet, { y: planetY, s: planetS, o: orb ? 0 : planetO * orbFade });
   // the planet turns slowly by itself and faster while you scroll
-  if (ocean) ocean(SW, SH, SW / 2, SH / 2 + planetY * SH / 100, L.planet.offsetWidth / 2 * planetS,
-                   spinAt(t, grow) - ringAngle(p) / (Math.PI * 2), reduce ? 0 : t, planetO, mouse);
+  if (orb) orb({ W: SW, H: SH, cx: SW / 2, cy: SH / 2 + planetY * SH / 100, R: L.planet.offsetWidth / 2 * planetS, t,
+                 look: mouse.on ? mouse : null, dark: darkPage(), alpha: planetO * orbFade, mood: p > .8 && p < .95 ? 1 : 0 });
   // features: the icons orbit the globe on a ring that turns with it
   const showIcons = easeOut(seg(p, .14, .2)) * (1 - ease(seg(p, .76, .82)));
   const pcx = SW / 2, pcy = SH / 2 + planetY * SH / 100, pR = L.planet.offsetWidth / 2 * planetS;
@@ -580,7 +380,7 @@ function render(t) {
   const f = easeOut(seg(p, .86, .95)), b = easeOut(seg(p, .88, .97)), st = easeOut(seg(p, .9, .98));
   place(L.final, { y: -26 + 4 * (1 - f), o: f * gone });
 
-  place(L.start, { y: 30 + 6 * (1 - st) - 20 * grow, o: st * gone });
+  place(L.start, { y: 2 + 6 * (1 - st), o: st * gone });   // between the title and the orb, not on it
 }
 function drawSky(t) {
   ctx.clearRect(0, 0, W, H);
@@ -589,7 +389,7 @@ function drawSky(t) {
     const y = ((s.y - shift * s.d) % (H * 1.6) + H * 1.6) % (H * 1.6);
     if (y > H) continue;
     const tw = reduce ? s.a : s.a * (.65 + .35 * Math.sin(t / 1000 * s.s + s.x));
-    ctx.globalAlpha = tw; ctx.fillStyle = "#fff";
+    ctx.globalAlpha = tw * (darkPage() ? 1 : .5); ctx.fillStyle = darkPage() ? "#fff" : "#1a1c22";
     ctx.beginPath(); ctx.arc(s.x, y, s.r, 0, Math.PI * 2); ctx.fill();
   }
   // a shooting star now and then

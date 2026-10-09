@@ -72,7 +72,7 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* One recipe for every glass surface */
-aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-card, .res, .think-block, .search-bar, .home-action, .home-card {
+aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-card, .res, .think-block, .search-bar, .home-action, .home-card, .jv-card, .jv-ask {
   background-color: var(--glass); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
   border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), var(--shadow);
 }
@@ -423,6 +423,42 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 .recent .tt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent small { color: var(--muted); font-size: 12px; flex: none; }
 
+/* ---------- Jarvis ---------- */
+body:not(.jarvis-view) #jarvis { display: none; }
+body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, body.jarvis-view #model, body.jarvis-view #typeBadge { display: none !important; }
+#jarvis { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 2px 20px; }
+.jv { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 12px; max-width: 1200px; margin: 0 auto; align-items: start; }
+@media (max-width: 900px) { .jv { grid-template-columns: 1fr; } }
+.jv-card { border-radius: 28px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.jv-orb { position: relative; width: 100%; aspect-ratio: 1; max-width: 300px; margin: 0 auto; }
+.jv-orb canvas { position: absolute; inset: -18%; width: 136%; height: 136%; }
+.jv-status { text-align: center; font-size: 13px; color: var(--muted); margin-top: -6px; }
+.jv-status b { color: var(--fg); font-weight: 600; }
+.jv-stop { min-height: 56px; border-radius: 999px; border: none; font-size: 17px; font-weight: 700; letter-spacing: .3px; color: #fff; cursor: pointer;
+  background: linear-gradient(180deg, #ff5a4e, #d92a1f); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.45), inset 0 -2px 4px rgba(0,0,0,.2), 0 10px 26px rgba(217,42,31,.38);
+  display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform .35s cubic-bezier(.3,1.6,.4,1); }
+.jv-stop:hover { transform: scale(1.03); } .jv-stop:active { transform: scale(.95); }
+.jv-stop svg { width: 20px; height: 20px; }
+.jv-ask { display: flex; gap: 8px; align-items: center; padding: 6px 6px 6px 16px; border-radius: 999px; }
+.jv-ask input { flex: 1; min-width: 0; border: none; outline: none; background: none; color: var(--fg); font: inherit; }
+.jv-log { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+.jv-msg { padding: 9px 13px; border-radius: 18px; font-size: 14px; line-height: 1.45; max-width: 92%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.jv-msg.you { align-self: flex-end; background-color: var(--bubble); color: var(--bubble-fg); }
+.jv-msg.jarvis { align-self: flex-start; background-color: var(--btn-glass); border: 1px solid var(--glass-edge); }
+.jv-msg.action, .jv-msg.system, .jv-msg.refused, .jv-msg.error { align-self: center; font-size: 12.5px; color: var(--muted); padding: 2px 8px; }
+.jv-msg.refused, .jv-msg.error { color: var(--danger); }
+.jv-confirm { border-radius: 20px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--warn) 16%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+.jv-confirm b { font-size: 14px; } .jv-confirm span { font-size: 13.5px; color: var(--fg); }
+.jv-confirm .row { justify-content: flex-end; }
+.jv-screen { position: relative; border-radius: 20px; overflow: hidden; background: #000; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; border: 1px solid var(--glass-edge); }
+.jv-screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.jv-screen .ph { color: #9aa0aa; font-size: 14px; text-align: center; padding: 20px; }
+.jv-screen .live { position: absolute; top: 10px; left: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: 1px; color: #fff; background: rgba(217,42,31,.9); padding: 3px 9px; border-radius: 999px; }
+.jv-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.jv-head h3 { margin: 0; font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.jv-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 18px; }
+.jv-offline { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; color: var(--muted); font-size: 14px; }
+
 /* ---------- Files ---------- */
 #filesDlg { width: min(640px, calc(100vw - 24px)); }
 #filesDlg .body { padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
@@ -525,6 +561,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 <aside id="sidebar">
   <div class="brand"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>Albatross</div>
   <button class="side-btn" id="goHome"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Home</button>
+  <button class="side-btn" id="goJarvis"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/></svg>Jarvis</button>
   <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
   <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
   <div class="chat-list" id="chatList"></div>
@@ -555,6 +592,32 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
   </div>
 
   <div id="home"></div>
+  <div id="jarvis">
+    <div class="jv">
+      <div class="jv-card">
+        <div class="jv-orb"><canvas id="jvOrb" aria-hidden="true"></canvas></div>
+        <div class="jv-status" id="jvStatus">Connecting to Jarvis…</div>
+        <button class="jv-stop" id="jvStop" title="Stops whatever Jarvis is doing, at once"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="3"/></svg>STOP</button>
+        <div class="jv-confirm" id="jvConfirm" hidden><b>Jarvis asks:</b><span id="jvConfirmText"></span><div class="row"><button class="btn small" id="jvDeny">Deny</button><button class="btn small primary" id="jvAllow">Allow</button></div></div>
+        <form class="jv-ask" id="jvAsk"><input id="jvInput" placeholder="Tell Jarvis what to do…" autocomplete="off"><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>
+        <div class="jv-log" id="jvLog"></div>
+        <div class="jv-offline" id="jvOffline" hidden><span id="jvOfflineText">Jarvis isn't running on your PC.</span><button class="btn primary" id="jvStart">Start Jarvis</button></div>
+      </div>
+      <div class="jv-card">
+        <div class="jv-head"><h3>Your PC's screen</h3><label class="pub-toggle"><input type="checkbox" class="switch" id="jvLive">Live</label></div>
+        <div class="jv-screen" id="jvScreen"><div class="ph" id="jvScreenPh">Switch on <b>Live</b> to watch what Jarvis does on your PC.</div></div>
+        <div class="jv-head"><h3>Settings</h3></div>
+        <div class="jv-settings">
+          <label class="check"><span>Control the computer<small>Open apps, type and click.</small></span><input type="checkbox" class="switch" data-jv="control"></label>
+          <label class="check"><span>Speak out loud<small>On the PC's speakers.</small></span><input type="checkbox" class="switch" data-jv="voice"></label>
+          <label class="check"><span>Internet access<small>Search the web, read pages.</small></span><input type="checkbox" class="switch" data-jv="internet"></label>
+          <label class="check"><span>"Hey Jarvis"<small>Listen for the wake word.</small></span><input type="checkbox" class="switch" data-jv="wake_word"></label>
+          <label class="check"><span>Show click targets<small>Red boxes on the PC's screen.</small></span><input type="checkbox" class="switch" data-jv="targets"></label>
+          <label class="check"><span>Follow the cursor<small>Its eyes follow the mouse.</small></span><input type="checkbox" class="switch" data-jv="follow"></label>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="messages" id="messages"><div class="inner" id="inner"></div></div>
 
   <div class="composer">
@@ -780,6 +843,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 
 <div class="toast" id="toast"></div>
 
+<script src="orb.js"></script>
 <script>
 "use strict";
 // ======================================================================
@@ -2062,8 +2126,11 @@ loadImgFields();
 // ======================================================================
 function setView(v) {
   document.body.classList.toggle("home-view", v === "home");
+  document.body.classList.toggle("jarvis-view", v === "jarvis");
   $("#goHome").classList.toggle("on", v === "home");
+  $("#goJarvis").classList.toggle("on", v === "jarvis");
   if (v === "home") renderHome();
+  if (v === "jarvis") jarvisOpen(); else jarvisClose();
 }
 const isHome = () => document.body.classList.contains("home-view");
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
@@ -2458,11 +2525,130 @@ $("#installBtn").onclick = async () => { if (!installPrompt) return; installProm
 if (matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) $("#installNote").hidden = true;
 
 // ======================================================================
+// Jarvis: the orb on the PC, driven from here (through the Albatross host)
+// ======================================================================
+const jv = { open: false, state: null, seen: 0, poll: 0, live: false, shotBusy: false, raf: 0, orb: null, mouse: null, lastStart: 0 };
+// This PC: through the local host's doorway. Another device: end-to-end encrypted with the code.
+async function jarvisCall(method, path, body) {
+  if (viaHost || (S.conn.mode !== "remote" && !CODE_RE.test(S.conn.code))) {
+    const r = await fetch("http://127.0.0.1:4747/jarvis" + path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(25000) });
+    return { status: r.status, j: await r.json().catch(() => ({})) };
+  }
+  const res = await e2eFetch("/jarvis" + path, { method, body: body ? JSON.stringify(body) : undefined, base: hostBase() });
+  return { status: res.status, j: await res.json().catch(() => ({})) };
+}
+function jarvisOpen() {
+  if (jv.open) return;
+  jv.open = true;
+  if (!jv.orb && window.createOrb) jv.orb = createOrb($("#jvOrb"), { budget: 1.2e6 });
+  const frame = (t) => {
+    if (!jv.open) return;
+    const cv = $("#jvOrb"), box = cv.getBoundingClientRect();
+    if (jv.orb && box.width) {
+      const W = box.width, H = box.height, st = jv.state?.state || "idle";
+      const look = jv.mouse ? { x: jv.mouse.x - box.left, y: jv.mouse.y - box.top } : null;
+      jv.orb({ W, H, cx: W / 2, cy: H / 2, R: W / 2 / 1.36, t, look, dark: document.documentElement.dataset.theme === "dark",
+               mood: st === "thinking" ? 2 : st === "listening" ? 3 : st === "speaking" ? 1 : 0,
+               pulse: jv.state?.busy ? .5 + .5 * Math.sin(t / 260) : 0, alpha: jv.state ? 1 : .55 });
+    }
+    jv.raf = requestAnimationFrame(frame);
+  };
+  jv.raf = requestAnimationFrame(frame);
+  jarvisPoll();
+}
+function jarvisClose() { jv.open = false; cancelAnimationFrame(jv.raf); clearTimeout(jv.poll); }
+addEventListener("pointermove", (e) => { jv.mouse = { x: e.clientX, y: e.clientY }; }, { passive: true });
+
+async function jarvisPoll() {
+  clearTimeout(jv.poll);
+  if (!jv.open) return;
+  try {
+    const { status, j } = await jarvisCall("GET", "/state");
+    if (status === 200) { jv.state = j; renderJarvis(); }
+    else jarvisOffline(j.error || "Jarvis isn't reachable.", j.canStart);
+  } catch (e) {
+    jarvisOffline(/not allowed|unknown/i.test(e.message) ? "Your PC runs an older Albatross host. Restart it to use Jarvis." : "Your PC isn't connected. Check the connection in Settings.", false);
+  }
+  jv.poll = setTimeout(jarvisPoll, jv.state?.busy ? 700 : 1300);
+}
+function jarvisOffline(text, canStart) {
+  jv.state = null;
+  $("#jvOffline").hidden = false; $("#jvOfflineText").textContent = text;
+  $("#jvStart").hidden = !canStart;
+  $("#jvStatus").textContent = "Offline";
+  $("#jvConfirm").hidden = true;
+}
+const JV_STATE = { idle: "Ready", thinking: "Thinking…", listening: "Listening…", speaking: "Speaking", sleeping: "Asleep", booting: "Starting its model…", error: "Something went wrong" };
+function renderJarvis() {
+  const st = jv.state;
+  $("#jvOffline").hidden = true;
+  $("#jvStatus").innerHTML = `<b>${esc(JV_STATE[st.state] || st.state)}</b>${st.settings.control ? " · can control the PC" : ""}`;
+  $("#jvConfirm").hidden = !st.pending;
+  $("#jvConfirmText").textContent = st.pending || "";
+  for (const el of $$("[data-jv]")) if (document.activeElement !== el) el.checked = !!st.settings[el.dataset.jv];
+  const log = $("#jvLog"), last = st.log.length ? st.log[st.log.length - 1].id : 0;
+  if (last !== jv.seen) {
+    jv.seen = last;
+    log.innerHTML = "";
+    if (!st.log.length) log.innerHTML = '<div class="jv-msg system">Say something to Jarvis. It answers on the PC and here.</div>';
+    for (const m of st.log) { const d = document.createElement("div"); d.className = "jv-msg " + m.role; d.textContent = m.text; log.appendChild(d); }
+    log.scrollTop = log.scrollHeight;
+  }
+}
+$("#jvAsk").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("#jvInput").value.trim(); if (!text) return;
+  $("#jvInput").value = "";
+  try { const { status, j } = await jarvisCall("POST", "/ask", { text }); if (status !== 200) toast(j.error || "Jarvis didn't take that"); } catch (err) { toast("Couldn't reach Jarvis: " + err.message); }
+  jarvisPoll();
+});
+$("#jvStop").onclick = async () => {
+  $("#jvStop").disabled = true;
+  try { await jarvisCall("POST", "/stop"); toast("Jarvis stopped"); } catch (e) { toast("Couldn't reach Jarvis: " + e.message); }
+  $("#jvStop").disabled = false; jarvisPoll();
+};
+$("#jvAllow").onclick = () => jarvisCall("POST", "/confirm", { yes: true }).then(jarvisPoll);
+$("#jvDeny").onclick = () => jarvisCall("POST", "/confirm", { yes: false }).then(jarvisPoll);
+$("#jvStart").onclick = async () => {
+  $("#jvStart").disabled = true; $("#jvOfflineText").textContent = "Starting Jarvis on your PC…";
+  try { await jarvisCall("POST", "/start"); } catch {}
+  setTimeout(() => { $("#jvStart").disabled = false; jarvisPoll(); }, 6000);
+};
+for (const el of $$("[data-jv]")) el.onchange = async () => {
+  try { const { j } = await jarvisCall("POST", "/settings", { [el.dataset.jv]: el.checked }); if (j.settings) { jv.state = j; renderJarvis(); } } catch (e) { toast("Couldn't change that: " + e.message); }
+};
+// the live screen: one picture at a time, the next as soon as the last has arrived
+$("#jvLive").onchange = (e) => {
+  jv.live = e.target.checked;
+  const box = $("#jvScreen");
+  if (!jv.live) { box.innerHTML = '<div class="ph">Switch on <b>Live</b> to watch what Jarvis does on your PC.</div>'; return; }
+  box.innerHTML = '<span class="live">LIVE</span><div class="ph">Connecting to the screen…</div>';
+  jarvisScreen();
+};
+async function jarvisScreen() {
+  if (!jv.live || !jv.open || jv.shotBusy) return;
+  jv.shotBusy = true;
+  try {
+    const w = Math.min(1600, Math.round($("#jvScreen").clientWidth * (devicePixelRatio || 1)));
+    const { status, j } = await jarvisCall("GET", `/screen?w=${w}&q=${viaHost ? 70 : 55}`);
+    if (status === 200 && j.jpeg && jv.live) {
+      const box = $("#jvScreen");
+      let img = box.querySelector("img");
+      if (!img) { box.innerHTML = '<span class="live">LIVE</span>'; img = document.createElement("img"); img.alt = "Your PC's screen"; box.appendChild(img); }
+      img.src = "data:image/jpeg;base64," + j.jpeg;
+    }
+  } catch {}
+  jv.shotBusy = false;
+  if (jv.live) setTimeout(jarvisScreen, viaHost ? 120 : 400);
+}
+
+// ======================================================================
 // Wire up
 // ======================================================================
 $("#send").onclick = () => send();
 $("#newChat").onclick = () => openNewChat();
 $("#goHome").onclick = () => { setView("home"); $("#sidebar").classList.remove("open"); };
+$("#goJarvis").onclick = () => { setView("jarvis"); $("#sidebar").classList.remove("open"); };
 $("#openFiles").onclick = () => { openFiles(); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
 $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
