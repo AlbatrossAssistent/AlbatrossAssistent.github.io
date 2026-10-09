@@ -992,7 +992,7 @@ function cleanModels(list) {
 }
 function guessKind(m) {
   const n = (m.name + " " + (m.details?.family || "") + " " + (m.details?.families || []).join(" ")).toLowerCase();
-  if (/flux|z-image|zimage|stable-diffusion|sdxl|image-turbo/.test(n)) return "image";
+  if (/:comfyui$/.test(m.name) || /flux|z-image|zimage|stable-diffusion|sdxl|image-turbo|omnigen|qwen-image/.test(n)) return "image";
   if (/llava|vision|bakllava|moondream|minicpm-v|gemma3|gemma4|gemma-?3n|llama4|pixtral|mistral-small3|qwen2\.5vl|qwen2-vl|qwen3-vl|llama3\.2-vision|mllama|clip/.test(n)) return "vision";
   if ((m.details?.families || []).includes("clip")) return "vision";
   if (/embed|bge|nomic-embed|mxbai/.test(n)) return "embed";

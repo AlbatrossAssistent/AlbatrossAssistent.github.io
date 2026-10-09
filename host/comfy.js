@@ -106,7 +106,7 @@ function omnigenWorkflow({ prompt, width = 1024, height = 1024, steps = 20, seed
     for (const name of refs) {
       const load = String(id++), scale = String(id++), enc = String(id++), rp = String(id++), rn = String(id++);
       w[load] = { class_type: "LoadImage", inputs: { image: name } };
-      w[scale] = { class_type: "ImageScaleToTotalPixels", inputs: { image: [load, 0], upscale_method: "lanczos", megapixels: 1 } };
+      w[scale] = { class_type: "ImageScaleToTotalPixels", inputs: { image: [load, 0], upscale_method: "lanczos", megapixels: 1, resolution_steps: 16 } };
       w[enc] = { class_type: "VAEEncode", inputs: { pixels: [scale, 0], vae: ["3", 0] } };
       w[rp] = { class_type: "ReferenceLatent", inputs: { conditioning: pos, latent: [enc, 0] } };
       w[rn] = { class_type: "ReferenceLatent", inputs: { conditioning: neg, latent: [enc, 0] } };

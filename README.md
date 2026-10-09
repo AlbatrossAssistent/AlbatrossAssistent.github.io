@@ -111,9 +111,16 @@ set OLLAMA_API_KEY=your_key && npm start   # Windows (cmd)
 
 1. Download `ComfyUI_windows_portable_nvidia.7z` from the [ComfyUI releases](https://github.com/Comfy-Org/ComfyUI/releases) and unpack it into a `ComfyUI` folder next to the Burrow folder (for example `D:\Burrow\app` and `D:\Burrow\ComfyUI\ComfyUI_windows_portable`). Set `COMFY_DIR` if you put it somewhere else.
 2. From [Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo/tree/main/split_files), put these into `ComfyUI\models`:
-   - `diffusion_models/z_image_turbo_nvfp4.safetensors` (4.5 GB, for RTX 50-series; use `z_image_turbo_int8_convrot.safetensors` on older cards and change `FILES.unet` in `host/comfy.js`)
+   - `diffusion_models/z_image_turbo_nvfp4.safetensors` (4.5 GB, for RTX 50-series; use `z_image_turbo_int8_convrot.safetensors` on older cards and change its file name in `MODELS` in `host/comfy.js`)
    - `text_encoders/qwen_3_4b_fp8_mixed.safetensors` (5.6 GB)
    - `vae/ae.safetensors` (0.3 GB)
-3. Restart the host. **z-image-turbo:comfyui** appears in Image mode on every device connected with your code. It stays end-to-end encrypted.
+3. Restart the host. **z-image-turbo:comfyui** appears in Settings → Image on every device connected with your code, and on this PC itself. It stays end-to-end encrypted.
+
+**OmniGen2 (edits pictures).** OmniGen2 can change an existing picture instead of starting over: attach a photo and say what to change, or follow up on a picture with something like "make it night". Albatross sends those to OmniGen2 with the picture; new pictures still use the image model chosen in Settings → Image.
+
+1. Install the [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) add-on into `ComfyUI\custom_nodes` and its requirements (`python_embeded\python.exe -s -m pip install -r ComfyUI\custom_nodes\ComfyUI-GGUF\requirements.txt`).
+2. Put `omnigen2-fp32-q8_0.gguf` (6.7 GB) into `ComfyUI\models\unet`, and `qwen_2.5_vl_fp16.safetensors` (7.5 GB, from [Comfy-Org/Omnigen2_ComfyUI_repackaged](https://huggingface.co/Comfy-Org/Omnigen2_ComfyUI_repackaged)) into `ComfyUI\models\text_encoders`. It uses the same `vae/ae.safetensors` as Z-Image.
+3. That GGUF file is tagged with the architecture "pig", which ComfyUI-GGUF doesn't recognise as OmniGen2 yet. On this PC `custom_nodes\ComfyUI-GGUF\tools\convert.py` has a small added `ModelOmniGen2` entry (and `loader.py` lists "omnigen2"). Updating the add-on removes that change, so add it again after an update.
+4. Restart the host. **omnigen2:comfyui** appears next to Z-Image.
 
 Only one model is kept in GPU memory at a time: before a chat or image, the host unloads every other model (Ollama and ComfyUI). The host starts ComfyUI (only reachable from this PC) on the first image request. The first image after that takes a while to load; after that a 1024×1024 image takes about 15 seconds on an RTX 5070. **Free GPU memory** also unloads ComfyUI. ComfyUI's log is in `host/comfyui.log`.
