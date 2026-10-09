@@ -468,7 +468,7 @@ function drawSky(t) {
 // ---------- smooth scrolling ----------
 let lenis = null;
 if (!reduce && window.Lenis) {
-  lenis = new Lenis({ duration: 2.1, smoothWheel: true, wheelMultiplier: .55, syncTouch: TOUCH, syncTouchLerp: .06, touchInertiaMultiplier: 18, touchMultiplier: TOUCH ? .5 : 1 });
+  lenis = new Lenis({ duration: 2.1, smoothWheel: true, wheelMultiplier: .55, touchMultiplier: 1 });
   document.querySelectorAll('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); lenis.scrollTo(a.getAttribute("href") === "#top" ? 0 : a.getAttribute("href")); }));
 }
 const navEl = document.querySelector(".nav");

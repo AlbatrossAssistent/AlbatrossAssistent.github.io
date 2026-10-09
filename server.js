@@ -139,6 +139,7 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname.startsWith("/relay/")) return handleRelay(req, res, url);
   if (url.pathname.startsWith("/tools/")) return handleTools(req, res, url);
+  if (url.pathname === "/power/wake") return handleWake(req, res);
 
   // static files
   if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
@@ -215,6 +216,51 @@ function finish(host, id, errorText) {
     else p.res.end();
   } else p.res.end();
 }
+// ---------- Wake-on-LAN ----------
+// The PC is off, so nothing on it can help. The server sends a "magic packet" (UDP) to the home's public
+// address, which a router can pass on to the PC, and also knocks on a TCP port there: a FRITZ!Box with
+// "start this computer automatically when it is accessed from the internet" wakes the PC on that.
+// Nothing is stored; the browser sends the address, port and network card (MAC) with each request.
+const dgram = require("dgram");
+const net = require("net");
+const wakeUse = new Map(); // ip -> times
+function handleWake(req, res) {
+  cors(res);
+  if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+  if (req.method !== "POST") return sendJson(res, 405, { error: "POST only" });
+  const ip = clientIp(req), now = Date.now();
+  const times = (wakeUse.get(ip) || []).filter((t) => now - t < 10 * 60e3);
+  if (times.length >= 12) return sendJson(res, 429, { error: "Too many wake-ups. Wait a few minutes." });
+  times.push(now); wakeUse.set(ip, times);
+  let raw = "";
+  req.on("data", (c) => { raw += c; if (raw.length > 2000) req.destroy(); });
+  req.on("end", async () => {
+    let b = {};
+    try { b = JSON.parse(raw || "{}"); } catch {}
+    const mac = String(b.mac || "").replace(/[^0-9a-f]/gi, "");
+    const host = String(b.host || "").trim();
+    const port = Math.min(65535, Math.max(1, Number(b.port) || 9));
+    if (mac.length !== 12) return sendJson(res, 400, { error: "That network card address (MAC) doesn't look right." });
+    if (!/^[a-z0-9.-]{3,253}$/i.test(host) || /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.)/i.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host))
+      return sendJson(res, 400, { error: "Enter your home's public address (for example its MyFRITZ! address), not a local one." });
+    const packet = Buffer.alloc(102, 0xff);
+    const m = Buffer.from(mac, "hex");
+    for (let i = 0; i < 16; i++) m.copy(packet, 6 + i * 6);
+    const sock = dgram.createSocket("udp4");
+    const sent = await new Promise((done) => {
+      let n = 0, ok = 0;
+      for (let i = 0; i < 3; i++) sock.send(packet, port, host, (err) => { if (!err) ok++; if (++n === 3) { sock.close(); done(ok); } });
+    }).catch(() => 0);
+    // the knock: just opening a connection is enough for a router that starts the PC on access
+    const knock = await new Promise((done) => {
+      const c = net.connect({ host, port: Number(b.knockPort) || port, timeout: 3000 });
+      const end = (r) => { c.destroy(); done(r); };
+      c.on("connect", () => end("open")); c.on("timeout", () => end("waiting")); c.on("error", (e) => end(e.code || "error"));
+    });
+    sendJson(res, 200, { ok: true, sent, knock });
+  });
+}
+
 function safeSend(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch {} }
 
 // ---------- WebSockets: /host for host PCs, /peer for public users sending files ----------
@@ -227,7 +273,8 @@ server.on("upgrade", (req, socket, head) => {
   target.handleUpgrade(req, socket, head, (ws) => target.emit("connection", ws, req));
 });
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
+  const publicIp = req ? clientIp(req) : "";
   let myCode = null;
   ws.isAlive = true;
   ws.on("pong", () => (ws.isAlive = true));
@@ -250,7 +297,7 @@ wss.on("connection", (ws) => {
       myCode = code;
       hosts.set(code, { ws, name: String(msg.name || "PC").slice(0, 60), secretHash: sha(msg.secret), pending: new Map() });
       console.log(`[relay] device online: ${code} (${msg.name || "PC"})`);
-      return safeSend(ws, { type: "registered", code });
+      return safeSend(ws, { type: "registered", code, ip: publicIp });
     }
 
     const host = myCode && hosts.get(myCode);

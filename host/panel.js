@@ -33,7 +33,7 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, onLis
     // The website on this PC talks to Ollama through here, so it also gets ComfyUI image models,
     // one-model-at-a-time and the loading percentage, just like devices that connect with the code.
     // Jarvis, for the website on this PC (devices with the code reach it end-to-end encrypted instead).
-    const jx = req.url.match(/^(\/jarvis\/[a-z]+(?:\?[\w=&.%-]*)?)$/);
+    const jx = req.url.match(/^(\/(?:jarvis|pc)\/[a-z]+(?:\?[\w=&.%-]*)?)$/);
     if (jx && jarvis) {
       const origin = req.headers.origin || "";
       if (origin && !ORIGINS.test(origin)) { res.writeHead(403); return res.end(); }

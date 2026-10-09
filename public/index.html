@@ -571,6 +571,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
       <button class="side-btn" id="powerBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>Turn on PC</button>
       <small id="powerMsg" role="status"></small>
     </div>
+    <button class="side-btn" id="offBtn" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg><span id="offText">Shut down PC</span></button>
     <button class="side-btn" id="openFiles"><svg class="i" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg>Files<span class="live" id="pubLive" hidden title="You are public"></span></button>
     <button class="side-btn" id="openConn"><svg class="i" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Connect with code</button>
     <button class="side-btn" id="openSettings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
@@ -668,9 +669,17 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
             <div class="field"><label for="relayUrl">Albatross server</label><input id="relayUrl" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
           </div>
           <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
-          <h3>Turn on your PC</h3>
-          <div class="field"><label for="powerUrl">Turn-on link</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input id="powerUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://… (your smart plug or Alexa routine link)" style="flex:1;min-width:0"><button class="btn" id="powerUrlShow" type="button">Show</button></div>
-            <small>When your PC is offline, a <b>Turn on PC</b> button appears in the sidebar and opens this link, for example a Voice Monkey or smart-plug link that switches the PC's plug on. Saved on this device and, if you're signed in, in your account encrypted with your passphrase. It never goes to the Albatross server.</small></div>
+          <h3>Turn your PC on and off</h3>
+          <div class="note" style="margin:0">Wake-on-LAN: the Albatross server sends a wake-up signal to your home, and your router starts the PC. The PC's details below fill in by themselves while it's connected. One-time setup on the router: see the tip under the fields.</div>
+          <div class="row">
+            <div class="field" style="flex:2 1 220px"><label for="wakeHost">Home address</label><input id="wakeHost" autocomplete="off" spellcheck="false" placeholder="e.g. xyz123.myfritz.net or your public IP"></div>
+            <div class="field" style="flex:1 1 90px"><label for="wakePort">Port</label><input id="wakePort" type="number" min="1" max="65535" placeholder="9"></div>
+            <div class="field" style="flex:1 1 170px"><label for="wakeMac">PC network card (MAC)</label><input id="wakeMac" autocomplete="off" spellcheck="false" placeholder="AA-BB-CC-DD-EE-FF"></div>
+          </div>
+          <small style="color:var(--muted);font-size:12.5px;margin-top:-8px">FRITZ!Box: Internet → Permit Access → Port Sharing → your PC → add a sharing for this port, and tick <b>"Start this computer automatically when it is accessed from the internet"</b>. In the PC's BIOS, switch on Wake-on-LAN ("Power On By PCI-E"). Saved on this device, and in your account encrypted if you're signed in.</small>
+          <details class="note" style="margin:0"><summary style="cursor:pointer;color:var(--fg)">Advanced: smart plug link instead</summary>
+          <div class="field" style="margin-top:10px"><label for="powerUrl">Turn-on link</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input id="powerUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://… (your smart plug or Alexa routine link)" style="flex:1;min-width:0"><button class="btn" id="powerUrlShow" type="button">Show</button></div>
+            <small>Used when Wake-on-LAN isn't set up: the button opens this link, for example a Voice Monkey or smart-plug link that switches the PC's plug on. It never goes to the Albatross server.</small></div></details>
           <div class="note">
             <strong style="color:var(--fg)">Share this PC's AI with another device</strong><br>
             On this PC, with Ollama running, open a terminal in the Albatross folder and run<br>
@@ -840,6 +849,17 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
   </div>
 </dialog>
 <div class="offers" id="offers" aria-live="polite"></div>
+
+<dialog id="termsDlg">
+  <div class="modal">
+    <div class="modal-head"><h2>Welcome to Albatross</h2></div>
+    <div class="body" style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <p style="margin:0;line-height:1.55">Albatross runs AI on your own PC. Before you start, please read and accept how it may be used and what happens to your data.</p>
+      <label class="check" style="border:none;justify-content:flex-start;gap:12px"><input type="checkbox" class="switch" id="termsOk"><span>I agree to the <a href="https://albatrossassistent.github.io/terms.html" target="_blank" rel="noopener" style="color:var(--fg)">Terms of Use</a> and have read the <a href="https://albatrossassistent.github.io/privacy.html" target="_blank" rel="noopener" style="color:var(--fg)">Privacy Policy</a>.</span></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" id="termsGo" disabled>Continue</button></div>
+    </div>
+  </div>
+</dialog>
 
 <div class="toast" id="toast"></div>
 
@@ -1098,14 +1118,20 @@ function fillModelSelect() {
     sel.innerHTML = imageMode ? "<option value=''>No image models</option>" : "<option value=''>No models installed</option>";
     return;
   }
-  for (const m of list) {
+  const opt = (m, parent) => {
     const o = document.createElement("option");
     o.value = m.name;
     o.textContent = (m.running ? "● " : "") + m.name + (m.kind === "vision" ? " (vision)" : "") + (m.cloud ? " (cloud)" : "");
-    sel.appendChild(o);
-  }
-  const want = imageMode ? S.imageModel : S.model;
-  if (list.some(m => m.name === want)) sel.value = want;
+    parent.appendChild(o);
+  };
+  const imgs = imageMode ? [] : models.filter(m => m.kind === "image");
+  if (imgs.length) {
+    // chat models first, then the image models: picking one makes every message a picture with it
+    const g1 = document.createElement("optgroup"); g1.label = "Chat"; list.forEach(m => opt(m, g1)); sel.appendChild(g1);
+    const g2 = document.createElement("optgroup"); g2.label = "Pictures"; imgs.forEach(m => opt(m, g2)); sel.appendChild(g2);
+  } else list.forEach(m => opt(m, sel));
+  const want = imageMode ? S.imageModel : (S.pickedImage && imgs.some(m => m.name === S.pickedImage) ? S.pickedImage : S.model);
+  if ([...sel.options].some(o => o.value === want)) sel.value = want;
   fillCtxModels();
 }
 function imageModels() { return models.filter(m => m.kind === "image"); }
@@ -1184,38 +1210,87 @@ setInterval(() => { if (connected && !document.hidden && !controller) refreshLoa
 // Your own turn-on link (Settings → Connection), e.g. a smart-plug or Alexa routine link. The browser opens it
 // directly, so the Albatross server never sees it. The button only shows while the remote PC is offline.
 let powerWait = null;
+const wake = () => ({ host: store.get("wakeHost", ""), port: store.get("wakePort", "") || 9, mac: store.get("wakeMac", "") });
+const remotePC = () => S.conn.mode === "remote" && CODE_RE.test(S.conn.code);
 function updatePowerBox(online) {
-  const box = $("#powerBox");
-  if (online || S.conn.mode !== "remote" || !CODE_RE.test(S.conn.code) || !store.get("powerUrl", "")) {
+  const box = $("#powerBox"), w = wake();
+  const canWake = (w.host && w.mac) || store.get("powerUrl", "");
+  $("#offBtn").hidden = !(online && (remotePC() || viaHost));
+  if (online || !remotePC() || !canWake) {
     box.hidden = true;
     if (powerWait) { clearInterval(powerWait); powerWait = null; toast("Your PC is on and connected"); }
     $("#powerMsg").textContent = "";
+    if (online) learnPC();
     return;
   }
   box.hidden = false;
 }
+// while the PC is connected, remember what Wake-on-LAN needs (its network card and the home's address)
+let learned = false;
+async function learnPC() {
+  if (learned) return;
+  learned = true;
+  try {
+    const r = remotePC() ? await e2eFetch("/pc/info", { base: hostBase() }) : await fetch("http://127.0.0.1:4747/pc/info", { signal: AbortSignal.timeout(3000) });
+    const j = await r.json();
+    if (j.mac && !store.get("wakeMac", "")) store.set("wakeMac", j.mac);
+    if (j.publicIp && !store.get("wakeHost", "")) store.set("wakeHost", j.publicIp);
+  } catch { learned = false; }
+}
+function waitForPC(msg, how) {
+  const started = Date.now();
+  clearInterval(powerWait);
+  powerWait = setInterval(async () => {
+    if (Date.now() - started > 6 * 60e3) {
+      clearInterval(powerWait); powerWait = null;
+      msg.textContent = how === "wol" ? "The PC hasn't come online. Check the home address, the router's port sharing, and Wake-on-LAN in the PC's BIOS." : "The PC hasn't come online. Check the link, that the PC starts when it gets power (BIOS: Restore on AC power loss), and that Albatross starts at boot.";
+      return;
+    }
+    if (await connect(true)) checkSearch();
+  }, 10000);
+}
 $("#powerBtn").onclick = async () => {
-  const url = store.get("powerUrl", ""), msg = $("#powerMsg");
-  if (!/^https:\/\//i.test(url)) { msg.textContent = "Add an https turn-on link in Settings → Connection first."; return; }
+  const w = wake(), url = store.get("powerUrl", ""), msg = $("#powerMsg");
   $("#powerBtn").disabled = true;
   msg.textContent = "Sending…";
   try {
-    // "no-cors": the trigger services don't allow reading their answer, but the request still goes through.
-    await fetch(url, { mode: "no-cors", cache: "no-store", referrerPolicy: "no-referrer", credentials: "omit" });
-    msg.textContent = "Turn-on link opened. Your PC is starting, which usually takes 1 to 2 minutes. This connects by itself.";
-    const started = Date.now();
-    clearInterval(powerWait);
-    powerWait = setInterval(async () => {
-      if (Date.now() - started > 6 * 60e3) {
-        clearInterval(powerWait); powerWait = null;
-        msg.textContent = "The PC hasn't come online. Check the link, that the PC starts when it gets power (BIOS: Restore on AC power loss), and that Albatross starts at boot.";
-        return;
-      }
-      if (await connect(true)) checkSearch();
-    }, 10000);
+    if (w.host && w.mac) {
+      const r = await fetch(toolsBase() + "/power/wake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(w) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+      msg.textContent = "Wake-up signal sent. Your PC is starting, which usually takes 1 to 2 minutes. This connects by itself.";
+      waitForPC(msg, "wol");
+    } else if (/^https:\/\//i.test(url)) {
+      // "no-cors": the trigger services don't allow reading their answer, but the request still goes through.
+      await fetch(url, { mode: "no-cors", cache: "no-store", referrerPolicy: "no-referrer", credentials: "omit" });
+      msg.textContent = "Turn-on link opened. Your PC is starting, which usually takes 1 to 2 minutes. This connects by itself.";
+      waitForPC(msg, "plug");
+    } else msg.textContent = "Set up Wake-on-LAN in Settings → Connection first.";
   } catch (err) {
-    msg.textContent = "Couldn't open the turn-on link: " + err.message;
+    msg.textContent = "Couldn't wake the PC: " + err.message;
   } finally { $("#powerBtn").disabled = false; }
+};
+// shut down: click once to arm, again within 4 s to confirm; then it can be cancelled for a minute
+let offArmed = 0, offPending = 0;
+async function pcCall(path, body) {
+  const opts = { method: "POST", body: JSON.stringify(body || {}) };
+  const r = remotePC() ? await e2eFetch(path, { ...opts, base: hostBase() }) : await fetch("http://127.0.0.1:4747" + path, { ...opts, headers: { "Content-Type": "application/json" } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+  return j;
+}
+$("#offBtn").onclick = async () => {
+  if (offPending) {
+    try { await pcCall("/pc/cancel"); toast("Shutdown cancelled"); } catch (e) { toast("Couldn't cancel: " + e.message); }
+    clearTimeout(offPending); offPending = 0; $("#offText").textContent = "Shut down PC"; return;
+  }
+  if (Date.now() - offArmed > 4000) { offArmed = Date.now(); $("#offText").textContent = "Click again to shut down"; setTimeout(() => { if (!offPending) $("#offText").textContent = "Shut down PC"; }, 4000); return; }
+  try {
+    await pcCall("/pc/shutdown", { seconds: 60 });
+    toast("Your PC shuts down in 1 minute");
+    $("#offText").textContent = "Cancel shutdown";
+    offPending = setTimeout(() => { offPending = 0; $("#offText").textContent = "Shut down PC"; }, 60000);
+  } catch (e) { toast("Couldn't shut down: " + e.message); $("#offText").textContent = "Shut down PC"; }
 };
 $("#powerUrl").onchange = e => {
   const v = e.target.value.trim();
@@ -1224,6 +1299,7 @@ $("#powerUrl").onchange = e => {
   toast(v ? "Turn-on link saved" : "Turn-on link removed");
   updatePowerBox(connected);
 };
+for (const k of ["wakeHost", "wakePort", "wakeMac"]) $("#" + k).onchange = (e) => { const v = e.target.value.trim(); if (v) store.set(k, v); else store.del(k); updatePowerBox(connected); };
 $("#powerUrlShow").onclick = () => { const i = $("#powerUrl"); i.type = i.type === "password" ? "text" : "password"; $("#powerUrlShow").textContent = i.type === "password" ? "Show" : "Hide"; };
 
 function showConnHelp(err) {
@@ -1630,15 +1706,16 @@ async function send(textOverride) {
   const lastPic = [...current.messages].reverse().find(m => m.role === "assistant")?.genImage || "";
   const editVerb = /^(please |bitte )?(make|turn|change|add|remove|put|give|replace|edit|colou?r|mach|mache|füge|entferne|ändere|verwandle|ersetze|färbe)/i.test(text);
   let refs = [];
-  let asImage = !!text && (forceImage || wantsImage(text) || (!!attachments.length && !!editModel && editVerb));
+  const pickedImg = models.find(m => m.name === $("#model").value && m.kind === "image");
+  let asImage = !!text && (!!pickedImg || forceImage || wantsImage(text) || (!!attachments.length && !!editModel && editVerb));
   if (asImage && attachments.length) {
     if (editModel) refs = attachments.slice(0, 3);
     else if (forceImage) { toast("The image model on your PC can't use reference pictures. Add OmniGen2 to edit photos."); return; }
     else asImage = false;                               // a vision model will look at the photo instead
   } else if (asImage && editModel && lastPic && !wantsNewPicture(text)) refs = [lastPic];
-  const imgModel = refs.length ? editModel : pickImageModel();
+  const imgModel = refs.length ? editModel : (pickedImg ? pickedImg.name : pickImageModel());
   if (asImage && !imgModel) { if (forceImage) { toast("No image model on the connected PC"); return; } asImage = false; }
-  const model = asImage ? imgModel : $("#model").value;
+  const model = asImage ? imgModel : (pickedImg ? S.model || models.find(m => m.kind !== "image" && m.kind !== "embed")?.name : $("#model").value);
   if (!model) { toast("Pick a model first"); return; }
   if (forceImage) setForceImage(false);
 
@@ -2017,6 +2094,7 @@ function openSettings(tab) {
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay;
   $("#serverHint").textContent = S.conn.relay || DEFAULT_SERVER;
   $("#powerUrl").value = store.get("powerUrl", ""); $("#powerUrl").type = "password"; $("#powerUrlShow").textContent = "Show";
+  $("#wakeHost").value = store.get("wakeHost", ""); $("#wakePort").value = store.get("wakePort", ""); $("#wakeMac").value = store.get("wakeMac", "");
   $("#connResult").textContent = "";
   // params
   for (const k of ["temperature", "top_p", "top_k", "repeat_penalty"]) { const r = $("#p_" + k); r.value = S.params[k]; r.nextElementSibling.textContent = r.value; }
@@ -2099,7 +2177,7 @@ function armed2(key, fn) { if (armed[key]) { armed[key] = 0; fn(); } else { arme
 $("#deleteAll").onclick = () => armed2("del", () => { chats = []; current = null; saveChats(); newChat(); toast("All chats deleted"); });
 $("#resetAll").onclick = () => armed2("reset", () => { S = structuredClone(DEFAULTS); saveSettings(); applyAppearance(); loadImgFields(); applyType(); openSettings("appearance"); toast("Settings reset"); });
 $$("dialog [data-close]").forEach(b => (b.onclick = () => b.closest("dialog").close()));
-$$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));
+$$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d && d.id !== "termsDlg") d.close(); }));
 
 // per-chat (lives in Settings → Chat)
 function openChatSettings() { openSettings("chat"); setTimeout(() => $("#chatTitle").focus(), 50); }
@@ -2655,7 +2733,12 @@ $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#openSettings").onclick = () => openSettings();
 $("#openConn").onclick = () => { openSettings("connection"); setConnCards("remote"); setTimeout(() => $("#codeInput").focus(), 50); };
 $("#search").addEventListener("input", renderSidebar);
-$("#model").onchange = e => { S.model = e.target.value; saveSettings(); };
+$("#model").onchange = e => {
+  const m = models.find(x => x.name === e.target.value);
+  if (m && m.kind === "image") { S.pickedImage = m.name; S.imageModel = m.name; toast("Every message now makes a picture with " + m.name); }
+  else { S.pickedImage = ""; S.model = e.target.value; }
+  saveSettings(); applyType();
+};
 $("#imgBtn").onclick = () => setForceImage(!forceImage);
 $("#exportChat").onclick = () => {
   if (!current.messages.length) return toast("This chat is empty");
@@ -2690,6 +2773,15 @@ if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S
 applyAppearance();
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
+// the terms have to be accepted once (again when they change: bump TERMS_VERSION)
+const TERMS_VERSION = "2026-10-09";
+if (store.get("termsAccepted", "") !== TERMS_VERSION) {
+  const d = $("#termsDlg");
+  d.addEventListener("cancel", (e) => e.preventDefault());           // Esc doesn't skip it
+  $("#termsOk").onchange = (e) => ($("#termsGo").disabled = !e.target.checked);
+  $("#termsGo").onclick = () => { store.set("termsAccepted", TERMS_VERSION); store.set("termsAcceptedAt", new Date().toISOString()); d.close(); };
+  setTimeout(() => d.showModal(), S.intro ? 3400 : 300);
+}
 setView("home");
 if (S.files.public && S.files.name) peerConnect();
 checkHost();
@@ -2729,7 +2821,7 @@ async function deriveVault(pass, salt) {
   const base = await crypto.subtle.importKey("raw", te.encode(pass), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 600000 }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
-const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl", "") });
+const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl", ""), wakeHost: store.get("wakeHost", ""), wakePort: store.get("wakePort", ""), wakeMac: store.get("wakeMac", "") });
 function publicSettings() {
   const c = structuredClone(S);
   c.conn = { ...c.conn, code: "" };           // the code only travels inside the vault
@@ -2749,7 +2841,7 @@ const schedulePush = () => { clearTimeout(pushTimer); pushTimer = setTimeout(pus
 const _save = saveSettings;
 saveSettings = function () { _save(); schedulePush(); };
 const _set = store.set;
-store.set = function (k, v) { const r = _set.call(store, k, v); if (k === "powerUrl") schedulePush(); return r; };
+store.set = function (k, v) { const r = _set.call(store, k, v); if (/^(powerUrl|wakeHost|wakePort|wakeMac)$/.test(k)) schedulePush(); return r; };
 
 function applyCloud(settings) {
   applying = true;
@@ -2777,6 +2869,7 @@ async function openVault(pass) {
     applying = true;
     if (sec.code) S.conn.code = sec.code;
     if (sec.powerUrl) _set.call(store, "powerUrl", sec.powerUrl);
+    for (const k of ["wakeHost", "wakePort", "wakeMac"]) if (sec[k]) _set.call(store, k, sec[k]);
     updatePowerBox(connected);
     _save(); applying = false;
     connect(true); checkSearch(); checkHost();

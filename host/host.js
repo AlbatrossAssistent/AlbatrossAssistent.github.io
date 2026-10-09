@@ -23,6 +23,33 @@ const WebSocket = require("ws");
 const { startPanel } = require("./panel");
 const comfy = require("./comfy");
 const files = require("./files");
+// ---------- the PC's own power: what Wake-on-LAN needs to know, and shutting down ----------
+const pcPower = {
+  publicIp: "",
+  mac() {
+    // the wired card on the home network (the one Wake-on-LAN has to reach)
+    const all = Object.entries(os.networkInterfaces()).flatMap(([name, list]) => (list || []).map((a) => ({ name, ...a })));
+    const pick = all.find((a) => a.family === "IPv4" && !a.internal && /^(192\.168|10\.|172\.)/.test(a.address) && !/virtual|vethernet|vmware|hyper|loopback|wsl/i.test(a.name));
+    return pick ? pick.mac.toUpperCase() : "";
+  },
+  handle(method, p, body, note) {
+    if (method === "GET" && p === "/pc/info") return [200, { mac: this.mac(), publicIp: this.publicIp, name: NAME, platform: process.platform }];
+    if (method === "POST" && p === "/pc/shutdown") {
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      const secs = Math.min(600, Math.max(15, Number(j.seconds) || 60));
+      if (process.platform !== "win32") return [501, { error: "Shutting down is only set up for Windows." }];
+      execFile("shutdown", ["/s", "/t", String(secs), "/c", "Albatross: shutting down, as asked from the website. Cancel it there or run: shutdown /a"], { windowsHide: true }, () => {});
+      note(`Shutting down in ${secs} s, as asked from the website`);
+      return [200, { ok: true, seconds: secs }];
+    }
+    if (method === "POST" && p === "/pc/cancel") {
+      execFile("shutdown", ["/a"], { windowsHide: true }, () => {});
+      note("Shutdown cancelled from the website");
+      return [200, { ok: true }];
+    }
+    return [404, { error: "Unknown PC request" }];
+  },
+};
 const jarvis = require("./jarvis");
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
@@ -258,6 +285,7 @@ function connect() {
     try { msg = JSON.parse(raw); } catch { return; }
 
     if (msg.type === "registered") {
+      if (msg.ip) pcPower.publicIp = String(msg.ip);
       stats.code = fullCode(state);
       // After "#" the browser never sends it to any server, so the key stays private.
       stats.link = `${SERVER}/#code=${stats.code}`;
@@ -303,6 +331,12 @@ function connect() {
     const reply = (frame) => send({ type: "chunk", id, data: seal(aesKey, JSON.stringify(frame), `${rid}:${seq++}`) + "\n" });
     send({ type: "head", id, status: 200, contentType: "text/plain; charset=utf-8" });
     // Files to and from this PC (see files.js), answered here instead of by Ollama.
+    if (typeof p === "string" && p.startsWith("/pc/")) {
+      let status = 500, out;
+      try { [status, out] = pcPower.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+      return send({ type: "end", id });
+    }
     if (typeof p === "string" && p.startsWith("/jarvis/")) {
       let status = 500, out;
       try { [status, out] = await jarvis.handle(method, p, body, note, freeImageModels); } catch (e) { out = { error: e.message }; }
@@ -493,7 +527,7 @@ panel = startPanel({
   files,
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },
-  jarvis: (method, p, body) => jarvis.handle(method, p, body, note, freeImageModels),
+  jarvis: (method, p, body) => p.startsWith("/pc/") ? pcPower.handle(method, p.split("?")[0], body, note) : jarvis.handle(method, p, body, note, freeImageModels),
   proxy: (method, p, body, signal) => {
     if (!ALLOWED.has(`${method} ${p}`)) return Response.json({ error: "Not allowed" }, { status: 403 });
     if (method === "POST" && (p === "/api/chat" || p === "/api/generate")) {
