@@ -311,8 +311,8 @@ function orbitIcon(icon, cap, k, p, cx, cy, R, show) {
   th = Math.atan2(Math.sin(th), Math.cos(th));                         // -PI..PI, 0 = front
   const front = Math.cos(th), side = Math.sin(th);
   const x = side * R * 1.32, y = cy - R * .2 - (1 - front) * R * .1;
-  const sc = (.5 + .5 * (front + 1) / 2) * (R / 260);
-  icon.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) perspective(700px) rotateY(${th}rad) scale(${sc})`;
+  const sc = (.35 + .65 * (front + 1) / 2) * (R / 260);
+  icon.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${sc})`;
   const o = show * (front > -.2 ? 1 : Math.max(0, 1 + (front + .2) * 2));
   icon.style.opacity = o;
   icon.style.visibility = o < .01 ? "hidden" : "visible";
@@ -331,7 +331,8 @@ uniform vec2 uRes;      // canvas size in pixels
 uniform vec3 uC;        // planet centre x, y (from the top) and radius, in canvas pixels
 uniform float uTime, uTurn, uAlpha;
 uniform vec2 uTilt;     // the globe leans toward the mouse
-uniform vec4 uMouse;    // mouse x, y (canvas pixels), strength, ripple time
+uniform vec4 uMouse;    // mouse x, y (canvas pixels), hover strength, now
+uniform vec4 uRip[8];   // ripples: x, y (canvas pixels), start time, strength
 // 3D simplex noise (Ian McEwan / Stefan Gustavson, MIT licence)
 vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
 vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
@@ -435,18 +436,36 @@ void main(){
   float t = uTime;
   vec3 g;
   float h0 = waves(q, t, g);
-  // ripples spreading from the point under the mouse
+  // the water reacts to the mouse: rings spread out from where it moved, and it dips right under the pointer
+  float rl = 0., dipL = 0.;
+  for (int i = 0; i < 8; i++) {
+    vec4 rp = uRip[i];
+    if (rp.w < .001) continue;
+    float age = uMouse.w - rp.z;
+    if (age < 0. || age > 3.5) continue;
+    vec2 dm = (rp.xy - uC.xy) / uC.z;
+    if (dot(dm, dm) >= 1.) continue;
+    vec3 rdm = normalize(vec3(dm.x * tanA, -dm.y * tanA, -1.));
+    float bm = dot(ro, rdm), tm = -bm - sqrt(max(bm * bm - c, 0.));
+    vec3 qm = R * normalize(ro + rdm * tm);
+    vec3 dv = q - qm; float dist = length(dv) + 1e-4;
+    float front = dist - age * .18;                   // the ring's distance from where it started
+    float k = 70., env = exp(-front * front * 900.) * exp(-age * 1.3) * rp.w;
+    float ph = front * k;
+    h0 += .5 * sin(ph) * env;
+    rl += (.6 + .4 * sin(ph)) * env;                  // the ring catches light even on the dark side
+    g += .5 * (k * cos(ph) - 1800. * front * sin(ph)) * env * (dv / dist);
+  }
   if (uMouse.z > .001) {
-    vec2 dm = (vec2(uMouse.x, uMouse.y) - uC.xy) / uC.z;
+    vec2 dm = (uMouse.xy - uC.xy) / uC.z;
     if (dot(dm, dm) < 1.) {
       vec3 rdm = normalize(vec3(dm.x * tanA, -dm.y * tanA, -1.));
       float bm = dot(ro, rdm), tm = -bm - sqrt(max(bm * bm - c, 0.));
       vec3 qm = R * normalize(ro + rdm * tm);
-      vec3 dv = q - qm; float dist = length(dv) + 1e-4;
-      float k = 46., w = 5.5, fall = exp(-dist * 5.) * uMouse.z;
-      float ph = dist * k - uMouse.w * w;
-      h0 += .35 * sin(ph) * fall;
-      g += .35 * (k * cos(ph) - 5. * sin(ph)) * fall * (dv / dist);
+      vec3 dv = q - qm; float d2 = dot(dv, dv);
+      float dip = exp(-d2 * 1400.) * uMouse.z;          // a soft dent in the water under the pointer
+      h0 -= .6 * dip; dipL = dip;
+      g += .6 * 2800. * dip * dv;
     }
   }
   g -= dot(g, q) * q;                             // only the slope along the surface
@@ -464,6 +483,7 @@ void main(){
   col += vec3(1., .97, .9) * (pow(NH, 1100.) * 7. + pow(NH, 120.) * .35 + pow(NH, 18.) * .05) * terminator;   // sun glitter
   float rim = pow(1. - max(dot(n0, V), 0.), 3.);
   col += vec3(.2, .5, 1.) * rim * (.2 + .9 * terminator);                // atmosphere seen through at the edge
+  col += vec3(.45, .72, 1.) * rl * .42 - vec3(.02, .05, .08) * dipL;    // mouse ripples
   col = 1. - exp(-col * 1.7);                                           // soft highlights
   float aa = smoothstep(1., 1. - 1.6 / uC.z, r);                        // smooth outline
   gl_FragColor = vec4(col * aa + haloCol * .8 * (1. - aa), mix(.8, 1., aa)) * uAlpha;
@@ -483,7 +503,7 @@ const ocean = (() => {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = (n) => gl.getUniformLocation(prog, n);
-  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha"), uOct = U("uOct"), uTilt = U("uTilt"), uMouse = U("uMouse");
+  const uRes = U("uRes"), uC = U("uC"), uTime = U("uTime"), uTurn = U("uTurn"), uAlpha = U("uAlpha"), uOct = U("uOct"), uTilt = U("uTilt"), uMouse = U("uMouse"), uRip = U("uRip");
   // computers: the screen's full sharpness (up to 2x); phones: fewer pixels and 30 frames a second, so scrolling stays smooth
   let scale = MOBILE ? Math.min(1.5, devicePixelRatio || 1) * .6 : Math.min(2, devicePixelRatio || 1);
   const budget = MOBILE ? 1.1e6 : 7e6, minScale = MOBILE ? .45 : .9;
@@ -505,6 +525,14 @@ const ocean = (() => {
     m.s += (near - m.s) * .08;
     gl.uniform2f(uTilt, m.tx, m.ty);
     gl.uniform4f(uMouse, m.x * px, m.y * px, m.s, time / 1000);
+    // drop a new ripple every ~90 ms while the pointer moves over the globe
+    const now = time / 1000;
+    if (near && m.moved && now - m.lastDrop > .09) {
+      m.rips[m.ri] = [m.x, m.y, now, Math.min(1, .45 + m.speed * .02)]; m.ri = (m.ri + 1) % 8; m.lastDrop = now; m.moved = false;
+    }
+    const ra = new Float32Array(32);
+    m.rips.forEach((r, i) => { if (r) { ra[i * 4] = r[0] * px; ra[i * 4 + 1] = r[1] * px; ra[i * 4 + 2] = r[2]; ra[i * 4 + 3] = r[3]; } });
+    gl.uniform4fv(uRip, ra);
     // close to the surface the waves get extra fine layers, so it stays sharp and detailed
     const zoom = R / Math.max(W, H);
     gl.uniform1f(uOct, MOBILE ? (zoom > .8 ? 5 : 4) : (zoom > 1.6 ? 7 : zoom > .7 ? 6 : 5));
@@ -513,8 +541,8 @@ const ocean = (() => {
 })();
 
 // where the mouse (or finger) is, for the globe's tilt and ripples
-const mouse = { x: 0, y: 0, on: false, tx: 0, ty: 0, s: 0 };
-addEventListener("pointermove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; }, { passive: true });
+const mouse = { x: 0, y: 0, on: false, tx: 0, ty: 0, s: 0, rips: new Array(8).fill(null), ri: 0, lastDrop: 0, moved: false, speed: 0 };
+addEventListener("pointermove", (e) => { mouse.speed = Math.hypot(e.clientX - mouse.x, e.clientY - mouse.y); mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; mouse.moved = true; }, { passive: true });
 document.addEventListener("pointerleave", () => (mouse.on = false));
 // the planet's own slow turning, which eases to a stop while it zooms in at the end
 let spinAcc = 0, spinLast = 0;

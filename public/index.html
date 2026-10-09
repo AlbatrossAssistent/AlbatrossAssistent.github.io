@@ -330,7 +330,7 @@ textarea#prompt::placeholder { color: var(--muted); white-space: nowrap; overflo
 .send:active { transform: scale(.94); }
 .attach-btn { width: 42px; height: 42px; flex: none; border: none; border-radius: 50%; background: none; color: var(--muted); display: flex; align-items: center; justify-content: center; }
 .attach-btn:hover { background: var(--soft); color: var(--fg); }
-.attach-btn.img-btn.on { background-color: var(--accent); background-image: var(--accent-sheen); color: var(--accent-fg); }
+.attach-btn.web-btn.on, .attach-btn.img-btn.on { background-color: var(--accent); background-image: var(--accent-sheen); color: var(--accent-fg); }
 .attach-btn.web-btn { width: auto; padding: 0 14px; gap: 6px; font-size: 14px; border: 1px solid var(--line); height: 38px; margin-bottom: 2px; border-radius: 999px; }
 .attach-btn.web-btn.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .attach-btn.web-btn[disabled] { opacity: .35; cursor: not-allowed; }
@@ -562,6 +562,7 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 <div class="attachments" id="attachments"></div>
       <div class="box" id="box">
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <button class="attach-btn web-btn" id="webBtn" aria-pressed="false" title="Let the AI search the web"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Search</span></button>
         <button class="attach-btn img-btn" id="imgBtn" aria-pressed="false" title="Make a picture (otherwise Albatross notices by itself when you ask for one)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></button>
         <button class="attach-btn" id="attachBtn" aria-label="Attach image" title="Attach image (for vision models)"><svg class="i" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
         <label for="prompt" class="sr">Message</label>
@@ -1613,6 +1614,9 @@ async function checkSearch() {
   const sw = $("#webSearch");
   sw.disabled = !searchAvailable;
   sw.checked = searchAvailable && S.webSearch;
+  const wb = $("#webBtn");
+  wb.hidden = !searchAvailable;
+  wb.classList.toggle("on", searchAvailable && S.webSearch); wb.setAttribute("aria-pressed", String(searchAvailable && S.webSearch));
   $("#webNote").textContent = searchAvailable ? "The AI can look things up online (needs a model with tool support, e.g. qwen3)." : "Needs the Albatross server with OLLAMA_API_KEY set (see README).";
 }
 const TOOLS = [
@@ -2472,7 +2476,8 @@ $("#exportChat").onclick = () => {
   const mdText = `# ${current.title}\n\n` + current.messages.map(m => `**${m.role === "user" ? "You" : "Albatross" + (m.model ? " (" + m.model + ")" : "")}:**\n\n${m.genImage !== undefined ? "[generated image: " + (m.prompt || "") + "]" : m.content}`).join("\n\n---\n\n");
   download(slug(current.title) + ".md", new Blob([mdText], { type: "text/markdown" }));
 };
-$("#webSearch").onchange = e => { S.webSearch = e.target.checked; saveSettings(); };
+$("#webSearch").onchange = e => { S.webSearch = e.target.checked; saveSettings(); checkSearch(); };
+$("#webBtn").onclick = () => { S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on: the AI can look things up" : "Web search off"); };
 $("#attachBtn").onclick = () => $("#fileInput").click();
 $("#fileInput").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 const box = $("#box");
