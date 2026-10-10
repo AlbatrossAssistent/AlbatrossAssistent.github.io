@@ -427,6 +427,91 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 
 input.masked { -webkit-text-security: disc; text-security: disc; }
 #search::-webkit-search-cancel-button { display: none; }
+
+/* ---------- Tools menu ---------- */
+.tools-wrap { position: relative; flex: none; }
+.tools-menu { position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 30; width: 300px; max-width: calc(100vw - 32px); padding: 6px; border-radius: 22px; display: flex; flex-direction: column; gap: 2px;
+  background: #fff; border: 1px solid var(--glass-edge); box-shadow: 0 12px 40px rgba(0,0,0,.16); animation: menuIn .2s cubic-bezier(.2,.8,.2,1); }
+.tools-menu[hidden] { display: none; }
+[data-theme="dark"] .tools-menu { background: #1c1c1c; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+@keyframes menuIn { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+.tool-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: none; background: none; color: var(--fg); padding: 9px 10px; border-radius: 16px; cursor: pointer; font: inherit; }
+.tool-item:hover { background: var(--soft); }
+.tool-item > .i { flex: none; width: 34px; height: 34px; padding: 8px; border-radius: 12px; background: var(--soft); }
+.tool-item span { display: flex; flex-direction: column; min-width: 0; }
+.tool-item b { font-size: 14px; font-weight: 600; }
+.tool-item small { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.tool-item.on > .i { background: var(--accent); background-image: var(--accent-sheen); color: var(--accent-fg); }
+.tool-item.on b::after { content: " · on"; color: var(--muted); font-weight: 400; }
+.tool-item[hidden] { display: none; }
+
+/* ---------- charts and chances (reference palette, light and dark) ---------- */
+.viz { --surface: #fcfcfb; --t1: #0b0b0b; --t2: #52514e; --t3: #7a7974; --grid: #e9e8e4; --axisc: #c9c8c2;
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c6: #008300; --c7: #6250d6; --c8: #e34948;
+  background: var(--surface); color: var(--t1); border: 1px solid var(--glass-edge); border-radius: 20px; padding: 16px 16px 10px; margin: 0 0 12px; max-width: 720px; position: relative; }
+[data-theme="dark"] .viz { --surface: #1a1a19; --t1: #f0efec; --t2: #c3c2b7; --t3: #96958d; --grid: #2b2b29; --axisc: #4a4945;
+  --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767; }
+.viz.inner { border: none; padding: 14px 0 0; margin: 10px 0 0; border-top: 1px solid var(--grid); border-radius: 0; background: none; }
+.viz-head { margin-bottom: 8px; }
+.viz-title { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.viz-sub { font-size: 12.5px; color: var(--t2); margin-top: 2px; }
+.viz-sub:empty { display: none; }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--t2); margin: 2px 0 8px; }
+.viz-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.viz-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+@media (min-width: 461px) { .viz-legend.donut-only { display: none; } }
+.viz-plot { position: relative; width: 100%; }
+.viz-plot svg { display: block; overflow: visible; font-family: inherit; }
+.viz-plot .grid { stroke: var(--grid); stroke-width: 1; }
+.viz-plot .base { stroke: var(--axisc); stroke-width: 1; }
+.viz-plot .ax { fill: var(--t3); font-size: 11px; }
+.viz-plot .lb { fill: var(--t2); font-size: 12px; }
+.viz-plot .strong { fill: var(--t1); font-weight: 600; }
+.viz-plot .hero-t { fill: var(--t1); font-size: 20px; font-weight: 600; }
+.viz-plot .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.viz-plot .line.future { stroke-dasharray: 5 5; }
+.viz-plot .areafill { opacity: .12; }
+.viz-plot .bandfill { opacity: .14; }
+.viz-plot .dot { stroke: var(--surface); stroke-width: 2; }
+.viz-plot .seg, .viz-plot .bar { stroke: var(--surface); stroke-width: 2; transition: opacity .15s; }
+.viz-plot .seg:hover { opacity: .85; }
+.viz-plot .cross { stroke: var(--axisc); stroke-width: 1; }
+.viz-plot .hit { fill: transparent; }
+.viz-tip { position: absolute; z-index: 5; pointer-events: none; min-width: 120px; max-width: 240px; padding: 8px 10px; border-radius: 12px; background: var(--surface); color: var(--t1); border: 1px solid var(--grid); box-shadow: 0 8px 24px rgba(0,0,0,.14); font-size: 12.5px; }
+.viz-tip .th { font-weight: 600; margin-bottom: 4px; }
+.viz-tip .tr { display: flex; align-items: center; gap: 6px; line-height: 1.6; }
+.viz-tip .tr i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.viz-tip .tr span { flex: 1; color: var(--t2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viz-tip .tr b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.viz-tip .tr.sub span { padding-left: 14px; }
+.viz-table { overflow-x: auto; max-height: 340px; }
+.viz-table table { border-collapse: collapse; font-size: 13px; width: 100%; font-variant-numeric: tabular-nums; }
+.viz-table th, .viz-table td { padding: 5px 10px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+.viz-table th:first-child { text-align: left; }
+.viz-table tr:first-child th { color: var(--t2); font-weight: 600; }
+.viz-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.viz-foot .src { font-size: 12px; color: var(--t3); }
+.chances .ch-hero { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 12px; }
+.chances .ch-hero b { white-space: nowrap; font-size: 44px; font-weight: 600; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.chances .ch-hero span { font-size: 15px; color: var(--t2); min-width: 0; }
+.chances .ch-list { display: flex; flex-direction: column; gap: 12px; }
+.chances .ch-top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; margin-bottom: 5px; }
+.chances .ch-top b { font-variant-numeric: tabular-nums; }
+.chances .meter { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--c1) 18%, var(--surface)); overflow: hidden; }
+.chances .meter i { display: block; height: 100%; border-radius: inherit; background: var(--c1); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.chances .ch-why { font-size: 12.5px; color: var(--t2); margin-top: 4px; }
+.chances .ch-factors { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.chances .ch-ct { font-size: 12px; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.chances .ch-f { display: flex; gap: 8px; align-items: baseline; font-size: 13.5px; line-height: 1.4; margin-bottom: 6px; }
+.chances .ch-f .arr { font-weight: 700; width: 12px; flex: none; }
+.chances .ch-f.up .arr { color: var(--c1); }
+.chances .ch-f.down .arr { color: var(--c2); }
+.chances .ch-f span:nth-child(2) { flex: 1; }
+.chances .ch-f .str { font-size: 9px; letter-spacing: 1px; color: var(--t3); flex: none; }
+.chances .ch-note { font-size: 13px; color: var(--t2); margin-top: 12px; }
+.chances .ch-note.small { font-size: 11.5px; color: var(--t3); }
+.tool-block { margin: 0 0 12px; }
+
 /* ---------- slides side panel ---------- */
 .deck-side { width: 380px; flex: 0 0 380px; display: flex; flex-direction: column; gap: 12px; padding: 16px 14px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 34px; overflow: hidden; animation: dsIn .45s cubic-bezier(.2,.8,.2,1); }
 .deck-side[hidden] { display: none; }
@@ -765,8 +850,15 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 <div class="attachments" id="attachments"></div>
       <div class="box" id="box">
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
-        <button class="attach-btn web-btn" id="webBtn" aria-pressed="false" title="Let the AI search the web"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Search</span></button>
-        <button class="attach-btn web-btn" id="slidesBtn" aria-pressed="false" title="Make a presentation: the AI plans it, then writes it slide by slide"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M7 8h6M7 11h9"/></svg><span>Slides</span></button>
+        <div class="tools-wrap">
+          <button class="attach-btn web-btn" id="toolsBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Tools: web search, slides, graphs, chances"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><path d="M16.75 13.5v6.5M13.5 16.75H20"/></svg><span id="toolsLabel">Tools</span></button>
+          <div class="tools-menu" id="toolsMenu" role="menu" hidden>
+            <button class="tool-item" id="webBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span><b>Search the web</b><small>Look things up online while answering</small></span></button>
+            <button class="tool-item" id="slidesBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M7 8h6M7 11h9"/></svg><span><b>Slides</b><small>A presentation, planned and built slide by slide</small></span></button>
+            <button class="tool-item" id="graphBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M7 15l4-5 3 3 5-6"/></svg><span><b>Graph</b><small>A chart from your numbers or real data</small></span></button>
+            <button class="tool-item" id="chancesBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><span><b>Chances &amp; predictions</b><small>How likely something is, and how it may develop</small></span></button>
+          </div>
+        </div>
         <button class="attach-btn img-btn" id="imgBtn" aria-pressed="false" title="Make a picture (otherwise Albatross notices by itself when you ask for one)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></button>
         <button class="attach-btn" id="attachBtn" aria-label="Attach image" title="Attach image (for vision models)"><svg class="i" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
         <label for="prompt" class="sr">Message</label>
@@ -1708,7 +1800,7 @@ function fillLive(c, m) {
   blocks.forEach((b, i) => {
     const active = !b.done && i === blocks.length - 1, e = L.blocks[i];
     if (b.type === "thinking" && e) return updateThink(e, b, active);
-    const key = [b.active, b.error, b.title, (b.results || b.images || []).length, b.progress].join("|");
+    const key = [b.active, b.error, b.title, (b.results || b.images || []).length, b.progress, b.status].join("|");
     if (e && e.key === key) return;
     const el = renderBlock(b, active);
     if (e) e.el.replaceWith(el); else L.wrap.appendChild(el);
@@ -1815,6 +1907,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
+  if (b.type === "chart" || b.type === "chances") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -2230,7 +2323,7 @@ let forceImage = false;
 function setForceImage(on) { forceImage = on; $("#imgBtn").classList.toggle("on", on); $("#imgBtn").setAttribute("aria-pressed", String(on)); applyType(); }
 
 // "draw a new …" / "another picture of …" starts fresh instead of editing the last picture
-function wantsNewPicture(text) { return /(new|another|different|neues?|neuen|anderes?|weiteres?)/i.test(text) || /^(draw|paint|sketch|zeichne|male|generate|create|erstelle|generiere)/i.test(text.trim()); }
+function wantsNewPicture(text) { return /\b(new|another|different|neues?|neuen|anderes?|weiteres?)\b/i.test(text) || /^(draw|paint|sketch|zeichne|male|generate|create|erstelle|generiere)\b/i.test(text.trim()); }
 async function send(textOverride) {
   if (controller) { controller.abort(); return; }
   const p = $("#prompt");
@@ -2241,10 +2334,10 @@ async function send(textOverride) {
   // like "make it night" right after one) goes to a model that can edit, such as OmniGen2, with the picture attached.
   const editModel = models.find(m => m.kind === "image" && m.details?.edit)?.name || "";
   const lastPic = [...current.messages].reverse().find(m => m.role === "assistant")?.genImage || "";
-  const editVerb = /^(please |bitte )?(make|turn|change|add|remove|put|give|replace|edit|colou?r|mach|mache|füge|entferne|ändere|verwandle|ersetze|färbe)/i.test(text);
+  const editVerb = /^(please |bitte )?(make|turn|change|add|remove|put|give|replace|edit|colou?r|mach|mache|füge|entferne|ändere|verwandle|ersetze|färbe)\b/i.test(text);
   let refs = [];
   const pickedImg = models.find(m => m.name === $("#model").value && m.kind === "image");
-  let asImage = !!text && (!!pickedImg || forceImage || (!slidesMode && wantsImage(text)) || (!!attachments.length && !!editModel && editVerb));
+  let asImage = !!text && (!!pickedImg || forceImage || (!toolMode && wantsImage(text)) || (!!attachments.length && !!editModel && editVerb));
   if (asImage && attachments.length) {
     if (editModel) refs = attachments.slice(0, 3);
     else if (forceImage) { toast("The image model on your PC can't use reference pictures. Add OmniGen2 to edit photos."); return; }
@@ -2266,7 +2359,7 @@ async function send(textOverride) {
   if (current.messages.length === 1) $("#inner").innerHTML = "";
   $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
   renderSidebar();
-  await (asImage ? generateImage(model, text, refs) : slidesMode ? buildSlides(model, text) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : toolMode === "slides" ? buildSlides(model, text) : toolMode === "graph" ? buildGraph(model, text) : toolMode === "chances" ? buildChances(model, text) : chat(model));
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -2295,7 +2388,8 @@ async function checkSearch() {
   sw.checked = searchAvailable && S.webSearch;
   const wb = $("#webBtn");
   wb.hidden = !searchAvailable;
-  wb.classList.toggle("on", searchAvailable && S.webSearch); wb.setAttribute("aria-pressed", String(searchAvailable && S.webSearch));
+  wb.classList.toggle("on", searchAvailable && S.webSearch); wb.setAttribute("aria-checked", String(searchAvailable && S.webSearch));
+  setTimeout(updateToolsLabel);
   $("#webNote").textContent = searchAvailable ? "The AI can look things up online (needs a model with tool support, e.g. qwen3)." : "Needs the Albatross server with OLLAMA_API_KEY set (see README).";
 }
 const TOOLS = [
@@ -2370,7 +2464,7 @@ async function chat(model) {
 
     let system = current.system || S.defaultSystem;
     if (toolsOk && imageSearchAvailable) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search.";
-    system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, tell them to switch on \"Slides\" next to the message box and ask again: then you build it step by step.";
+    system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, a graph or chart, or for chances, odds or a prediction, tell them to open \"Tools\" next to the message box, switch on Slides, Graph or Chances, and ask again.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
     // Say so in the bubble and pop a notification once it's ready.
@@ -2462,13 +2556,462 @@ async function chat(model) {
 }
 
 // ---------- Slides mode: plan first, then write slide by slide (any model, no tool support needed) ----------
-let slidesMode = false;
-function setSlidesMode(on) {
-  slidesMode = on;
-  $("#slidesBtn").classList.toggle("on", on); $("#slidesBtn").setAttribute("aria-pressed", String(on));
-  $("#prompt").placeholder = on ? "What should the presentation be about?" : "Message your local AI…";
+// ---------- Tools menu: Search, Slides, Graph, Chances (one mode at a time; Search can go along with any) ----------
+const TOOL_INFO = {
+  slides:  { name: "Slides",  ph: "What should the presentation be about?", on: "Slides on: your next message becomes a presentation" },
+  graph:   { name: "Graph",   ph: "What should the graph show? (or paste your numbers)", on: "Graph on: your next message becomes a chart" },
+  chances: { name: "Chances", ph: "What do you want the chances of, or a prediction for?", on: "Chances on: the AI estimates how likely things are" },
+};
+let toolMode = "";
+function setToolMode(m) {
+  toolMode = toolMode === m ? "" : m;
+  for (const k of Object.keys(TOOL_INFO)) { const b = $("#" + k + "Btn"); b.classList.toggle("on", toolMode === k); b.setAttribute("aria-checked", String(toolMode === k)); }
+  $("#prompt").placeholder = toolMode ? TOOL_INFO[toolMode].ph : "Message your local AI…";
+  setTimeout(updateToolsLabel);
 }
-$("#slidesBtn").onclick = () => { setSlidesMode(!slidesMode); toast(slidesMode ? "Slides on: your next message becomes a presentation" : "Slides off"); };
+function setSlidesMode(on) { if (on !== (toolMode === "slides")) setToolMode("slides"); }
+function updateToolsLabel() {
+  const on = [toolMode && TOOL_INFO[toolMode].name, S.webSearch && searchAvailable && "Search"].filter(Boolean);
+  $("#toolsLabel").textContent = on.join(" + ") || "Tools";
+  $("#toolsBtn").classList.toggle("on", on.length > 0);
+}
+for (const k of Object.keys(TOOL_INFO)) $("#" + k + "Btn").onclick = () => { setToolMode(k); closeTools(); toast(toolMode === k ? TOOL_INFO[k].on : TOOL_INFO[k].name + " off"); };
+const closeTools = () => { $("#toolsMenu").hidden = true; $("#toolsBtn").setAttribute("aria-expanded", "false"); };
+$("#toolsBtn").onclick = (e) => { e.stopPropagation(); const m = $("#toolsMenu"); m.hidden = !m.hidden; $("#toolsBtn").setAttribute("aria-expanded", String(!m.hidden)); };
+document.addEventListener("click", (e) => { if (!$("#toolsMenu").hidden && !e.target.closest("#toolsMenu")) closeTools(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#toolsMenu").hidden) closeTools(); });
+
+// ---------- charts (inline SVG, drawn at the real width so text stays readable on phones) ----------
+const NS_SVG = "http://www.w3.org/2000/svg";
+function vizFmt(v, unit) {
+  if (v == null || !isFinite(v)) return "–";
+  const a = Math.abs(v);
+  const s = a >= 10000 ? new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(v)
+    : new Intl.NumberFormat(undefined, { maximumFractionDigits: a < 10 ? 2 : a < 100 ? 1 : 0 }).format(v);
+  if (!unit) return s;
+  if (/^[%°]/.test(unit)) return s + unit;
+  if (/^[$€£¥₹]$/.test(unit)) return unit + s;
+  return s + " " + unit;
+}
+function niceTicks(lo, hi, n = 5) {
+  if (!(hi > lo)) hi = lo + 1;
+  const span = hi - lo, mag = 10 ** Math.floor(Math.log10(span / n));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= n) || 10 * mag;
+  const out = [];
+  for (let v = Math.floor(lo / step) * step; v <= Math.ceil(hi / step) * step + step / 2; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+const textW = (s, px = 11) => String(s).length * px * .58;
+
+function chartEl(c) {
+  const box = document.createElement("div"); box.className = "viz-plot";
+  box.innerHTML = '<div class="viz-tip" hidden></div>';
+  let lastW = 0;
+  const ro = new ResizeObserver(() => { const w = Math.round(box.clientWidth); if (w && Math.abs(w - lastW) > 4) { lastW = w; drawChart(box, c); } });
+  ro.observe(box);
+  return box;
+}
+function drawChart(box, c) {
+  const W = Math.max(260, box.clientWidth), small = W < 460;
+  const tip = box.querySelector(".viz-tip");
+  box.querySelector("svg")?.remove();
+  const labels = c.labels || [], series = c.series || [], n = labels.length;
+  const H = c.type === "donut" ? Math.round(Math.min(280, Math.max(200, W * .5)))
+    : c.type === "hbar" ? Math.max(120, n * 32 + 34)
+    : Math.round(Math.min(340, Math.max(220, W * .48)));
+  const svg = document.createElementNS(NS_SVG, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
+  svg.setAttribute("role", "img"); svg.setAttribute("aria-label", c.title || "Chart");
+  box.prepend(svg);
+  const el = (tag, a = {}, parent = svg) => { const e = document.createElementNS(NS_SVG, tag); for (const k in a) e.setAttribute(k, a[k]); parent.appendChild(e); return e; };
+  const txt = (x, y, s, a = {}, parent) => { const t = el("text", { x, y, ...a }, parent); t.textContent = s; return t; };
+  const col = (i) => `var(--c${(i % 8) + 1})`;
+  const showTip = (x, y, html) => {
+    tip.innerHTML = html; tip.hidden = false;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    tip.style.left = Math.max(0, Math.min(W - tw, x + 14 > W - tw ? x - tw - 14 : x + 14)) + "px";
+    tip.style.top = Math.max(0, Math.min(H - th, y - th / 2)) + "px";
+  };
+  const hideTip = () => { tip.hidden = true; };
+  const row = (i, name, v, extra = "") => `<div class="tr"><i style="background:${col(i)}"></i><span>${esc(name)}</span><b>${esc(vizFmt(v, c.unit))}</b>${extra}</div>`;
+
+  // ----- donut: parts of a whole -----
+  if (c.type === "donut") {
+    const vals = (series[0]?.values || []).map(v => Math.max(0, Number(v) || 0)), total = vals.reduce((a, b) => a + b, 0) || 1;
+    const R = Math.min(H / 2 - 8, small ? W / 2 - 8 : W * .22), r = R * .62, cx = small ? W / 2 : R + 20, cy = H / 2;
+    let a0 = -Math.PI / 2;
+    vals.forEach((v, i) => {
+      const a1 = a0 + v / total * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0;
+      const p = (rad, ang) => `${cx + rad * Math.cos(ang)} ${cy + rad * Math.sin(ang)}`;
+      const d = v >= total ? `M ${cx - R} ${cy} a ${R} ${R} 0 1 0 ${2 * R} 0 a ${R} ${R} 0 1 0 ${-2 * R} 0 M ${cx - r} ${cy} a ${r} ${r} 0 1 1 ${2 * r} 0 a ${r} ${r} 0 1 1 ${-2 * r} 0`
+        : `M ${p(R, a0)} A ${R} ${R} 0 ${big} 1 ${p(R, a1)} L ${p(r, a1)} A ${r} ${r} 0 ${big} 0 ${p(r, a0)} Z`;
+      const seg = el("path", { d, fill: col(i), class: "seg", "fill-rule": "evenodd" });
+      const pct = Math.round(v / total * 1000) / 10;
+      seg.onmousemove = (e) => { const b = box.getBoundingClientRect(); showTip(e.clientX - b.left, e.clientY - b.top, `<div class="th">${esc(labels[i])}</div><div class="tr"><i style="background:${col(i)}"></i><span>${esc(vizFmt(v, c.unit))}</span><b>${pct}%</b></div>`); };
+      seg.onmouseleave = hideTip;
+      a0 = a1;
+    });
+    if (!/%/.test(c.unit)) { txt(cx, cy - 2, vizFmt(total, c.unit), { class: "hero-t", "text-anchor": "middle" }); txt(cx, cy + 16, "total", { class: "ax", "text-anchor": "middle" }); }
+    if (!small) {
+      const lx = cx + R + 28, top = cy - Math.min(vals.length, 8) * 13;
+      vals.slice(0, 8).forEach((v, i) => {
+        const y = top + i * 26 + 13;
+        el("rect", { x: lx, y: y - 9, width: 10, height: 10, rx: 2, fill: col(i) });
+        txt(lx + 18, y, labels[i].length > 34 ? labels[i].slice(0, 33) + "…" : labels[i], { class: "lb" });
+        txt(W - 8, y, Math.round(v / total * 1000) / 10 + "%", { class: "lb strong", "text-anchor": "end" });
+      });
+    }
+    return;
+  }
+
+  // ----- scatter: two numbers per point -----
+  if (c.type === "scatter") {
+    const pts = (c.points || []).filter(p => isFinite(p.x) && isFinite(p.y));
+    const xs = niceTicks(Math.min(...pts.map(p => p.x)), Math.max(...pts.map(p => p.x)));
+    const ys = niceTicks(Math.min(...pts.map(p => p.y)), Math.max(...pts.map(p => p.y)));
+    const L = Math.max(...ys.map(v => textW(vizFmt(v)))) + 14, T = 14, B = 34, Rm = 14;
+    const X = (v) => L + (v - xs[0]) / (xs.at(-1) - xs[0]) * (W - L - Rm), Y = (v) => T + (1 - (v - ys[0]) / (ys.at(-1) - ys[0])) * (H - T - B);
+    for (const v of ys) { el("line", { x1: L, x2: W - Rm, y1: Y(v), y2: Y(v), class: "grid" }); txt(L - 6, Y(v) + 4, vizFmt(v), { class: "ax", "text-anchor": "end" }); }
+    for (const v of xs) txt(X(v), H - B + 16, vizFmt(v), { class: "ax", "text-anchor": "middle" });
+    if (c.xLabel) txt(W - Rm, H - 4, c.xLabel, { class: "ax", "text-anchor": "end" });
+    for (const p of pts) {
+      const d = el("circle", { cx: X(p.x), cy: Y(p.y), r: 5, fill: col(0), class: "dot" });
+      const hit = el("circle", { cx: X(p.x), cy: Y(p.y), r: 11, class: "hit" });
+      hit.onmousemove = () => { d.setAttribute("r", 7); showTip(X(p.x), Y(p.y), `<div class="th">${esc(p.label || "")}</div><div class="tr"><span>${esc(c.xLabel || "x")}</span><b>${esc(vizFmt(p.x))}</b></div><div class="tr"><span>${esc(c.yLabel || "y")}</span><b>${esc(vizFmt(p.y, c.unit))}</b></div>`); };
+      hit.onmouseleave = () => { d.setAttribute("r", 5); hideTip(); };
+    }
+    return;
+  }
+
+  // ----- horizontal bars: rankings and long names -----
+  if (c.type === "hbar") {
+    const vals = (series[0]?.values || []).map(Number);
+    const ticks = niceTicks(Math.min(0, ...vals.filter(isFinite)), Math.max(0, ...vals.filter(isFinite)), small ? 3 : 5);
+    const LW = Math.min(W * (small ? .38 : .3), Math.max(...labels.map(s => textW(s, 12))) + 12), T = 6, B = 24, Rm = 52;
+    const X = (v) => LW + (v - ticks[0]) / (ticks.at(-1) - ticks[0]) * (W - LW - Rm);
+    for (const v of ticks) { el("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "grid" }); txt(X(v), H - 6, vizFmt(v), { class: "ax", "text-anchor": "middle" }); }
+    vals.forEach((v, i) => {
+      const yc = T + i * 32 + 16, h = 18, x0 = X(Math.max(0, ticks[0])), x1 = X(isFinite(v) ? v : 0), w = Math.abs(x1 - x0), left = Math.min(x0, x1);
+      const lab = labels[i].length * 7 > LW ? labels[i].slice(0, Math.floor(LW / 7) - 1) + "…" : labels[i];
+      txt(LW - 8, yc + 4, lab, { class: "lb", "text-anchor": "end" });
+      const r4 = Math.min(4, w);
+      el("path", { d: v >= 0 ? `M${left} ${yc - h / 2} h${w - r4} q${r4} 0 ${r4} ${r4} v${h - 2 * r4} q0 ${r4} ${-r4} ${r4} h${-(w - r4)} Z` : `M${left + w} ${yc - h / 2} h${-(w - r4)} q${-r4} 0 ${-r4} ${r4} v${h - 2 * r4} q0 ${r4} ${r4} ${r4} h${w - r4} Z`, fill: col(0), class: "bar" });
+      txt((v >= 0 ? left + w : left) + (v >= 0 ? 6 : -6), yc + 4, vizFmt(v, c.unit), { class: "lb strong", "text-anchor": v >= 0 ? "start" : "end" });
+      const hit = el("rect", { x: 0, y: yc - 16, width: W, height: 32, class: "hit" });
+      hit.onmousemove = () => showTip(X(v), yc, `<div class="th">${esc(labels[i])}</div>${row(0, series[0].name || "", v)}`);
+      hit.onmouseleave = hideTip;
+    });
+    el("line", { x1: X(Math.max(0, ticks[0])), x2: X(Math.max(0, ticks[0])), y1: T, y2: H - B, class: "base" });
+    return;
+  }
+
+  // ----- line, area, column bars -----
+  const all = series.flatMap(s => s.values).concat(c.band ? c.band.flatMap(b => b ? [b.low, b.high] : []) : []).filter(v => v != null && isFinite(v));
+  let lo = Math.min(...all), hi = Math.max(...all);
+  const isBar = c.type === "bar";
+  if (isBar || c.type === "area" || lo >= 0 && lo < hi * .45) lo = Math.min(0, lo);
+  if (hi <= 0 && (isBar || c.type === "area")) hi = 0;
+  const ticks = niceTicks(lo, hi, small ? 4 : 5);
+  const L = Math.max(...ticks.map(v => textW(vizFmt(v)))) + 14, T = 12, B = 30;
+  const ends = !isBar && series.length <= 4 && !small;
+  const Rm = ends ? Math.min(130, Math.max(...series.map(s => textW(s.name || "", 11))) + 22) : 16;
+  const PW = W - L - Rm, PH = H - T - B;
+  const Y = (v) => T + (1 - (v - ticks[0]) / (ticks.at(-1) - ticks[0])) * PH;
+  const band = PW / Math.max(1, n);
+  const X = isBar ? (i) => L + band * (i + .5) : (i) => n === 1 ? L + PW / 2 : L + i * PW / (n - 1);
+  for (const v of ticks) { el("line", { x1: L, x2: L + PW, y1: Y(v), y2: Y(v), class: v === 0 ? "base" : "grid" }); txt(L - 6, Y(v) + 4, vizFmt(v), { class: "ax", "text-anchor": "end" }); }
+  // x labels, thinned out so they never overlap
+  const maxLab = Math.max(1, ...labels.map(s => textW(s))) + 10, every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(PW / maxLab))));
+  labels.forEach((s, i) => { if (i % every === 0 || i === n - 1 && !isBar && (n - 1) % every > every / 2) txt(X(i), H - B + 18, s.length > 16 ? s.slice(0, 15) + "…" : s, { class: "ax", "text-anchor": "middle" }); });
+  if (c.yLabel) txt(L, T - 2 > 8 ? T - 2 : 10, "", {}); // y label shown in the card header instead (no rotated text)
+
+  if (isBar) {
+    const k = series.length, bw = Math.max(3, Math.min(24, (band * .72 - (k - 1) * 2) / k)), gw = k * bw + (k - 1) * 2, y0 = Y(Math.max(ticks[0], Math.min(0, ticks.at(-1))));
+    labels.forEach((_, i) => {
+      series.forEach((s, j) => {
+        const v = s.values[i]; if (v == null || !isFinite(v)) return;
+        const x = X(i) - gw / 2 + j * (bw + 2), y = Y(v), h = Math.abs(y0 - y), r4 = Math.min(4, h, bw / 2);
+        el("path", { d: v >= 0 ? `M${x} ${y0} V${y + r4} q0 ${-r4} ${r4} ${-r4} h${bw - 2 * r4} q${r4} 0 ${r4} ${r4} V${y0} Z` : `M${x} ${y0} V${y - r4} q0 ${r4} ${r4} ${r4} h${bw - 2 * r4} q${r4} 0 ${r4} ${-r4} V${y0} Z`, fill: col(j), class: "bar" });
+      });
+      if (k === 1 && n <= 12 && series[0].values[i] != null) txt(X(i), Y(series[0].values[i]) - 6, vizFmt(series[0].values[i]), { class: "ax strong", "text-anchor": "middle" });
+      const hit = el("rect", { x: X(i) - band / 2, y: T, width: band, height: PH, class: "hit" });
+      hit.onmousemove = () => showTip(X(i), T + PH / 3, `<div class="th">${esc(labels[i])}</div>` + series.map((s, j) => row(j, s.name || "", s.values[i])).join(""));
+      hit.onmouseleave = hideTip;
+    });
+    return;
+  }
+  // forecast range (likely low–high) behind the lines
+  if (c.band) {
+    const idx = c.band.map((b, i) => b && isFinite(b.low) && isFinite(b.high) ? i : -1).filter(i => i >= 0);
+    if (idx.length > 1) el("path", { d: "M" + idx.map(i => `${X(i)} ${Y(c.band[i].high)}`).join(" L") + " L" + idx.reverse().map(i => `${X(i)} ${Y(c.band[i].low)}`).join(" L") + " Z", fill: col(0), class: "bandfill" });
+  }
+  const pathOf = (vals, from, to) => { let d = "", pen = false; for (let i = from; i <= to; i++) { const v = vals[i]; if (v == null || !isFinite(v)) { pen = false; continue; } d += (pen ? " L" : " M") + `${X(i)} ${Y(v)}`; pen = true; } return d; };
+  const endY = [];
+  series.forEach((s, j) => {
+    const vals = s.values, f = c.from != null && c.from > 0 ? c.from : n;
+    if (c.type === "area") {
+      const idx = vals.map((v, i) => v != null && isFinite(v) ? i : -1).filter(i => i >= 0);
+      if (idx.length > 1) el("path", { d: `M${X(idx[0])} ${Y(Math.max(0, ticks[0]))} L` + idx.map(i => `${X(i)} ${Y(vals[i])}`).join(" L") + ` L${X(idx.at(-1))} ${Y(Math.max(0, ticks[0]))} Z`, fill: col(j), class: "areafill" });
+    }
+    el("path", { d: pathOf(vals, 0, Math.min(f, n - 1)), stroke: col(j), class: "line" });
+    if (f < n) el("path", { d: pathOf(vals, f - 1, n - 1), stroke: col(j), class: "line future" });
+    let li = n - 1; while (li >= 0 && (vals[li] == null || !isFinite(vals[li]))) li--;
+    if (li >= 0) { el("circle", { cx: X(li), cy: Y(vals[li]), r: 4, fill: col(j), class: "dot" }); endY.push({ j, y: Y(vals[li]), name: s.name || "", v: vals[li] }); }
+  });
+  if (c.from != null && c.from > 0 && c.from < n) {
+    const xf = (X(c.from - 1) + X(c.from)) / 2;
+    el("line", { x1: xf, x2: xf, y1: T, y2: T + PH, class: "grid" });
+    txt(xf + 6, T + 10, c.futureLabel || "prediction", { class: "ax" });
+  }
+  // direct labels at the line ends, only when they don't collide (the legend carries identity otherwise)
+  if (ends) {
+    const ys = endY.map(e => e.y).sort((a, b) => a - b);
+    if (ys.every((y, i) => !i || y - ys[i - 1] >= 13)) for (const e of endY) txt(L + PW + 10, e.y + 4, series.length > 1 ? e.name : vizFmt(e.v, c.unit), { class: "lb" });
+  }
+  // crosshair + tooltip
+  const cross = el("line", { y1: T, y2: T + PH, class: "cross", visibility: "hidden" });
+  const marks = series.map((s, j) => el("circle", { r: 5, fill: col(j), class: "dot", visibility: "hidden" }));
+  const hit = el("rect", { x: L, y: T, width: PW, height: PH, class: "hit" });
+  hit.onmousemove = (e) => {
+    const b = svg.getBoundingClientRect(), mx = (e.clientX - b.left) * (W / b.width);
+    const i = Math.max(0, Math.min(n - 1, Math.round(n === 1 ? 0 : (mx - L) / (PW / (n - 1)))));
+    cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible");
+    series.forEach((s, j) => { const v = s.values[i]; const m = marks[j]; if (v == null || !isFinite(v)) return m.setAttribute("visibility", "hidden"); m.setAttribute("cx", X(i)); m.setAttribute("cy", Y(v)); m.setAttribute("visibility", "visible"); });
+    const bandTxt = c.band?.[i] && c.from != null && i >= c.from ? `<div class="tr sub"><span>likely range</span><b>${esc(vizFmt(c.band[i].low, c.unit))} – ${esc(vizFmt(c.band[i].high, c.unit))}</b></div>` : "";
+    showTip(X(i), T + PH / 3, `<div class="th">${esc(labels[i])}${c.from != null && i >= c.from ? " · prediction" : ""}</div>` + series.map((s, j) => row(j, s.name || "", s.values[i])).join("") + bandTxt);
+  };
+  hit.onmouseleave = () => { cross.setAttribute("visibility", "hidden"); marks.forEach(m => m.setAttribute("visibility", "hidden")); hideTip(); };
+}
+
+function vizCard(c, opts = {}) {
+  const card = document.createElement("div"); card.className = "viz";
+  const head = document.createElement("div"); head.className = "viz-head";
+  head.innerHTML = '<div class="viz-title"></div><div class="viz-sub"></div>';
+  head.firstChild.textContent = c.title || "";
+  head.lastChild.textContent = [c.subtitle, c.yLabel && c.type !== "donut" && c.type !== "hbar" ? c.yLabel + (c.unit && !c.yLabel.includes(c.unit) ? ` (${c.unit})` : "") : ""].filter(Boolean).join(" · ");
+  if (opts.noHead) head.hidden = true;
+  card.appendChild(head);
+  const multi = c.type !== "scatter" && (c.series || []).length > 1, donutSmall = c.type === "donut";
+  if (multi || donutSmall) {
+    const lg = document.createElement("div"); lg.className = "viz-legend" + (donutSmall ? " donut-only" : "");
+    const names = donutSmall ? c.labels : c.series.map(s => s.name);
+    names.forEach((nm, i) => { const it = document.createElement("span"); it.innerHTML = `<i style="background:var(--c${(i % 8) + 1})"></i>`; it.append(nm || ""); lg.appendChild(it); });
+    card.appendChild(lg);
+  }
+  const plot = chartEl(c); card.appendChild(plot);
+  const table = document.createElement("div"); table.className = "viz-table"; table.hidden = true; card.appendChild(table);
+  const foot = document.createElement("div"); foot.className = "viz-foot";
+  foot.innerHTML = '<span class="src"></span><span style="flex:1"></span><button class="btn small" data-a="table">Table</button><button class="btn small" data-a="png">PNG</button><button class="btn small" data-a="csv">CSV</button>';
+  foot.querySelector(".src").textContent = [c.estimated ? "Estimated values" : "", c.source ? "Source: " + c.source : ""].filter(Boolean).join(" · ");
+  foot.querySelector('[data-a="table"]').onclick = (e) => {
+    if (table.hidden && !table.firstChild) table.appendChild(vizTable(c));
+    table.hidden = !table.hidden; e.target.textContent = table.hidden ? "Table" : "Chart"; plot.hidden = !table.hidden;
+  };
+  foot.querySelector('[data-a="png"]').onclick = () => vizPng(card, c);
+  foot.querySelector('[data-a="csv"]').onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([vizCsv(c)], { type: "text/csv" })); a.download = slug(c.title || "chart") + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 20000); };
+  card.appendChild(foot);
+  return card;
+}
+function vizRows(c) {
+  if (c.type === "scatter") return [["", c.xLabel || "x", c.yLabel || "y"], ...(c.points || []).map(p => [p.label || "", p.x, p.y])];
+  const head = ["", ...c.series.map(s => s.name || c.unit || "value")];
+  if (c.band) head.push("likely low", "likely high");
+  return [head, ...c.labels.map((l, i) => [l, ...c.series.map(s => s.values[i]), ...(c.band ? [c.band[i]?.low ?? "", c.band[i]?.high ?? ""] : [])])];
+}
+function vizTable(c) {
+  const t = document.createElement("table"), rows = vizRows(c);
+  rows.forEach((r, i) => { const tr = t.insertRow(); r.forEach((v, j) => { const cell = document.createElement(i ? (j ? "td" : "th") : "th"); cell.textContent = i && j && v !== "" && v != null ? vizFmt(Number(v), c.unit) : v ?? ""; tr.appendChild(cell); }); });
+  return t;
+}
+const vizCsv = (c) => vizRows(c).map(r => r.map(v => /[",\n]/.test(String(v ?? "")) ? `"${String(v).replace(/"/g, '""')}"` : (v ?? "")).join(",")).join("\n");
+async function vizPng(card, c) {
+  const svg = card.querySelector(".viz-plot svg"); if (!svg) return;
+  const clone = svg.cloneNode(true), src = svg.querySelectorAll("*"), dst = clone.querySelectorAll("*");
+  src.forEach((s, i) => { const cs = getComputedStyle(s); for (const p of ["fill", "stroke", "stroke-width", "stroke-dasharray", "opacity", "fill-opacity", "font-family", "font-size", "font-weight", "visibility"]) dst[i].style.setProperty(p, cs.getPropertyValue(p)); });
+  const W = +svg.getAttribute("width"), H = +svg.getAttribute("height"), pad = 20, head = 44;
+  const k = 2, cv = document.createElement("canvas"); cv.width = (W + pad * 2) * k; cv.height = (H + pad * 2 + head) * k;
+  const g = cv.getContext("2d"); g.scale(k, k);
+  const cs = getComputedStyle(card);
+  g.fillStyle = cs.getPropertyValue("--surface").trim() || "#fff"; g.fillRect(0, 0, W + pad * 2, H + pad * 2 + head);
+  g.fillStyle = cs.getPropertyValue("--t1").trim() || "#000"; g.font = `600 16px ${cs.fontFamily}`; g.fillText(c.title || "", pad, pad + 14);
+  g.fillStyle = cs.getPropertyValue("--t2").trim() || "#555"; g.font = `12px ${cs.fontFamily}`; g.fillText(card.querySelector(".viz-sub").textContent, pad, pad + 32);
+  const img = new Image(); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+  await img.decode(); g.drawImage(img, pad, pad + head, W, H);
+  cv.toBlob(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = slug(c.title || "chart") + ".png"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 20000); });
+}
+
+// ---------- chances ----------
+function chancesCard(x) {
+  const card = document.createElement("div"); card.className = "viz chances";
+  const add = (parent, tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; parent.appendChild(e); return e; };
+  const head = add(card, "div", "viz-head");
+  add(head, "div", "viz-title", x.question);
+  add(head, "div", "viz-sub", `Confidence: ${{ low: "low", medium: "medium", high: "high" }[x.confidence] || "medium"}${x.kind === "separate" ? " · each chance on its own" : ""}`);
+  const outs = [...x.outcomes].sort((a, b) => b.chance - a.chance);
+  const fav = outs.find(o => !/^(other|others|rest|andere|sonstige|alle anderen|field)\b/i.test(o.label)) || outs[0];
+  if (outs.length && x.kind !== "separate") {
+    const hero = add(card, "div", "ch-hero");
+    add(hero, "b", "", Math.round(fav.chance) + "%");
+    add(hero, "span", "", fav.label + (fav !== outs[0] ? " · most likely single outcome" : ""));
+  }
+  const list = add(card, "div", "ch-list");
+  for (const o of outs) {
+    const r = add(list, "div", "ch-row");
+    const top = add(r, "div", "ch-top"); add(top, "span", "ch-lab", o.label); add(top, "b", "", Math.round(o.chance) + "%");
+    const m = add(r, "div", "meter"); add(m, "i").style.width = Math.max(1.5, Math.min(100, o.chance)) + "%";
+    if (o.why) add(r, "div", "ch-why", o.why);
+  }
+  const ups = x.factors.filter(f => f.direction === "up"), downs = x.factors.filter(f => f.direction !== "up");
+  if (x.factors.length) {
+    const f = add(card, "div", "ch-factors");
+    for (const [arr, title, cls] of [[ups, x.kind === "yesno" ? "Makes it more likely" : `Helps ${fav?.label || "it"}`, "up"], [downs, x.kind === "yesno" ? "Makes it less likely" : `Works against ${fav?.label || "it"}`, "down"]]) {
+      if (!arr.length) continue;
+      const col = add(f, "div", "ch-col"); add(col, "div", "ch-ct", title);
+      for (const it of arr) { const li = add(col, "div", "ch-f " + cls); add(li, "span", "arr", cls === "up" ? "↑" : "↓"); add(li, "span", "", it.text); add(li, "span", "str", "●".repeat(it.strength) + "○".repeat(3 - it.strength)).title = ["", "small effect", "medium effect", "big effect"][it.strength]; }
+    }
+  }
+  if (x.base_rate) add(card, "div", "ch-note", x.base_rate);
+  if (x.forecast) { const fc = vizCard(x.forecast); fc.classList.add("inner"); card.appendChild(fc); }
+  add(card, "div", "ch-note small", "Estimates by your local AI from what it knows" + (x.researched ? " and found on the web" : "") + ". Not a guarantee, and not financial or betting advice.");
+  return card;
+}
+
+// ---------- Graph and Chances: one structured answer from any model ----------
+async function webResearch(q) {
+  const r = await fetch(toolsBase() + "/tools/web_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q.slice(0, 200) }), signal: controller.signal });
+  const j = await r.json().catch(() => ({}));
+  return (j.results || []).slice(0, 5).map(x => `${x.title} (${x.url}): ${(x.content || "").slice(0, 900)}`).join("\n\n");
+}
+async function toolAnswer(model, text, block, work) {
+  const reply = { role: "assistant", content: "", blocks: [block], model };
+  const bubble = botBubble(reply, -1);
+  $("#inner").appendChild(bubble); fillBot(bubble, reply, -1, true); scrollDown(true);
+  setBusy(true); controller = new AbortController();
+  const redraw = (status) => { if (status) block.status = status; block.progress = (block.progress || 0) + 1; fillBot(bubble, reply, -1, true); scrollDown(); };
+  let tokens = 0, ns = 0, ok = false;
+  try {
+    const caps = await getCaps(model);
+    const ask = async (messages, schema) => { const r = await askJSON(model, caps, messages, schema); tokens += r.tokens; ns += r.ns; return r.data; };
+    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined).slice(-6).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
+    let research = "";
+    if (S.webSearch && searchAvailable) { redraw("Looking it up on the web…"); try { research = await webResearch(text); } catch (e) { if (e.name === "AbortError") throw e; } }
+    let thinking = block.thinkLabel;
+    try {
+      const running = (await (await api("/api/ps")).json()).models || [];
+      if (!running.some(r => r.name === model)) { thinking = `Loading ${model}…`; watchLoading(model, pct => redraw(`Loading ${model}… ${pct}%`), () => !block.active || !controller || ok); }
+    } catch {}
+    redraw(thinking);
+    reply.content = await work({ ask, history, research, today: new Date().toDateString() });
+    ok = true;
+  } catch (e) {
+    if (e.name !== "AbortError") block.error = e.message;
+  } finally {
+    controller = null; setBusy(false);
+    block.active = false; block.done = true; delete block.status;
+    if (ok || block.error) {
+      reply.stats = tokens && ns ? `${model} · ${(tokens / (ns / 1e9)).toFixed(1)} tok/s · ${tokens} tokens` : model;
+      current.messages.push(reply); current.updated = Date.now(); saveChats();
+    }
+    renderMessages();
+  }
+}
+const numOrNull = (v) => { if (v == null || v === "") return null; const n = typeof v === "number" ? v : Number(String(v).replace(/[^\d.eE+-]/g, "")); return isFinite(n) ? n : null; };
+function cleanChart(r) {
+  const S1 = (x, n = 120) => String(x ?? "").trim().slice(0, n);
+  const type = ["line", "area", "bar", "hbar", "donut", "scatter"].includes(r.type) ? r.type : "bar";
+  const labels = (Array.isArray(r.labels) ? r.labels : []).slice(0, 60).map(x => S1(x, 40));
+  const series = (Array.isArray(r.series) ? r.series : []).slice(0, 4).map(s => ({ name: S1(s?.name, 40), values: labels.map((_, i) => numOrNull(s?.values?.[i])) })).filter(s => s.values.some(v => v != null));
+  const points = (Array.isArray(r.points) ? r.points : []).slice(0, 300).map(p => ({ x: numOrNull(p?.x), y: numOrNull(p?.y), label: S1(p?.label, 40) })).filter(p => p.x != null && p.y != null);
+  const c = { type, title: S1(r.title), subtitle: S1(r.subtitle, 160), xLabel: S1(r.x_label, 40), yLabel: S1(r.y_label, 40), unit: S1(r.unit, 20), labels, series, points, source: S1(r.source, 160), estimated: !!r.estimated };
+  if (type === "scatter" ? points.length < 2 : !labels.length || !series.length) throw new Error("the model didn't give usable numbers. Try saying exactly what to show, or paste the numbers.");
+  if (type === "donut" || type === "hbar") c.series = c.series.slice(0, 1);
+  return c;
+}
+async function buildGraph(model, text) {
+  const block = { type: "chart", active: true, title: "", thinkLabel: "Making the graph…" };
+  await toolAnswer(model, text, block, async ({ ask, history, research, today }) => {
+    const str = { type: "string" }, num = { type: ["number", "null"] };
+    const schema = { type: "object", properties: {
+      language: str, title: str, subtitle: str, type: { type: "string", enum: ["line", "area", "bar", "hbar", "donut", "scatter"] },
+      x_label: str, y_label: str, unit: str, labels: { type: "array", items: str },
+      series: { type: "array", items: { type: "object", properties: { name: str, values: { type: "array", items: num } }, required: ["name", "values"] } },
+      points: { type: "array", items: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, label: str }, required: ["x", "y", "label"] } },
+      source: str, estimated: { type: "boolean" }, summary: str },
+      required: ["language", "title", "subtitle", "type", "x_label", "y_label", "unit", "labels", "series", "points", "source", "estimated", "summary"] };
+    const sys = `You turn requests into charts. Reply only with JSON. Today is ${today}.
+- "language": the language of the request; write title, labels and summary in it.
+- "type": "line" for change over time, "area" for a total over time, "bar" to compare up to about 12 categories, "hbar" for rankings or long names, "donut" for the parts of one whole (2 to 8 parts), "scatter" for how two numbers relate (then fill "points", one per item, and leave labels and series empty).
+- "labels": the categories or time points along the x axis, in order (for donut: the part names). "series": 1 to 4 lines or bar groups, each with a "name" and "values" = one number per label (null if unknown). Never more than 4 series.
+- Use exactly the numbers the user gave. Otherwise use the best real figures you know or the web facts; if they're approximate set "estimated": true. Plain numbers only, no units inside numbers.
+- "unit": like "%", "°C", "€", "$", "million people", or "". "y_label": what the values measure.
+- "source": where the numbers come from (like "World Bank, 2023", "your numbers", or "approximate, from memory").
+- "summary": 1 to 3 sentences with the main takeaway; say so if the numbers are estimates.`;
+    const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, `Request: ${text}`].filter(Boolean).join("\n\n");
+    const r = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
+    block.chart = cleanChart(r); block.title = block.chart.title;
+    return String(r.summary || "").trim();
+  });
+}
+async function buildChances(model, text) {
+  const block = { type: "chances", active: true, title: "", thinkLabel: "Weighing the chances…" };
+  await toolAnswer(model, text, block, async ({ ask, history, research, today }) => {
+    const str = { type: "string" };
+    const schema = { type: "object", properties: {
+      language: str, question: str, kind: { type: "string", enum: ["outcomes", "yesno", "separate"] },
+      outcomes: { type: "array", items: { type: "object", properties: { label: str, chance: { type: "number" }, why: str }, required: ["label", "chance", "why"] } },
+      factors: { type: "array", items: { type: "object", properties: { text: str, direction: { type: "string", enum: ["up", "down"] }, strength: { type: "integer" } }, required: ["text", "direction", "strength"] } },
+      confidence: { type: "string", enum: ["low", "medium", "high"] }, base_rate: str,
+      forecast: { type: "object", properties: { title: str, unit: str, labels: { type: "array", items: str }, values: { type: "array", items: { type: ["number", "null"] } }, low: { type: "array", items: { type: ["number", "null"] } }, high: { type: "array", items: { type: ["number", "null"] } }, from: { type: "integer" } }, required: ["title", "unit", "labels", "values", "low", "high", "from"] },
+      summary: str },
+      required: ["language", "question", "kind", "outcomes", "factors", "confidence", "base_rate", "forecast", "summary"] };
+    const sys = `You estimate chances and make predictions. Reply only with JSON. Today is ${today}.
+- "language": the language of the request; write all text in it. "question": the question, short and clear.
+- Think like a careful forecaster: start from the base rate (how often this kind of thing happens), then adjust for the specific situation. Be calibrated: don't say 0 or 100 unless it's certain, and lower your confidence when you lack recent information.
+- "kind": "outcomes" when exactly one of several outcomes will happen (who wins, which option): the chances add up to 100. "yesno" for one yes/no event: outcomes "Yes" and "No" (in the request's language). "separate" for several independent events, each with its own chance.
+- "outcomes": 2 to 8, each with "label", "chance" (0 to 100) and "why" (one short sentence).
+- "factors": 3 to 6 things that push the chance of the most likely named outcome (not "Other"), or of "Yes", "up" or "down", with "strength" 1 (small), 2 or 3 (big).
+- "confidence": how sure you are of these numbers. "base_rate": one sentence on how often this usually happens, or "".
+- "forecast": only when the request asks how a number will develop over time (a price, a population, temperatures, scores): "labels" = time points (some known past ones first, then future ones), "values" = known past values then your predicted middle values, "low"/"high" = the likely range for predicted points (same as the value for past points), "from" = index of the first predicted point, "title", "unit". Otherwise give empty arrays and "from": 0.
+- "summary": 2 to 4 sentences with your estimate and the main reasons.`;
+    const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, `Request: ${text}`].filter(Boolean).join("\n\n");
+    const r = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
+    const S1 = (x, n = 200) => String(x ?? "").trim().slice(0, n);
+    const kind = ["outcomes", "yesno", "separate"].includes(r.kind) ? r.kind : "outcomes";
+    let outcomes = (Array.isArray(r.outcomes) ? r.outcomes : []).slice(0, 8).map(o => ({ label: S1(o?.label, 80), chance: Math.max(0, Math.min(100, numOrNull(o?.chance) ?? 0)), why: S1(o?.why) })).filter(o => o.label);
+    if (!outcomes.length) throw new Error("the model didn't give any chances. Try asking more specifically.");
+    if (kind === "yesno" && outcomes.length === 1) outcomes.push({ label: /^(ja|yes)$/i.test(outcomes[0].label) ? (/^ja$/i.test(outcomes[0].label) ? "Nein" : "No") : "—", chance: 100 - outcomes[0].chance, why: "" });
+    if (kind !== "separate") {                      // one of them happens: make them add up to 100
+      const sum = outcomes.reduce((a, o) => a + o.chance, 0) || 1;
+      outcomes = outcomes.map(o => ({ ...o, chance: Math.round(o.chance / sum * 1000) / 10 }));
+    }
+    const factors = (Array.isArray(r.factors) ? r.factors : []).slice(0, 8).map(f => ({ text: S1(f?.text), direction: f?.direction === "down" ? "down" : "up", strength: Math.max(1, Math.min(3, Math.round(numOrNull(f?.strength) ?? 2))) })).filter(f => f.text);
+    let forecast = null;
+    const fc = r.forecast;
+    if (fc && Array.isArray(fc.labels) && fc.labels.length >= 2 && Array.isArray(fc.values)) {
+      const labels = fc.labels.slice(0, 40).map(x => S1(x, 30)), from = Math.max(0, Math.min(labels.length, Math.round(numOrNull(fc.from) ?? 0)));
+      const values = labels.map((_, i) => numOrNull(fc.values[i]));
+      if (values.filter(v => v != null).length >= 2) {
+        forecast = { type: "line", title: S1(fc.title, 120) || S1(r.question, 120), unit: S1(fc.unit, 20), labels, series: [{ name: S1(fc.title, 40), values }], from: from > 0 ? from : null,
+          band: labels.map((_, i) => i >= from ? { low: numOrNull(fc.low?.[i]) ?? values[i], high: numOrNull(fc.high?.[i]) ?? values[i] } : null), estimated: true, source: "prediction by your local AI", futureLabel: "prediction" };
+      }
+    }
+    block.chances = { question: S1(r.question, 200) || text.slice(0, 200), kind, outcomes, factors, confidence: ["low", "medium", "high"].includes(r.confidence) ? r.confidence : "medium", base_rate: S1(r.base_rate, 300), forecast, researched: !!research };
+    block.title = block.chances.question;
+    return String(r.summary || "").trim();
+  });
+}
+function renderToolBlock(b) {
+  const wrap = document.createElement("div"); wrap.className = "tool-block";
+  if (b.active) {
+    wrap.innerHTML = `<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>`;
+    wrap.querySelector(".q").textContent = b.status || b.thinkLabel || "Working…";
+    return wrap;
+  }
+  if (b.error) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = (b.type === "chart" ? "Couldn't make the graph: " : "Couldn't estimate the chances: ") + b.error; return wrap; }
+  if (b.type === "chart" && b.chart) wrap.appendChild(vizCard(b.chart));
+  if (b.type === "chances" && b.chances) wrap.appendChild(chancesCard(b.chances));
+  return wrap;
+}
 
 let sideBlock = null, sideSel = -1;
 function openDeckSide(b) { sideBlock = b; sideSel = -1; $("#deckSide").hidden = false; $("#deckSide").classList.remove("min"); drawDeckSide(); }
@@ -3581,7 +4124,7 @@ $("#exportChat").onclick = () => {
   download(slug(current.title) + ".md", new Blob([mdText], { type: "text/markdown" }));
 };
 $("#webSearch").onchange = e => { S.webSearch = e.target.checked; saveSettings(); checkSearch(); };
-$("#webBtn").onclick = () => { S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on: the AI can look things up" : "Web search off"); };
+$("#webBtn").onclick = () => { closeTools(); S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on: the AI can look things up" : "Web search off"); };
 $("#attachBtn").onclick = () => $("#fileInput").click();
 $("#fileInput").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 const box = $("#box");
