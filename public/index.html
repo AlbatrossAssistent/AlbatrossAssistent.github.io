@@ -238,9 +238,13 @@ body.compact .inner { gap: 14px; }
 .actions svg { width: 15px; height: 15px; }
 .actions .stat { margin-left: 6px; }
 .gen-wait { position: relative; width: min(340px, 100%); border-radius: 28px; overflow: hidden; display: flex; align-items: center; justify-content: center;
-  background-color: var(--glass); background-image: radial-gradient(70% 60% at 50% 40%, rgba(160,175,255,.14), transparent 70%), var(--sheen);
-  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), var(--shadow); }
-[data-theme="dark"] .gen-wait { background-color: rgba(10,10,14,.6); }
+  background: radial-gradient(110% 85% at 50% 42%, #0e1d42 0%, #050a17 55%, #020308 100%); border: 1px solid var(--glass-edge); box-shadow: var(--shadow); }
+.gen-wait::before { content: ""; position: absolute; inset: 0; opacity: .75; animation: twinkle 4s ease-in-out infinite alternate;
+  background-image: radial-gradient(1.2px 1.2px at 9% 14%, #fff, transparent), radial-gradient(1px 1px at 22% 72%, #fff, transparent), radial-gradient(1.4px 1.4px at 37% 9%, #cfe0ff, transparent),
+    radial-gradient(1px 1px at 61% 86%, #fff, transparent), radial-gradient(1.3px 1.3px at 78% 22%, #fff, transparent), radial-gradient(1px 1px at 88% 64%, #cfe0ff, transparent),
+    radial-gradient(1px 1px at 47% 93%, #fff, transparent), radial-gradient(1.2px 1.2px at 94% 7%, #fff, transparent), radial-gradient(1px 1px at 5% 48%, #fff, transparent), radial-gradient(1px 1px at 70% 50%, #fff, transparent); }
+@keyframes twinkle { to { opacity: .35; } }
+.gen-wait .gplanet { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .gen-wait .grk svg { width: 64px; height: 64px; fill: var(--fg); filter: drop-shadow(0 0 14px rgba(170,190,255,.35)); transform: rotate(90deg); animation: rkside2 2s ease-in-out infinite; }
 @keyframes rkside2 { 0%, 100% { transform: translateX(-26px) rotate(90deg); } 50% { transform: translateX(26px) rotate(90deg); } }
 .gen-wait .grk .flame { transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; opacity: .8; }
@@ -248,7 +252,9 @@ body.compact .inner { gap: 14px; }
 .gen-wait .gstars i { position: absolute; right: -6px; width: 3px; height: 3px; border-radius: 50%; background: var(--fg); opacity: 0; animation: gfall 2s linear infinite; }
 .gen-wait .gstars i:nth-child(3n) { width: 2px; height: 2px; }
 @keyframes gfall { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: .7; } 100% { transform: translateX(-380px); opacity: 0; } }
-.gen-wait .gfoot { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.gen-wait .gfoot { position: absolute; left: 16px; right: 16px; bottom: 14px; z-index: 1; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: rgba(225,235,255,.8); }
+.gen-wait .progress { background: rgba(255,255,255,.12); }
+.gen-wait .progress div { background: #6fa8ff; }
 .gen-wait .progress { width: 100%; margin: 0; }
 .gen-img { max-width: 100%; width: 512px; border-radius: 20px; border: 1px solid var(--line); display: block; box-shadow: var(--shadow); }
 .progress { height: 4px; background: var(--soft); border-radius: 999px; overflow: hidden; width: 320px; max-width: 100%; margin: 10px 0; }
@@ -512,6 +518,32 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .chances .ch-note.small { font-size: 11.5px; color: var(--t3); }
 .tool-block { margin: 0 0 12px; }
 
+
+/* ---------- answers animate in ---------- */
+.tok { animation: tokIn .55s ease-out both; }
+@keyframes tokIn { from { opacity: 0; filter: blur(4px); } }
+.caret-dot { display: inline-block; width: .42em; height: .42em; margin-left: .3em; border-radius: 50%; background: var(--fg); vertical-align: .08em; animation: caretPulse 1s ease-in-out infinite; }
+@keyframes caretPulse { 50% { transform: scale(.5); opacity: .4; } }
+.gen-img.fresh { animation: imgReveal 1.5s cubic-bezier(.16,1,.3,1) both; }
+@keyframes imgReveal { from { filter: blur(30px) saturate(1.6); transform: scale(1.05); opacity: .35; } }
+.viz-plot svg.anim .line:not(.future) { stroke-dasharray: 1; stroke-dashoffset: 1; animation: vizDraw 1.4s cubic-bezier(.65,0,.35,1) forwards; animation-delay: calc(var(--i, 0) * 140ms); }
+@keyframes vizDraw { to { stroke-dashoffset: 0; } }
+.viz-plot svg.anim .line.future, .viz-plot svg.anim .areafill, .viz-plot svg.anim .bandfill { animation: vizFade .9s ease 1.1s both; }
+.viz-plot svg.anim .dot, .viz-plot svg.anim .lb, .viz-plot svg.anim .strong, .viz-plot svg.anim .hero-t { animation: vizFade .5s ease 1.2s both; }
+@keyframes vizFade { from { opacity: 0; } }
+.viz-plot svg.anim .bar { transform-box: fill-box; transform-origin: 50% 100%; animation: vizGrow .9s cubic-bezier(.16,1,.3,1) both; animation-delay: calc(var(--i, 0) * 55ms); }
+.viz-plot svg.anim .bar.neg { transform-origin: 50% 0%; }
+.viz-plot svg.anim .bar.h { transform-origin: 0% 50%; animation-name: vizGrowX; }
+@keyframes vizGrow { from { transform: scaleY(0); } }
+@keyframes vizGrowX { from { transform: scaleX(0); } }
+.viz-plot svg.anim .seg { animation: vizSeg .8s cubic-bezier(.16,1,.3,1) both; animation-delay: calc(var(--i, 0) * 100ms); }
+@keyframes vizSeg { from { opacity: 0; transform: scale(.8) rotate(-30deg); } }
+.viz:has(svg.anim), .chances.anim { animation: msgIn .5s cubic-bezier(.2,.8,.2,1) both; }
+.chances .meter i { transition: width 1.1s cubic-bezier(.16,1,.3,1); }
+.chances.anim .ch-row { animation: msgIn .5s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--i, 0) * 90ms + 120ms); }
+.chances.anim .ch-factors, .chances.anim .ch-note { animation: msgIn .6s cubic-bezier(.2,.8,.2,1) .7s backwards; }
+@media (prefers-reduced-motion: reduce) { .tok, .caret-dot, .gen-img.fresh, .viz-plot svg.anim *, .gen-wait::before { animation: none !important; } }
+
 /* ---------- slides side panel ---------- */
 .deck-side { width: 380px; flex: 0 0 380px; display: flex; flex-direction: column; gap: 12px; padding: 16px 14px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 34px; overflow: hidden; animation: dsIn .45s cubic-bezier(.2,.8,.2,1); }
 .deck-side[hidden] { display: none; }
@@ -615,24 +647,78 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .sl .tl { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2cqw; margin: auto 0; }
 .sl .tl::before { content: ""; position: absolute; left: 0; right: 0; top: .85cqw; height: .3cqw; background: var(--ac); opacity: .45; }
 .sl .step i { display: block; position: relative; width: 2cqw; height: 2cqw; border-radius: 50%; background: var(--ac); margin-bottom: 1.6cqw; }
-.sl.building .bld { opacity: 0; transform: translateY(1.4cqw); transition: opacity .5s, transform .5s cubic-bezier(.2,.8,.2,1); }
-.sl.building .bld.in { opacity: 1; transform: none; }
-.sl.tr-fade { animation: trFade .6s ease; }
-.sl.tr-push { animation: trPush .6s cubic-bezier(.2,.8,.2,1); }
-.sl.tr-push.back { animation-name: trPushB; }
-.sl.tr-wipe { animation: trWipe .7s ease; }
-.sl.tr-wipe.back { animation-name: trWipeB; }
-.sl.tr-zoom { animation: trZoom .6s cubic-bezier(.2,.8,.2,1); }
-.sl.tr-cover { animation: trCover .6s cubic-bezier(.2,.8,.2,1); }
-.sl.tr-cover.back { animation-name: trCoverB; }
-@keyframes trFade { from { opacity: 0; } }
-@keyframes trPush { from { transform: translateX(100%); } }
-@keyframes trPushB { from { transform: translateX(-100%); } }
-@keyframes trWipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
-@keyframes trWipeB { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0); } }
-@keyframes trZoom { from { transform: scale(.8); opacity: 0; } }
-@keyframes trCover { from { transform: translateY(100%); } }
-@keyframes trCoverB { from { transform: translateY(-100%); } }
+/* entrance animations while presenting (the AI picks the style) */
+.stage16 { position: relative; perspective: 2200px; }
+.stage16 > .sl.leaving { position: absolute; inset: 0; pointer-events: none; }
+.sl.animating .ent, .sl.animating .bld { transition: opacity .7s ease, transform .95s cubic-bezier(.16,1,.3,1), clip-path .9s cubic-bezier(.65,0,.35,1), filter .8s ease; transition-delay: var(--d, 0s); }
+.sl.animating .ent:not(.in), .sl.animating .bld:not(.in) { opacity: 0; }
+.sl.an-rise .ent:not(.in), .sl.an-rise .bld:not(.in) { transform: translateY(2.8cqw); }
+.sl.an-fly .ent:not(.in), .sl.an-fly .bld:not(.in) { transform: translateY(26cqw); }
+.sl.an-zoom .ent:not(.in), .sl.an-zoom .bld:not(.in) { transform: scale(.7); }
+.sl.an-wipe .ent:not(.in), .sl.an-wipe .bld:not(.in) { opacity: 1; clip-path: inset(0 100% 0 0); }
+.sl.an-wipe .ent.in, .sl.an-wipe .bld.in { clip-path: inset(0 0 0 0); }
+.sl.an-blur .ent:not(.in), .sl.an-blur .bld:not(.in) { filter: blur(1.4cqw); transform: scale(1.06); }
+.sl.animating .bgph.ent { transition-duration: 1.6s; }
+.sl.animating .bgph.ent:not(.in) { opacity: 0; transform: scale(1.12); clip-path: none; filter: none; }
+.sl.animating .deco { transition: transform 1.2s cubic-bezier(.16,1,.3,1), opacity 1.2s ease; }
+.sl .deco.bar { transform-origin: top; }
+.sl .deco.line { transform-origin: left; }
+.sl.animating:not(.started) .deco.bar { transform: scaleY(0); }
+.sl.animating:not(.started) .deco.line { transform: scaleX(0); }
+.sl.animating:not(.started) .deco.circle { transform: scale(.35); opacity: 0; }
+.sl.animating:not(.started) .deco.frame { transform: scale(1.04); opacity: 0; }
+.sl.animating .tl::before { transform-origin: left; transition: transform 1.5s cubic-bezier(.16,1,.3,1) .35s; }
+.sl.animating:not(.started) .tl::before { transform: scaleX(0); }
+.present .sl .bgph img { animation: kenburns 22s ease-out both; }
+@keyframes kenburns { from { transform: scale(1.16) translate(1.5%, 1%); } }
+/* slide transitions: the new slide comes in (tr-*), the old one leaves (out-*) */
+.sl.tr-fade { animation: tInFade .7s ease both; }
+.sl.tr-dissolve { animation: tInDissolve .9s ease both; }
+.sl.tr-push { animation: tInPush .75s cubic-bezier(.65,0,.35,1) both; }
+.sl.tr-push.back { animation-name: tInPushB; }
+.sl.out-push { animation: tOutPush .75s cubic-bezier(.65,0,.35,1) both; }
+.sl.out-push.back { animation-name: tOutPushB; }
+.sl.tr-wipe { animation: tInWipe .85s cubic-bezier(.65,0,.35,1) both; }
+.sl.tr-wipe.back { animation-name: tInWipeB; }
+.sl.tr-zoom { animation: tInZoom .85s cubic-bezier(.16,1,.3,1) both; }
+.sl.out-zoom { animation: tOutZoom .6s ease both; }
+.sl.tr-cover { animation: tInCover .75s cubic-bezier(.65,0,.35,1) both; }
+.sl.tr-cover.back { animation-name: tInCoverB; }
+.sl.out-uncover { z-index: 2; animation: tOutPush .75s cubic-bezier(.65,0,.35,1) both; }
+.sl.out-uncover.back { animation-name: tOutPushB; }
+.sl.tr-split { animation: tInSplit .8s cubic-bezier(.65,0,.35,1) both; }
+.sl.tr-circle { animation: tInCircle .9s cubic-bezier(.65,0,.35,1) both; }
+.sl.tr-flip { animation: tInFlip .9s ease both; backface-visibility: hidden; }
+.sl.tr-flip.back { animation-name: tInFlipB; }
+.sl.out-flip { animation: tOutFlip .45s ease-in both; backface-visibility: hidden; }
+.sl.out-flip.back { animation-name: tOutFlipB; }
+.sl.tr-cube { animation: tInCube .9s cubic-bezier(.65,0,.35,1) both; transform-origin: 0% 50%; }
+.sl.tr-cube.back { animation-name: tInCubeB; transform-origin: 100% 50%; }
+.sl.out-cube { animation: tOutCube .9s cubic-bezier(.65,0,.35,1) both; transform-origin: 100% 50%; }
+.sl.out-cube.back { animation-name: tOutCubeB; transform-origin: 0% 50%; }
+@keyframes tInFade { from { opacity: 0; } }
+@keyframes tInDissolve { from { opacity: 0; filter: blur(2.2cqw); } }
+@keyframes tInPush { from { transform: translateX(100%); } }
+@keyframes tInPushB { from { transform: translateX(-100%); } }
+@keyframes tOutPush { to { transform: translateX(-100%); } }
+@keyframes tOutPushB { to { transform: translateX(100%); } }
+@keyframes tInWipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+@keyframes tInWipeB { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0); } }
+@keyframes tInZoom { from { transform: scale(.6); opacity: 0; } }
+@keyframes tOutZoom { to { transform: scale(1.25); opacity: 0; } }
+@keyframes tInCover { from { transform: translateY(100%); } }
+@keyframes tInCoverB { from { transform: translateY(-100%); } }
+@keyframes tInSplit { from { clip-path: inset(0 50% 0 50%); } to { clip-path: inset(0); } }
+@keyframes tInCircle { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+@keyframes tInFlip { 0%, 50% { transform: rotateY(90deg); } to { transform: none; } }
+@keyframes tInFlipB { 0%, 50% { transform: rotateY(-90deg); } to { transform: none; } }
+@keyframes tOutFlip { to { transform: rotateY(-90deg); } }
+@keyframes tOutFlipB { to { transform: rotateY(90deg); } }
+@keyframes tInCube { from { transform: translateX(100%) rotateY(-90deg); } }
+@keyframes tInCubeB { from { transform: translateX(-100%) rotateY(90deg); } }
+@keyframes tOutCube { to { transform: translateX(-100%) rotateY(90deg); } }
+@keyframes tOutCubeB { to { transform: translateX(100%) rotateY(-90deg); } }
+@media (prefers-reduced-motion: reduce) { .sl[class*="tr-"], .sl[class*="out-"], .present .sl .bgph img { animation: none !important; } }
 .present .stage16 { overflow: hidden; }
 .deck-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .deck-bar .cnt { font-size: 13px; color: var(--muted); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -1107,6 +1193,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 <div class="toast" id="toast"></div>
 
 <script src="orb.js"></script>
+<script src="planet.js"></script>
 <script>
 "use strict";
 // ======================================================================
@@ -1756,12 +1843,12 @@ function fillBot(d, m, idx, live) {
   c.innerHTML = ""; c._live = null;
   if (m.genImage !== undefined) {
     if (m.genImage) {
-      const im = document.createElement("img"); im.className = "gen-img"; im.alt = m.prompt || "Generated image"; im.src = "data:image/png;base64," + m.genImage; c.appendChild(im);
+      const im = document.createElement("img"); im.className = "gen-img" + (Date.now() - (m.genAt || 0) < 4000 ? " fresh" : ""); im.alt = m.prompt || "Generated image"; im.src = "data:image/png;base64," + m.genImage; c.appendChild(im);
       if (m.asked && m.prompt && m.asked !== m.prompt) { const pd = document.createElement("details"); pd.style.cssText = "margin-top:8px;color:var(--muted);font-size:13px"; pd.innerHTML = "<summary style='cursor:pointer'>Prompt used (with context)</summary><div style='margin-top:4px'></div>"; pd.lastChild.textContent = m.prompt; c.appendChild(pd); }
     } else if (live) {
       const [gw, gh] = (S.img.size || "1024x1024").split("x").map(Number);
-      c.innerHTML = `<div class="gen-wait" style="aspect-ratio:${gw}/${gh}"><div class="gstars">${"<i></i>".repeat(18)}</div><div class="grk">${LOGO}</div><div class="gfoot"><span class="pct">Starting…</span><div class="progress"><div></div></div></div></div>`;
-      c.querySelectorAll(".gstars i").forEach((d, k) => { d.style.top = (k * 37 % 100) + "%"; d.style.animationDelay = `calc(var(--sync, 0s) - ${(k * .23) % 2.4}s)`; d.style.animationDuration = (1.4 + (k % 5) * .35) + "s"; });
+      c.innerHTML = `<div class="gen-wait" style="aspect-ratio:${gw}/${gh}"><canvas class="gplanet" aria-hidden="true"></canvas><div class="gfoot"><span class="pct">Starting…</span><div class="progress"><div></div></div></div></div>`;
+      if (!window.createPlanet || !createPlanet(c.querySelector(".gplanet"))) c.querySelector(".gplanet").outerHTML = `<div class="grk">${LOGO}</div>`;   // no WebGL: the rocket
     } else c.innerHTML = `<div style="color:var(--muted)">(image not stored)</div>`;
   } else {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
@@ -1814,10 +1901,50 @@ function fillLive(c, m) {
   if (cut) {
     trimTail();
     body.insertAdjacentHTML("beforeend", md(rest.slice(0, cut)));
-    L.done += cut; L.n = body.childNodes.length; L.tail = null;
+    L.done += cut; L.n = body.childNodes.length; L.tail = null; L.hist = null;
   }
   const tail = src ? src.slice(L.done) : blocks.length ? "" : m.loading ? `<div class="shimmer" style="font-size:14px">Loading ${esc(m.model)} into memory…${m.loadPct != null ? " " + m.loadPct + "%" : ""}</div>${m.loadPct != null ? `<div class="progress" style="width:220px"><div style="width:${m.loadPct}%"></div></div>` : ""}` : TYPING;
-  if (tail !== L.tail) { trimTail(); body.insertAdjacentHTML("beforeend", src ? md(tail) : tail); L.tail = tail; }
+  if (tail !== L.tail) { trimTail(); body.insertAdjacentHTML("beforeend", src ? md(tail) : tail); L.tail = tail; if (src) fadeFresh(body, L); }
+}
+// The words written in the last half second fade in. The paragraph being written is re-rendered on every
+// update, so each time the fresh words are wrapped again and their fade continues where it was.
+function fadeFresh(body, L) {
+  if (reduceMotion()) return;
+  const now = performance.now();
+  const textsOf = () => {
+    const out = [];
+    for (let k = L.n; k < body.childNodes.length; k++) {
+      const node = body.childNodes[k];
+      if (node.nodeType === 3) { out.push(node); continue; }
+      const w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT); let t;
+      while ((t = w.nextNode())) if (!t.parentElement.closest("pre")) out.push(t);
+    }
+    return out;
+  };
+  const total = textsOf().reduce((a, t) => a + t.data.length, 0);
+  const H = L.hist || (L.hist = []);
+  if (!H.length || total < H.at(-1).len) { H.length = 0; H.push({ len: total, t: now - 2000 }); }
+  else if (total > H.at(-1).len) H.push({ len: total, t: now });
+  while (H.length > 2 && now - H[1].t > 600) H.shift();
+  for (let i = H.length - 1; i >= 1; i--) {
+    const age = now - H[i].t;
+    if (age > 600) break;
+    let from = H[i - 1].len, to = H[i].len, pos = 0;
+    for (const t of textsOf()) {
+      const a = pos, b = pos + t.data.length; pos = b;
+      if (b <= from || a >= to || t.parentElement.classList.contains("tok")) continue;
+      const s0 = Math.max(0, from - a), s1 = Math.min(t.data.length, to - a);
+      const mid = s0 ? t.splitText(s0) : t;
+      if (s1 - s0 < mid.data.length) mid.splitText(s1 - s0);
+      const span = document.createElement("span"); span.className = "tok"; span.style.animationDelay = -Math.round(age) + "ms";
+      mid.replaceWith(span); span.appendChild(mid);
+    }
+  }
+  // a soft dot right after the last word being written
+  const tailNodes = [...body.childNodes].slice(L.n);
+  const blocks = tailNodes.flatMap(nd => nd.nodeType === 1 ? [...(nd.matches("p,li,h1,h2,h3,h4,h5,h6,td,th") ? [nd] : []), ...nd.querySelectorAll("p,li,h1,h2,h3,h4,h5,h6,td,th")] : []);
+  const last = blocks.at(-1), end = tailNodes.at(-1);
+  if (last && end?.nodeType === 1 && end.contains(last) && !last.closest("pre")) last.insertAdjacentHTML("beforeend", '<span class="caret-dot" aria-hidden="true"></span>');
 }
 // Length of the leading part of s that ends at a blank line outside any ``` block.
 // md() resets at such a line, so that part renders the same on its own.
@@ -1895,7 +2022,7 @@ function renderBlock(b, active) {
     if ((b.images || []).length) {
       const grid = document.createElement("div"); grid.className = "photo-grid";
       for (const im of b.images) {
-        const a = document.createElement("a"); a.href = safeHref(im.page || im.full); a.target = "_blank"; a.rel = "noopener noreferrer"; a.className = "photo";
+        const a = document.createElement("a"); a.href = safeHref(im.page || im.full); a.target = "_blank"; a.rel = "noopener noreferrer"; a.className = "photo"; a.style.animationDelay = grid.children.length * 80 + "ms";
         a.innerHTML = `<img loading="lazy" alt=""><span class="cr"></span>`;
         a.querySelector("img").src = im.thumb; a.querySelector("img").alt = im.title || "";
         a.querySelector(".cr").textContent = [im.creator, im.license].filter(Boolean).join(" · ") || im.source || "";
@@ -1960,7 +2087,8 @@ const DECK_LAYOUTS = {
   statement:     { use: "one big key message on its own", fill: '"statement": one strong sentence (at most 15 words)', need: ["statement"] },
   section:       { use: "a divider that starts a new part of a long presentation", fill: '"sub": one short line about what this part covers', need: ["sub"] },
 };
-const DECK_TRANSITIONS = ["none", "fade", "push", "wipe", "zoom", "cover"];
+const DECK_TRANSITIONS = ["none", "fade", "dissolve", "push", "wipe", "zoom", "cover", "uncover", "split", "circle", "flip", "cube"];
+const DECK_STYLES = ["fade", "rise", "fly", "zoom", "wipe", "blur"];
 
 const deckFontsLoaded = new Set();
 function deckLook(d) {
@@ -1988,10 +2116,17 @@ function slideEl(d, i, build) {
   const { t, f } = deckLook(d);
   const gen = f.serif ? "Georgia, serif" : f.mono ? "Consolas, monospace" : "system-ui, sans-serif";
   const el = document.createElement("div");
-  el.className = "sl" + (build ? " building" : "") + (f.heavy ? " heavy" : "");
+  el.className = "sl" + (f.heavy ? " heavy" : "");
   el.style.cssText = `--bg:#${t.bg};--fg:#${t.fg};--mu:#${t.muted};--ac:#${t.accent};--cd:#${t.card};--hf:'${f.web[0]}',${gen};--bf:'${f.web[1]}',system-ui,sans-serif`;
   const add = (parent, tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; parent.appendChild(e); return e; };
   const photo = (p, cls) => { const fig = add(el, "figure", cls); const im = add(fig, "img"); im.src = p.thumb; im.alt = p.title || ""; add(fig, "figcaption", "", photoCredit(p)); return fig; };
+  // what animates in by itself when presenting, in this order (points and boxes are ".bld": after it, or one per click)
+  const done = () => {
+    const prio = (e) => e.matches(".kick,.num,.qm") ? 0 : e.matches("h1,h2,blockquote") ? 1 : e.matches("figure") ? 2 : 3;
+    [...el.querySelectorAll(".kick,.num,.qm,h1,h2,blockquote,figure,.sub,.by")].filter(e => !e.closest(".bld"))
+      .sort((x, y) => prio(x) - prio(y)).forEach((e, k) => { e.classList.add("ent"); e.dataset.o = k; });
+    return el;
+  };
   const list = (parent, items, bld = true) => { const ul = add(parent, "ul"); for (const x of items || []) add(ul, "li", bld ? "bld" : "", x); return ul; };
   add(el, "i", "deco " + t.deco);
   if (i === 0) {
@@ -1999,7 +2134,7 @@ function slideEl(d, i, build) {
     if (d.coverPhoto) { el.classList.add("on-photo"); photo(d.coverPhoto, "bgph"); }
     const b = add(el, "div", "body");
     add(b, "h1", "", d.title); if (d.subtitle) add(b, "p", "sub", d.subtitle);
-    return el;
+    return done();
   }
   const sl = d.slides[i - 1], L = layoutOf(sl);
   el.classList.add("L-" + L);
@@ -2017,7 +2152,7 @@ function slideEl(d, i, build) {
     case "cards": { add(b, "h2", "", sl.title); const g = add(b, "div", "grid"); for (const s of sl.cards.slice(0, 4)) { const c = add(g, "div", "card bld"); add(c, "h4", "", s.title); add(c, "p", "", s.text); } break; }
     default: add(b, "h2", "", sl.title); list(b, sl.bullets);
   }
-  return el;
+  return done();
 }
 function fillSlide(host, d, i, build) { host.innerHTML = ""; host.appendChild(slideEl(d, i, build)); }
 
@@ -2037,30 +2172,94 @@ function renderDeck(b) {
   b.idx = Math.min(b.idx || 0, total - 1);
   wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span>${b.steps ? '<button class="btn small" data-a="side">Steps</button>' : ""}<button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>`;
   const stage = wrap.querySelector(".stage16"), cnt = wrap.querySelector(".cnt");
-  const show = () => { fillSlide(stage, d, b.idx); cnt.textContent = `${b.idx + 1} / ${total}`; };
-  show();
-  wrap.querySelector('[data-a="prev"]').onclick = () => { b.idx = Math.max(0, b.idx - 1); show(); };
-  wrap.querySelector('[data-a="next"]').onclick = () => { b.idx = Math.min(total - 1, b.idx + 1); show(); };
+  const show = (dir) => { swapSlide(stage, d, b.idx, dir, { animate: !!dir, preview: true }); cnt.textContent = `${b.idx + 1} / ${total}`; };
+  show(0);
+  wrap.querySelector('[data-a="prev"]').onclick = () => { if (b.idx > 0) { b.idx--; show(-1); } };
+  wrap.querySelector('[data-a="next"]').onclick = () => { if (b.idx < total - 1) { b.idx++; show(1); } };
   wrap.querySelector('[data-a="present"]').onclick = () => presentDeck(d, b.idx);
   const sideBtn = wrap.querySelector('[data-a="side"]'); if (sideBtn) sideBtn.onclick = () => openDeckSide(b);
   wrap.querySelector('[data-a="pptx"]').onclick = (e) => downloadPptx(d, e.target);
   return wrap;
 }
 
+function reduceMotion() { return matchMedia("(prefers-reduced-motion: reduce)").matches; }
+function deckAnim(d) {
+  return { mode: ["none", "entrance", "build"].includes(d.animation) ? d.animation : "none", style: DECK_STYLES.includes(d.animStyle) ? d.animStyle : "rise" };
+}
+// a slide's own transition, else the deck's
+function slideTransition(d, i) {
+  const own = i > 0 ? d.slides[i - 1]?.transition : "";
+  return DECK_TRANSITIONS.includes(own) ? own : DECK_TRANSITIONS.includes(d.transition) ? d.transition : "fade";
+}
+function reveal(e, delay = 0) {
+  e.style.setProperty("--d", delay + "s"); e.classList.add("in");
+  const b = e.matches(".stat") ? e.querySelector("b") : null;
+  if (b) countUp(b, delay * 1000 + 120);
+}
+// key numbers count up from zero ("8,849 m", "70%", "1.5 Mio."), years don't
+function countUp(b, delay) {
+  const txt = b.dataset.v || (b.dataset.v = b.textContent);
+  const m = txt.match(/^(\D*?)(\d[\d.,\s]*\d|\d)(.*)$/);
+  if (!m) return;
+  let raw = m[2].replace(/\s/g, ""), sep = "", dec = ".";
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(raw)) { sep = ","; raw = raw.replace(/,/g, ""); }
+  else if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw)) { sep = "."; dec = ","; raw = raw.replace(/\./g, "").replace(",", "."); }
+  else if (/^\d+,\d+$/.test(raw)) { dec = ","; raw = raw.replace(",", "."); }
+  const target = parseFloat(raw);
+  if (!isFinite(target) || (!sep && /^(1[0-9]|20)\d\d$/.test(raw))) return;
+  const decimals = (raw.split(".")[1] || "").length;
+  const fmt = (v) => { const [a, c] = v.toFixed(decimals).split("."); return (sep ? a.replace(/\B(?=(\d{3})+(?!\d))/g, sep) : a) + (c ? dec + c : ""); };
+  const t0 = performance.now() + delay, dur = 1200;
+  b.textContent = m[1] + fmt(0) + m[3];
+  const tick = (now) => {
+    const p = Math.min(1, Math.max(0, (now - t0) / dur));
+    b.textContent = p < 1 ? m[1] + fmt(target * (1 - Math.pow(1 - p, 3))) + m[3] : txt;
+    if (p < 1 && b.isConnected) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function animateIn(el, d, { all = false, wait = 0, preview = false } = {}) {
+  let { mode, style } = deckAnim(d);
+  if (preview && mode === "build") mode = "entrance";
+  if (mode === "none" || all || reduceMotion()) return;
+  el.classList.add("animating", "an-" + style);
+  const ents = [...el.querySelectorAll(".ent")].sort((x, y) => x.dataset.o - y.dataset.o), blds = [...el.querySelectorAll(".bld")];
+  const w = wait / 1000, gap = .17;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.classList.add("started");
+    ents.forEach((e, k) => reveal(e, w + .1 + k * gap));
+    if (mode === "entrance") blds.forEach((e, k) => reveal(e, w + .3 + (ents.length + k) * gap));
+  }));
+}
+// shows slide i in a stage, with its transition when moving (dir 1 = forward, -1 = back)
+function swapSlide(stage, d, i, dir, opts = {}) {
+  const old = stage.querySelector(".sl:not(.leaving)");
+  stage.querySelectorAll(".sl.leaving").forEach(x => x.remove());
+  const el = slideEl(d, i);
+  const tr = dir && old && !reduceMotion() ? slideTransition(d, dir > 0 ? i : i + 1) : "none";
+  stage.appendChild(el);
+  if (old) {
+    if (tr !== "none") {
+      old.classList.add("leaving", "out-" + tr); el.classList.add("tr-" + tr);
+      if (dir < 0) { old.classList.add("back"); el.classList.add("back"); }
+      setTimeout(() => old.remove(), 1000);
+    } else old.remove();
+  }
+  if (opts.animate) animateIn(el, d, { ...opts, wait: tr !== "none" ? 380 : 0 });
+  return el;
+}
 function presentDeck(d, start = 0) {
-  const total = d.slides.length + 1, build = d.animation === "build", tr = DECK_TRANSITIONS.includes(d.transition) ? d.transition : "fade";
+  const total = d.slides.length + 1, { mode } = deckAnim(d);
   let i = start;
   const ov = document.createElement("div"); ov.className = "present";
   ov.innerHTML = '<div class="stage16 big"></div><div class="present-hint">← → to move · Esc to end</div>';
   const stage = ov.firstChild;
-  const show = (dir, all) => {
-    fillSlide(stage, d, i, build && !all);
-    const sl = stage.firstChild;
-    if (tr !== "none" && dir) sl.classList.add("tr-" + tr, ...(dir < 0 ? ["back"] : []));
-  };
+  const show = (dir, all) => swapSlide(stage, d, i, dir, { animate: true, all });
   const next = () => {
-    const hidden = build ? stage.querySelector(".bld:not(.in)") : null;
-    if (hidden) return hidden.classList.add("in");
+    if (mode === "build") {
+      const hidden = stage.querySelector(".sl:not(.leaving)")?.querySelector(".bld:not(.in)");
+      if (hidden) return reveal(hidden);
+    }
     if (i === total - 1) return end();
     i++; show(1);
   };
@@ -2127,8 +2326,8 @@ async function makePptx(d) {
   const [HF, BF] = f.ppt, hb = !f.heavy && !/Semibold/.test(HF);
   const W = 13.333, H = 7.5, X = .93, CW = W - 2 * X;
   const pptx = new pptxLib(); pptx.layout = "LAYOUT_WIDE"; pptx.title = d.title;
-  const build = d.animation === "build", anims = [];
-  const head = (s, text, o = {}) => s.addText(text, { x: X, y: .75, w: CW, h: 1.05, fontSize: 32, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink", ...o });
+  const anims = [];
+  const head = (s, text, o = {}) => s.addText(text, { x: X, y: .75, w: CW, h: 1.05, fontSize: 32, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink", objectName: "anim-title", ...o });
   const bullets = (s, items, o = {}) => items.length && s.addText(items.map(x => ({ text: x, options: { bullet: { indent: 18 }, breakLine: true } })),
     { x: X, y: 2.0, w: CW, h: 4.7, fontSize: 21, color: t.fg, fontFace: BF, valign: "top", paraSpaceAfter: 12, objectName: "anim-list", ...o });
   const deco = (s, onPhoto) => {
@@ -2141,7 +2340,7 @@ async function makePptx(d) {
   const fullPhoto = async (s, p) => {
     const data = await croppedJpeg(bigPhoto(p), W, H, 1920);
     if (!data) return false;
-    s.addImage({ data, x: 0, y: 0, w: W, h: H });
+    s.addImage({ data, x: 0, y: 0, w: W, h: H, objectName: "anim-photo" });
     s.addShape("rect", { x: 0, y: 0, w: W, h: H, fill: { color: "000000", transparency: 55 } });
     s.addText(photoCredit(p), { x: W - 5.2, y: H - .45, w: 5, h: .3, fontSize: 9, color: "DDDDDD", fontFace: BF, align: "right" });
     return true;
@@ -2154,8 +2353,8 @@ async function makePptx(d) {
     const photo = d.coverPhoto && await fullPhoto(s, d.coverPhoto);
     deco(s, photo);
     const c = photo ? "FFFFFF" : t.fg;
-    s.addText(d.title, { x: X, y: photo ? 3.6 : 2.0, w: CW, h: 2.0, fontSize: 50, bold: hb, color: c, fontFace: HF, valign: "bottom", fit: "shrink" });
-    if (d.subtitle) s.addText(d.subtitle, { x: X, y: photo ? 5.65 : 4.1, w: CW, h: .8, fontSize: 22, color: photo ? "E6E6E6" : t.muted, fontFace: BF, valign: "top" });
+    s.addText(d.title, { x: X, y: photo ? 3.6 : 2.0, w: CW, h: 2.0, fontSize: 50, bold: hb, color: c, fontFace: HF, valign: "bottom", fit: "shrink", objectName: "anim-title" });
+    if (d.subtitle) s.addText(d.subtitle, { x: X, y: photo ? 5.65 : 4.1, w: CW, h: .8, fontSize: 22, color: photo ? "E6E6E6" : t.muted, fontFace: BF, valign: "top", objectName: "anim-sub" });
     anims.push([]);
   }
   for (const [n, sl] of d.slides.entries()) {
@@ -2166,16 +2365,16 @@ async function makePptx(d) {
     deco(s, photoOk);
     const list = (sl.bullets || []);
     if (L === "section") {
-      s.addText(String(n + 1).padStart(2, "0"), { x: X, y: 1.3, w: 4, h: 1.7, fontSize: 96, bold: hb, color: t.accent, fontFace: HF, valign: "bottom" });
+      s.addText(String(n + 1).padStart(2, "0"), { x: X, y: 1.3, w: 4, h: 1.7, fontSize: 96, bold: hb, color: t.accent, fontFace: HF, valign: "bottom", objectName: "anim-pre" });
       head(s, sl.title, { y: 3.15, h: 1.4, fontSize: 44 });
-      if (sl.sub) s.addText(sl.sub, { x: X, y: 4.6, w: CW, h: .8, fontSize: 20, color: t.muted, fontFace: BF, valign: "top" });
+      if (sl.sub) s.addText(sl.sub, { x: X, y: 4.6, w: CW, h: .8, fontSize: 20, color: t.muted, fontFace: BF, valign: "top", objectName: "anim-sub" });
     } else if (L === "statement") {
-      s.addText(sl.title.toUpperCase(), { x: X, y: 1.9, w: CW, h: .5, fontSize: 14, bold: true, color: t.accent, fontFace: BF, charSpacing: 4 });
-      s.addText(sl.statement, { x: X, y: 2.5, w: CW - .8, h: 3.2, fontSize: 40, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink" });
+      s.addText(sl.title.toUpperCase(), { x: X, y: 1.9, w: CW, h: .5, fontSize: 14, bold: true, color: t.accent, fontFace: BF, charSpacing: 4, objectName: "anim-pre" });
+      s.addText(sl.statement, { x: X, y: 2.5, w: CW - .8, h: 3.2, fontSize: 40, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink", objectName: "anim-title" });
     } else if (L === "quote") {
-      s.addText("“", { x: X - .1, y: .7, w: 2, h: 2, fontSize: 150, color: t.accent, fontFace: "Georgia", valign: "top" });
-      s.addText(sl.quote, { x: X, y: 2.3, w: CW - .8, h: 3, fontSize: 32, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink" });
-      if (sl.by) s.addText("— " + sl.by, { x: X, y: 5.5, w: CW, h: .6, fontSize: 18, color: t.muted, fontFace: BF });
+      s.addText("“", { x: X - .1, y: .7, w: 2, h: 2, fontSize: 150, color: t.accent, fontFace: "Georgia", valign: "top", objectName: "anim-pre" });
+      s.addText(sl.quote, { x: X, y: 2.3, w: CW - .8, h: 3, fontSize: 32, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink", objectName: "anim-title" });
+      if (sl.by) s.addText("— " + sl.by, { x: X, y: 5.5, w: CW, h: .6, fontSize: 18, color: t.muted, fontFace: BF, objectName: "anim-sub" });
     } else if (L === "image-full") {
       const c = photoOk ? "FFFFFF" : t.fg;
       head(s, sl.title, { y: 3.7, h: 1.1, fontSize: 38, color: c });
@@ -2187,7 +2386,7 @@ async function makePptx(d) {
       bullets(s, list, { x: tx, w: tw });
       if (list.length) targets.push({ name: "anim-list", paras: list.length });
       const iw = CW - tw - .5, data = await croppedJpeg(bigPhoto(sl.photo), iw, 5.6);
-      if (data) { s.addImage({ data, x: ix, y: .75, w: iw, h: 5.6 }); s.addText(photoCredit(sl.photo), { x: ix, y: 6.4, w: iw, h: .3, fontSize: 9, color: t.muted, fontFace: BF }); }
+      if (data) { s.addImage({ data, x: ix, y: .75, w: iw, h: 5.6, objectName: "anim-photo" }); s.addText(photoCredit(sl.photo), { x: ix, y: 6.4, w: iw, h: .3, fontSize: 9, color: t.muted, fontFace: BF }); }
     } else if (L === "stats" || L === "cards" || L === "columns" || L === "timeline") {
       head(s, sl.title);
       const items = (L === "stats" ? sl.stats : L === "cards" ? sl.cards : L === "columns" ? sl.columns : sl.steps).slice(0, L === "columns" ? 3 : L === "timeline" ? 5 : 4);
@@ -2220,34 +2419,63 @@ async function makePptx(d) {
       if (list.length) targets.push({ name: "anim-list", paras: list.length });
     }
     if (sl.notes) s.addNotes(sl.notes);
-    anims.push(build ? targets : []);
+    anims.push(targets);
   }
 
-  // transitions and "one by one" animations aren't in PptxGenJS: add them to the slide XML
+  // transitions and animations aren't in PptxGenJS: add them to each slide's XML
   const buf = await pptx.write({ outputType: "arraybuffer" });
-  const TR = { fade: "<p:fade/>", push: '<p:push dir="u"/>', wipe: '<p:wipe dir="r"/>', zoom: "<p:zoom/>", cover: '<p:cover dir="l"/>' }[d.transition];
-  if (!TR && !anims.some(a => a.length)) return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+  const { mode, style } = deckAnim(d);
+  const TRX = { fade: "<p:fade/>", dissolve: "<p:dissolve/>", push: '<p:push dir="l"/>', wipe: '<p:wipe dir="r"/>', zoom: "<p:zoom/>", cover: '<p:cover dir="l"/>',
+    uncover: '<p:pull dir="l"/>', split: '<p:split orient="vert" dir="out"/>', circle: "<p:circle/>", flip: '<p:push dir="l"/>', cube: '<p:push dir="l"/>' };
   if (!window.JSZip) await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js");
   const zip = await JSZip.loadAsync(buf);
   for (let n = 0; n < anims.length; n++) {
     const file = zip.file(`ppt/slides/slide${n + 1}.xml`);
     if (!file) continue;
-    let xml = await file.async("string"), add = TR ? `<p:transition spd="med">${TR}</p:transition>` : "";
-    const clicks = [], blds = [];
-    for (const tg of anims[n]) {
-      const m = xml.match(new RegExp(`<p:cNvPr id="(\\d+)" name="${tg.name}"`));
-      if (!m) continue;
-      const spid = m[1];
-      if (tg.paras) { for (let p = 0; p < tg.paras; p++) clicks.push(`<p:spTgt spid="${spid}"><p:txEl><p:pRg st="${p}" end="${p}"/></p:txEl></p:spTgt>`); blds.push(`<p:bldP spid="${spid}" grpId="0" build="p"/>`); }
-      else { clicks.push(`<p:spTgt spid="${spid}"/>`); blds.push(`<p:bldP spid="${spid}" grpId="0" animBg="1"/>`); }
+    let xml = await file.async("string");
+    const tr = TRX[slideTransition(d, n)];
+    let add = tr ? `<p:transition spd="med">${tr}</p:transition>` : "";
+    const idOf = (name) => (xml.match(new RegExp(`<p:cNvPr id="(\\d+)" name="${name}"`)) || [])[1];
+    // what animates, in order: the slide's own parts by themselves, then the points (by themselves, or one per click)
+    const steps = [];
+    if (mode !== "none") {
+      for (const nm of ["anim-pre", "anim-title", "anim-photo", "anim-sub"]) { const id = idOf(nm); if (id) steps.push({ spid: id, pic: nm === "anim-photo", auto: true }); }
+      for (const tg of anims[n]) {
+        const id = idOf(tg.name); if (!id) continue;
+        if (tg.paras) for (let p = 0; p < tg.paras; p++) steps.push({ spid: id, para: p, auto: mode === "entrance" });
+        else steps.push({ spid: id, auto: mode === "entrance" });
+      }
     }
-    if (clicks.length) {
+    if (steps.length) {
       let id = 2;
-      const pars = clicks.map(tgt => {
-        const a = ++id, b = ++id, c = ++id, e = ++id, g = ++id;
-        return `<p:par><p:cTn id="${a}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${b}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${c}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:set><p:cBhvr><p:cTn id="${e}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl>${tgt}</p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${g}" dur="500"/><p:tgtEl>${tgt}</p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
+      const tgtOf = (st) => st.para != null ? `<p:spTgt spid="${st.spid}"><p:txEl><p:pRg st="${st.para}" end="${st.para}"/></p:txEl></p:spTgt>` : `<p:spTgt spid="${st.spid}"/>`;
+      const setVis = (tgt) => `<p:set><p:cBhvr><p:cTn id="${++id}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl>${tgt}</p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>`;
+      const fx = (tgt, filter, dur) => `<p:animEffect transition="in" filter="${filter}"><p:cBhvr><p:cTn id="${++id}" dur="${dur}"/><p:tgtEl>${tgt}</p:tgtEl></p:cBhvr></p:animEffect>`;
+      const mv = (tgt, attr, from, to, dur) => `<p:anim calcmode="lin" valueType="num"><p:cBhvr additive="base"><p:cTn id="${++id}" dur="${dur}" decel="100000" fill="hold"/><p:tgtEl>${tgt}</p:tgtEl><p:attrNameLst><p:attrName>${attr}</p:attrName></p:attrNameLst></p:cBhvr><p:tavLst><p:tav tm="0"><p:val><p:strVal val="${from}"/></p:val></p:tav><p:tav tm="100000"><p:val><p:strVal val="${to}"/></p:val></p:tav></p:tavLst></p:anim>`;
+      // [presetID, presetSubtype, behaviours]
+      const effect = (tgt, st) => {
+        const sty = st.pic ? "zoom" : style;
+        if (sty === "fly") return [2, 4, setVis(tgt) + mv(tgt, "ppt_x", "#ppt_x", "#ppt_x", 600) + mv(tgt, "ppt_y", "1+#ppt_h/2", "#ppt_y", 600)];
+        if (sty === "wipe") return [22, 8, setVis(tgt) + fx(tgt, "wipe(left)", 600)];
+        if (sty === "rise") return [10, 0, setVis(tgt) + fx(tgt, "fade", 600) + mv(tgt, "ppt_y", "#ppt_y+0.05", "#ppt_y", 700)];
+        if (sty === "zoom" || sty === "blur") { const k = sty === "zoom" ? "0.7" : "0.92"; return [10, 0, setVis(tgt) + fx(tgt, "fade", 600) + mv(tgt, "ppt_w", `#ppt_w*${k}`, "#ppt_w", 700) + mv(tgt, "ppt_h", `#ppt_h*${k}`, "#ppt_h", 700)]; }
+        return [10, 0, setVis(tgt) + fx(tgt, "fade", 600)];
+      };
+      // click groups: a new one at each click; the slide's opening animations start by themselves
+      const groups = [];
+      for (const st of steps) { if (!groups.length || !st.auto) groups.push({ auto: st.auto, list: [] }); groups.at(-1).list.push(st); }
+      const pars = groups.map((g, gi) => {
+        const outer = ++id;
+        const inner = g.list.map((st, k) => {
+          const a = ++id, tgt = tgtOf(st), [preset, sub, beh] = effect(tgt, st), c = ++id;
+          const node = k ? "afterEffect" : g.auto ? "afterEffect" : "clickEffect";
+          return `<p:par><p:cTn id="${a}" fill="hold"><p:stCondLst><p:cond delay="${k * 300}"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${c}" presetID="${preset}" presetClass="entr" presetSubtype="${sub}" fill="hold" grpId="0" nodeType="${node}"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${beh}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
+        }).join("");
+        const start = g.auto && gi === 0 ? '<p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond>' : '<p:cond delay="indefinite"/>';
+        return `<p:par><p:cTn id="${outer}" fill="hold"><p:stCondLst>${start}</p:stCondLst><p:childTnLst>${inner}</p:childTnLst></p:cTn></p:par>`;
       }).join("");
-      add += `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${pars}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst><p:bldLst>${blds.join("")}</p:bldLst></p:timing>`;
+      const blds = [...new Map(steps.filter(st => !st.pic).map(st => [st.spid, st.para != null ? `<p:bldP spid="${st.spid}" grpId="0" build="p"/>` : `<p:bldP spid="${st.spid}" grpId="0" animBg="1"/>`])).values()].join("");
+      add += `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${pars}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>${blds ? `<p:bldLst>${blds}</p:bldLst>` : ""}</p:timing>`;
     }
     if (add) zip.file(`ppt/slides/slide${n + 1}.xml`, xml.replace(/<\/p:clrMapOvr>/, "</p:clrMapOvr>" + add));
   }
@@ -2623,6 +2851,8 @@ function drawChart(box, c) {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
   svg.setAttribute("role", "img"); svg.setAttribute("aria-label", c.title || "Chart");
   box.prepend(svg);
+  if (box.dataset.anim === "1" && !reduceMotion()) svg.classList.add("anim");   // only the first time it's drawn
+  box.dataset.anim = "";
   const el = (tag, a = {}, parent = svg) => { const e = document.createElementNS(NS_SVG, tag); for (const k in a) e.setAttribute(k, a[k]); parent.appendChild(e); return e; };
   const txt = (x, y, s, a = {}, parent) => { const t = el("text", { x, y, ...a }, parent); t.textContent = s; return t; };
   const col = (i) => `var(--c${(i % 8) + 1})`;
@@ -2645,7 +2875,7 @@ function drawChart(box, c) {
       const p = (rad, ang) => `${cx + rad * Math.cos(ang)} ${cy + rad * Math.sin(ang)}`;
       const d = v >= total ? `M ${cx - R} ${cy} a ${R} ${R} 0 1 0 ${2 * R} 0 a ${R} ${R} 0 1 0 ${-2 * R} 0 M ${cx - r} ${cy} a ${r} ${r} 0 1 1 ${2 * r} 0 a ${r} ${r} 0 1 1 ${-2 * r} 0`
         : `M ${p(R, a0)} A ${R} ${R} 0 ${big} 1 ${p(R, a1)} L ${p(r, a1)} A ${r} ${r} 0 ${big} 0 ${p(r, a0)} Z`;
-      const seg = el("path", { d, fill: col(i), class: "seg", "fill-rule": "evenodd" });
+      const seg = el("path", { d, fill: col(i), class: "seg", "fill-rule": "evenodd", style: `--i:${i};transform-origin:${cx}px ${cy}px` });
       const pct = Math.round(v / total * 1000) / 10;
       seg.onmousemove = (e) => { const b = box.getBoundingClientRect(); showTip(e.clientX - b.left, e.clientY - b.top, `<div class="th">${esc(labels[i])}</div><div class="tr"><i style="background:${col(i)}"></i><span>${esc(vizFmt(v, c.unit))}</span><b>${pct}%</b></div>`); };
       seg.onmouseleave = hideTip;
@@ -2695,7 +2925,7 @@ function drawChart(box, c) {
       const lab = labels[i].length * 7 > LW ? labels[i].slice(0, Math.floor(LW / 7) - 1) + "…" : labels[i];
       txt(LW - 8, yc + 4, lab, { class: "lb", "text-anchor": "end" });
       const r4 = Math.min(4, w);
-      el("path", { d: v >= 0 ? `M${left} ${yc - h / 2} h${w - r4} q${r4} 0 ${r4} ${r4} v${h - 2 * r4} q0 ${r4} ${-r4} ${r4} h${-(w - r4)} Z` : `M${left + w} ${yc - h / 2} h${-(w - r4)} q${-r4} 0 ${-r4} ${r4} v${h - 2 * r4} q0 ${r4} ${r4} ${r4} h${w - r4} Z`, fill: col(0), class: "bar" });
+      el("path", { d: v >= 0 ? `M${left} ${yc - h / 2} h${w - r4} q${r4} 0 ${r4} ${r4} v${h - 2 * r4} q0 ${r4} ${-r4} ${r4} h${-(w - r4)} Z` : `M${left + w} ${yc - h / 2} h${-(w - r4)} q${-r4} 0 ${-r4} ${r4} v${h - 2 * r4} q0 ${r4} ${r4} ${r4} h${w - r4} Z`, fill: col(0), class: "bar h", style: `--i:${i}` });
       txt((v >= 0 ? left + w : left) + (v >= 0 ? 6 : -6), yc + 4, vizFmt(v, c.unit), { class: "lb strong", "text-anchor": v >= 0 ? "start" : "end" });
       const hit = el("rect", { x: 0, y: yc - 16, width: W, height: 32, class: "hit" });
       hit.onmousemove = () => showTip(X(v), yc, `<div class="th">${esc(labels[i])}</div>${row(0, series[0].name || "", v)}`);
@@ -2731,7 +2961,7 @@ function drawChart(box, c) {
       series.forEach((s, j) => {
         const v = s.values[i]; if (v == null || !isFinite(v)) return;
         const x = X(i) - gw / 2 + j * (bw + 2), y = Y(v), h = Math.abs(y0 - y), r4 = Math.min(4, h, bw / 2);
-        el("path", { d: v >= 0 ? `M${x} ${y0} V${y + r4} q0 ${-r4} ${r4} ${-r4} h${bw - 2 * r4} q${r4} 0 ${r4} ${r4} V${y0} Z` : `M${x} ${y0} V${y - r4} q0 ${r4} ${r4} ${r4} h${bw - 2 * r4} q${r4} 0 ${r4} ${-r4} V${y0} Z`, fill: col(j), class: "bar" });
+        el("path", { d: v >= 0 ? `M${x} ${y0} V${y + r4} q0 ${-r4} ${r4} ${-r4} h${bw - 2 * r4} q${r4} 0 ${r4} ${r4} V${y0} Z` : `M${x} ${y0} V${y - r4} q0 ${r4} ${r4} ${r4} h${bw - 2 * r4} q${r4} 0 ${r4} ${-r4} V${y0} Z`, fill: col(j), class: v >= 0 ? "bar" : "bar neg", style: `--i:${i}` });
       });
       if (k === 1 && n <= 12 && series[0].values[i] != null) txt(X(i), Y(series[0].values[i]) - 6, vizFmt(series[0].values[i]), { class: "ax strong", "text-anchor": "middle" });
       const hit = el("rect", { x: X(i) - band / 2, y: T, width: band, height: PH, class: "hit" });
@@ -2753,7 +2983,7 @@ function drawChart(box, c) {
       const idx = vals.map((v, i) => v != null && isFinite(v) ? i : -1).filter(i => i >= 0);
       if (idx.length > 1) el("path", { d: `M${X(idx[0])} ${Y(Math.max(0, ticks[0]))} L` + idx.map(i => `${X(i)} ${Y(vals[i])}`).join(" L") + ` L${X(idx.at(-1))} ${Y(Math.max(0, ticks[0]))} Z`, fill: col(j), class: "areafill" });
     }
-    el("path", { d: pathOf(vals, 0, Math.min(f, n - 1)), stroke: col(j), class: "line" });
+    el("path", { d: pathOf(vals, 0, Math.min(f, n - 1)), stroke: col(j), class: "line", pathLength: 1, style: `--i:${j}` });
     if (f < n) el("path", { d: pathOf(vals, f - 1, n - 1), stroke: col(j), class: "line future" });
     let li = n - 1; while (li >= 0 && (vals[li] == null || !isFinite(vals[li]))) li--;
     if (li >= 0) { el("circle", { cx: X(li), cy: Y(vals[li]), r: 4, fill: col(j), class: "dot" }); endY.push({ j, y: Y(vals[li]), name: s.name || "", v: vals[li] }); }
@@ -2798,7 +3028,7 @@ function vizCard(c, opts = {}) {
     names.forEach((nm, i) => { const it = document.createElement("span"); it.innerHTML = `<i style="background:var(--c${(i % 8) + 1})"></i>`; it.append(nm || ""); lg.appendChild(it); });
     card.appendChild(lg);
   }
-  const plot = chartEl(c); card.appendChild(plot);
+  const plot = chartEl(c); plot.dataset.anim = opts.animate ? "1" : ""; card.appendChild(plot);
   const table = document.createElement("div"); table.className = "viz-table"; table.hidden = true; card.appendChild(table);
   const foot = document.createElement("div"); foot.className = "viz-foot";
   foot.innerHTML = '<span class="src"></span><span style="flex:1"></span><button class="btn small" data-a="table">Table</button><button class="btn small" data-a="png">PNG</button><button class="btn small" data-a="csv">CSV</button>';
@@ -2841,8 +3071,9 @@ async function vizPng(card, c) {
 }
 
 // ---------- chances ----------
-function chancesCard(x) {
-  const card = document.createElement("div"); card.className = "viz chances";
+function chancesCard(x, animate = false) {
+  animate = animate && !reduceMotion();
+  const card = document.createElement("div"); card.className = "viz chances" + (animate ? " anim" : "");
   const add = (parent, tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; parent.appendChild(e); return e; };
   const head = add(card, "div", "viz-head");
   add(head, "div", "viz-title", x.question);
@@ -2851,14 +3082,16 @@ function chancesCard(x) {
   const fav = outs.find(o => !/^(other|others|rest|andere|sonstige|alle anderen|field)\b/i.test(o.label)) || outs[0];
   if (outs.length && x.kind !== "separate") {
     const hero = add(card, "div", "ch-hero");
-    add(hero, "b", "", Math.round(fav.chance) + "%");
+    const big = add(hero, "b", "", Math.round(fav.chance) + "%");
+    if (animate) countUp(big, 150);
     add(hero, "span", "", fav.label + (fav !== outs[0] ? " · most likely single outcome" : ""));
   }
   const list = add(card, "div", "ch-list");
-  for (const o of outs) {
-    const r = add(list, "div", "ch-row");
+  for (const [k, o] of outs.entries()) {
+    const r = add(list, "div", "ch-row"); r.style.setProperty("--i", k);
     const top = add(r, "div", "ch-top"); add(top, "span", "ch-lab", o.label); add(top, "b", "", Math.round(o.chance) + "%");
-    const m = add(r, "div", "meter"); add(m, "i").style.width = Math.max(1.5, Math.min(100, o.chance)) + "%";
+    const m = add(r, "div", "meter"), bar = add(m, "i"), w = Math.max(1.5, Math.min(100, o.chance)) + "%";
+    if (animate) { bar.style.width = "0"; bar.style.transitionDelay = (.3 + k * .1) + "s"; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = w; })); } else bar.style.width = w;
     if (o.why) add(r, "div", "ch-why", o.why);
   }
   const ups = x.factors.filter(f => f.direction === "up"), downs = x.factors.filter(f => f.direction !== "up");
@@ -2871,7 +3104,7 @@ function chancesCard(x) {
     }
   }
   if (x.base_rate) add(card, "div", "ch-note", x.base_rate);
-  if (x.forecast) { const fc = vizCard(x.forecast); fc.classList.add("inner"); card.appendChild(fc); }
+  if (x.forecast) { const fc = vizCard(x.forecast, { animate }); fc.classList.add("inner"); card.appendChild(fc); }
   add(card, "div", "ch-note small", "Estimates by your local AI from what it knows" + (x.researched ? " and found on the web" : "") + ". Not a guarantee, and not financial or betting advice.");
   return card;
 }
@@ -2907,7 +3140,7 @@ async function toolAnswer(model, text, block, work) {
     if (e.name !== "AbortError") block.error = e.message;
   } finally {
     controller = null; setBusy(false);
-    block.active = false; block.done = true; delete block.status;
+    block.active = false; block.done = true; delete block.status; block.doneAt = Date.now();
     if (ok || block.error) {
       reply.stats = tokens && ns ? `${model} · ${(tokens / (ns / 1e9)).toFixed(1)} tok/s · ${tokens} tokens` : model;
       current.messages.push(reply); current.updated = Date.now(); saveChats();
@@ -3008,8 +3241,9 @@ function renderToolBlock(b) {
     return wrap;
   }
   if (b.error) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = (b.type === "chart" ? "Couldn't make the graph: " : "Couldn't estimate the chances: ") + b.error; return wrap; }
-  if (b.type === "chart" && b.chart) wrap.appendChild(vizCard(b.chart));
-  if (b.type === "chances" && b.chances) wrap.appendChild(chancesCard(b.chances));
+  const fresh = Date.now() - (b.doneAt || 0) < 4000;     // animate when it first appears, not every time the chat is redrawn
+  if (b.type === "chart" && b.chart) wrap.appendChild(vizCard(b.chart, { animate: fresh }));
+  if (b.type === "chances" && b.chances) wrap.appendChild(chancesCard(b.chances, fresh));
   return wrap;
 }
 
@@ -3046,14 +3280,16 @@ function drawDeckSide() {
 }
 
 async function askJSON(model, caps, messages, schema) {
-  const body = { model, messages, stream: false, format: schema, options: { ...buildOptions(), temperature: 0.6 } };
+  // streamed, so the connection never sits silent (a slow model used to hit the 5-minute timeout of a single answer)
+  const body = { model, messages, stream: true, format: schema, options: { ...buildOptions(), temperature: 0.6 } };
   if (caps.includes("thinking")) body.think = false;
   if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
-  const j = await (await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal })).json();
-  if (j.error) throw new Error(j.error);
-  const txt = (j.message?.content || "").trim();
-  try { return { data: JSON.parse(txt), tokens: j.eval_count || 0, ns: j.eval_duration || 0 }; }
-  catch { const m = txt.match(/\{[\s\S]*\}/); if (m) return { data: JSON.parse(m[0]), tokens: j.eval_count || 0, ns: j.eval_duration || 0 }; throw new Error("the model didn't answer in the right format"); }
+  const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+  let txt = "", tokens = 0, ns = 0;
+  await readNdjson(res, j => { if (j.error) throw new Error(j.error); txt += j.message?.content || ""; if (j.done) { tokens = j.eval_count || 0; ns = j.eval_duration || 0; } });
+  txt = txt.trim();
+  try { return { data: JSON.parse(txt), tokens, ns }; }
+  catch { const m = txt.match(/\{[\s\S]*\}/); if (m) return { data: JSON.parse(m[0]), tokens, ns }; throw new Error("the model didn't answer in the right format"); }
 }
 
 const LAYOUT_NAMES = { bullets: "points", "image-right": "photo and points", "image-left": "photo and points", "image-full": "full-screen photo", quote: "quote", stats: "key numbers", columns: "comparison", timeline: "timeline", cards: "cards", statement: "key message", section: "section start" };
@@ -3129,21 +3365,22 @@ async function buildSlides(model, text) {
     const planSchema = { type: "object", properties: {
       language: { type: "string" }, title: { type: "string" }, subtitle: { type: "string" },
       theme: { type: "string", enum: Object.keys(DECK_THEMES) }, fonts: { type: "string", enum: Object.keys(DECK_FONTS) },
-      transition: { type: "string", enum: DECK_TRANSITIONS }, animation: { type: "string", enum: ["none", "build"] },
+      transition: { type: "string", enum: DECK_TRANSITIONS }, animation: { type: "string", enum: ["entrance", "build", "none"] },
+      anim_style: { type: "string", enum: DECK_STYLES },
       cover: { type: "string" },
       slides: { type: "array", items: { type: "object", properties: {
         title: { type: "string" }, about: { type: "string" }, layout: { type: "string", enum: Object.keys(DECK_LAYOUTS) },
-        image: { type: "string" }, keep: { type: "integer" } }, required: ["title", "about", "layout", "image"] } } },
-      required: ["language", "title", "subtitle", "theme", "fonts", "transition", "animation", "cover", "slides"] };
+        image: { type: "string" }, transition: { type: "string", enum: ["default", ...DECK_TRANSITIONS] }, keep: { type: "integer" } }, required: ["title", "about", "layout", "image", "transition"] } } },
+      required: ["language", "title", "subtitle", "theme", "fonts", "transition", "animation", "anim_style", "cover", "slides"] };
     const plan = await run(sPlan, async () => {
       const sys = `You plan and design presentations. Reply only with JSON.
 - "language": the language the user's request is written in (for example English or German). Write all titles in that language.
-- Design, chosen to fit the topic and mood: "theme" is one of: ${themeList}. "fonts" is one of: ${fontList}. "transition" between slides is none, fade, push, wipe, zoom or cover (calm or serious topics: fade or none; lively ones: push, wipe, zoom or cover). "animation": "build" makes the points appear one by one while presenting (good for talks and teaching), "none" shows everything at once.
+- Design, chosen to fit the topic and mood: "theme" is one of: ${themeList}. "fonts" is one of: ${fontList}. Motion: the presentation should feel alive and polished. "transition" is the main slide transition: fade or dissolve (calm), push, wipe, cover or uncover (clean), zoom, split or circle (energetic), flip or cube (playful, use sparingly). Each slide also has its own "transition": usually "default", but give section starts, the key message and the last slide a bolder one. "animation": "entrance" makes each slide's title, photo and points animate in by themselves, "build" brings the title in by itself and then each point on a click (great for talks and teaching), "none" only if the user asks for no animations. "anim_style": fade (calm), rise (smooth and modern), fly (energetic), zoom (punchy), wipe (graphic and clean) or blur (soft, cinematic).
 - "cover": an English photo search query for a striking title-slide photo of something concrete (like "erupting volcano at night"), or "" if the topic is abstract.
 - Plan 5 to 10 content slides (the title slide is added automatically, don't include it). Each slide has a short "title", "about" (one sentence: what it says) and a "layout":
 ${layoutList}
   Vary the layouts so the deck looks interesting: never the same layout three times in a row, at most one quote, and only quotes you really know. Photo layouts need "image": an English search query naming exactly what the photo must show (a concrete thing, place, animal, event or person, like "Saturn V rocket launch"), never an abstract idea. Other layouts have "image": "".`
-        + (prev ? `\nThis is the current presentation: ${JSON.stringify({ theme: prev.theme, fonts: prev.fonts, transition: prev.transition, animation: prev.animation, title: prev.title, subtitle: prev.subtitle, slides: prev.slides.map((x, i) => ({ n: i + 1, title: x.title, layout: x.layout || "bullets" })) })}. Change it as the user asks and keep its design unless the user asks for a different look. The slides the request is about MUST change (new title and content) and must not have "keep". Only for a slide the request doesn't touch at all, copy its title and layout exactly and set "keep" to its number n.` : "");
+        + (prev ? `\nThis is the current presentation: ${JSON.stringify({ theme: prev.theme, fonts: prev.fonts, transition: prev.transition, animation: prev.animation, anim_style: prev.animStyle, title: prev.title, subtitle: prev.subtitle, slides: prev.slides.map((x, i) => ({ n: i + 1, title: x.title, layout: x.layout || "bullets" })) })}. Change it as the user asks and keep its design unless the user asks for a different look. The slides the request is about MUST change (new title and content) and must not have "keep". Only for a slide the request doesn't touch at all, copy its title and layout exactly and set "keep" to its number n.` : "");
       const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, `Request: ${text}`].filter(Boolean).join("\n\n");
       const r = count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user }], planSchema));
       if (!Array.isArray(r.slides) || !r.slides.length) throw new Error("the model didn't plan any slides");
@@ -3154,17 +3391,20 @@ ${layoutList}
     deck.theme = DECK_THEMES[plan.theme] ? plan.theme : "midnight";
     deck.fonts = DECK_FONTS[plan.fonts] ? plan.fonts : DECK_THEMES[deck.theme].fonts;
     deck.transition = DECK_TRANSITIONS.includes(plan.transition) ? plan.transition : "fade";
-    deck.animation = plan.animation === "build" ? "build" : "none";
-    sPlan.sub = `${plan.slides.length + 1} slides · ${deck.theme} design · ${deck.transition === "none" ? "no" : deck.transition} transition${deck.animation === "build" ? " · points one by one" : ""}`;
+    const noMotion = /\b(no|without|keine|ohne) (animations?|animationen)\b/i.test(text);
+    deck.animation = noMotion ? "none" : plan.animation === "build" ? "build" : "entrance";
+    deck.animStyle = DECK_STYLES.includes(plan.anim_style) ? plan.anim_style : "rise";
+    sPlan.sub = `${plan.slides.length + 1} slides · ${deck.theme} design · ${deck.transition === "none" ? "no" : deck.transition} transitions · ${deck.animation === "none" ? "no animations" : deck.animStyle + (deck.animation === "build" ? " animations, points one by one" : " animations")}`;
     const sTitle = step("Title slide", { slide: 0 });
     // a "kept" slide must really be the old one (same title), and a change request has to change something
     const norm = (t) => String(t || "").trim().toLowerCase();
     const keepOf = (x) => prev && Number.isInteger(x.keep) && prev.slides[x.keep - 1] && norm(prev.slides[x.keep - 1].title) === norm(x.title) ? prev.slides[x.keep - 1] : null;
-    const designChanged = prev && ["theme", "fonts", "transition", "animation"].some(k => (prev[k] || "") !== deck[k]);
+    const designChanged = prev && ["theme", "fonts", "transition", "animation", "animStyle"].some(k => (prev[k] || "") !== deck[k]);
     const allKept = prev && !designChanged && norm(prev.title) === norm(deck.title) && plan.slides.length === prev.slides.length && plan.slides.every(keepOf);
     const work = plan.slides.slice(0, 14).map((x, i) => {
       const kept = !allKept && keepOf(x);
       const sl = kept ? { ...kept, ready: true } : { title: String(x.title || ""), layout: DECK_LAYOUTS[x.layout] ? x.layout : "bullets", image: String(x.image || ""), notes: "", about: String(x.about || "") };
+      if (DECK_TRANSITIONS.includes(x.transition)) sl.transition = x.transition; else if (!kept) delete sl.transition;
       deck.slides.push(sl);
       return { sl, kept, planned: sl.layout, st: step(`${i + 1}. ${sl.title}`, { slide: i + 1, state: kept ? "done" : "", sub: kept ? "kept as it was" : LAYOUT_NAMES[sl.layout] }) };
     });
@@ -3344,7 +3584,7 @@ async function generateImage(model, prompt, refs = []) {
         show("Drawing…", Math.round((j.completed || 0) / j.total * 100));
       }
       const img = j.image || j.images?.[0];
-      if (img) reply.genImage = img;
+      if (img) { reply.genImage = img; reply.genAt = Date.now(); }
     });
     if (!reply.genImage) throw new Error("The model didn't return an image. Is this an image-generation model, and does your Ollama version support image generation on this OS?");
   } catch (e) {
@@ -3384,6 +3624,9 @@ async function readNdjson(res, onObj) {
 function buildOptions() {
   const o = {};
   for (const [k, v] of Object.entries(S.params)) if (v !== "" && v !== null && v !== undefined && !Number.isNaN(Number(v))) o[k] = Number(v);
+  // Ollama's own default can be huge (its app was set to 128k): the memory for that pushes a 12B model partly
+  // off the 12 GB graphics card and makes it ~7x slower. 16k is plenty for chats, slides and graphs.
+  if (o.num_ctx == null) o.num_ctx = 16384;
   return o;
 }
 function regenerate() {
