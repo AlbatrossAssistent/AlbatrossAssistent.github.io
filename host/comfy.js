@@ -10,7 +10,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { spawn } = require("child_process");
+const { spawn, execFile } = require("child_process");
 const WebSocket = require("ws");
 
 const COMFY_DIR = process.env.COMFY_DIR || [
@@ -43,26 +43,38 @@ function models() {
   return Object.keys(MODELS).filter(hasFiles).map((name) => ({ name, model: name, size: 0, details: MODELS[name].details }));
 }
 
-let starting = null;
-function ensureRunning(log) {
+let starting = null, child = null;
+const alive = () => child && child.exitCode === null && !child.killed;
+function ensureRunning(log, status = () => {}) {
   if (starting) return starting;
   starting = (async () => {
     if (await up()) return;
-    log("Starting ComfyUI for image generation…");
-    const out = fs.openSync(path.join(__dirname, "comfyui.log"), "a");
-    const child = spawn(path.join(COMFY_DIR, "python_embeded", "python.exe"),
-      ["-s", path.join("ComfyUI", "main.py"), "--windows-standalone-build", "--listen", "127.0.0.1", "--port", new URL(COMFY).port || "8188", "--disable-auto-launch",
-       // keep the image model and its text encoder on the graphics card between pictures: the text encoder is stored
-       // in 8-bit (half the memory, barely any quality difference) so both fit in 12 GB and nothing gets swapped out
-       "--fp8_e4m3fn-text-enc", "--highvram"],
-      { cwd: COMFY_DIR, detached: true, stdio: ["ignore", out, out], windowsHide: true });
-    child.on("error", () => {});
-    child.unref();
-    for (let i = 0; i < 180; i++) {
+    // still starting from an earlier request (from a slow disk this takes minutes): wait for it, don't start a second one
+    if (!alive()) {
+      log("Starting ComfyUI for image generation…");
+      const out = fs.openSync(path.join(__dirname, "comfyui.log"), "a");
+      child = spawn(path.join(COMFY_DIR, "python_embeded", "python.exe"),
+        ["-s", path.join("ComfyUI", "main.py"), "--windows-standalone-build", "--listen", "127.0.0.1", "--port", new URL(COMFY).port || "8188", "--disable-auto-launch",
+         // keep the image model and its text encoder on the graphics card between pictures: the text encoder is stored
+         // in 8-bit (half the memory, barely any quality difference) so both fit in 12 GB and nothing gets swapped out
+         "--fp8_e4m3fn-text-enc", "--highvram",
+         // pinning 6+ GB of RAM squeezes a 16 GB PC into swapping while a model loads
+         // (don't add --disable-mmap: it reads whole model files into RAM first, which is far worse with 16 GB)
+         "--disable-pinned-memory",
+         // keep the loaded model between pictures: the default cache drops it whenever RAM runs low (always, with 16 GB),
+         // and every picture then reloads ~10 GB from disk
+         "--cache-classic"],
+        { cwd: COMFY_DIR, detached: true, stdio: ["ignore", out, out], windowsHide: true });
+      child.on("error", () => {});
+      child.unref();
+    }
+    for (let i = 0; i < 600; i++) {
       if (await up()) { log("ComfyUI is running"); return; }
+      if (i % 5 === 0) status(`Starting the picture engine… ${i ? i + " s" : ""}`.trim());
+      if (child && !alive() && i > 5) throw new Error("ComfyUI stopped while starting (see host/comfyui.log)");
       await new Promise((r) => setTimeout(r, 1000));
     }
-    throw new Error("ComfyUI didn't start within 3 minutes (see host/comfyui.log)");
+    throw new Error("ComfyUI didn't start within 10 minutes (see host/comfyui.log)");
   })().finally(() => { starting = null; });
   return starting;
 }
@@ -146,7 +158,9 @@ async function uploadRefs(images) {
 async function generate(body, emit, signal, log) {
   const name = isComfy(body.model) ? body.model : MODEL;
   if (!hasPython() || !hasFiles(name)) throw new Error(`${name} isn't fully installed on this PC`);
-  await ensureRunning(log);
+  const t0 = Date.now();
+  const status = (text) => emit({ model: name, status: text, done: false });
+  await ensureRunning(log, status);
   const clamp = (v, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(v) || d)));
   const opts = {
     prompt: String(body.prompt || ""),
@@ -159,7 +173,7 @@ async function generate(body, emit, signal, log) {
   const ws = new WebSocket(COMFY.replace(/^http/, "ws") + "/ws?clientId=" + clientId);
   await new Promise((ok, fail) => { ws.once("open", ok); ws.once("error", fail); });
   try {
-    loaded = true;
+    loaded = true; lastModel = name;
     const refs = name.startsWith("omnigen2") ? await uploadRefs(body.images) : [];
     if (refs.length) log(`OmniGen2: editing with ${refs.length} reference picture${refs.length > 1 ? "s" : ""}`);
     const wf = name.startsWith("omnigen2") ? omnigenWorkflow({ ...opts, refs }) : zimageWorkflow(opts);
@@ -167,6 +181,8 @@ async function generate(body, emit, signal, log) {
     const j = await r.json();
     if (!r.ok || !j.prompt_id) throw new Error(j.error?.message || JSON.stringify(j.node_errors || j).slice(0, 300));
     const id = j.prompt_id;
+    let drawing = false;
+    const beat = setInterval(() => { if (!drawing) status(`Loading ${name.split(":")[0]} from disk… ${Math.round((Date.now() - t0) / 1000)} s`); }, 3000);
     const onAbort = () => {
       fetch(COMFY + "/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: [id] }) }).catch(() => {});
       fetch(COMFY + "/interrupt", { method: "POST" }).catch(() => {});
@@ -178,6 +194,7 @@ async function generate(body, emit, signal, log) {
           if (isBinary) return; // live preview frames
           let m; try { m = JSON.parse(raw); } catch { return; }
           if (m.data?.prompt_id && m.data.prompt_id !== id) return;
+          if (m.type === "progress") drawing = true;
           if (m.type === "progress") emit({ model: name, completed: m.data.value, total: m.data.max, done: false });
           else if (m.type === "execution_error") fail(new Error(m.data.exception_message || "ComfyUI error"));
           else if (m.type === "execution_interrupted") fail(Object.assign(new Error("Stopped"), { name: "AbortError" }));
@@ -187,9 +204,14 @@ async function generate(body, emit, signal, log) {
         ws.on("close", () => fail(new Error("Lost connection to ComfyUI")));
         signal?.addEventListener("abort", () => fail(Object.assign(new Error("Stopped"), { name: "AbortError" })));
       });
-    } finally { signal?.removeEventListener("abort", onAbort); }
-    const hist = (await (await fetch(COMFY + "/history/" + id)).json())[id];
-    const img = Object.values(hist?.outputs || {}).flatMap((o) => o.images || [])[0];
+    } finally { signal?.removeEventListener("abort", onAbort); clearInterval(beat); }
+    // ComfyUI says "finished" a moment before it files the result in its history: ask again for a few seconds
+    let img = null;
+    for (let i = 0; i < 40 && !img; i++) {
+      const hist = (await (await fetch(COMFY + "/history/" + id)).json())[id];
+      img = Object.values(hist?.outputs || {}).flatMap((o) => o.images || [])[0];
+      if (!img) await new Promise((r) => setTimeout(r, 250));
+    }
     if (!img) throw new Error("ComfyUI didn't return an image");
     const q = new URLSearchParams({ filename: img.filename, subfolder: img.subfolder || "", type: img.type || "temp" });
     const png = Buffer.from(await (await fetch(COMFY + "/view?" + q)).arrayBuffer());
@@ -197,9 +219,37 @@ async function generate(body, emit, signal, log) {
   } finally { ws.close(); }
 }
 
+// A ComfyUI started with older settings (by an earlier version of the host) is stopped while it's idle,
+// so the next picture starts it with the current ones.
+const FLAGS = ["--disable-pinned-memory", "--cache-classic"], NOT = ["--disable-mmap"];
+async function retireOutdated(log) {
+  if (process.platform !== "win32" || !(await up())) return;
+  try {
+    const argv = (await (await fetch(COMFY + "/system_stats")).json()).system?.argv || [];
+    if (FLAGS.every((f) => argv.includes(f)) && !NOT.some((f) => argv.includes(f))) return;
+    const q = await (await fetch(COMFY + "/queue")).json();
+    if (q.queue_running?.length || q.queue_pending?.length) return;
+    await new Promise((res) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+      "Get-CimInstance Win32_Process -Filter \"name='python.exe'\" | Where-Object { $_.CommandLine -like '*ComfyUI*main.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"],
+      { windowsHide: true, timeout: 15000 }, () => res()));
+    log("Restarted ComfyUI with faster loading settings (it starts again with the next picture)");
+  } catch {}
+}
+
+// Loads a model ahead of time (the website asks when you pick a picture model): a tiny 1-step picture
+// pulls everything from disk onto the graphics card, so the real one starts drawing right away.
+let warmingUp = null;
+function warm(model, log) {
+  if (warmingUp || (loaded && lastModel === model)) return;
+  log(`Getting ${model} ready`);
+  warmingUp = generate({ model, prompt: "a plain grey background", width: 256, height: 256, steps: 1 }, () => {}, null, log)
+    .then(() => log(`${model} is ready`), (e) => log(`Couldn't get ${model} ready: ${e.message}`))
+    .finally(() => { warmingUp = null; });
+}
+
 // Frees ComfyUI's GPU memory (used by the "Free GPU memory" buttons). Does nothing if it isn't running.
 // Returns true if it had made an image since the last free (so there's something worth reporting).
-let loaded = false;
+let loaded = false, lastModel = "";
 async function free() {
   if (!(await up())) return false;
   await fetch(COMFY + "/free", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unload_models: true, free_memory: true }) }).catch(() => {});
@@ -216,4 +266,4 @@ function bytes(model) {
   return t;
 }
 
-module.exports = { MODEL, isComfy, models, generate, free, installed, bytes };
+module.exports = { MODEL, isComfy, models, generate, free, installed, bytes, warm, retireOutdated };

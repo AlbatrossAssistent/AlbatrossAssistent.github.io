@@ -260,6 +260,7 @@ async function upstream(method, p, body, signal) {
   if (comfy.isComfy(j?.model)) {
     if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
     if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models().find((m) => m.name === j.model)?.details || {} });
+    if (p === "/api/generate" && j.warm) { comfy.warm(j.model, (t) => note(t)); return Response.json({ model: j.model, done: true, done_reason: "warming" }); }
     if (p === "/api/generate") {
       const enc = new TextEncoder();
       return new Response(new ReadableStream({
@@ -557,6 +558,7 @@ panel = startPanel({
     if (!args.includes("--no-panel")) openWindow(url);
     keepAwake();
     schedule.start(note);
+    comfy.retireOutdated(note);
     pollOllama();
     setInterval(pollOllama, 3000);
     checkAutostart();

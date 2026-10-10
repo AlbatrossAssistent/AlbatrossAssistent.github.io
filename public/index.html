@@ -425,6 +425,8 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 
 
 
+input.masked { -webkit-text-security: disc; text-security: disc; }
+#search::-webkit-search-cancel-button { display: none; }
 /* ---------- slides side panel ---------- */
 .deck-side { width: 380px; flex: 0 0 380px; display: flex; flex-direction: column; gap: 12px; padding: 16px 14px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 34px; overflow: hidden; animation: dsIn .45s cubic-bezier(.2,.8,.2,1); }
 .deck-side[hidden] { display: none; }
@@ -472,17 +474,81 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 .photo .cr { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 10.5px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.7)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .deck { margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
 .stage16 { aspect-ratio: 16/9; border-radius: 18px; overflow: hidden; background: #0b0c10; color: #f5f5f7; border: 1px solid var(--glass-edge); box-shadow: var(--shadow); container-type: inline-size; }
-.sl { width: 100%; height: 100%; display: flex; gap: 4cqw; padding: 5cqw 6cqw; }
-.sl.title { flex-direction: column; justify-content: center; }
-.sl.title h2 { margin: 0; font-size: 6.5cqw; letter-spacing: -.03em; line-height: 1.05; }
-.sl.title p { margin: 1.5cqw 0 0; font-size: 2.8cqw; color: #9ca0aa; }
-.sl .txt { flex: 1; min-width: 0; }
-.sl h3 { margin: 0 0 2.4cqw; font-size: 4.4cqw; letter-spacing: -.02em; line-height: 1.1; }
-.sl ul { margin: 0; padding-left: 3cqw; font-size: 2.5cqw; line-height: 1.45; }
-.sl li { margin-bottom: 1cqw; }
-.sl figure { margin: 0; flex: 0 0 40%; display: flex; flex-direction: column; gap: .8cqw; }
-.sl figure img { width: 100%; flex: 1; min-height: 0; object-fit: cover; border-radius: 1.5cqw; }
-.sl figcaption { font-size: 1.3cqw; color: #9ca0aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg); font-family: var(--bf); padding: 6.2cqw 7cqw 5cqw; display: flex; gap: 4cqw; line-height: 1.35; }
+.sl .body { position: relative; z-index: 1; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2.2cqw; }
+.sl h1, .sl h2, .sl h4, .sl blockquote { font-family: var(--hf); font-weight: 700; letter-spacing: -.01em; margin: 0; line-height: 1.1; }
+.sl.heavy h1, .sl.heavy h2, .sl.heavy h4, .sl.heavy blockquote, .sl.heavy .num, .sl.heavy .stat b { font-weight: 400; letter-spacing: 0; }
+.sl h2 { font-size: 4.1cqw; }
+.sl.L-bullets .body { gap: 3.4cqw; }
+.sl.L-bullets ul { font-size: 2.7cqw; line-height: 1.5; }
+.sl.L-bullets li { margin-bottom: 1.3cqw; }
+.sl ul { margin: 0; padding-left: 2.4cqw; font-size: 2.2cqw; line-height: 1.45; }
+.sl li { margin-bottom: .9cqw; }
+.sl li::marker { color: var(--ac); }
+.sl figure { margin: 0; display: flex; flex-direction: column; gap: .6cqw; min-height: 0; position: relative; z-index: 1; }
+.sl figure img { width: 100%; flex: 1; min-height: 0; object-fit: cover; display: block; }
+.sl figcaption { font-size: 1.05cqw; color: var(--mu); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl .deco { position: absolute; pointer-events: none; z-index: 0; }
+.sl .deco.bar { left: 0; top: 0; bottom: 0; width: 1.4cqw; background: var(--ac); }
+.sl .deco.line { left: 7cqw; top: 3.8cqw; width: 6cqw; height: .5cqw; background: var(--ac); border-radius: 1cqw; }
+.sl .deco.circle { right: -12cqw; top: -14cqw; width: 42cqw; height: 42cqw; border-radius: 50%; background: var(--ac); opacity: .13; }
+.sl .deco.frame { inset: 2.2cqw; border: .2cqw solid var(--ac); opacity: .6; }
+.sl.on-photo .deco { display: none; }
+.sl.on-photo .bgph { position: absolute; inset: 0; z-index: 0; }
+.sl.on-photo .bgph figcaption { position: absolute; right: 2cqw; bottom: 1.4cqw; color: rgba(255,255,255,.75); z-index: 2; max-width: 50%; }
+.sl.on-photo::after { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,.25) 60%, rgba(0,0,0,.05)); }
+.sl.on-photo .body { justify-content: flex-end; color: #fff; }
+.sl.on-photo .sub, .sl.on-photo li { color: rgba(255,255,255,.9); }
+.sl.L-title .body { justify-content: center; }
+.sl.L-title.on-photo .body { justify-content: flex-end; }
+.sl.L-title h1 { font-size: 6.2cqw; max-width: 85%; line-height: 1.05; }
+.sl .sub { font-size: 2.3cqw; color: var(--mu); margin: 0; }
+.sl.L-section .body { justify-content: center; gap: 1.2cqw; }
+.sl .num { font-family: var(--hf); font-weight: 700; font-size: 11cqw; line-height: 1; color: var(--ac); }
+.sl.L-section h2 { font-size: 5.2cqw; }
+.sl.L-statement .body { justify-content: center; }
+.sl .kick { margin: 0; font-size: 1.6cqw; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--ac); }
+.sl.L-statement h2 { font-size: 4.8cqw; max-width: 90%; line-height: 1.15; }
+.sl.L-quote .body { justify-content: center; gap: 1.4cqw; }
+.sl .qm { font-family: Georgia, serif; font-size: 13cqw; line-height: .5; height: 5.5cqw; color: var(--ac); }
+.sl blockquote { font-size: 3.5cqw; line-height: 1.25; max-width: 88%; }
+.sl .by { margin: 0; font-size: 1.9cqw; color: var(--mu); }
+.sl.L-image-left { flex-direction: row-reverse; }
+.sl.L-image-right .body, .sl.L-image-left .body { justify-content: center; }
+.sl .side { flex: 0 0 41%; }
+.sl .side img { border-radius: 1.4cqw; }
+.sl.L-image-full h2 { font-size: 4.4cqw; }
+.sl .grid { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2cqw; margin: auto 0; }
+.sl .stat { background: var(--cd); border-radius: 1.6cqw; padding: 2.4cqw 2.2cqw; display: flex; flex-direction: column; gap: .8cqw; }
+.sl .stat b { font-family: var(--hf); font-weight: 700; font-size: 4.6cqw; line-height: 1; color: var(--ac); overflow-wrap: anywhere; }
+.sl .stat span { font-size: 1.7cqw; color: var(--mu); }
+.sl h4 { font-size: 2.2cqw; margin-bottom: .8cqw; }
+.sl .col { border-top: .35cqw solid var(--ac); padding-top: 1.6cqw; align-self: start; }
+.sl .col ul { font-size: 1.8cqw; }
+.sl .card { background: var(--cd); border-radius: 1.6cqw; padding: 2.2cqw; }
+.sl .card p, .sl .step p { margin: 0; font-size: 1.65cqw; line-height: 1.4; color: var(--mu); }
+.sl .tl { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2cqw; margin: auto 0; }
+.sl .tl::before { content: ""; position: absolute; left: 0; right: 0; top: .85cqw; height: .3cqw; background: var(--ac); opacity: .45; }
+.sl .step i { display: block; position: relative; width: 2cqw; height: 2cqw; border-radius: 50%; background: var(--ac); margin-bottom: 1.6cqw; }
+.sl.building .bld { opacity: 0; transform: translateY(1.4cqw); transition: opacity .5s, transform .5s cubic-bezier(.2,.8,.2,1); }
+.sl.building .bld.in { opacity: 1; transform: none; }
+.sl.tr-fade { animation: trFade .6s ease; }
+.sl.tr-push { animation: trPush .6s cubic-bezier(.2,.8,.2,1); }
+.sl.tr-push.back { animation-name: trPushB; }
+.sl.tr-wipe { animation: trWipe .7s ease; }
+.sl.tr-wipe.back { animation-name: trWipeB; }
+.sl.tr-zoom { animation: trZoom .6s cubic-bezier(.2,.8,.2,1); }
+.sl.tr-cover { animation: trCover .6s cubic-bezier(.2,.8,.2,1); }
+.sl.tr-cover.back { animation-name: trCoverB; }
+@keyframes trFade { from { opacity: 0; } }
+@keyframes trPush { from { transform: translateX(100%); } }
+@keyframes trPushB { from { transform: translateX(-100%); } }
+@keyframes trWipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+@keyframes trWipeB { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0); } }
+@keyframes trZoom { from { transform: scale(.8); opacity: 0; } }
+@keyframes trCover { from { transform: translateY(100%); } }
+@keyframes trCoverB { from { transform: translateY(-100%); } }
+.present .stage16 { overflow: hidden; }
 .deck-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .deck-bar .cnt { font-size: 13px; color: var(--muted); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 .present { position: fixed; inset: 0; z-index: 300; background: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -633,7 +699,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
   <button class="side-btn" id="goHome"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Home</button>
   <button class="side-btn" id="goJarvis"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/></svg>Jarvis</button>
   <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
-  <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" placeholder="Search chats"></div>
+  <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" type="search" placeholder="Search chats" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore></div>
   <div class="chat-list" id="chatList"></div>
   <div class="conn-card">
     <div class="conn-line"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
@@ -746,7 +812,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
           </div>
           <div id="connRemote" class="pane" style="padding:0">
             <div class="field"><label for="codeInput">Device code</label><input id="codeInput" class="code-input" maxlength="19" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false"><small>Shown in the Burrow control center on the PC. The second half is the encryption key: it never leaves this device, so the server can't read your chats.</small></div>
-            <div class="field"><label for="relayUrl">Albatross server</label><input id="relayUrl" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
+            <div class="field"><label for="relayUrl">Albatross server</label><input id="relayUrl" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
           </div>
           <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
           <h3>Turn your PC on and off</h3>
@@ -763,7 +829,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
           <div class="sched"><input type="checkbox" class="switch" id="schedWakeOn"><span>Wake up every day at</span><input id="schedWakeTime" type="time"><small style="color:var(--muted)">(from sleep; a PC that is fully off needs Turn on PC)</small></div>
           <small id="schedNote" style="color:var(--muted);font-size:12.5px;margin-top:-6px">Connect to your PC to change its schedule.</small>
           <details class="note" style="margin:0"><summary style="cursor:pointer;color:var(--fg)">Advanced: smart plug link instead</summary>
-          <div class="field" style="margin-top:10px"><label for="powerUrl">Turn-on link</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input id="powerUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://… (your smart plug or Alexa routine link)" style="flex:1;min-width:0"><button class="btn" id="powerUrlShow" type="button">Show</button></div>
+          <div class="field" style="margin-top:10px"><label for="powerUrl">Turn-on link</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input id="powerUrl" class="masked" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore spellcheck="false" placeholder="https://… (your smart plug or Alexa routine link)" style="flex:1;min-width:0"><button class="btn" id="powerUrlShow" type="button">Show</button></div>
             <small>Used when Wake-on-LAN isn't set up: the button opens this link, for example a Voice Monkey or smart-plug link that switches the PC's plug on. It never goes to the Albatross server.</small></div></details>
           <div class="note">
             <strong style="color:var(--fg)">Share this PC's AI with another device</strong><br>
@@ -1414,7 +1480,9 @@ $("#powerUrl").onchange = e => {
   updatePowerBox(connected);
 };
 for (const k of ["wakeHost", "wakePort", "wakeMac"]) $("#" + k).onchange = (e) => { const v = e.target.value.trim(); if (v) store.set(k, v); else store.del(k); updatePowerBox(connected); };
-$("#powerUrlShow").onclick = () => { const i = $("#powerUrl"); i.type = i.type === "password" ? "text" : "password"; $("#powerUrlShow").textContent = i.type === "password" ? "Show" : "Hide"; };
+// hidden with CSS, not type="password": a password field made browsers treat the page as a login and
+// autofill a saved "username" (the server address) into the chat search
+$("#powerUrlShow").onclick = () => { const m = $("#powerUrl").classList.toggle("masked"); $("#powerUrlShow").textContent = m ? "Show" : "Hide"; };
 
 function showConnHelp(err) {
   const text = S.conn.mode === "remote"
@@ -1757,21 +1825,109 @@ function renderBlock(b, active) {
   }
   return document.createElement("div");
 }
-// ---------- presentations ----------
-function slideHTML(deck, i) {
-  if (i === 0) return `<div class="sl title"><h2></h2><p></p></div>`;
-  const sl = deck.slides[i - 1];
-  return `<div class="sl${sl.photo ? " has-photo" : ""}"><div class="txt"><h3></h3><ul></ul></div>${sl.photo ? '<figure><img alt=""><figcaption></figcaption></figure>' : ""}</div>`;
+// ---------- presentations: designs, layouts, viewer, presenting, PowerPoint ----------
+// The AI picks a theme, a font pairing, a transition, an animation and a layout per slide.
+const DECK_THEMES = {
+  midnight: { about: "dark navy, calm and modern, blue accent", bg: "0B0F1A", fg: "F4F6FB", muted: "98A2B8", accent: "6E8BFF", card: "161C2C", fonts: "modern", deco: "line" },
+  paper:    { about: "warm cream paper, editorial, burnt orange", bg: "FAF6EE", fg: "221E19", muted: "6E665B", accent: "C2410C", card: "F0E8DA", fonts: "editorial", deco: "bar" },
+  nordic:   { about: "clean white and slate, minimal, teal", bg: "F7F8FA", fg: "1D2433", muted: "667085", accent: "0E9384", card: "E9EDF2", fonts: "geometric", deco: "circle" },
+  forest:   { about: "deep green with gold, nature and outdoors", bg: "12291F", fg: "F1EEE2", muted: "A9B8AA", accent: "D9B45A", card: "1B392C", fonts: "classic", deco: "frame" },
+  sunset:   { about: "dark plum with coral, warm and lively", bg: "24122F", fg: "FFF1EA", muted: "C9A9C2", accent: "FF7A59", card: "33203F", fonts: "friendly", deco: "circle" },
+  bold:     { about: "bright yellow and black, loud and punchy", bg: "FFD43B", fg: "111111", muted: "4A4426", accent: "111111", card: "FFE27A", fonts: "bold", deco: "bar" },
+  swiss:    { about: "white, black and red, strict and graphic", bg: "FFFFFF", fg: "111111", muted: "6B6B6B", accent: "E11D2E", card: "F2F2F2", fonts: "tech", deco: "line" },
+  ocean:    { about: "deep blue with cyan, science and water", bg: "0A2540", fg: "EAF6FF", muted: "8FB3CF", accent: "38D2E5", card: "123459", fonts: "geometric", deco: "circle" },
+  blush:    { about: "soft pink, elegant, fashion and lifestyle", bg: "FBEFF1", fg: "2B1B22", muted: "7D6370", accent: "C2416B", card: "F5DDE3", fonts: "elegant", deco: "frame" },
+  terminal: { about: "black with neon green, code and technology", bg: "0D1117", fg: "E6EDF3", muted: "8B949E", accent: "3FB950", card: "161B22", fonts: "mono", deco: "line" },
+  royal:    { about: "navy with gold, formal, history and business", bg: "1B2A4A", fg: "F6F1E7", muted: "AEB7C9", accent: "D4A64A", card: "243660", fonts: "classic", deco: "bar" },
+  lavender: { about: "light lilac with indigo, friendly, school", bg: "F3F0FF", fg: "1F1640", muted: "6B6290", accent: "5B4BDB", card: "E6E0FF", fonts: "friendly", deco: "circle" },
+  sand:     { about: "sand and brown, earth, travel and ancient history", bg: "EDE3D1", fg: "33291F", muted: "7A6A55", accent: "8A5A2B", card: "E2D4BC", fonts: "condensed", deco: "bar" },
+};
+const DECK_FONTS = {
+  modern:    { about: "clean sans serif", web: ["Inter", "Inter"], ppt: ["Segoe UI Semibold", "Segoe UI"] },
+  editorial: { about: "magazine serif headings", web: ["DM Serif Display", "Inter"], ppt: ["Georgia", "Segoe UI"], serif: 1 },
+  elegant:   { about: "high-contrast elegant serif", web: ["Playfair Display", "Lato"], ppt: ["Georgia", "Calibri"], serif: 1 },
+  geometric: { about: "geometric sans, modern and wide", web: ["Montserrat", "Montserrat"], ppt: ["Century Gothic", "Century Gothic"] },
+  friendly:  { about: "round and friendly", web: ["Poppins", "Nunito"], ppt: ["Century Gothic", "Calibri"] },
+  bold:      { about: "heavy display, very loud", web: ["Archivo Black", "Inter"], ppt: ["Arial Black", "Arial"], heavy: 1 },
+  tech:      { about: "technical grotesk", web: ["Space Grotesk", "IBM Plex Sans"], ppt: ["Segoe UI Semibold", "Segoe UI"] },
+  mono:      { about: "monospace, like code", web: ["IBM Plex Mono", "IBM Plex Sans"], ppt: ["Consolas", "Segoe UI"], mono: 1 },
+  classic:   { about: "book serif, classic", web: ["Lora", "Source Sans 3"], ppt: ["Cambria", "Calibri"], serif: 1 },
+  condensed: { about: "tall condensed headlines", web: ["Bebas Neue", "Inter"], ppt: ["Impact", "Arial"], heavy: 1 },
+};
+const DECK_LAYOUTS = {
+  bullets:       { use: "a title and 3-5 points", fill: '"bullets": 3 to 5 short points (at most 12 words each)', need: ["bullets"] },
+  "image-right": { use: "points with a photo on the right (only for something concrete you can photograph)", fill: '"bullets": 3 or 4 short points', need: ["bullets"], photo: 1 },
+  "image-left":  { use: "points with a photo on the left (only for something concrete you can photograph)", fill: '"bullets": 3 or 4 short points', need: ["bullets"], photo: 1 },
+  "image-full":  { use: "a big full-screen photo with a short caption, for a strong visual moment", fill: '"bullets": 1 or 2 very short points', need: ["bullets"], photo: 1 },
+  quote:         { use: "a famous quote, only if you know a real one word for word (best for topics about a person)", fill: '"quote": the exact words of a real, well-known quote and "by": who said it. Never make up or guess a quote: if you are not completely sure of the exact words and the person, leave "quote" and "by" empty. Also write "statement": the key message of the slide in one strong sentence', need: ["quote", "by", "statement"] },
+  stats:         { use: "2-4 key numbers, dates or measurements", fill: '"stats": 2 to 4 items, each "value" (short, like "8,849 m", "1969" or "70%") and "label" (what it means, at most 8 words)', need: ["stats"] },
+  columns:       { use: "two things side by side: A vs B, pros and cons, before and after", fill: '"columns": exactly 2 items, each "title" and "bullets" (2 to 4 short points)', need: ["columns"] },
+  timeline:      { use: "events in time order or the steps of a process", fill: '"steps": 3 to 5 items, each "title" (a year or a short step name) and "text" (at most 12 words)', need: ["steps"] },
+  cards:         { use: "3 or 4 parallel ideas, types or examples", fill: '"cards": 3 or 4 items, each "title" (2 to 4 words) and "text" (at most 15 words)', need: ["cards"] },
+  statement:     { use: "one big key message on its own", fill: '"statement": one strong sentence (at most 15 words)', need: ["statement"] },
+  section:       { use: "a divider that starts a new part of a long presentation", fill: '"sub": one short line about what this part covers', need: ["sub"] },
+};
+const DECK_TRANSITIONS = ["none", "fade", "push", "wipe", "zoom", "cover"];
+
+const deckFontsLoaded = new Set();
+function deckLook(d) {
+  const t = DECK_THEMES[d.theme] || DECK_THEMES.midnight;
+  const f = DECK_FONTS[d.fonts] || DECK_FONTS[t.fonts];
+  for (const fam of new Set(f.web)) {
+    if (deckFontsLoaded.has(fam)) continue;
+    deckFontsLoaded.add(fam);
+    const single = ["Archivo Black", "Bebas Neue", "DM Serif Display"].includes(fam);
+    const l = document.createElement("link"); l.rel = "stylesheet";
+    l.href = `https://fonts.googleapis.com/css2?family=${fam.replace(/ /g, "+")}${single ? "" : ":wght@400;700"}&display=swap`;
+    document.head.appendChild(l);
+  }
+  return { t, f };
 }
-function fillSlide(el, deck, i) {
-  el.innerHTML = slideHTML(deck, i);
-  if (i === 0) { el.querySelector("h2").textContent = deck.title; el.querySelector("p").textContent = deck.subtitle || ""; return; }
-  const sl = deck.slides[i - 1];
-  el.querySelector("h3").textContent = sl.title;
-  const ul = el.querySelector("ul");
-  for (const b of sl.bullets) { const li = document.createElement("li"); li.textContent = b; ul.appendChild(li); }
-  if (sl.photo) { el.querySelector("img").src = sl.photo.thumb; el.querySelector("figcaption").textContent = [sl.photo.creator, sl.photo.license].filter(Boolean).join(" · "); }
+const LAYOUT_OK = {
+  "image-right": s => s.photo, "image-left": s => s.photo, "image-full": s => s.photo, quote: s => s.quote,
+  stats: s => s.stats?.length >= 2, columns: s => s.columns?.length >= 2, timeline: s => s.steps?.length >= 2,
+  cards: s => s.cards?.length >= 2, statement: s => s.statement, section: () => true,
+};
+function layoutOf(sl) { const l = sl.layout || (sl.photo ? "image-right" : "bullets"); return !LAYOUT_OK[l] || LAYOUT_OK[l](sl) ? l : "bullets"; }
+const photoCredit = (p) => [p.creator, p.license].filter(Boolean).join(" · ");
+
+function slideEl(d, i, build) {
+  const { t, f } = deckLook(d);
+  const gen = f.serif ? "Georgia, serif" : f.mono ? "Consolas, monospace" : "system-ui, sans-serif";
+  const el = document.createElement("div");
+  el.className = "sl" + (build ? " building" : "") + (f.heavy ? " heavy" : "");
+  el.style.cssText = `--bg:#${t.bg};--fg:#${t.fg};--mu:#${t.muted};--ac:#${t.accent};--cd:#${t.card};--hf:'${f.web[0]}',${gen};--bf:'${f.web[1]}',system-ui,sans-serif`;
+  const add = (parent, tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; parent.appendChild(e); return e; };
+  const photo = (p, cls) => { const fig = add(el, "figure", cls); const im = add(fig, "img"); im.src = p.thumb; im.alt = p.title || ""; add(fig, "figcaption", "", photoCredit(p)); return fig; };
+  const list = (parent, items, bld = true) => { const ul = add(parent, "ul"); for (const x of items || []) add(ul, "li", bld ? "bld" : "", x); return ul; };
+  add(el, "i", "deco " + t.deco);
+  if (i === 0) {
+    el.classList.add("L-title");
+    if (d.coverPhoto) { el.classList.add("on-photo"); photo(d.coverPhoto, "bgph"); }
+    const b = add(el, "div", "body");
+    add(b, "h1", "", d.title); if (d.subtitle) add(b, "p", "sub", d.subtitle);
+    return el;
+  }
+  const sl = d.slides[i - 1], L = layoutOf(sl);
+  el.classList.add("L-" + L);
+  if (L === "image-full") { el.classList.add("on-photo"); photo(sl.photo, "bgph"); }
+  if (L === "image-right" || L === "image-left") photo(sl.photo, "side");
+  const b = add(el, "div", "body");
+  switch (L) {
+    case "section": add(b, "div", "num", String(i).padStart(2, "0")); add(b, "h2", "", sl.title); if (sl.sub) add(b, "p", "sub", sl.sub); break;
+    case "statement": add(b, "p", "kick", sl.title); add(b, "h2", "", sl.statement); break;
+    case "quote": add(b, "div", "qm", "“"); add(b, "blockquote", "", sl.quote); if (sl.by) add(b, "p", "by", "— " + sl.by); break;
+    case "image-full": add(b, "h2", "", sl.title); list(b, (sl.bullets || []).slice(0, 3)); break;
+    case "stats": { add(b, "h2", "", sl.title); const g = add(b, "div", "grid"); for (const s of sl.stats.slice(0, 4)) { const c = add(g, "div", "stat bld"); add(c, "b", "", s.value); add(c, "span", "", s.label); } break; }
+    case "columns": { add(b, "h2", "", sl.title); const g = add(b, "div", "grid"); for (const c of sl.columns.slice(0, 3)) { const k = add(g, "div", "col bld"); add(k, "h4", "", c.title); list(k, c.bullets, false); } break; }
+    case "timeline": { add(b, "h2", "", sl.title); const g = add(b, "div", "tl"); for (const s of sl.steps.slice(0, 5)) { const c = add(g, "div", "step bld"); add(c, "i"); add(c, "h4", "", s.title); add(c, "p", "", s.text); } break; }
+    case "cards": { add(b, "h2", "", sl.title); const g = add(b, "div", "grid"); for (const s of sl.cards.slice(0, 4)) { const c = add(g, "div", "card bld"); add(c, "h4", "", s.title); add(c, "p", "", s.text); } break; }
+    default: add(b, "h2", "", sl.title); list(b, sl.bullets);
+  }
+  return el;
 }
+function fillSlide(host, d, i, build) { host.innerHTML = ""; host.appendChild(slideEl(d, i, build)); }
+
 function renderDeck(b) {
   const d = b.deck || { title: "", slides: [] }, total = (d.slides || []).length + 1;
   const wrap = document.createElement("div"); wrap.className = "deck";
@@ -1784,7 +1940,7 @@ function renderDeck(b) {
     wrap.firstChild.onclick = () => openDeckSide(b);
     return wrap;
   }
-  if (b.error && !(d.slides || []).some(x => x.bullets?.length)) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = "Couldn't build the slides: " + b.error; return wrap; }
+  if (b.error && !(d.slides || []).some(x => x.ready !== false && (x.bullets?.length || x.stats || x.cards || x.steps || x.columns || x.quote || x.statement))) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = "Couldn't build the slides: " + b.error; return wrap; }
   b.idx = Math.min(b.idx || 0, total - 1);
   wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span>${b.steps ? '<button class="btn small" data-a="side">Steps</button>' : ""}<button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>`;
   const stage = wrap.querySelector(".stage16"), cnt = wrap.querySelector(".cnt");
@@ -1797,52 +1953,212 @@ function renderDeck(b) {
   wrap.querySelector('[data-a="pptx"]').onclick = (e) => downloadPptx(d, e.target);
   return wrap;
 }
+
 function presentDeck(d, start = 0) {
-  const total = d.slides.length + 1;
+  const total = d.slides.length + 1, build = d.animation === "build", tr = DECK_TRANSITIONS.includes(d.transition) ? d.transition : "fade";
   let i = start;
   const ov = document.createElement("div"); ov.className = "present";
   ov.innerHTML = '<div class="stage16 big"></div><div class="present-hint">← → to move · Esc to end</div>';
-  const stage = ov.firstChild, show = () => fillSlide(stage, d, i);
+  const stage = ov.firstChild;
+  const show = (dir, all) => {
+    fillSlide(stage, d, i, build && !all);
+    const sl = stage.firstChild;
+    if (tr !== "none" && dir) sl.classList.add("tr-" + tr, ...(dir < 0 ? ["back"] : []));
+  };
+  const next = () => {
+    const hidden = build ? stage.querySelector(".bld:not(.in)") : null;
+    if (hidden) return hidden.classList.add("in");
+    if (i === total - 1) return end();
+    i++; show(1);
+  };
+  const prev = () => { if (i > 0) { i--; show(-1, true); } };
   const key = (e) => {
-    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { i = Math.min(total - 1, i + 1); show(); }
-    else if (e.key === "ArrowLeft" || e.key === "PageUp") { i = Math.max(0, i - 1); show(); }
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown" || e.key === "Enter") { e.preventDefault(); next(); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") prev();
     else if (e.key === "Escape") end();
   };
   const end = () => { removeEventListener("keydown", key, true); ov.remove(); if (document.fullscreenElement) document.exitFullscreen?.(); };
-  ov.onclick = (e) => { const r = ov.getBoundingClientRect(); if (e.clientX > r.width / 2) { if (i === total - 1) end(); else { i++; show(); } } else { i = Math.max(0, i - 1); show(); } };
+  ov.onclick = (e) => { if (e.clientX > ov.getBoundingClientRect().width / 3) next(); else prev(); };
   addEventListener("keydown", key, true);
-  document.body.appendChild(ov); show();
+  document.body.appendChild(ov); show(0);
   ov.requestFullscreen?.().catch(() => {});
   document.addEventListener("fullscreenchange", function f() { if (!document.fullscreenElement) { document.removeEventListener("fullscreenchange", f); if (ov.isConnected) end(); } });
 }
+
+// photos: small JPEGs for the AI to look at, cropped ones for the PowerPoint file
+async function photoBitmap(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const blob = await r.blob();
+  if (!blob.type.startsWith("image/")) throw new Error("not a picture");
+  return createImageBitmap(blob);
+}
+async function smallJpeg(url, max = 448) {
+  const bm = await photoBitmap(url);
+  const k = Math.min(1, max / Math.max(bm.width, bm.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k);
+  c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", .85).split(",")[1];
+}
+async function croppedJpeg(urls, boxW, boxH, maxPx = 1600) {
+  for (const u of urls) {
+    try {
+      const bm = await photoBitmap(u);
+      const ar = boxW / boxH;
+      let sw = bm.width, sh = sw / ar;
+      if (sh > bm.height) { sh = bm.height; sw = sh * ar; }
+      const scale = Math.min(1, maxPx / sw);
+      const c = document.createElement("canvas"); c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
+      c.getContext("2d").drawImage(bm, (bm.width - sw) / 2, (bm.height - sh) / 2, sw, sh, 0, 0, c.width, c.height);
+      return c.toDataURL("image/jpeg", .88);
+    } catch {}
+  }
+  return null;
+}
+const bigPhoto = (p) => /api\.openverse\.org\/v1\/images\/[^/]+\/thumb\/?$/.test(p.thumb) ? [p.thumb.replace(/\/?$/, "/") + "?full_size=true", p.thumb] : [p.thumb];
+
+const loadScript = (src) => new Promise((ok, fail) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = () => fail(new Error("couldn't load " + src.split("/").pop())); document.head.appendChild(sc); });
 let pptxLib = null;
 async function downloadPptx(d, btn) {
   const label = btn.textContent; btn.disabled = true; btn.textContent = "Making the file…";
   try {
-    if (!pptxLib) pptxLib = await new Promise((ok, fail) => { const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"; sc.onload = () => ok(window.PptxGenJS); sc.onerror = () => fail(new Error("couldn't load the PowerPoint maker")); document.head.appendChild(sc); });
-    const pptx = new pptxLib(); pptx.layout = "LAYOUT_WIDE"; pptx.title = d.title;
-    const bg = "0B0C10", fg = "F5F5F7", mute = "9CA0AA";
-    const t = pptx.addSlide(); t.background = { color: bg };
-    t.addText(d.title, { x: .8, y: 2.4, w: 11.7, h: 1.4, fontSize: 44, bold: true, color: fg, fontFace: "Segoe UI" });
-    if (d.subtitle) t.addText(d.subtitle, { x: .8, y: 3.8, w: 11.7, h: .8, fontSize: 22, color: mute, fontFace: "Segoe UI" });
-    for (const sl of d.slides) {
-      const s2 = pptx.addSlide(); s2.background = { color: bg };
-      const w = sl.photo ? 6.6 : 11.7;
-      s2.addText(sl.title, { x: .7, y: .5, w, h: 1, fontSize: 32, bold: true, color: fg, fontFace: "Segoe UI" });
-      if (sl.bullets.length) s2.addText(sl.bullets.map(x => ({ text: x, options: { bullet: true, breakLine: true } })), { x: .7, y: 1.7, w, h: 5, fontSize: 20, color: fg, fontFace: "Segoe UI", valign: "top", paraSpaceAfter: 10 });
-      if (sl.photo) {
-        try {
-          const blob = await (await fetch(sl.photo.thumb)).blob();
-          const data = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
-          s2.addImage({ data, x: 7.6, y: 1.2, w: 5.1, h: 4.4, sizing: { type: "cover", w: 5.1, h: 4.4 } });
-          s2.addText([sl.photo.creator, sl.photo.license, sl.photo.source].filter(Boolean).join(" · "), { x: 7.6, y: 5.7, w: 5.1, h: .4, fontSize: 10, color: mute, fontFace: "Segoe UI" });
-        } catch {}
-      }
-      if (sl.notes) s2.addNotes(sl.notes);
-    }
-    await pptx.writeFile({ fileName: slug(d.title) + ".pptx" });
+    if (!pptxLib) { await loadScript("https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"); pptxLib = window.PptxGenJS; }
+    const blob = await makePptx(d);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = slug(d.title) + ".pptx";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   } catch (e) { toast("Couldn't make the file: " + e.message); }
   btn.disabled = false; btn.textContent = label;
+}
+async function makePptx(d) {
+  const { t, f } = deckLook(d);
+  const [HF, BF] = f.ppt, hb = !f.heavy && !/Semibold/.test(HF);
+  const W = 13.333, H = 7.5, X = .93, CW = W - 2 * X;
+  const pptx = new pptxLib(); pptx.layout = "LAYOUT_WIDE"; pptx.title = d.title;
+  const build = d.animation === "build", anims = [];
+  const head = (s, text, o = {}) => s.addText(text, { x: X, y: .75, w: CW, h: 1.05, fontSize: 32, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink", ...o });
+  const bullets = (s, items, o = {}) => items.length && s.addText(items.map(x => ({ text: x, options: { bullet: { indent: 18 }, breakLine: true } })),
+    { x: X, y: 2.0, w: CW, h: 4.7, fontSize: 21, color: t.fg, fontFace: BF, valign: "top", paraSpaceAfter: 12, objectName: "anim-list", ...o });
+  const deco = (s, onPhoto) => {
+    if (onPhoto) return;
+    if (t.deco === "bar") s.addShape("rect", { x: 0, y: 0, w: .19, h: H, fill: { color: t.accent } });
+    if (t.deco === "line") s.addShape("rect", { x: X, y: .5, w: .8, h: .07, fill: { color: t.accent } });
+    if (t.deco === "circle") s.addShape("ellipse", { x: W - 4, y: -1.9, w: 5.6, h: 5.6, fill: { color: t.accent, transparency: 87 } });
+    if (t.deco === "frame") s.addShape("rect", { x: .3, y: .3, w: W - .6, h: H - .6, fill: { type: "none" }, line: { color: t.accent, width: 1.25, transparency: 40 } });
+  };
+  const fullPhoto = async (s, p) => {
+    const data = await croppedJpeg(bigPhoto(p), W, H, 1920);
+    if (!data) return false;
+    s.addImage({ data, x: 0, y: 0, w: W, h: H });
+    s.addShape("rect", { x: 0, y: 0, w: W, h: H, fill: { color: "000000", transparency: 55 } });
+    s.addText(photoCredit(p), { x: W - 5.2, y: H - .45, w: 5, h: .3, fontSize: 9, color: "DDDDDD", fontFace: BF, align: "right" });
+    return true;
+  };
+  const card = (s, x, y, w, h, paras, name, fill = t.card) => s.addText(paras, { x, y, w, h, shape: pptx.ShapeType.roundRect, rectRadius: .12, fill: { color: fill }, valign: "top", margin: 14, objectName: name });
+
+  // title slide
+  {
+    const s = pptx.addSlide(); s.background = { color: t.bg };
+    const photo = d.coverPhoto && await fullPhoto(s, d.coverPhoto);
+    deco(s, photo);
+    const c = photo ? "FFFFFF" : t.fg;
+    s.addText(d.title, { x: X, y: photo ? 3.6 : 2.0, w: CW, h: 2.0, fontSize: 50, bold: hb, color: c, fontFace: HF, valign: "bottom", fit: "shrink" });
+    if (d.subtitle) s.addText(d.subtitle, { x: X, y: photo ? 5.65 : 4.1, w: CW, h: .8, fontSize: 22, color: photo ? "E6E6E6" : t.muted, fontFace: BF, valign: "top" });
+    anims.push([]);
+  }
+  for (const [n, sl] of d.slides.entries()) {
+    const s = pptx.addSlide(); s.background = { color: t.bg };
+    const L = layoutOf(sl), targets = [];
+    let photoOk = false;
+    if (L === "image-full") photoOk = await fullPhoto(s, sl.photo);
+    deco(s, photoOk);
+    const list = (sl.bullets || []);
+    if (L === "section") {
+      s.addText(String(n + 1).padStart(2, "0"), { x: X, y: 1.3, w: 4, h: 1.7, fontSize: 96, bold: hb, color: t.accent, fontFace: HF, valign: "bottom" });
+      head(s, sl.title, { y: 3.15, h: 1.4, fontSize: 44 });
+      if (sl.sub) s.addText(sl.sub, { x: X, y: 4.6, w: CW, h: .8, fontSize: 20, color: t.muted, fontFace: BF, valign: "top" });
+    } else if (L === "statement") {
+      s.addText(sl.title.toUpperCase(), { x: X, y: 1.9, w: CW, h: .5, fontSize: 14, bold: true, color: t.accent, fontFace: BF, charSpacing: 4 });
+      s.addText(sl.statement, { x: X, y: 2.5, w: CW - .8, h: 3.2, fontSize: 40, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink" });
+    } else if (L === "quote") {
+      s.addText("“", { x: X - .1, y: .7, w: 2, h: 2, fontSize: 150, color: t.accent, fontFace: "Georgia", valign: "top" });
+      s.addText(sl.quote, { x: X, y: 2.3, w: CW - .8, h: 3, fontSize: 32, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink" });
+      if (sl.by) s.addText("— " + sl.by, { x: X, y: 5.5, w: CW, h: .6, fontSize: 18, color: t.muted, fontFace: BF });
+    } else if (L === "image-full") {
+      const c = photoOk ? "FFFFFF" : t.fg;
+      head(s, sl.title, { y: 3.7, h: 1.1, fontSize: 38, color: c });
+      bullets(s, list.slice(0, 3), { y: 4.85, h: 1.9, fontSize: 19, color: photoOk ? "EEEEEE" : t.fg });
+      if (list.length) targets.push({ name: "anim-list", paras: Math.min(3, list.length) });
+    } else if (L === "image-right" || L === "image-left") {
+      const tw = 6.3, ix = L === "image-right" ? X + tw + .5 : X, tx = L === "image-right" ? X : X + CW - tw;
+      head(s, sl.title, { x: tx, w: tw });
+      bullets(s, list, { x: tx, w: tw });
+      if (list.length) targets.push({ name: "anim-list", paras: list.length });
+      const iw = CW - tw - .5, data = await croppedJpeg(bigPhoto(sl.photo), iw, 5.6);
+      if (data) { s.addImage({ data, x: ix, y: .75, w: iw, h: 5.6 }); s.addText(photoCredit(sl.photo), { x: ix, y: 6.4, w: iw, h: .3, fontSize: 9, color: t.muted, fontFace: BF }); }
+    } else if (L === "stats" || L === "cards" || L === "columns" || L === "timeline") {
+      head(s, sl.title);
+      const items = (L === "stats" ? sl.stats : L === "cards" ? sl.cards : L === "columns" ? sl.columns : sl.steps).slice(0, L === "columns" ? 3 : L === "timeline" ? 5 : 4);
+      const gap = .35, w = (CW - gap * (items.length - 1)) / items.length;
+      if (L === "timeline") s.addShape("rect", { x: X, y: 2.62, w: CW, h: .04, fill: { color: t.accent, transparency: 50 } });
+      items.forEach((it, k) => {
+        const x = X + k * (w + gap), name = "anim-" + k;
+        if (L === "stats") card(s, x, 2.3, w, 2.9, [
+          { text: it.value, options: { fontSize: 44, bold: hb, color: t.accent, fontFace: HF, breakLine: true } },
+          { text: it.label, options: { fontSize: 16, color: t.muted, fontFace: BF } }], name);
+        if (L === "cards") card(s, x, 2.2, w, 3.9, [
+          { text: it.title, options: { fontSize: 21, bold: hb, color: t.fg, fontFace: HF, breakLine: true, paraSpaceAfter: 8 } },
+          { text: it.text, options: { fontSize: 15, color: t.muted, fontFace: BF } }], name);
+        if (L === "columns") {
+          s.addShape("rect", { x, y: 2.15, w, h: .05, fill: { color: t.accent } });
+          s.addText([{ text: it.title, options: { fontSize: 22, bold: hb, color: t.fg, fontFace: HF, breakLine: true, paraSpaceAfter: 10 } },
+            ...(it.bullets || []).map(x2 => ({ text: x2, options: { fontSize: 17, color: t.fg, fontFace: BF, bullet: { indent: 16 }, breakLine: true, paraSpaceAfter: 6 } }))],
+            { x, y: 2.35, w, h: 4.3, valign: "top", objectName: name });
+        }
+        if (L === "timeline") {
+          s.addShape("ellipse", { x, y: 2.5, w: .28, h: .28, fill: { color: t.accent } });
+          s.addText([{ text: it.title, options: { fontSize: 20, bold: hb, color: t.fg, fontFace: HF, breakLine: true, paraSpaceAfter: 6 } },
+            { text: it.text, options: { fontSize: 15, color: t.muted, fontFace: BF } }], { x, y: 3.0, w, h: 3.2, valign: "top", objectName: name });
+        }
+        targets.push({ name });
+      });
+    } else {
+      head(s, sl.title);
+      bullets(s, list, { fontSize: 24, y: 2.1 });
+      if (list.length) targets.push({ name: "anim-list", paras: list.length });
+    }
+    if (sl.notes) s.addNotes(sl.notes);
+    anims.push(build ? targets : []);
+  }
+
+  // transitions and "one by one" animations aren't in PptxGenJS: add them to the slide XML
+  const buf = await pptx.write({ outputType: "arraybuffer" });
+  const TR = { fade: "<p:fade/>", push: '<p:push dir="u"/>', wipe: '<p:wipe dir="r"/>', zoom: "<p:zoom/>", cover: '<p:cover dir="l"/>' }[d.transition];
+  if (!TR && !anims.some(a => a.length)) return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+  if (!window.JSZip) await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js");
+  const zip = await JSZip.loadAsync(buf);
+  for (let n = 0; n < anims.length; n++) {
+    const file = zip.file(`ppt/slides/slide${n + 1}.xml`);
+    if (!file) continue;
+    let xml = await file.async("string"), add = TR ? `<p:transition spd="med">${TR}</p:transition>` : "";
+    const clicks = [], blds = [];
+    for (const tg of anims[n]) {
+      const m = xml.match(new RegExp(`<p:cNvPr id="(\\d+)" name="${tg.name}"`));
+      if (!m) continue;
+      const spid = m[1];
+      if (tg.paras) { for (let p = 0; p < tg.paras; p++) clicks.push(`<p:spTgt spid="${spid}"><p:txEl><p:pRg st="${p}" end="${p}"/></p:txEl></p:spTgt>`); blds.push(`<p:bldP spid="${spid}" grpId="0" build="p"/>`); }
+      else { clicks.push(`<p:spTgt spid="${spid}"/>`); blds.push(`<p:bldP spid="${spid}" grpId="0" animBg="1"/>`); }
+    }
+    if (clicks.length) {
+      let id = 2;
+      const pars = clicks.map(tgt => {
+        const a = ++id, b = ++id, c = ++id, e = ++id, g = ++id;
+        return `<p:par><p:cTn id="${a}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${b}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${c}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:set><p:cBhvr><p:cTn id="${e}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl>${tgt}</p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${g}" dur="500"/><p:tgtEl>${tgt}</p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
+      }).join("");
+      add += `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${pars}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst><p:bldLst>${blds.join("")}</p:bldLst></p:timing>`;
+    }
+    if (add) zip.file(`ppt/slides/slide${n + 1}.xml`, xml.replace(/<\/p:clrMapOvr>/, "</p:clrMapOvr>" + add));
+  }
+  return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
 }
 function actBtn(icon, label, fn) { const b = document.createElement("button"); b.innerHTML = icon; b.title = label; b.setAttribute("aria-label", label); b.onclick = fn; return b; }
 function errorBubble(text) {
@@ -2170,7 +2486,7 @@ function drawDeckSide() {
   if (show < 0) { show = 0; d.slides.forEach((sl, i) => { if (sl.ready) show = i + 1; }); }
   const stage = $("#dsStage");
   const cur = show ? d.slides[show - 1] : null;
-  const sig = show + "|" + (cur ? cur.title + cur.bullets.length + (cur.photo ? "p" : "") : d.title + d.subtitle);
+  const sig = show + "|" + JSON.stringify(cur ? [cur, cur.ready] : [d.title, d.subtitle, d.theme, d.fonts, d.coverPhoto?.thumb]);
   if (stage.dataset.sig !== sig) { stage.dataset.sig = sig; fillSlide(stage, d, show); }
   $("#dsActions").hidden = !!b.active;
   const ol = $("#dsSteps"); ol.innerHTML = "";
@@ -2197,6 +2513,26 @@ async function askJSON(model, caps, messages, schema) {
   catch { const m = txt.match(/\{[\s\S]*\}/); if (m) return { data: JSON.parse(m[0]), tokens: j.eval_count || 0, ns: j.eval_duration || 0 }; throw new Error("the model didn't answer in the right format"); }
 }
 
+const LAYOUT_NAMES = { bullets: "points", "image-right": "photo and points", "image-left": "photo and points", "image-full": "full-screen photo", quote: "quote", stats: "key numbers", columns: "comparison", timeline: "timeline", cards: "cards", statement: "key message", section: "section start" };
+function deckSlideSchema(layout) {
+  const str = { type: "string" }, arr = (items) => ({ type: "array", items }), pair = (a, b) => arr({ type: "object", properties: { [a]: str, [b]: str }, required: [a, b] });
+  const defs = { bullets: arr(str), quote: str, by: str, statement: str, sub: str, stats: pair("value", "label"), steps: pair("title", "text"), cards: pair("title", "text"),
+    columns: arr({ type: "object", properties: { title: str, bullets: arr(str) }, required: ["title", "bullets"] }) };
+  const need = (DECK_LAYOUTS[layout] || DECK_LAYOUTS.bullets).need, props = {};
+  for (const k of need) props[k] = defs[k];
+  props.notes = str;
+  return { type: "object", properties: props, required: [...need, "notes"] };
+}
+function cleanSlide(r) {
+  const S1 = (x, n = 220) => String(x ?? "").trim().slice(0, n), A = (a, n) => Array.isArray(a) ? a.slice(0, n) : [];
+  const out = { notes: S1(r.notes, 1500) };
+  if (r.bullets) out.bullets = A(r.bullets, 6).map(x => S1(x)).filter(Boolean);
+  for (const k of ["quote", "by", "statement", "sub"]) if (r[k]) out[k] = S1(r[k], 300);
+  if (r.stats) out.stats = A(r.stats, 4).map(x => ({ value: S1(x?.value, 24), label: S1(x?.label, 90) })).filter(x => x.value);
+  for (const k of ["steps", "cards"]) if (r[k]) out[k] = A(r[k], 5).map(x => ({ title: S1(x?.title, 60), text: S1(x?.text, 160) })).filter(x => x.title || x.text);
+  if (r.columns) out.columns = A(r.columns, 3).map(c => ({ title: S1(c?.title, 60), bullets: A(c?.bullets, 5).map(x => S1(x)).filter(Boolean) })).filter(c => c.title || c.bullets.length);
+  return out;
+}
 async function buildSlides(model, text) {
   const deck = { title: "", subtitle: "", slides: [] };
   const block = { type: "deck", active: true, deck, idx: 0, steps: [], progress: 0 };
@@ -2244,56 +2580,101 @@ async function buildSlides(model, text) {
       sResearch.sub = `${(j.results || []).length} sources`;
     });
 
+    const themeList = Object.entries(DECK_THEMES).map(([k, v]) => `${k} (${v.about})`).join(", ");
+    const fontList = Object.entries(DECK_FONTS).map(([k, v]) => `${k} (${v.about})`).join(", ");
+    const layoutList = Object.entries(DECK_LAYOUTS).map(([k, v]) => `  - ${k}: ${v.use}`).join("\n");
     const planSchema = { type: "object", properties: {
       language: { type: "string" }, title: { type: "string" }, subtitle: { type: "string" },
+      theme: { type: "string", enum: Object.keys(DECK_THEMES) }, fonts: { type: "string", enum: Object.keys(DECK_FONTS) },
+      transition: { type: "string", enum: DECK_TRANSITIONS }, animation: { type: "string", enum: ["none", "build"] },
+      cover: { type: "string" },
       slides: { type: "array", items: { type: "object", properties: {
-        title: { type: "string" }, about: { type: "string" }, image: { type: "string" }, keep: { type: "integer" } }, required: ["title", "about"] } } },
-      required: ["language", "title", "slides"] };
+        title: { type: "string" }, about: { type: "string" }, layout: { type: "string", enum: Object.keys(DECK_LAYOUTS) },
+        image: { type: "string" }, keep: { type: "integer" } }, required: ["title", "about", "layout", "image"] } } },
+      required: ["language", "title", "subtitle", "theme", "fonts", "transition", "animation", "cover", "slides"] };
     const plan = await run(sPlan, async () => {
-      const sys = `You plan presentations. Reply only with JSON. First set "language" to the language the user's request is written in (for example English or German); write the titles in that language. Plan 5 to 10 content slides (the title slide is added automatically, don't include it). For each slide give a short title, "about" (one sentence: what the slide says) and, if a real photo would help, "image": a short English search query for a photo (leave it empty for abstract slides).`
-        + (prev ? ` This is the current presentation: ${JSON.stringify({ title: prev.title, subtitle: prev.subtitle, slides: prev.slides.map((x, i) => ({ n: i + 1, title: x.title, bullets: x.bullets })) })}. Change it as the user asks: the slides the request is about MUST change (new title and content) and must not have "keep". Only for a slide the request doesn't touch at all, copy its title exactly and set "keep" to its number n.` : "");
+      const sys = `You plan and design presentations. Reply only with JSON.
+- "language": the language the user's request is written in (for example English or German). Write all titles in that language.
+- Design, chosen to fit the topic and mood: "theme" is one of: ${themeList}. "fonts" is one of: ${fontList}. "transition" between slides is none, fade, push, wipe, zoom or cover (calm or serious topics: fade or none; lively ones: push, wipe, zoom or cover). "animation": "build" makes the points appear one by one while presenting (good for talks and teaching), "none" shows everything at once.
+- "cover": an English photo search query for a striking title-slide photo of something concrete (like "erupting volcano at night"), or "" if the topic is abstract.
+- Plan 5 to 10 content slides (the title slide is added automatically, don't include it). Each slide has a short "title", "about" (one sentence: what it says) and a "layout":
+${layoutList}
+  Vary the layouts so the deck looks interesting: never the same layout three times in a row, at most one quote, and only quotes you really know. Photo layouts need "image": an English search query naming exactly what the photo must show (a concrete thing, place, animal, event or person, like "Saturn V rocket launch"), never an abstract idea. Other layouts have "image": "".`
+        + (prev ? `\nThis is the current presentation: ${JSON.stringify({ theme: prev.theme, fonts: prev.fonts, transition: prev.transition, animation: prev.animation, title: prev.title, subtitle: prev.subtitle, slides: prev.slides.map((x, i) => ({ n: i + 1, title: x.title, layout: x.layout || "bullets" })) })}. Change it as the user asks and keep its design unless the user asks for a different look. The slides the request is about MUST change (new title and content) and must not have "keep". Only for a slide the request doesn't touch at all, copy its title and layout exactly and set "keep" to its number n.` : "");
       const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, `Request: ${text}`].filter(Boolean).join("\n\n");
       const r = count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user }], planSchema));
       if (!Array.isArray(r.slides) || !r.slides.length) throw new Error("the model didn't plan any slides");
       return r;
     });
-    sPlan.sub = `${plan.slides.length + 1} slides`;
     const language = String(plan.language || "").trim() || "the language of the request";
     deck.title = String(plan.title || "Presentation"); deck.subtitle = String(plan.subtitle || "");
-    const sTitle = step("Title slide", { slide: 0, state: "done" });
+    deck.theme = DECK_THEMES[plan.theme] ? plan.theme : "midnight";
+    deck.fonts = DECK_FONTS[plan.fonts] ? plan.fonts : DECK_THEMES[deck.theme].fonts;
+    deck.transition = DECK_TRANSITIONS.includes(plan.transition) ? plan.transition : "fade";
+    deck.animation = plan.animation === "build" ? "build" : "none";
+    sPlan.sub = `${plan.slides.length + 1} slides · ${deck.theme} design · ${deck.transition === "none" ? "no" : deck.transition} transition${deck.animation === "build" ? " · points one by one" : ""}`;
+    const sTitle = step("Title slide", { slide: 0 });
     // a "kept" slide must really be the old one (same title), and a change request has to change something
     const norm = (t) => String(t || "").trim().toLowerCase();
     const keepOf = (x) => prev && Number.isInteger(x.keep) && prev.slides[x.keep - 1] && norm(prev.slides[x.keep - 1].title) === norm(x.title) ? prev.slides[x.keep - 1] : null;
-    const allKept = prev && plan.slides.length === prev.slides.length && plan.slides.every(keepOf);
+    const designChanged = prev && ["theme", "fonts", "transition", "animation"].some(k => (prev[k] || "") !== deck[k]);
+    const allKept = prev && !designChanged && norm(prev.title) === norm(deck.title) && plan.slides.length === prev.slides.length && plan.slides.every(keepOf);
     const work = plan.slides.slice(0, 14).map((x, i) => {
       const kept = !allKept && keepOf(x);
-      const sl = kept ? { ...kept, ready: true } : { title: String(x.title || ""), bullets: [], image: String(x.image || ""), notes: "", about: String(x.about || "") };
+      const sl = kept ? { ...kept, ready: true } : { title: String(x.title || ""), layout: DECK_LAYOUTS[x.layout] ? x.layout : "bullets", image: String(x.image || ""), notes: "", about: String(x.about || "") };
       deck.slides.push(sl);
-      return { sl, kept, st: step(`${i + 1}. ${sl.title}`, { slide: i + 1, state: kept ? "done" : "", sub: kept ? "kept as it was" : "" }) };
+      return { sl, kept, planned: sl.layout, st: step(`${i + 1}. ${sl.title}`, { slide: i + 1, state: kept ? "done" : "", sub: kept ? "kept as it was" : LAYOUT_NAMES[sl.layout] }) };
     });
     const sFinish = step("Put it together");
     redraw();
 
-    const outline = deck.slides.map((x, i) => `${i + 1}. ${x.title}`).join("\n");
-    const slideSchema = { type: "object", properties: { bullets: { type: "array", items: { type: "string" } }, notes: { type: "string" } }, required: ["bullets"] };
+    // photos: the AI looks at a few candidates (or reads their titles, for models that can't see) and picks one, or none
+    const vision = caps.includes("vision");
+    const pickPhoto = async (query, what) => {
+      const r = await fetch(toolsBase() + "/tools/image_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, count: 6 }), signal: controller.signal });
+      const all = ((await r.json().catch(() => ({}))).images || []).slice(0, 5);
+      if (!all.length) return null;
+      let cands = all, imgs = [];
+      if (vision) {
+        const enc = await Promise.all(all.map(c => smallJpeg(c.thumb).catch(() => null)));
+        cands = all.filter((c, k) => enc[k]); imgs = enc.filter(Boolean);
+        if (!cands.length) return null;
+      }
+      const sys = `You choose photos for presentation slides. ${vision ? "Look carefully at each attached photo." : "You only know the photo titles."} Pick the photo that clearly shows what the slide is about and would look good on it. Answer 0 if none really fits: a different subject, a map, chart or diagram full of text, a logo, a blurry, dark or unrelated picture. Being strict is better than a wrong photo. Reply only with JSON.`;
+      const user = `Slide: ${what}\nThe photo should show: ${query}\nPhotos${vision ? " (attached in this order)" : ""}:\n` + cands.map((c, k) => `${k + 1}: "${c.title}"`).join("\n");
+      const res = count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user, ...(vision ? { images: imgs } : {}) }], { type: "object", properties: { pick: { type: "integer" } }, required: ["pick"] }));
+      const k = Number(res.pick);
+      return k >= 1 && k <= cands.length ? cands[k - 1] : null;
+    };
+    const tryPhoto = async (query, what) => { try { return await pickPhoto(query, what); } catch (e) { if (e.name === "AbortError") throw e; return null; } };
+
+    await run(sTitle, async () => {
+      const same = prev && norm(prev.title) === norm(deck.title) && prev.coverPhoto;
+      if (same) deck.coverPhoto = prev.coverPhoto;
+      else if (plan.cover && imageSearchAvailable) { sTitle.sub = "Checking cover photos…"; redraw(); deck.coverPhoto = await tryPhoto(String(plan.cover), `the title slide of "${deck.title}"`); }
+      sTitle.sub = deck.coverPhoto ? "with a cover photo" : "";
+    });
+
+    const outline = deck.slides.map((x, i) => `${i + 1}. ${x.title} (${x.layout || "bullets"})`).join("\n");
     for (const w of work) {
       if (w.kept) continue;
       await run(w.st, async () => {
-        const sys = `You write one slide of a presentation. Reply only with JSON: "bullets" (3 to 5 short, concrete points, at most 12 words each, no numbering) and "notes" (2 to 4 sentences the speaker can say). Write in ${language}.`;
-        const user = [`Presentation: ${deck.title}${deck.subtitle ? " — " + deck.subtitle : ""}`, `All slides:\n${outline}`, research && `Facts from the web:\n${research}`, history && `The conversation so far:\n${history}`, `Request: ${text}`, `Write slide "${w.sl.title}": ${w.sl.about}`].filter(Boolean).join("\n\n");
-        const r = count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user }], slideSchema));
-        w.sl.bullets = (Array.isArray(r.bullets) ? r.bullets : []).map(String).filter(Boolean).slice(0, 6);
-        w.sl.notes = String(r.notes || "");
-        if (w.sl.image && imageSearchAvailable) {
-          w.st.sub = "Finding a photo…"; redraw();
-          try {
-            const pr = await fetch(toolsBase() + "/tools/image_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: w.sl.image, count: 1 }), signal: controller.signal });
-            const im = (await pr.json()).images?.[0];
-            if (im) w.sl.photo = im;
-          } catch (e) { if (e.name === "AbortError") throw e; }
+        const sl = w.sl;
+        if (DECK_LAYOUTS[sl.layout].photo) {
+          if (sl.image && imageSearchAvailable) { w.st.sub = "Checking photos…"; redraw(); sl.photo = await tryPhoto(sl.image, `"${sl.title}": ${sl.about}`); }
+          if (!sl.photo) sl.layout = "bullets";
         }
-        w.st.sub = `${w.sl.bullets.length} points${w.sl.photo ? " · photo" : ""}`;
-        w.sl.ready = true;
+        const L = DECK_LAYOUTS[sl.layout];
+        w.st.sub = "Writing…"; redraw();
+        const sys = `You write one slide of a presentation. Reply only with JSON. The slide's layout is "${sl.layout}": ${L.use}. Fill in ${L.fill}, and "notes": 2 to 4 sentences the speaker can say. Be concrete and correct, no numbering, no emojis. Write in ${language}.`;
+        const user = [`Presentation: ${deck.title}${deck.subtitle ? " — " + deck.subtitle : ""}`, `All slides:\n${outline}`, research && `Facts from the web:\n${research}`, history && `The conversation so far:\n${history}`, `Request: ${text}`, `Write slide ${deck.slides.indexOf(sl) + 1}, "${sl.title}": ${sl.about}`].filter(Boolean).join("\n\n");
+        Object.assign(sl, cleanSlide(count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user }], deckSlideSchema(sl.layout)))));
+        if (sl.layout === "quote" && !(sl.quote && sl.by)) { delete sl.quote; delete sl.by; sl.layout = "statement"; }   // not sure of a real quote
+        const shown = layoutOf(sl);
+        if (shown !== sl.layout) sl.layout = shown;
+        w.st.label = `${deck.slides.indexOf(sl) + 1}. ${sl.title}`;
+        w.st.sub = LAYOUT_NAMES[sl.layout] + (sl.photo ? " · photo checked" : DECK_LAYOUTS[w.planned]?.photo ? " · no fitting photo" : "");
+        sl.ready = true;
       });
     }
     await run(sFinish, async () => { for (const sl of deck.slides) delete sl.about; });
@@ -2403,15 +2784,18 @@ async function generateImage(model, prompt, refs = []) {
   const t0 = performance.now();
   try {
     let drawing = false;
-    const show = (label, pct) => {
-      const bar = bubble.querySelector(".gen-wait .progress div"); if (bar) bar.style.width = pct + "%";
-      const t = bubble.querySelector(".gen-wait .pct"); if (t) t.textContent = `${label} ${pct}%`;
+    let label = "Starting " + model + "…", lastPct = 0;
+    const show = (text, pct) => {
+      label = text; if (pct != null) lastPct = pct;
+      const bar = bubble.querySelector(".gen-wait .progress div"); if (bar) bar.style.width = lastPct + "%";
+      const t = bubble.querySelector(".gen-wait .pct"); if (t) t.textContent = lastPct ? `${label} ${lastPct}%` : label;
     };
-    show("Starting " + model + "…", 0);
-    const stopWatch = watchLoading(model, pct => show("Loading " + model + " into memory…", pct), () => drawing || !controller);
+    show(label, 0);
+    const stopWatch = watchLoading(model, pct => show(/from disk|engine/.test(label) ? label : "Loading " + model + " into memory…", pct), () => drawing || !controller);
     const res = await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
     await readNdjson(res, j => {
       if (j.error) throw new Error(j.error);
+      if (j.status && !drawing) show(j.status);      // ComfyUI starting / loading from disk (the host says what it's doing)
       if (j.total) {
         drawing = true; stopWatch();
         show("Drawing…", Math.round((j.completed || 0) / j.total * 100));
@@ -2432,6 +2816,15 @@ async function generateImage(model, prompt, refs = []) {
   }
 }
 
+// Picking a picture model starts loading it on the PC right away: from a slow disk that takes minutes,
+// so it's often ready by the time the prompt is written.
+let warming = "";
+async function warmImage(model) {
+  if (warming === model) return;
+  warming = model;
+  try { await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, warm: true }) }); } catch {}
+  setTimeout(() => { if (warming === model) warming = ""; }, 60000);
+}
 async function readNdjson(res, onObj) {
   const reader = res.body.getReader();
   const dec = new TextDecoder();
@@ -2534,7 +2927,7 @@ function openSettings(tab) {
   setConnCards(S.conn.mode);
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay;
   $("#serverHint").textContent = S.conn.relay || DEFAULT_SERVER;
-  $("#powerUrl").value = store.get("powerUrl", ""); $("#powerUrl").type = "password"; $("#powerUrlShow").textContent = "Show";
+  $("#powerUrl").value = store.get("powerUrl", ""); $("#powerUrl").classList.add("masked"); $("#powerUrlShow").textContent = "Show";
   loadSchedule();
   $("#wakeHost").value = store.get("wakeHost", ""); $("#wakePort").value = store.get("wakePort", ""); $("#wakeMac").value = store.get("wakeMac", "");
   $("#connResult").textContent = "";
@@ -3177,7 +3570,7 @@ $("#openConn").onclick = () => { openSettings("connection"); setConnCards("remot
 $("#search").addEventListener("input", renderSidebar);
 $("#model").onchange = e => {
   const m = models.find(x => x.name === e.target.value);
-  if (m && m.kind === "image") { S.pickedImage = m.name; S.imageModel = m.name; toast("Every message now makes a picture with " + m.name); }
+  if (m && m.kind === "image") { S.pickedImage = m.name; S.imageModel = m.name; toast("Every message now makes a picture with " + m.name + ". Getting it ready…"); warmImage(m.name); }
   else { S.pickedImage = ""; S.model = e.target.value; }
   saveSettings(); applyType();
 };
