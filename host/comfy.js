@@ -25,6 +25,12 @@ const MODELS = {
     files: { unet: ["diffusion_models", "z_image_turbo_nvfp4.safetensors"], clip: ["text_encoders", "qwen_3_4b_fp8_mixed.safetensors"], vae: ["vae", "ae.safetensors"] },
     details: { family: "z-image", parameter_size: "6B", format: "comfyui" },
   },
+  // Qwen-Image 2.1 (7B, 4-bit GGUF): makes pictures and edits them from reference pictures. Listed before OmniGen2,
+  // so it's the one used for edits when both are installed. Needs the GGUF add-on to know "qwen_image21" (patched in loader.py).
+  "qwen-image-2.1:comfyui": {
+    files: { unet: ["unet", "qwen-image-2.1-Ultra.gguf"], clip: ["text_encoders", "qwen3vl_8b_int8_convrot.safetensors"], vae: ["vae", "qwen_image_2.1_vae_bf16.safetensors"] },
+    details: { family: "qwen-image", parameter_size: "7B", format: "comfyui", edit: true },
+  },
   "omnigen2:comfyui": {
     files: { unet: ["unet", "omnigen2-fp32-q8_0.gguf"], clip: ["text_encoders", "qwen_2.5_vl_fp16.safetensors"], vae: ["vae", "ae.safetensors"] },
     details: { family: "omnigen2", parameter_size: "4B", format: "comfyui", edit: true },   // edit: takes reference pictures
@@ -138,6 +144,25 @@ function omnigenWorkflow({ prompt, width = 1024, height = 1024, steps = 20, seed
   return w;
 }
 
+// Qwen-Image 2.1, as in ComfyUI's own template: its text encoder (Qwen3-VL-8B) also reads the reference pictures,
+// and hands out the conditioning and, for edits, a latent the size of the first reference. 25 steps, CFG 1.
+function qwenWorkflow({ prompt, width = 1024, height = 1024, steps = 25, seed, refs = [] }) {
+  const F = MODELS["qwen-image-2.1:comfyui"].files;
+  const w = {
+    1: { class_type: "UnetLoaderGGUF", inputs: { unet_name: F.unet[1] } },
+    2: { class_type: "CLIPLoader", inputs: { clip_name: F.clip[1], type: "qwen_image", device: "default" } },
+    3: { class_type: "VAELoader", inputs: { vae_name: F.vae[1] } },
+    4: { class_type: "TextEncodeQwenImage21", inputs: { clip: ["2", 0], prompt, negative_prompt: "", vae: ["3", 0], resolution: 1024 } },
+    5: { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
+  };
+  refs.forEach((name, k) => { const id = String(20 + k); w[id] = { class_type: "LoadImage", inputs: { image: name } }; w[4].inputs[`images.image_${k + 1}`] = [id, 0]; });
+  const sd = Number.isFinite(seed) ? seed : crypto.randomInt(2 ** 47);
+  w[6] = { class_type: "KSampler", inputs: { model: ["1", 0], positive: ["4", 0], negative: ["4", 1], latent_image: refs.length ? ["4", 2] : ["5", 0], seed: sd, steps, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1 } };
+  w[7] = { class_type: "VAEDecode", inputs: { samples: ["6", 0], vae: ["3", 0] } };
+  w[9] = { class_type: "PreviewImage", inputs: { images: ["7", 0] } };
+  return w;
+}
+
 // Reference pictures from the website (base64) go to ComfyUI's input folder; returns their names there.
 async function uploadRefs(images) {
   const names = [];
@@ -166,7 +191,7 @@ async function generate(body, emit, signal, log) {
     prompt: String(body.prompt || ""),
     width: clamp(body.width, 256, 2048, 1024) & ~15,
     height: clamp(body.height, 256, 2048, 1024) & ~15,
-    steps: clamp(body.steps, 1, 50, name.startsWith("omnigen2") ? 20 : 8),
+    steps: clamp(body.steps, 1, 50, name.startsWith("qwen-image") ? 25 : name.startsWith("omnigen2") ? 20 : 8),
     seed: body.seed === undefined ? undefined : Number(body.seed),
   };
   const clientId = crypto.randomUUID();
@@ -174,9 +199,9 @@ async function generate(body, emit, signal, log) {
   await new Promise((ok, fail) => { ws.once("open", ok); ws.once("error", fail); });
   try {
     loaded = true; lastModel = name;
-    const refs = name.startsWith("omnigen2") ? await uploadRefs(body.images) : [];
-    if (refs.length) log(`OmniGen2: editing with ${refs.length} reference picture${refs.length > 1 ? "s" : ""}`);
-    const wf = name.startsWith("omnigen2") ? omnigenWorkflow({ ...opts, refs }) : zimageWorkflow(opts);
+    const refs = MODELS[name].details.edit ? await uploadRefs(body.images) : [];
+    if (refs.length) log(`${name.split(":")[0]}: editing with ${refs.length} reference picture${refs.length > 1 ? "s" : ""}`);
+    const wf = name.startsWith("qwen-image") ? qwenWorkflow({ ...opts, refs }) : name.startsWith("omnigen2") ? omnigenWorkflow({ ...opts, refs }) : zimageWorkflow(opts);
     const r = await fetch(COMFY + "/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: wf, client_id: clientId }) });
     const j = await r.json();
     if (!r.ok || !j.prompt_id) throw new Error(j.error?.message || JSON.stringify(j.node_errors || j).slice(0, 300));
