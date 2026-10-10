@@ -247,17 +247,36 @@ async function generate(body, emit, signal, log) {
 // A ComfyUI started with older settings (by an earlier version of the host) is stopped while it's idle,
 // so the next picture starts it with the current ones.
 const FLAGS = ["--disable-pinned-memory", "--cache-classic"], NOT = ["--disable-mmap"];
+const ps = (cmd) => new Promise((res) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd],
+  { windowsHide: true, timeout: 15000 }, (e, out) => res(String(out || "").trim())));
+const COMFY_PROC = "Get-CimInstance Win32_Process -Filter \"name='python.exe'\" | Where-Object { $_.CommandLine -like '*ComfyUI*main.py*' }";
+
+// Newest change to an add-on's own code (custom_nodes/<add-on>/*.py), so a patched add-on gets picked up.
+function addonsChanged() {
+  let newest = 0;
+  const dir = path.join(COMFY_DIR, "ComfyUI", "custom_nodes");
+  try {
+    for (const a of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!a.isDirectory()) continue;
+      for (const f of fs.readdirSync(path.join(dir, a.name))) if (f.endsWith(".py")) newest = Math.max(newest, fs.statSync(path.join(dir, a.name, f)).mtimeMs);
+    }
+  } catch {}
+  return newest;
+}
+
 async function retireOutdated(log) {
   if (process.platform !== "win32" || !(await up())) return;
   try {
     const argv = (await (await fetch(COMFY + "/system_stats")).json()).system?.argv || [];
-    if (FLAGS.every((f) => argv.includes(f)) && !NOT.some((f) => argv.includes(f))) return;
+    const flagsOk = FLAGS.every((f) => argv.includes(f)) && !NOT.some((f) => argv.includes(f));
+    const started = Date.parse(await ps(`(${COMFY_PROC} | Select-Object -First 1).CreationDate.ToString('o')`));
+    const addonsOk = !Number.isFinite(started) || addonsChanged() < started;
+    if (flagsOk && addonsOk) return;
     const q = await (await fetch(COMFY + "/queue")).json();
     if (q.queue_running?.length || q.queue_pending?.length) return;
-    await new Promise((res) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
-      "Get-CimInstance Win32_Process -Filter \"name='python.exe'\" | Where-Object { $_.CommandLine -like '*ComfyUI*main.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"],
-      { windowsHide: true, timeout: 15000 }, () => res()));
-    log("Restarted ComfyUI with faster loading settings (it starts again with the next picture)");
+    await ps(`${COMFY_PROC} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`);
+    log(flagsOk ? "Restarted ComfyUI so it picks up its updated add-ons (it starts again with the next picture)"
+      : "Restarted ComfyUI with faster loading settings (it starts again with the next picture)");
   } catch {}
 }
 
