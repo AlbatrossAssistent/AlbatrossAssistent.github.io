@@ -72,7 +72,7 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* One recipe for every glass surface */
-aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-card, .res, .think-block, .search-bar, .home-action, .home-card, .jv-card, .jv-ask {
+aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-card, .res, .think-block, .search-bar, .home-action, .home-card, .jv-card, .jv-ask, .deck-side {
   background-color: var(--glass); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
   border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), var(--shadow);
 }
@@ -424,6 +424,45 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 .recent small { color: var(--muted); font-size: 12px; flex: none; }
 
 
+
+/* ---------- slides side panel ---------- */
+.deck-side { width: 380px; flex: 0 0 380px; display: flex; flex-direction: column; gap: 12px; padding: 16px 14px; height: calc(100vh - 24px); height: calc(100dvh - 24px); border-radius: 34px; overflow: hidden; animation: dsIn .45s cubic-bezier(.2,.8,.2,1); }
+.deck-side[hidden] { display: none; }
+@keyframes dsIn { from { opacity: 0; transform: translateX(24px); } }
+.ds-head { display: flex; align-items: flex-start; gap: 8px; padding: 0 4px; }
+@media (max-width: 820px) { .ds-head { cursor: pointer; } .ds-head h3 { font-size: 16px; } }
+.ds-head > div { flex: 1; min-width: 0; }
+.ds-head small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.ds-head h3 { margin: 2px 0 0; font-size: 18px; letter-spacing: -.01em; line-height: 1.25; }
+.ds-head .icon-btn { width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--soft); color: var(--muted); flex: none; cursor: pointer; }
+.deck-side .stage16 { flex: none; box-shadow: none; }
+.deck-side .stage16 .sl { animation: slIn .4s cubic-bezier(.2,.8,.2,1); }
+@keyframes slIn { from { opacity: 0; transform: scale(.97); } }
+.ds-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ds-actions[hidden] { display: none; }
+.ds-steps { list-style: none; margin: 0; padding: 0 2px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ds-steps li { display: flex; align-items: flex-start; gap: 10px; padding: 8px 8px; border-radius: 12px; font-size: 14px; line-height: 1.35; color: var(--muted); transition: background .2s, color .2s; }
+.ds-steps li.clickable { cursor: pointer; }
+.ds-steps li.clickable:hover, .ds-steps li.sel { background: var(--soft); }
+.ds-steps li.doing, .ds-steps li.done { color: var(--fg); }
+.ds-steps li .mk { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; margin-top: 0; }
+.ds-steps li.done .mk { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); animation: tick .35s cubic-bezier(.2,.8,.2,1.4); }
+.ds-steps li.done .mk::after { content: ""; width: 9px; height: 5px; border: solid currentColor; border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg); }
+.ds-steps li.doing .mk { border-color: var(--line); border-top-color: var(--fg); animation: spin .8s linear infinite; }
+.ds-steps li.fail .mk { border-color: var(--bad); }
+.ds-steps li.fail .mk::after { content: "!"; color: var(--bad); font-size: 12px; font-weight: 700; }
+.ds-steps li .lb { flex: 1; min-width: 0; }
+.ds-steps li .sub { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+@keyframes tick { from { transform: scale(.4); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.deck-mini { display: flex; align-items: center; gap: 10px; }
+.deck-mini .bar { flex: 1; height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
+.deck-mini .bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .4s; }
+@media (max-width: 820px) {
+  .deck-side { position: fixed; left: 8px; right: 8px; bottom: 8px; top: auto; width: auto; height: auto; max-height: 72dvh; z-index: 40; border-radius: 28px; background-color: var(--glass-strong); }
+  .deck-side.min .stage16, .deck-side.min .ds-actions { display: none; }
+}
+
 /* ---------- photos and presentations ---------- */
 .photo-card { margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
@@ -520,7 +559,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 .pub-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .pub-row .field { flex: 1 1 200px; }
 .pub-toggle { display: flex; align-items: center; gap: 10px; min-height: 40px; font-weight: 600; font-size: 14px; }
-.pc-btns { display: flex; gap: 6px; } .pc-btns .side-btn { flex: 1; min-width: 0; padding: 0 10px; justify-content: center; font-size: 14px; }
+.pc-btns { display: flex; gap: 6px; } .pc-btns .side-btn { flex: 1; min-width: 0; padding: 0 10px; white-space: nowrap; justify-content: center; font-size: 14px; }
 .sched { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .sched input[type=number], .sched input[type=time], .sched select { min-height: 34px; border-radius: 999px; padding: 0 10px; width: auto; }
 .sched input[type=number] { width: 70px; }
@@ -661,6 +700,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
       <div class="box" id="box">
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
         <button class="attach-btn web-btn" id="webBtn" aria-pressed="false" title="Let the AI search the web"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Search</span></button>
+        <button class="attach-btn web-btn" id="slidesBtn" aria-pressed="false" title="Make a presentation: the AI plans it, then writes it slide by slide"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M7 8h6M7 11h9"/></svg><span>Slides</span></button>
         <button class="attach-btn img-btn" id="imgBtn" aria-pressed="false" title="Make a picture (otherwise Albatross notices by itself when you ask for one)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></button>
         <button class="attach-btn" id="attachBtn" aria-label="Attach image" title="Attach image (for vision models)"><svg class="i" viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></button>
         <label for="prompt" class="sr">Message</label>
@@ -671,6 +711,12 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
     </div>
   </div>
 </main>
+<section class="deck-side" id="deckSide" hidden aria-label="Presentation">
+  <div class="ds-head"><div><small id="dsKicker">Presentation</small><h3 id="dsTitle"></h3></div><button class="icon-btn" id="dsClose" aria-label="Close" title="Close">✕</button></div>
+  <div class="stage16" id="dsStage"></div>
+  <div class="ds-actions" id="dsActions" hidden><button class="btn small" id="dsPresent">Present</button><button class="btn small primary" id="dsPptx">Download (PowerPoint / Keynote)</button></div>
+  <ol class="ds-steps" id="dsSteps"></ol>
+</section>
 
 <!-- ================= SETTINGS ================= -->
 <dialog id="settings">
@@ -1594,7 +1640,7 @@ function fillLive(c, m) {
   blocks.forEach((b, i) => {
     const active = !b.done && i === blocks.length - 1, e = L.blocks[i];
     if (b.type === "thinking" && e) return updateThink(e, b, active);
-    const key = [b.active, b.error, b.title, (b.results || b.images || []).length].join("|");
+    const key = [b.active, b.error, b.title, (b.results || b.images || []).length, b.progress].join("|");
     if (e && e.key === key) return;
     const el = renderBlock(b, active);
     if (e) e.el.replaceWith(el); else L.wrap.appendChild(el);
@@ -1729,16 +1775,25 @@ function fillSlide(el, deck, i) {
 function renderDeck(b) {
   const d = b.deck || { title: "", slides: [] }, total = (d.slides || []).length + 1;
   const wrap = document.createElement("div"); wrap.className = "deck";
-  if (b.active) { wrap.innerHTML = `<div class="search-bar active">${MAG}<span class="q"></span><span class="spin"></span><span class="meta">Building the slides…</span></div>`; wrap.querySelector(".q").textContent = d.title; return wrap; }
-  if (b.error) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = "Couldn't build the slides: " + b.error; return wrap; }
+  if (b.active) {
+    const st = b.steps || [], done = st.filter(x => x.state === "done").length, now = st.find(x => x.state === "doing");
+    wrap.innerHTML = `<div class="search-bar active deck-mini"><span class="spin"></span><span class="q"></span><span class="bar"><i></i></span><span class="meta"></span></div>`;
+    wrap.querySelector(".q").textContent = now ? now.label : "Building the slides…";
+    wrap.querySelector(".bar i").style.width = (st.length ? Math.round(done / st.length * 100) : 3) + "%";
+    wrap.querySelector(".meta").textContent = st.length ? `${done} / ${st.length}` : "";
+    wrap.firstChild.onclick = () => openDeckSide(b);
+    return wrap;
+  }
+  if (b.error && !(d.slides || []).some(x => x.bullets?.length)) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = "Couldn't build the slides: " + b.error; return wrap; }
   b.idx = Math.min(b.idx || 0, total - 1);
-  wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span><button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>`;
+  wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span>${b.steps ? '<button class="btn small" data-a="side">Steps</button>' : ""}<button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>`;
   const stage = wrap.querySelector(".stage16"), cnt = wrap.querySelector(".cnt");
   const show = () => { fillSlide(stage, d, b.idx); cnt.textContent = `${b.idx + 1} / ${total}`; };
   show();
   wrap.querySelector('[data-a="prev"]').onclick = () => { b.idx = Math.max(0, b.idx - 1); show(); };
   wrap.querySelector('[data-a="next"]').onclick = () => { b.idx = Math.min(total - 1, b.idx + 1); show(); };
   wrap.querySelector('[data-a="present"]').onclick = () => presentDeck(d, b.idx);
+  const sideBtn = wrap.querySelector('[data-a="side"]'); if (sideBtn) sideBtn.onclick = () => openDeckSide(b);
   wrap.querySelector('[data-a="pptx"]').onclick = (e) => downloadPptx(d, e.target);
   return wrap;
 }
@@ -1873,7 +1928,7 @@ async function send(textOverride) {
   const editVerb = /^(please |bitte )?(make|turn|change|add|remove|put|give|replace|edit|colou?r|mach|mache|füge|entferne|ändere|verwandle|ersetze|färbe)/i.test(text);
   let refs = [];
   const pickedImg = models.find(m => m.name === $("#model").value && m.kind === "image");
-  let asImage = !!text && (!!pickedImg || forceImage || wantsImage(text) || (!!attachments.length && !!editModel && editVerb));
+  let asImage = !!text && (!!pickedImg || forceImage || (!slidesMode && wantsImage(text)) || (!!attachments.length && !!editModel && editVerb));
   if (asImage && attachments.length) {
     if (editModel) refs = attachments.slice(0, 3);
     else if (forceImage) { toast("The image model on your PC can't use reference pictures. Add OmniGen2 to edit photos."); return; }
@@ -1895,7 +1950,7 @@ async function send(textOverride) {
   if (current.messages.length === 1) $("#inner").innerHTML = "";
   $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
   renderSidebar();
-  await (asImage ? generateImage(model, text, refs) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : slidesMode ? buildSlides(model, text) : chat(model));
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -1998,7 +2053,8 @@ async function chat(model) {
     if (wantSearch && !useTools) toast(`${model} can't use tools, so it can't search. Try qwen3, llama3.1 or gpt-oss.`);
 
     let system = current.system || S.defaultSystem;
-    if (toolsOk) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search, and create presentations with make_slides (when asked for slides, a presentation or a keynote).";
+    if (toolsOk && imageSearchAvailable) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search.";
+    system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, tell them to switch on \"Slides\" next to the message box and ask again: then you build it step by step.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
     // Say so in the bubble and pop a notification once it's ready.
@@ -2027,7 +2083,8 @@ async function chat(model) {
       const body = { model, messages: msgs, stream: true, options: buildOptions() };
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
       if (useThink) body.think = true;
-      if (toolsOk && round < 5) body.tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS : MEDIA_TOOLS.filter(t => t.function.name === "make_slides"))];
+      const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : [])];
+      if (toolsOk && round < 5 && tools.length) body.tools = tools;
 
       const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
       let think = null, roundText = "", calls = [];
@@ -2085,6 +2142,185 @@ async function chat(model) {
       saveChats();
     }
     renderMessages();
+  }
+}
+
+// ---------- Slides mode: plan first, then write slide by slide (any model, no tool support needed) ----------
+let slidesMode = false;
+function setSlidesMode(on) {
+  slidesMode = on;
+  $("#slidesBtn").classList.toggle("on", on); $("#slidesBtn").setAttribute("aria-pressed", String(on));
+  $("#prompt").placeholder = on ? "What should the presentation be about?" : "Message your local AI…";
+}
+$("#slidesBtn").onclick = () => { setSlidesMode(!slidesMode); toast(slidesMode ? "Slides on: your next message becomes a presentation" : "Slides off"); };
+
+let sideBlock = null, sideSel = -1;
+function openDeckSide(b) { sideBlock = b; sideSel = -1; $("#deckSide").hidden = false; $("#deckSide").classList.remove("min"); drawDeckSide(); }
+$("#dsClose").onclick = (e) => { e.stopPropagation(); $("#deckSide").hidden = true; sideBlock = null; };
+$("#deckSide").querySelector(".ds-head").onclick = () => $("#deckSide").classList.toggle("min");   // phones: small or big
+$("#dsPresent").onclick = () => sideBlock && presentDeck(sideBlock.deck, Math.max(0, sideSel));
+$("#dsPptx").onclick = (e) => sideBlock && downloadPptx(sideBlock.deck, e.target);
+function drawDeckSide() {
+  const b = sideBlock; if (!b || $("#deckSide").hidden) return;
+  const d = b.deck;
+  $("#dsTitle").textContent = d.title || "New presentation";
+  $("#dsKicker").textContent = b.active ? "Building the presentation" : b.error ? "Stopped" : `Presentation · ${d.slides.length + 1} slides`;
+  // the preview: the slide picked in the list, else the newest finished one
+  let show = sideSel;
+  if (show < 0) { show = 0; d.slides.forEach((sl, i) => { if (sl.ready) show = i + 1; }); }
+  const stage = $("#dsStage");
+  const cur = show ? d.slides[show - 1] : null;
+  const sig = show + "|" + (cur ? cur.title + cur.bullets.length + (cur.photo ? "p" : "") : d.title + d.subtitle);
+  if (stage.dataset.sig !== sig) { stage.dataset.sig = sig; fillSlide(stage, d, show); }
+  $("#dsActions").hidden = !!b.active;
+  const ol = $("#dsSteps"); ol.innerHTML = "";
+  for (const st of b.steps || []) {
+    const li = document.createElement("li");
+    li.className = (st.state || "") + (st.slide != null && (st.state === "done" || !b.active) ? " clickable" : "") + (st.slide != null && st.slide === show && sideSel >= 0 ? " sel" : "");
+    li.innerHTML = '<span class="mk"></span><span class="lb"></span>';
+    li.querySelector(".lb").textContent = st.label;
+    if (st.sub) { const sub = document.createElement("span"); sub.className = "sub"; sub.textContent = st.sub; li.querySelector(".lb").appendChild(sub); }
+    if (st.slide != null) li.onclick = () => { sideSel = st.slide; drawDeckSide(); };
+    ol.appendChild(li);
+  }
+  const doing = ol.querySelector(".doing"); if (doing) doing.scrollIntoView({ block: "nearest" });
+}
+
+async function askJSON(model, caps, messages, schema) {
+  const body = { model, messages, stream: false, format: schema, options: { ...buildOptions(), temperature: 0.6 } };
+  if (caps.includes("thinking")) body.think = false;
+  if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
+  const j = await (await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal })).json();
+  if (j.error) throw new Error(j.error);
+  const txt = (j.message?.content || "").trim();
+  try { return { data: JSON.parse(txt), tokens: j.eval_count || 0, ns: j.eval_duration || 0 }; }
+  catch { const m = txt.match(/\{[\s\S]*\}/); if (m) return { data: JSON.parse(m[0]), tokens: j.eval_count || 0, ns: j.eval_duration || 0 }; throw new Error("the model didn't answer in the right format"); }
+}
+
+async function buildSlides(model, text) {
+  const deck = { title: "", subtitle: "", slides: [] };
+  const block = { type: "deck", active: true, deck, idx: 0, steps: [], progress: 0 };
+  const reply = { role: "assistant", content: "", blocks: [block], model };
+  const bubble = botBubble(reply, -1);
+  $("#inner").appendChild(bubble);
+  fillBot(bubble, reply, -1, true);
+  scrollDown(true);
+  setBusy(true);
+  controller = new AbortController();
+  openDeckSide(block);
+  if (matchMedia("(max-width: 820px)").matches) $("#deckSide").classList.add("min");
+  const redraw = () => { block.progress++; fillBot(bubble, reply, -1, true); drawDeckSide(); scrollDown(); };
+  const step = (label, extra = {}) => { const st = { label, state: "", ...extra }; block.steps.push(st); return st; };
+  const run = async (st, fn) => { st.state = "doing"; redraw(); try { const r = await fn(); st.state = "done"; return r; } catch (e) { st.state = "fail"; throw e; } finally { redraw(); } };
+  let tokens = 0, ns = 0, finished = false;
+  const count = (r) => { tokens += r.tokens; ns += r.ns; return r.data; };
+  try {
+    const caps = await getCaps(model);
+    // the chat so far (short), so "now make slides about it" works
+    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined).slice(-6)
+      .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
+    // changing an earlier presentation from this chat?
+    const prev = [...current.messages].reverse().find(m => m.role === "assistant" && m.blocks?.some(x => x.type === "deck" && x.deck?.slides?.length))?.blocks.find(x => x.type === "deck").deck;
+
+    const wantResearch = S.webSearch && searchAvailable;
+    const sResearch = wantResearch ? step("Look up facts on the web") : null;
+    const sPlan = step(prev ? "Plan the changes" : "Plan the slides");
+    redraw();
+
+    // model may still have to load from disk
+    try {
+      const running = (await (await api("/api/ps")).json()).models || [];
+      if (!running.some(r => r.name === model)) {
+        (sResearch || sPlan).sub = "Loading " + model + "…";
+        watchLoading(model, pct => { sPlan.sub = `Loading ${model}… ${pct}%`; redraw(); }, () => sPlan.state === "done" || !controller);
+      }
+    } catch {}
+
+    let research = "";
+    if (sResearch) await run(sResearch, async () => {
+      const r = await fetch(toolsBase() + "/tools/web_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text.slice(0, 200) }), signal: controller.signal });
+      const j = await r.json().catch(() => ({}));
+      research = (j.results || []).slice(0, 5).map(x => `${x.title} (${x.url}): ${(x.content || "").slice(0, 900)}`).join("\n\n");
+      sResearch.sub = `${(j.results || []).length} sources`;
+    });
+
+    const planSchema = { type: "object", properties: {
+      language: { type: "string" }, title: { type: "string" }, subtitle: { type: "string" },
+      slides: { type: "array", items: { type: "object", properties: {
+        title: { type: "string" }, about: { type: "string" }, image: { type: "string" }, keep: { type: "integer" } }, required: ["title", "about"] } } },
+      required: ["language", "title", "slides"] };
+    const plan = await run(sPlan, async () => {
+      const sys = `You plan presentations. Reply only with JSON. First set "language" to the language the user's request is written in (for example English or German); write the titles in that language. Plan 5 to 10 content slides (the title slide is added automatically, don't include it). For each slide give a short title, "about" (one sentence: what the slide says) and, if a real photo would help, "image": a short English search query for a photo (leave it empty for abstract slides).`
+        + (prev ? ` This is the current presentation: ${JSON.stringify({ title: prev.title, subtitle: prev.subtitle, slides: prev.slides.map((x, i) => ({ n: i + 1, title: x.title, bullets: x.bullets })) })}. Change it as the user asks: the slides the request is about MUST change (new title and content) and must not have "keep". Only for a slide the request doesn't touch at all, copy its title exactly and set "keep" to its number n.` : "");
+      const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, `Request: ${text}`].filter(Boolean).join("\n\n");
+      const r = count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user }], planSchema));
+      if (!Array.isArray(r.slides) || !r.slides.length) throw new Error("the model didn't plan any slides");
+      return r;
+    });
+    sPlan.sub = `${plan.slides.length + 1} slides`;
+    const language = String(plan.language || "").trim() || "the language of the request";
+    deck.title = String(plan.title || "Presentation"); deck.subtitle = String(plan.subtitle || "");
+    const sTitle = step("Title slide", { slide: 0, state: "done" });
+    // a "kept" slide must really be the old one (same title), and a change request has to change something
+    const norm = (t) => String(t || "").trim().toLowerCase();
+    const keepOf = (x) => prev && Number.isInteger(x.keep) && prev.slides[x.keep - 1] && norm(prev.slides[x.keep - 1].title) === norm(x.title) ? prev.slides[x.keep - 1] : null;
+    const allKept = prev && plan.slides.length === prev.slides.length && plan.slides.every(keepOf);
+    const work = plan.slides.slice(0, 14).map((x, i) => {
+      const kept = !allKept && keepOf(x);
+      const sl = kept ? { ...kept, ready: true } : { title: String(x.title || ""), bullets: [], image: String(x.image || ""), notes: "", about: String(x.about || "") };
+      deck.slides.push(sl);
+      return { sl, kept, st: step(`${i + 1}. ${sl.title}`, { slide: i + 1, state: kept ? "done" : "", sub: kept ? "kept as it was" : "" }) };
+    });
+    const sFinish = step("Put it together");
+    redraw();
+
+    const outline = deck.slides.map((x, i) => `${i + 1}. ${x.title}`).join("\n");
+    const slideSchema = { type: "object", properties: { bullets: { type: "array", items: { type: "string" } }, notes: { type: "string" } }, required: ["bullets"] };
+    for (const w of work) {
+      if (w.kept) continue;
+      await run(w.st, async () => {
+        const sys = `You write one slide of a presentation. Reply only with JSON: "bullets" (3 to 5 short, concrete points, at most 12 words each, no numbering) and "notes" (2 to 4 sentences the speaker can say). Write in ${language}.`;
+        const user = [`Presentation: ${deck.title}${deck.subtitle ? " — " + deck.subtitle : ""}`, `All slides:\n${outline}`, research && `Facts from the web:\n${research}`, history && `The conversation so far:\n${history}`, `Request: ${text}`, `Write slide "${w.sl.title}": ${w.sl.about}`].filter(Boolean).join("\n\n");
+        const r = count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user }], slideSchema));
+        w.sl.bullets = (Array.isArray(r.bullets) ? r.bullets : []).map(String).filter(Boolean).slice(0, 6);
+        w.sl.notes = String(r.notes || "");
+        if (w.sl.image && imageSearchAvailable) {
+          w.st.sub = "Finding a photo…"; redraw();
+          try {
+            const pr = await fetch(toolsBase() + "/tools/image_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: w.sl.image, count: 1 }), signal: controller.signal });
+            const im = (await pr.json()).images?.[0];
+            if (im) w.sl.photo = im;
+          } catch (e) { if (e.name === "AbortError") throw e; }
+        }
+        w.st.sub = `${w.sl.bullets.length} points${w.sl.photo ? " · photo" : ""}`;
+        w.sl.ready = true;
+      });
+    }
+    await run(sFinish, async () => { for (const sl of deck.slides) delete sl.about; });
+    sFinish.sub = "Ready to present or download";
+    sideSel = -1;
+    finished = true;
+    reply.content = prev
+      ? `I changed the presentation **${deck.title}** (${deck.slides.length + 1} slides). Present it or download it as PowerPoint / Keynote. Tell me what else to change.`
+      : `Here's your presentation **${deck.title}** with ${deck.slides.length + 1} slides. Present it full screen or download it as PowerPoint / Keynote. Tell me what to change, and I'll update it.`;
+  } catch (e) {
+    if (e.name !== "AbortError") { block.error = e.message; errorBubble("Couldn't build the slides: " + e.message); }
+    for (const st of block.steps) if (st.state === "doing") st.state = "fail";
+  } finally {
+    controller = null; setBusy(false);
+    block.active = false; block.done = true;
+    for (const sl of deck.slides) { delete sl.ready; delete sl.about; }
+    if (deck.slides.length || reply.content) {
+      if (!finished && !block.error) block.error = "stopped";
+      reply.stats = tokens && ns ? `${model} · ${(tokens / (ns / 1e9)).toFixed(1)} tok/s · ${tokens} tokens` : model;
+      if (!finished) reply.stats += " · stopped";
+      current.messages.push(reply);
+      current.updated = Date.now();
+      saveChats();
+    }
+    renderMessages();
+    $("#deckSide").classList.remove("min");
+    drawDeckSide();
   }
 }
 

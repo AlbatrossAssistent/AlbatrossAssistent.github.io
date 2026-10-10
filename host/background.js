@@ -18,10 +18,37 @@ const OLLAMA = (process.env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/+
 const up = () => fetch(OLLAMA + "/api/version", { signal: AbortSignal.timeout(2000) }).then(() => true, () => false);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Ollama runs from a copy of its program folder. Started from here it has admin rights, and then
+// Ollama's own updater (which has none) can't replace the files in use: updates failed half-way and
+// left Ollama without its engine. With a copy the updater never meets a locked file. The copy is
+// refreshed at the next start after an update, and only from a complete install.
+const RUNTIME = path.join(path.dirname(path.dirname(__dirname)), "ollama-runtime");
+function runtimeCopy() {
+  const src = path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama");
+  const done = path.join(RUNTIME, "copied-from.txt"), exe = path.join(RUNTIME, "ollama.exe");
+  try {
+    const complete = fs.existsSync(path.join(src, "ollama.exe")) && fs.existsSync(path.join(src, "lib", "ollama", "llama-server.exe"));
+    if (complete) {
+      const st = fs.statSync(path.join(src, "ollama.exe")), stamp = `${st.size} ${st.mtimeMs}`;
+      const have = fs.existsSync(done) ? fs.readFileSync(done, "utf8") : "";
+      if (have !== stamp) {
+        console.log("Copying Ollama to", RUNTIME, "(new version)");
+        fs.rmSync(RUNTIME, { recursive: true, force: true });
+        fs.cpSync(src, RUNTIME, { recursive: true, filter: (f) => !/unins000/i.test(path.basename(f)) });
+        fs.writeFileSync(done, stamp);
+      }
+    } else console.log("Ollama's own install is incomplete (an update failed?), using the last good copy");
+    return fs.existsSync(done) && fs.existsSync(exe) ? exe : null;
+  } catch (e) {
+    console.log("Couldn't copy Ollama:", e.message);
+    return fs.existsSync(done) && fs.existsSync(exe) ? exe : null;
+  }
+}
+
 (async () => {
   console.log("Burrow background start");
   if (!(await up())) {
-    const exe = [path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama.exe")].find((f) => fs.existsSync(f)) || "ollama";
+    const exe = runtimeCopy() || [path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama.exe")].find((f) => fs.existsSync(f)) || "ollama";
     console.log("Starting Ollama:", exe);
     const ollamaLog = fs.openSync(path.join(__dirname, "ollama-background.log"), "a");
     // One model in memory at a time, also for the website used directly on this PC.
