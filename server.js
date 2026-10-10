@@ -91,11 +91,55 @@ function searchLimited(ip) {
 }
 const clip = (s, n) => (typeof s === "string" && s.length > n ? s.slice(0, n) + " …" : s || "");
 
+// ---------- photos from the web ----------
+// Freely licensed photos only (Openverse: Creative Commons / public domain; Wikimedia Commons as backup),
+// so they can be shown and reused with credit. No key needed. Returns small previews plus credits.
+function imageSearch(req, res) {
+  if (searchLimited(clientIp(req))) return sendJson(res, 429, { error: "Too many searches — wait a few minutes." });
+  let body = "";
+  req.on("data", (c) => { body += c; if (body.length > 4000) req.destroy(); });
+  req.on("end", async () => {
+    let args = {};
+    try { args = JSON.parse(body || "{}"); } catch {}
+    const query = String(args.query || "").trim().slice(0, 200);
+    const count = Math.min(Math.max(Number(args.count) || 6, 1), 12);
+    if (!query) return sendJson(res, 400, { error: "Empty query" });
+    const ua = { "User-Agent": "AlbatrossBot/1.0 (https://albatrossassistent.github.io)" };
+    let images = [];
+    try {
+      const r = await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=${count}&mature=false`, { headers: ua, signal: AbortSignal.timeout(12000) });
+      const j = await r.json();
+      images = (j.results || []).map((x) => ({
+        title: clip(x.title || query, 120), thumb: x.thumbnail || x.url, full: x.url, page: x.foreign_landing_url || x.url,
+        creator: clip(x.creator || "", 80), license: (x.license ? "CC " + x.license.toUpperCase() + (x.license_version ? " " + x.license_version : "") : "").replace("CC PDM", "Public domain").replace("CC CC0", "CC0"),
+        source: x.source || x.provider || "",
+      }));
+    } catch {}
+    if (images.length < count) {
+      try {
+        const u = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=${count}&gsrsearch=${encodeURIComponent(query + " filetype:bitmap")}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=640`;
+        const j = await (await fetch(u, { headers: ua, signal: AbortSignal.timeout(12000) })).json();
+        const strip = (h) => String(h || "").replace(/<[^>]+>/g, "").trim();
+        for (const pg of Object.values(j.query?.pages || {}).sort((a, b) => a.index - b.index)) {
+          const ii = pg.imageinfo?.[0]; if (!ii) continue;
+          const md = ii.extmetadata || {};
+          images.push({ title: clip(pg.title.replace(/^File:/, "").replace(/\.[a-z]+$/i, ""), 120), thumb: ii.thumburl || ii.url, full: ii.url, page: ii.descriptionurl,
+            creator: clip(strip(md.Artist?.value), 80), license: strip(md.LicenseShortName?.value), source: "Wikimedia Commons" });
+          if (images.length >= count) break;
+        }
+      } catch {}
+    }
+    if (!images.length) return sendJson(res, 200, { images: [], note: "No free photos found for that." });
+    sendJson(res, 200, { images: images.slice(0, count) });
+  });
+}
+
 function handleTools(req, res, url) {
   cors(res);
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
-  if (url.pathname === "/tools/status") return sendJson(res, 200, { webSearch: !!OLLAMA_API_KEY });
+  if (url.pathname === "/tools/status") return sendJson(res, 200, { webSearch: !!OLLAMA_API_KEY, imageSearch: true });
   const name = url.pathname.slice("/tools/".length);
+  if (name === "image_search" && req.method === "POST") return imageSearch(req, res);
   if (req.method !== "POST" || !["web_search", "web_fetch"].includes(name)) return sendJson(res, 404, { error: "Unknown tool" });
   if (!OLLAMA_API_KEY) return sendJson(res, 501, { error: "Web search isn't set up on the server (OLLAMA_API_KEY missing)." });
   if (searchLimited(clientIp(req))) return sendJson(res, 429, { error: "Too many searches — wait a few minutes." });

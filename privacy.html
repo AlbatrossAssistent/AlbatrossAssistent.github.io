@@ -11,7 +11,7 @@
 <nav class="nav"><a class="brand" href="./"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>Albatross</a><span class="sp"></span><a href="terms.html">Terms</a><a class="btn" href="public/">Open app</a></nav>
 <main class="doc">
   <h1>Privacy Policy</h1>
-  <p class="meta">Last updated: 8 October 2026</p>
+  <p class="meta">Last updated: 10 October 2026</p>
 
   <p class="lead">Short version: Albatross works without an account and has no analytics, no ads and no tracking cookies. If you choose to sign in, only your settings are stored, and your PC code and turn-on link are encrypted with your own passphrase first. Your chats are stored in your own browser and processed on your own computer. What passes through our relay server is encrypted so that the server can't read it.</p>
 
@@ -44,6 +44,7 @@
   <h2>4. Optional features that use other services</h2>
   <ul>
     <li><b>Web search:</b> if you turn on web search, the search queries and page addresses the AI looks up are sent through our server to Ollama's web search API (ollama.com). Don't turn it on for questions you want to keep fully private.</li>
+    <li><b>Photos and presentations:</b> when the AI shows photos from the web (also inside presentations), the search words go through our server to Openverse (openverse.org) and Wikimedia Commons, and your browser loads the photos from them. Presentations are made in your browser; downloading one as a PowerPoint file loads a small library from jsDelivr.</li>
     <li><b>No cloud models:</b> Ollama also offers "cloud" models that run on its servers. Albatross hides and blocks them, so your messages are only ever processed by models on your own PC.</li>
     <li><b>Turn on PC:</b> with Wake-on-LAN, your browser sends your home's public address, a port and your PC's network card address (MAC) to the Albatross server, which sends the wake-up signal and forgets them right away. If you use a smart plug link instead, your browser opens it directly and the server never sees it. If you're signed in, these details are stored in your account only encrypted with your passphrase.</li>
     <li><b>Hosting:</b> the website is served by GitHub Pages, and the landing page loads a scrolling library from jsDelivr. Like any website, these services receive your IP address and browser details when you load the page.</li>

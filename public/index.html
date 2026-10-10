@@ -423,6 +423,33 @@ body.home-view .messages, body.home-view .composer, body.home-view #typeBadge, b
 .recent .tt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent small { color: var(--muted); font-size: 12px; flex: none; }
 
+
+/* ---------- photos and presentations ---------- */
+.photo-card { margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.photo { position: relative; display: block; border-radius: 16px; overflow: hidden; aspect-ratio: 4/3; background: var(--soft); border: 1px solid var(--glass-edge); animation: msgIn .4s cubic-bezier(.2,.8,.2,1) backwards; }
+.photo img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.photo:hover img { transform: scale(1.05); }
+.photo .cr { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 10.5px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.7)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deck { margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.stage16 { aspect-ratio: 16/9; border-radius: 18px; overflow: hidden; background: #0b0c10; color: #f5f5f7; border: 1px solid var(--glass-edge); box-shadow: var(--shadow); container-type: inline-size; }
+.sl { width: 100%; height: 100%; display: flex; gap: 4cqw; padding: 5cqw 6cqw; }
+.sl.title { flex-direction: column; justify-content: center; }
+.sl.title h2 { margin: 0; font-size: 6.5cqw; letter-spacing: -.03em; line-height: 1.05; }
+.sl.title p { margin: 1.5cqw 0 0; font-size: 2.8cqw; color: #9ca0aa; }
+.sl .txt { flex: 1; min-width: 0; }
+.sl h3 { margin: 0 0 2.4cqw; font-size: 4.4cqw; letter-spacing: -.02em; line-height: 1.1; }
+.sl ul { margin: 0; padding-left: 3cqw; font-size: 2.5cqw; line-height: 1.45; }
+.sl li { margin-bottom: 1cqw; }
+.sl figure { margin: 0; flex: 0 0 40%; display: flex; flex-direction: column; gap: .8cqw; }
+.sl figure img { width: 100%; flex: 1; min-height: 0; object-fit: cover; border-radius: 1.5cqw; }
+.sl figcaption { font-size: 1.3cqw; color: #9ca0aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deck-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.deck-bar .cnt { font-size: 13px; color: var(--muted); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+.present { position: fixed; inset: 0; z-index: 300; background: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.present .stage16.big { width: min(100vw, 177.78vh); border: none; border-radius: 0; box-shadow: none; }
+.present-hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 12px; color: rgba(255,255,255,.4); }
+
 /* ---------- Jarvis ---------- */
 body:not(.jarvis-view) #jarvis { display: none; }
 body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, body.jarvis-view #model, body.jarvis-view #typeBadge { display: none !important; }
@@ -1567,7 +1594,7 @@ function fillLive(c, m) {
   blocks.forEach((b, i) => {
     const active = !b.done && i === blocks.length - 1, e = L.blocks[i];
     if (b.type === "thinking" && e) return updateThink(e, b, active);
-    const key = [b.active, b.error, b.title, (b.results || []).length].join("|");
+    const key = [b.active, b.error, b.title, (b.results || b.images || []).length].join("|");
     if (e && e.key === key) return;
     const el = renderBlock(b, active);
     if (e) e.el.replaceWith(el); else L.wrap.appendChild(el);
@@ -1654,6 +1681,26 @@ function renderBlock(b, active) {
     }
     return wrap;
   }
+  if (b.type === "images") {
+    const wrap = document.createElement("div"); wrap.className = "photo-card";
+    wrap.innerHTML = `<div class="search-bar ${b.active ? "active" : ""}">${MAG}<span class="q"></span>${b.active ? '<span class="spin"></span><span class="meta">Finding photos…</span>' : `<span class="meta">${b.error ? "failed" : (b.images || []).length + " photos"}</span>`}</div>`;
+    wrap.querySelector(".q").textContent = b.query;
+    if (b.error) { const e = document.createElement("div"); e.className = "tool-err"; e.textContent = b.error; wrap.appendChild(e); }
+    if ((b.images || []).length) {
+      const grid = document.createElement("div"); grid.className = "photo-grid";
+      for (const im of b.images) {
+        const a = document.createElement("a"); a.href = safeHref(im.page || im.full); a.target = "_blank"; a.rel = "noopener noreferrer"; a.className = "photo";
+        a.innerHTML = `<img loading="lazy" alt=""><span class="cr"></span>`;
+        a.querySelector("img").src = im.thumb; a.querySelector("img").alt = im.title || "";
+        a.querySelector(".cr").textContent = [im.creator, im.license].filter(Boolean).join(" · ") || im.source || "";
+        a.title = `${im.title}${im.creator ? " by " + im.creator : ""}${im.license ? " (" + im.license + ")" : ""}`;
+        grid.appendChild(a);
+      }
+      wrap.appendChild(grid);
+    }
+    return wrap;
+  }
+  if (b.type === "deck") return renderDeck(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -1663,6 +1710,84 @@ function renderBlock(b, active) {
     return d;
   }
   return document.createElement("div");
+}
+// ---------- presentations ----------
+function slideHTML(deck, i) {
+  if (i === 0) return `<div class="sl title"><h2></h2><p></p></div>`;
+  const sl = deck.slides[i - 1];
+  return `<div class="sl${sl.photo ? " has-photo" : ""}"><div class="txt"><h3></h3><ul></ul></div>${sl.photo ? '<figure><img alt=""><figcaption></figcaption></figure>' : ""}</div>`;
+}
+function fillSlide(el, deck, i) {
+  el.innerHTML = slideHTML(deck, i);
+  if (i === 0) { el.querySelector("h2").textContent = deck.title; el.querySelector("p").textContent = deck.subtitle || ""; return; }
+  const sl = deck.slides[i - 1];
+  el.querySelector("h3").textContent = sl.title;
+  const ul = el.querySelector("ul");
+  for (const b of sl.bullets) { const li = document.createElement("li"); li.textContent = b; ul.appendChild(li); }
+  if (sl.photo) { el.querySelector("img").src = sl.photo.thumb; el.querySelector("figcaption").textContent = [sl.photo.creator, sl.photo.license].filter(Boolean).join(" · "); }
+}
+function renderDeck(b) {
+  const d = b.deck || { title: "", slides: [] }, total = (d.slides || []).length + 1;
+  const wrap = document.createElement("div"); wrap.className = "deck";
+  if (b.active) { wrap.innerHTML = `<div class="search-bar active">${MAG}<span class="q"></span><span class="spin"></span><span class="meta">Building the slides…</span></div>`; wrap.querySelector(".q").textContent = d.title; return wrap; }
+  if (b.error) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = "Couldn't build the slides: " + b.error; return wrap; }
+  b.idx = Math.min(b.idx || 0, total - 1);
+  wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span><button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>`;
+  const stage = wrap.querySelector(".stage16"), cnt = wrap.querySelector(".cnt");
+  const show = () => { fillSlide(stage, d, b.idx); cnt.textContent = `${b.idx + 1} / ${total}`; };
+  show();
+  wrap.querySelector('[data-a="prev"]').onclick = () => { b.idx = Math.max(0, b.idx - 1); show(); };
+  wrap.querySelector('[data-a="next"]').onclick = () => { b.idx = Math.min(total - 1, b.idx + 1); show(); };
+  wrap.querySelector('[data-a="present"]').onclick = () => presentDeck(d, b.idx);
+  wrap.querySelector('[data-a="pptx"]').onclick = (e) => downloadPptx(d, e.target);
+  return wrap;
+}
+function presentDeck(d, start = 0) {
+  const total = d.slides.length + 1;
+  let i = start;
+  const ov = document.createElement("div"); ov.className = "present";
+  ov.innerHTML = '<div class="stage16 big"></div><div class="present-hint">← → to move · Esc to end</div>';
+  const stage = ov.firstChild, show = () => fillSlide(stage, d, i);
+  const key = (e) => {
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { i = Math.min(total - 1, i + 1); show(); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") { i = Math.max(0, i - 1); show(); }
+    else if (e.key === "Escape") end();
+  };
+  const end = () => { removeEventListener("keydown", key, true); ov.remove(); if (document.fullscreenElement) document.exitFullscreen?.(); };
+  ov.onclick = (e) => { const r = ov.getBoundingClientRect(); if (e.clientX > r.width / 2) { if (i === total - 1) end(); else { i++; show(); } } else { i = Math.max(0, i - 1); show(); } };
+  addEventListener("keydown", key, true);
+  document.body.appendChild(ov); show();
+  ov.requestFullscreen?.().catch(() => {});
+  document.addEventListener("fullscreenchange", function f() { if (!document.fullscreenElement) { document.removeEventListener("fullscreenchange", f); if (ov.isConnected) end(); } });
+}
+let pptxLib = null;
+async function downloadPptx(d, btn) {
+  const label = btn.textContent; btn.disabled = true; btn.textContent = "Making the file…";
+  try {
+    if (!pptxLib) pptxLib = await new Promise((ok, fail) => { const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"; sc.onload = () => ok(window.PptxGenJS); sc.onerror = () => fail(new Error("couldn't load the PowerPoint maker")); document.head.appendChild(sc); });
+    const pptx = new pptxLib(); pptx.layout = "LAYOUT_WIDE"; pptx.title = d.title;
+    const bg = "0B0C10", fg = "F5F5F7", mute = "9CA0AA";
+    const t = pptx.addSlide(); t.background = { color: bg };
+    t.addText(d.title, { x: .8, y: 2.4, w: 11.7, h: 1.4, fontSize: 44, bold: true, color: fg, fontFace: "Segoe UI" });
+    if (d.subtitle) t.addText(d.subtitle, { x: .8, y: 3.8, w: 11.7, h: .8, fontSize: 22, color: mute, fontFace: "Segoe UI" });
+    for (const sl of d.slides) {
+      const s2 = pptx.addSlide(); s2.background = { color: bg };
+      const w = sl.photo ? 6.6 : 11.7;
+      s2.addText(sl.title, { x: .7, y: .5, w, h: 1, fontSize: 32, bold: true, color: fg, fontFace: "Segoe UI" });
+      if (sl.bullets.length) s2.addText(sl.bullets.map(x => ({ text: x, options: { bullet: true, breakLine: true } })), { x: .7, y: 1.7, w, h: 5, fontSize: 20, color: fg, fontFace: "Segoe UI", valign: "top", paraSpaceAfter: 10 });
+      if (sl.photo) {
+        try {
+          const blob = await (await fetch(sl.photo.thumb)).blob();
+          const data = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
+          s2.addImage({ data, x: 7.6, y: 1.2, w: 5.1, h: 4.4, sizing: { type: "cover", w: 5.1, h: 4.4 } });
+          s2.addText([sl.photo.creator, sl.photo.license, sl.photo.source].filter(Boolean).join(" · "), { x: 7.6, y: 5.7, w: 5.1, h: .4, fontSize: 10, color: mute, fontFace: "Segoe UI" });
+        } catch {}
+      }
+      if (sl.notes) s2.addNotes(sl.notes);
+    }
+    await pptx.writeFile({ fileName: slug(d.title) + ".pptx" });
+  } catch (e) { toast("Couldn't make the file: " + e.message); }
+  btn.disabled = false; btn.textContent = label;
 }
 function actBtn(icon, label, fn) { const b = document.createElement("button"); b.innerHTML = icon; b.title = label; b.setAttribute("aria-label", label); b.onclick = fn; return b; }
 function errorBubble(text) {
@@ -1788,10 +1913,11 @@ async function getCaps(model) {
 // ---------- web search tools ----------
 let searchAvailable = false;
 function toolsBase() { return (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, ""); }
+let imageSearchAvailable = false;
 async function checkSearch() {
   searchAvailable = false;
   if (toolsBase()) {
-    try { searchAvailable = !!(await (await fetch(toolsBase() + "/tools/status")).json()).webSearch; } catch {}
+    try { const st = await (await fetch(toolsBase() + "/tools/status")).json(); searchAvailable = !!st.webSearch; imageSearchAvailable = !!st.imageSearch; } catch {}
   }
   const sw = $("#webSearch");
   sw.disabled = !searchAvailable;
@@ -1805,6 +1931,39 @@ const TOOLS = [
   { type: "function", function: { name: "web_search", description: "Search the web for up-to-date information: news, recent events, prices, facts you are not sure about.", parameters: { type: "object", properties: { query: { type: "string", description: "The search query" } }, required: ["query"] } } },
   { type: "function", function: { name: "web_fetch", description: "Open a web page by URL and read its text. Use it to read a search result in detail.", parameters: { type: "object", properties: { url: { type: "string", description: "Full http(s) URL" } }, required: ["url"] } } },
 ];
+// Always offered to models that can use tools: photos from the web and presentations.
+const MEDIA_TOOLS = [
+  { type: "function", function: { name: "image_search", description: "Find real photos on the web (freely licensed) and show them to the user. Use it when the user wants to see pictures or photos of something real, or asks what something looks like.", parameters: { type: "object", properties: { query: { type: "string", description: "What the photos should show, in English" }, count: { type: "number", description: "How many photos, 1 to 8 (default 6)" } }, required: ["query"] } } },
+  { type: "function", function: { name: "make_slides", description: "Create a presentation (keynote / slide deck) and show it to the user. Use it when the user asks for slides, a presentation, a keynote or a deck. Write the full content: 5 to 10 slides, short bullet points.", parameters: { type: "object", properties: {
+    title: { type: "string", description: "Title of the presentation" },
+    subtitle: { type: "string", description: "Optional subtitle for the title slide" },
+    slides: { type: "array", description: "The slides after the title slide", items: { type: "object", properties: {
+      title: { type: "string" }, bullets: { type: "array", items: { type: "string" }, description: "3 to 5 short points" },
+      image: { type: "string", description: "Optional: what a photo on this slide should show (searched on the web), in English" },
+      notes: { type: "string", description: "Optional speaker notes" } }, required: ["title"] } } }, required: ["title", "slides"] } } },
+];
+async function runMediaTool(name, args, block) {
+  if (name === "image_search") {
+    const r = await fetch(toolsBase() + "/tools/image_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: args.query, count: Math.min(8, Number(args.count) || 6) }), signal: controller.signal });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+    block.images = j.images || [];
+    return block.images.length ? `Showed the user ${block.images.length} photos of "${args.query}" (with credits). Don't describe the photos in detail or list their links; refer to them briefly.` : "No free photos were found for that.";
+  }
+  // make_slides: build the deck, then find a photo for each slide that asks for one
+  const slides = (Array.isArray(args.slides) ? args.slides : []).slice(0, 20).map(x => ({ title: String(x.title || ""), bullets: (Array.isArray(x.bullets) ? x.bullets : []).map(String).slice(0, 8), image: x.image ? String(x.image) : "", notes: x.notes ? String(x.notes) : "" }));
+  block.deck = { title: String(args.title || "Presentation"), subtitle: String(args.subtitle || ""), slides };
+  block.idx = 0;
+  await Promise.all(slides.map(async (sl) => {
+    if (!sl.image || !imageSearchAvailable) return;
+    try {
+      const r = await fetch(toolsBase() + "/tools/image_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: sl.image, count: 1 }), signal: controller.signal });
+      const im = (await r.json()).images?.[0];
+      if (im) sl.photo = im;
+    } catch (e) { if (e.name === "AbortError") throw e; }
+  }));
+  return `The presentation "${block.deck.title}" with ${slides.length + 1} slides is shown to the user, who can present it or download it as PowerPoint/Keynote. Reply with one or two sentences, don't repeat the slides.`;
+}
 async function runTool(name, args, block) {
   const r = await fetch(toolsBase() + "/tools/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args), signal: controller.signal });
   const j = await r.json().catch(() => ({}));
@@ -1834,10 +1993,12 @@ async function chat(model) {
     const caps = await getCaps(model);
     const useThink = S.think && caps.includes("thinking");
     const wantSearch = S.webSearch && searchAvailable;
-    const useTools = wantSearch && caps.includes("tools");
+    const toolsOk = caps.includes("tools");
+    const useTools = wantSearch && toolsOk;
     if (wantSearch && !useTools) toast(`${model} can't use tools, so it can't search. Try qwen3, llama3.1 or gpt-oss.`);
 
     let system = current.system || S.defaultSystem;
+    if (toolsOk) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search, and create presentations with make_slides (when asked for slides, a presentation or a keynote).";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
     // Say so in the bubble and pop a notification once it's ready.
@@ -1866,7 +2027,7 @@ async function chat(model) {
       const body = { model, messages: msgs, stream: true, options: buildOptions() };
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
       if (useThink) body.think = true;
-      if (useTools && round < 5) body.tools = TOOLS;
+      if (toolsOk && round < 5) body.tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS : MEDIA_TOOLS.filter(t => t.function.name === "make_slides"))];
 
       const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
       let think = null, roundText = "", calls = [];
@@ -1894,12 +2055,15 @@ async function chat(model) {
         const name = tc.function?.name;
         let args = tc.function?.arguments || {};
         if (typeof args === "string") { try { args = JSON.parse(args); } catch { args = {}; } }
-        const block = name === "web_fetch" ? { type: "fetch", url: args.url, active: true } : { type: "search", query: args.query || "", active: true, results: [] };
+        const block = name === "web_fetch" ? { type: "fetch", url: args.url, active: true }
+          : name === "image_search" ? { type: "images", query: args.query || "", active: true, images: [] }
+          : name === "make_slides" ? { type: "deck", active: true, deck: { title: args.title || "Presentation", slides: [] } }
+          : { type: "search", query: args.query || "", active: true, results: [] };
         reply.blocks.push(block); redraw();
         let out;
-        if (name !== "web_search" && name !== "web_fetch") out = "Unknown tool: " + name;
+        if (!["web_search", "web_fetch", "image_search", "make_slides"].includes(name)) out = "Unknown tool: " + name;
         else {
-          try { out = await runTool(name, args, block); }
+          try { out = name === "image_search" || name === "make_slides" ? await runMediaTool(name, args, block) : await runTool(name, args, block); }
           catch (e) { if (e.name === "AbortError") throw e; block.error = e.message; out = "Error: " + e.message; }
         }
         block.active = false; block.done = true; redraw();
