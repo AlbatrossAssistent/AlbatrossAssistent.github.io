@@ -519,6 +519,43 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .tool-block { margin: 0 0 12px; }
 
 
+/* ---------- Code and Challenge cards ---------- */
+.tcard { --surface: #fcfcfb; --t1: #0b0b0b; --t2: #52514e; --t3: #7a7974; --grid: #e9e8e4; background: var(--surface); color: var(--t1); border: 1px solid var(--glass-edge); border-radius: 20px; padding: 16px; margin: 0 0 12px; max-width: 720px; }
+[data-theme="dark"] .tcard { --surface: #1a1a19; --t1: #f0efec; --t2: #c3c2b7; --t3: #96958d; --grid: #2b2b29; }
+.tcard-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tcard-head .ic { width: 34px; height: 34px; border-radius: 11px; background: var(--grid); display: flex; align-items: center; justify-content: center; flex: none; }
+.tcard-head .ic svg { width: 18px; height: 18px; }
+.tcard-head b { display: block; font-size: 15px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.tcard-head small { display: block; color: var(--t3); font-size: 12.5px; overflow-wrap: anywhere; }
+.tcard-head .copy { margin-left: auto; flex: none; }
+.tsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.tsteps .row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 8px; border-radius: 12px; }
+.tsteps li.has-out .row { cursor: pointer; }
+.tsteps li.has-out .row:hover { background: var(--grid); }
+.tsteps .mk { width: 18px; height: 18px; border-radius: 50%; border: 1.6px solid var(--t3); flex: none; margin-top: 1px; position: relative; }
+.tsteps li.done .mk, .tsteps li.saved .mk { background: var(--ok); border-color: var(--ok); }
+.tsteps li.done .mk::after, .tsteps li.saved .mk::after { content: ""; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.tsteps li.doing .mk { border-color: var(--t1); border-top-color: transparent; animation: tspin .8s linear infinite; }
+.tsteps li.fail .mk { border-color: var(--bad); }
+.tsteps li.fail .mk::after { content: "×"; position: absolute; inset: 0; text-align: center; font-size: 14px; line-height: 14px; color: var(--bad); }
+@keyframes tspin { to { transform: rotate(360deg); } }
+.tsteps .lb { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.tsteps .lb .sub { display: block; color: var(--t3); font-size: 12.5px; margin-top: 1px; }
+.tsteps li.fail .lb .sub { color: var(--bad); }
+.tsteps pre { margin: 2px 8px 8px 36px; padding: 10px 12px; border-radius: 12px; background: var(--grid); color: var(--t1); font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; }
+.tfound { margin-top: 12px; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.tfound.no { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.tfound .k { font-size: 11.5px; color: var(--t3); text-transform: uppercase; letter-spacing: .07em; }
+.tfound .v { font-size: 22px; font-weight: 650; letter-spacing: -.02em; overflow-wrap: anywhere; margin-top: 2px; }
+.tfound .chk { font-size: 12.5px; margin-top: 6px; color: var(--t2); }
+.att.file { display: flex; align-items: center; gap: 10px; height: 64px; padding: 0 16px 0 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--soft); max-width: 280px; }
+.att.file svg { width: 20px; height: 20px; flex: none; }
+.att.file span { min-width: 0; }
+.att.file b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att.file small { color: var(--muted); font-size: 12px; }
+.msg.user .file-chip { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 10px; border-radius: 12px; background: rgba(127,127,127,.18); font-size: 13px; max-width: 100%; }
+.msg.user .file-chip svg { width: 16px; height: 16px; flex: none; }
+
 /* ---------- answers animate in ---------- */
 .tok { animation: tokIn .55s ease-out both; }
 @keyframes tokIn { from { opacity: 0; filter: blur(4px); } }
@@ -937,13 +974,16 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 <div class="attachments" id="attachments"></div>
       <div class="box" id="box">
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <input type="file" id="challengeInput" hidden>
         <div class="tools-wrap">
-          <button class="attach-btn web-btn" id="toolsBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Tools: web search, slides, graphs, chances"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><path d="M16.75 13.5v6.5M13.5 16.75H20"/></svg><span id="toolsLabel">Tools</span></button>
+          <button class="attach-btn web-btn" id="toolsBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Tools: web search, slides, graphs, chances, code, challenge"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><path d="M16.75 13.5v6.5M13.5 16.75H20"/></svg><span id="toolsLabel">Tools</span></button>
           <div class="tools-menu" id="toolsMenu" role="menu" hidden>
             <button class="tool-item" id="webBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span><b>Search the web</b><small>Look things up online while answering</small></span></button>
             <button class="tool-item" id="slidesBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M7 8h6M7 11h9"/></svg><span><b>Slides</b><small>A presentation, planned and built slide by slide</small></span></button>
             <button class="tool-item" id="graphBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M7 15l4-5 3 3 5-6"/></svg><span><b>Graph</b><small>A chart from your numbers or real data</small></span></button>
             <button class="tool-item" id="chancesBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><span><b>Chances &amp; predictions</b><small>How likely something is, and how it may develop</small></span></button>
+            <button class="tool-item" id="codeBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg><span><b>Code</b><small>The AI writes a program into a folder on your PC</small></span></button>
+            <button class="tool-item" id="challengeBtn" role="menuitemcheckbox" aria-checked="false" type="button"><svg class="i" viewBox="0 0 24 24"><circle cx="9.5" cy="14.5" r="4.5"/><path d="M13 11l7-7M17 7l3 3M15 9l2 2"/></svg><span><b>Challenge</b><small>Give it a puzzle file; the AI digs for the hidden word</small></span></button>
           </div>
         </div>
         <button class="attach-btn img-btn" id="imgBtn" aria-pressed="false" title="Make a picture (otherwise Albatross notices by itself when you ask for one)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></button>
@@ -1196,6 +1236,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 <script src="orb.js"></script>
 <script src="planet.js"></script>
 <script src="xfer.js"></script>
+<script src="puzzle.js"></script>
 <script>
 "use strict";
 // ======================================================================
@@ -1825,6 +1866,11 @@ function userBubble(m, idx) {
     m.images.forEach(b => { const im = document.createElement("img"); im.src = "data:image/*;base64," + b; im.alt = "Attached image"; imgs.appendChild(im); });
     d.appendChild(imgs);
   }
+  if (m.file) {
+    const c = document.createElement("div"); c.className = "file-chip";
+    c.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span></span>';
+    c.querySelector("span").textContent = m.file.name; d.appendChild(c);
+  }
   const t = document.createElement("div"); t.className = "text"; t.textContent = m.content; d.appendChild(t);
   const a = document.createElement("div"); a.className = "actions";
   a.appendChild(actBtn(ICON.copy, "Copy", () => copy(m.content)));
@@ -2036,7 +2082,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
-  if (b.type === "chart" || b.type === "chances") return renderToolBlock(b);
+  if (b.type === "chart" || b.type === "chances" || b.type === "code" || b.type === "challenge") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -2557,8 +2603,10 @@ function wantsNewPicture(text) { return /\b(new|another|different|neues?|neuen|a
 async function send(textOverride) {
   if (controller) { controller.abort(); return; }
   const p = $("#prompt");
-  const text = (textOverride ?? p.value).trim();
+  let text = (textOverride ?? p.value).trim();
+  if (toolMode === "challenge" && !text && challengeFile) text = "Find the hidden word, message or flag in this file.";
   if (!text && !attachments.length) return;
+  if (toolMode === "challenge" && !challengeFile) { toast("Add the file first: tap the paperclip"); return; }
   if (!connected) { await connect(); if (!connected) return; }
   // Pictures: a new one goes to the chosen image model. Changing a picture (an attached photo, or a follow-up
   // like "make it night" right after one) goes to a model that can edit, such as OmniGen2, with the picture attached.
@@ -2579,7 +2627,7 @@ async function send(textOverride) {
   if (!model) { toast("Pick a model first"); return; }
   if (forceImage) setForceImage(false);
 
-  const userMsg = { role: "user", content: text, images: attachments.length ? attachments.slice() : undefined };
+  const userMsg = { role: "user", content: text, images: attachments.length ? attachments.slice() : undefined, file: toolMode === "challenge" && challengeFile ? { name: challengeFile.name, size: challengeFile.size } : undefined };
   if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; renderAttachments(); }
   current.messages.push(userMsg);
   if (!current.type) current.type = curMode();
@@ -2589,7 +2637,7 @@ async function send(textOverride) {
   if (current.messages.length === 1) $("#inner").innerHTML = "";
   $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
   renderSidebar();
-  await (asImage ? generateImage(model, text, refs) : toolMode === "slides" ? buildSlides(model, text) : toolMode === "graph" ? buildGraph(model, text) : toolMode === "chances" ? buildChances(model, text) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : toolMode === "slides" ? buildSlides(model, text) : toolMode === "graph" ? buildGraph(model, text) : toolMode === "chances" ? buildChances(model, text) : toolMode === "code" ? buildCode(model, text) : toolMode === "challenge" ? buildChallenge(model, text) : chat(model));
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -2694,7 +2742,7 @@ async function chat(model) {
 
     let system = current.system || S.defaultSystem;
     if (toolsOk && imageSearchAvailable) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search.";
-    system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, a graph or chart, or for chances, odds or a prediction, tell them to open \"Tools\" next to the message box, switch on Slides, Graph or Chances, and ask again.";
+    system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, a graph or chart, or for chances, odds or a prediction, tell them to open \"Tools\" next to the message box, switch on Slides, Graph or Chances, and ask again. For writing a program into a file on their PC there is Code, and for digging a hidden word out of a puzzle file there is Challenge.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
     // Say so in the bubble and pop a notification once it's ready.
@@ -2791,12 +2839,16 @@ const TOOL_INFO = {
   slides:  { name: "Slides",  ph: "What should the presentation be about?", on: "Slides on: your next message becomes a presentation" },
   graph:   { name: "Graph",   ph: "What should the graph show? (or paste your numbers)", on: "Graph on: your next message becomes a chart" },
   chances: { name: "Chances", ph: "What do you want the chances of, or a prediction for?", on: "Chances on: the AI estimates how likely things are" },
+  code:    { name: "Code",    ph: "What should the program do? (it's saved in a folder on your PC)", on: "Code on: the AI writes your program into a folder on your PC" },
+  challenge: { name: "Challenge", ph: "What should I find in the file? (for example the hidden word)", on: "Challenge on: add a file with the paperclip and tell me what to find" },
 };
 let toolMode = "";
 function setToolMode(m) {
   toolMode = toolMode === m ? "" : m;
   for (const k of Object.keys(TOOL_INFO)) { const b = $("#" + k + "Btn"); b.classList.toggle("on", toolMode === k); b.setAttribute("aria-checked", String(toolMode === k)); }
   $("#prompt").placeholder = toolMode ? TOOL_INFO[toolMode].ph : "Message your local AI…";
+  $("#attachBtn").title = toolMode === "challenge" ? "Add the file to investigate" : "Attach image (for vision models)";
+  try { renderAttachments(); } catch {}
   setTimeout(updateToolsLabel);
 }
 function setSlidesMode(on) { if (on !== (toolMode === "slides")) setToolMode("slides"); }
@@ -2805,7 +2857,7 @@ function updateToolsLabel() {
   $("#toolsLabel").textContent = on.join(" + ") || "Tools";
   $("#toolsBtn").classList.toggle("on", on.length > 0);
 }
-for (const k of Object.keys(TOOL_INFO)) $("#" + k + "Btn").onclick = () => { setToolMode(k); closeTools(); toast(toolMode === k ? TOOL_INFO[k].on : TOOL_INFO[k].name + " off"); };
+for (const k of Object.keys(TOOL_INFO)) $("#" + k + "Btn").onclick = () => { setToolMode(k); closeTools(); toast(toolMode === k ? TOOL_INFO[k].on : TOOL_INFO[k].name + " off"); if (k === "challenge" && toolMode === k && !challengeFile) $("#challengeInput").click(); };
 const closeTools = () => { $("#toolsMenu").hidden = true; $("#toolsBtn").setAttribute("aria-expanded", "false"); };
 $("#toolsBtn").onclick = (e) => { e.stopPropagation(); const m = $("#toolsMenu"); m.hidden = !m.hidden; $("#toolsBtn").setAttribute("aria-expanded", String(!m.hidden)); };
 document.addEventListener("click", (e) => { if (!$("#toolsMenu").hidden && !e.target.closest("#toolsMenu")) closeTools(); });
@@ -3136,7 +3188,7 @@ async function toolAnswer(model, text, block, work) {
       if (!running.some(r => r.name === model)) { thinking = `Loading ${model}…`; watchLoading(model, pct => redraw(`Loading ${model}… ${pct}%`), () => !block.active || !controller || ok); }
     } catch {}
     redraw(thinking);
-    reply.content = await work({ ask, history, research, today: new Date().toDateString() });
+    reply.content = await work({ ask, history, research, today: new Date().toDateString(), redraw, caps, track: (r) => { tokens += r.tokens; ns += r.ns; } });
     ok = true;
   } catch (e) {
     if (e.name !== "AbortError") block.error = e.message;
@@ -3235,7 +3287,290 @@ async function buildChances(model, text) {
     return String(r.summary || "").trim();
   });
 }
+// ---------- Code tool: the AI plans a project, writes it file by file and saves it in a folder on your PC ----------
+// ---------- Challenge tool: you give it a puzzle file, the AI digs through it with a toolbox (puzzle.js) to find a hidden word ----------
+const ICON_CODE = '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>';
+const ICON_PUZZLE = '<svg class="i" viewBox="0 0 24 24"><circle cx="9.5" cy="14.5" r="4.5"/><path d="M13 11l7-7M17 7l3 3M15 9l2 2"/></svg>';
+const slugProject = (n) => String(n || "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 60) || "project";
+const cleanCodePath = (p) => { const s = String(p || "").replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/^\/+/, "").trim(); return s && s.length <= 200 && !/^[a-z]:/i.test(s) && !s.split("/").some(x => x === ".." || x === "") ? s : ""; };
+const byteLen = (s) => new TextEncoder().encode(s).length;
+
+// One streamed answer as plain text (the JSON helper is askJSON).
+async function askText(model, caps, messages, onText, options = {}) {
+  const body = { model, messages, stream: true, options: { ...buildOptions(), temperature: 0.4, ...options } };
+  if (caps.includes("thinking")) body.think = false;
+  if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
+  const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+  let text = "", tokens = 0, ns = 0;
+  await readNdjson(res, j => { if (j.error) throw new Error(j.error); const c = j.message?.content || ""; if (c) { text += c; onText?.(text); } if (j.done) { tokens = j.eval_count || 0; ns = j.eval_duration || 0; } });
+  return { text, tokens, ns };
+}
+// A model sometimes wraps the file in ``` fences or adds a sentence around it: keep only the file.
+function stripFences(t) {
+  let s = String(t).replace(/\r\n/g, "\n").trim();
+  const open = s.search(/(^|\n)```/);
+  if (open >= 0 && open < 220) {
+    s = s.slice(s.indexOf("```", open)).replace(/^```[^\n]*\n?/, "");
+    const close = s.lastIndexOf("\n```");
+    if (close >= 0) s = s.slice(0, close);
+    else s = s.replace(/\n?```\s*$/, "");
+  }
+  return s;
+}
+// Talks to the host on this PC (its control center) or, from another device, end-to-end encrypted through the code.
+async function codeCall(path, body) {
+  const local = viaHost || (S.conn.mode !== "remote" && !CODE_RE.test(S.conn.code));
+  let status, j;
+  try {
+    if (local) {
+      const r = await fetch("http://127.0.0.1:4747" + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller?.signal });
+      status = r.status; j = await r.json().catch(() => ({}));
+    } else {
+      const res = await e2eFetch(path, { method: "POST", body: JSON.stringify(body), base: hostBase(), signal: controller?.signal });
+      status = res.status; j = await res.json().catch(() => ({}));
+    }
+  } catch (e) {
+    if (e.name === "AbortError") throw e;
+    if (/not allowed/i.test(e.message)) throw new Error("Your PC runs an older Albatross host. Restart the PC or burrow-host.bat to update it.");
+    throw new Error(local ? "The Albatross host isn't running on this PC, so nothing could be saved." : "Your PC didn't answer. Is the Albatross host running?");
+  }
+  if (status !== 200) throw new Error(j.error || "HTTP " + status);
+  return j;
+}
+
+async function buildCode(model, text) {
+  const block = { type: "code", active: true, thinkLabel: "Planning the project…", project: "", folder: "", files: [], run: "" };
+  await toolAnswer(model, text, block, async ({ ask, history, research, today, redraw, track, caps }) => {
+    // changing a project from earlier in this chat? Read it back from the PC (also picks up what you edited yourself)
+    const prev = [...current.messages].reverse().map(m => m.blocks?.find(x => x.type === "code" && x.project)).find(Boolean);
+    let existing = null, existingText = "";
+    if (prev) {
+      try {
+        redraw("Reading the project on your PC…");
+        existing = await codeCall("/code/read", { project: prev.project });
+        let left = 20000;
+        existingText = existing.files.filter(f => f.content != null && f.content.length <= left).map(f => { left -= f.content.length; return `--- ${f.path}\n${f.content}`; }).join("\n\n");
+        if (!existing.files.length) existing = null;
+      } catch (e) { if (e.name === "AbortError") throw e; }
+    }
+    const str = { type: "string" };
+    const schema = { type: "object", properties: {
+      language: str, project: str, summary: str, run: str,
+      files: { type: "array", items: { type: "object", properties: { path: str, purpose: str }, required: ["path", "purpose"] } } },
+      required: ["language", "project", "summary", "run", "files"] };
+    const sys = `You are a careful programmer. The user asks for a program, script, website or small project. Plan the files of one small, complete, working project. Reply only with JSON. Today is ${today}.
+- "language": the language of the request; write "summary" and "run" in it.
+- "project": a short folder name in lowercase letters, digits and dashes, like "snake-game".${existing ? ` The project already exists on the user's PC, so keep the name "${prev.project}".` : ""}
+- "summary": 1 to 3 sentences on what it does${existing ? " now, including the change" : ""}.
+- "run": how to start it on Windows in one or two short sentences, like "Open index.html in your browser." or "Run: python main.py".
+- "files": ${existing ? "only the files that must be created or rewritten for this request (each is rewritten completely), 1 to 10" : "1 to 10 files"}, in the order they should be written (code that others use comes first). Each has "path" (relative, with forward slashes) and "purpose" (one sentence about what is inside).
+- Prefer the simplest thing that works with nothing to install: for anything visual one HTML file with its CSS and JavaScript inside; for scripts plain Python (standard library only) or Node.js without packages. Only add a short README.md when the project has several files or needs setup.`;
+    const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, existingText && `The project's files right now:\n${existingText}`, `Request: ${text}`].filter(Boolean).join("\n\n");
+    redraw("Planning the project…");
+    const plan = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
+    block.project = existing ? prev.project : slugProject(plan.project);
+    block.run = String(plan.run || "").trim().slice(0, 300);
+    const seen = new Set();
+    for (const f of (Array.isArray(plan.files) ? plan.files : []).slice(0, 10)) {
+      const path = cleanCodePath(f?.path); if (!path || seen.has(path.toLowerCase())) continue; seen.add(path.toLowerCase());
+      block.files.push({ path, purpose: String(f?.purpose || "").trim().slice(0, 160), state: "", size: 0 });
+    }
+    if (!block.files.length) throw new Error("the model didn't plan any files. Try describing what the program should do.");
+    redraw("Writing the files…");
+
+    const summary = String(plan.summary || "").trim();
+    const listing = block.files.map(f => `- ${f.path}: ${f.purpose}`).join("\n");
+    const written = [];                                             // files finished in this run, so later files use the same names
+    let lastDraw = 0;
+    const soft = () => { const now = performance.now(); if (now - lastDraw > 140) { lastDraw = now; redraw(); } };
+    try {
+      for (const f of block.files) {
+        f.state = "doing"; f.live = ""; redraw(`Writing ${f.path}…`);
+        const old = existing?.files.find(x => x.path.toLowerCase() === f.path.toLowerCase() && x.content != null);
+        const others = written.map(w => `--- ${w.path}\n${w.content.slice(0, 2500)}`).join("\n\n").slice(0, 9000);
+        const fsys = `You write one file of a project. Reply with the complete content of that file and nothing else: no explanation, no markdown fences, no placeholders like "rest of the code here". The file must be complete and work together with the other files. Keep it readable, with short comments where they help.`;
+        const fuser = [`Project: ${block.project}`, `What it does: ${summary}`, `The user's request: ${text}`, `All files of this ${existing ? "change" : "project"}:\n${listing}`,
+          others && `Files already written (use the same names and functions):\n${others}`, old && `The current version of ${f.path} (change it as needed):\n${old.content}`, `Write the file ${f.path} now.`].filter(Boolean).join("\n\n");
+        const r = await askText(model, caps, [{ role: "system", content: fsys }, { role: "user", content: fuser }], (t) => { f.live = t; soft(); }, { num_predict: 8000 });
+        track(r);
+        const content = stripFences(r.text).replace(/\s+$/, "") + "\n";
+        if (!content.trim()) throw new Error(`the model wrote nothing for ${f.path}. Try again.`);
+        f.size = byteLen(content); f.lines = content.split("\n").length - 1; f.preview = content.slice(0, 1800) + (content.length > 1800 ? "\n…" : "");
+        delete f.live;
+        written.push({ path: f.path, content });
+        try {
+          const res = await codeCall("/code/write", { project: block.project, files: [{ path: f.path, content }] });
+          block.folder = res.folder || block.folder;
+          if (res.skipped?.length) throw new Error(res.skipped[0].reason);
+          f.state = "saved";
+        } catch (e) {
+          if (e.name === "AbortError") throw e;
+          f.state = "fail"; f.error = e.message; f.content = content.slice(0, 400000); block.saveError = e.message;
+          redraw(); break;                                          // no point writing the rest when the PC can't be reached
+        }
+        redraw();
+      }
+    } finally { for (const f of block.files) delete f.live; }
+    if (block.saveError) return `I wrote ${written.length === 1 ? "the file" : "the files"}, but couldn't save ${written.length === 1 ? "it" : "them"} on your PC: ${block.saveError}\nYou can still download what's finished below, or fix that and ask again.`;
+    return [summary, block.run].filter(Boolean).join("\n\n");
+  });
+}
+function toolRow(st, opts) {
+  const li = document.createElement("li");
+  li.className = (st.state || "") + (opts.out ? " has-out" : "");
+  li.innerHTML = '<div class="row"><span class="mk"></span><span class="lb"></span></div>';
+  const lb = li.querySelector(".lb"); lb.textContent = opts.label;
+  if (opts.sub) { const s = document.createElement("span"); s.className = "sub"; s.textContent = opts.sub; lb.appendChild(s); }
+  if (opts.out) {
+    const pre = document.createElement("pre"); pre.textContent = opts.out; pre.hidden = !opts.open;
+    li.appendChild(pre);
+    if (st.state === "doing") setTimeout(() => { pre.scrollTop = pre.scrollHeight; });
+    li.querySelector(".row").onclick = () => { pre.hidden = !pre.hidden; opts.toggle?.(!pre.hidden); };
+  }
+  return li;
+}
+function codeCard(b) {
+  const w = document.createElement("div"); w.className = "tcard";
+  w.innerHTML = `<div class="tcard-head"><span class="ic">${ICON_CODE}</span><span style="min-width:0"><b></b><small></small></span></div><ol class="tsteps"></ol>`;
+  w.querySelector("b").textContent = b.project ? "Project: " + b.project : (b.active ? "Code" : "Couldn't write code");
+  const sm = w.querySelector("small");
+  sm.textContent = b.folder ? "Saved in " + b.folder : (b.active ? (b.status || "Working…") : "");
+  if (b.folder) { const c = smallBtn("Copy path", () => { copy(b.folder); toast("Path copied"); }); c.classList.add("copy"); w.querySelector(".tcard-head").appendChild(c); }
+  const ol = w.querySelector(".tsteps");
+  if (b.active && !b.files.length) ol.appendChild(toolRow({ state: "doing" }, { label: b.status || "Planning the project…" }));
+  for (const f of b.files) {
+    const meta = f.state === "saved" ? `${fsize(f.size)} · ${f.lines} lines` : f.state === "fail" ? "Not saved: " + f.error : f.state === "doing" ? "Writing…" : "";
+    const out = f.state === "doing" ? (f.live || "").slice(-1400) : f.preview;
+    ol.appendChild(toolRow(f, { label: f.path, sub: [meta, f.purpose].filter(Boolean).join(" · "), out, open: f.state === "doing" || f.open, toggle: (o) => { f.open = o; } }));
+    if (f.state === "fail" && f.content) { const d = smallBtn("Download " + f.path.split("/").pop(), () => download(f.path.split("/").pop(), new Blob([f.content], { type: "text/plain" }))); d.style.margin = "2px 0 6px 36px"; ol.appendChild(d); }
+  }
+  if (b.error) { const e = document.createElement("div"); e.className = "tool-err"; e.style.marginTop = "8px"; e.textContent = "Stopped: " + b.error; w.appendChild(e); }
+  return w;
+}
+
+// ---------- Challenge ----------
+let challengeFile = null;                                           // { name, size, bytes } of the file to investigate
+async function setChallengeFile(f) {
+  if (!f) return;
+  if (f.size > 50 * 1024 * 1024) return toast("Files up to 50 MB, please");
+  challengeFile = { name: f.name, size: f.size, bytes: new Uint8Array(await f.arrayBuffer()) };
+  renderAttachments(); $("#prompt").focus();
+}
+const bytesToB64 = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); };
+const CH_ARGS = ["offset", "length", "min", "n", "text", "pattern", "method", "key", "name", "channels", "regex"];
+// Every step has all the argument fields; keep only the ones that tool uses and that hold something real (not 0, "" or stray punctuation).
+function pickArgs(r, action) {
+  const uses = new Set((Puzzle.ACTIONS.find(a => a[0] === action)?.[1] || "").match(/[a-z_]+/g) || []);
+  return Object.fromEntries(CH_ARGS.filter(k => uses.has(k) && r[k] && (typeof r[k] !== "string" || /[a-z0-9@]/i.test(r[k]))).map(k => [k, r[k]]));
+}
+async function buildChallenge(model, text) {
+  const file = challengeFile;
+  const kind = Puzzle.typeOf(file.bytes);
+  const block = { type: "challenge", active: true, thinkLabel: "Looking at the file…", file: { name: file.name, size: file.size, kind }, goal: text, steps: [], result: null };
+  await toolAnswer(model, text, block, async ({ ask, redraw, track, caps }) => {
+    const ctx = Puzzle.newCtx(file.bytes, file.name);
+    const canLook = /image/.test(kind) && caps.includes("vision") && file.size < 8e6;
+    const tools = Puzzle.ACTIONS.map(([n, a, d]) => `- ${n}${a ? " (" + a + ")" : ""}: ${d}`).join("\n")
+      + (canLook ? "\n- look: Look at the picture yourself (you can see images) and read out any text, symbols, codes or odd details in it." : "");
+    const names = [...Puzzle.ACTIONS.map(a => a[0]), ...(canLook ? ["look"] : []), "answer"];
+    const MAX = 14;
+    const sys = `You help the user solve a puzzle or capture-the-flag style challenge: they give you a file and a goal (for example "find the hidden word"). You work step by step with tools that look inside the file on the user's own device. Reply only with JSON: your short "thought" (what you notice and why this tool next), the "action", and the arguments that tool needs. Fill number fields you don't need with 0, text fields with "" and "regex" with false. The finishing action is "answer".
+
+Tools (arguments in brackets):
+${tools}
+- answer (found, answer, how): finish. found=true with "answer" = the exact word, text or flag, and "how" = 2 to 4 sentences, in the language the user writes in, on how you found it. If it can't be found: found=false, answer="", and in "how" say what you tried and what could be tried next.
+
+How to work:
+- Start with info. Then use what fits the file: text → flags, invisible, acrostic, decode (method auto), strings; pictures → png_chunks or jpeg_segments, signatures, strings, image_lsb${canLook ? ", look" : ""}; anything else → signatures, strings, zip_list, hexdump.
+- A result may be cut off. In "text" you can write "@last" for the complete result of the previous step, "@3" for the complete result of step 3, or "@file" for the file's text.
+- Follow the clues: a decoded text may point to the next step (a key, a place in the file, another encoding).
+- Extra data after the end of a picture or file often hides another file (a ZIP, text). Look at it properly (signatures, zip_list, zip_read, carve, strings) before answering.
+- Text that ends with "…" or says "cut off" is incomplete: get the rest (use @N, carve, strings or hexdump) before you answer. Never answer with a word that may be cut short.
+- Never repeat a step with the same settings. You have at most ${MAX} steps.
+- Only answer with something you actually saw in a tool result. Never guess or make up an answer.`;
+    const str = { type: "string" }, int = { type: "integer" };
+    const schema = (acts) => ({ type: "object", properties: { thought: str, action: { type: "string", enum: acts }, offset: int, length: int, min: int, n: int, text: str, pattern: str, method: str, key: str, name: str, channels: str, regex: { type: "boolean" }, found: { type: "boolean" }, answer: str, how: str },
+      required: ["thought", "action", "offset", "length", "min", "n", "text", "pattern", "method", "key", "name", "channels", "regex", "found", "answer", "how"] });
+    const norm = (s) => String(s).toLowerCase().replace(/\s+/g, " ").trim();
+    const fileLatin = new TextDecoder("latin1").decode(file.bytes.subarray(0, 8e6)), fileUtf = new TextDecoder().decode(file.bytes.subarray(0, 8e6));
+    // Did the answer really show up (as a whole word or text, not as the start or end of a longer lowercase word)?
+    // An uppercase letter or a symbol right behind it is fine: inside archives text is often followed directly by the next header.
+    const flat = (s) => String(s).replace(/\s+/g, " ");
+    const seenInData = (ans) => {
+      const a = flat(ans).trim(); if (!a) return false;
+      const re = new RegExp(a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      const wordBefore = /^[a-z0-9]/i.test(a), wordAfter = /[a-z0-9]$/i.test(a);
+      const inText = (t) => { for (const m of t.matchAll(re)) { const before = t[m.index - 1] || "", after = t[m.index + m[0].length] || ""; if (!(wordBefore && /[A-Za-z0-9]/.test(before)) && !(wordAfter && /[a-z0-9]/.test(after))) return true; } return false; };
+      return ctx.outputs.some(o => inText(flat(o))) || inText(flat(fileLatin)) || inText(flat(fileUtf));
+    };
+
+    const msgs = [{ role: "system", content: sys }, { role: "user", content: `Goal: ${block.goal}\nFile: ${file.name} (${file.size} bytes, looks like: ${kind})` }];
+    const done = new Map();
+    let pushedBack = false, result = null;
+    for (let turn = 0; turn < MAX + 6 && !result; turn++) {
+      const last = block.steps.length >= MAX;
+      const r = await ask(msgs, schema(last ? ["answer"] : names));
+      const action = last ? "answer" : r.action;
+      msgs.push({ role: "assistant", content: JSON.stringify(action === "answer" ? { thought: r.thought, action, found: r.found, answer: r.answer, how: r.how } : { thought: r.thought, action, ...pickArgs(r, action) }) });
+      if (action === "answer") {
+        const answer = String(r.answer || "").trim().slice(0, 400), how = String(r.how || "").trim().slice(0, 1500);
+        if (!r.found || !answer) { result = { found: false, answer: "", how }; break; }
+        const verified = seenInData(answer);
+        if (!verified && !pushedBack) { pushedBack = true; msgs.push({ role: "user", content: `I can't find "${answer}" in any tool result or in the file's text. Check it with a tool (for example search), or answer with found=false.` }); continue; }
+        result = { found: true, answer, how, verified };
+        break;
+      }
+      const args = pickArgs(r, action);
+      const st = { n: block.steps.length + 1, action, args, thought: String(r.thought || "").trim().slice(0, 300), state: "doing", out: "" };
+      block.steps.push(st); redraw(`Step ${st.n}: ${action.replace(/_/g, " ")}…`);
+      const key = action + JSON.stringify(args);
+      let out;
+      if (done.has(key)) { out = `(You already ran this in step ${done.get(key)}. Do something different, or answer.)`; ctx.outputs.push(out); st.state = "fail"; }
+      else {
+        done.set(key, st.n);
+        if (action === "look") {
+          const rr = await askText(model, caps, [{ role: "user", content: "Describe exactly what is visible in this picture. Read out ALL text, numbers, symbols, QR codes and patterns, and anything that looks like a hidden message or clue. Be precise and literal.", images: [bytesToB64(ctx.bytes)] }], null, { num_predict: 700 });
+          track(rr); out = rr.text.trim() || "(nothing to report)"; ctx.outputs.push(out);
+        } else out = await Puzzle.run(action, args, ctx);
+        st.state = "done";
+      }
+      st.out = Puzzle.clip(out, 1500);
+      redraw();
+      msgs.push({ role: "user", content: `Result of step ${st.n} (${action}):\n${Puzzle.clip(out, 1500)}` });
+    }
+    if (!result) result = { found: false, answer: "", how: "I ran out of steps without finding it." };
+    block.result = result;
+    return result.how;
+  });
+}
+const CH_NAMES = { info: "Check the file", strings: "Read hidden text", view_text: "Read as text", hexdump: "Look at the raw bytes", search: "Search", flags: "Look for flags and secrets", signatures: "Look for hidden files", carve: "Cut out a piece", reset: "Back to the whole file", png_chunks: "PNG details", jpeg_segments: "JPEG details", image_lsb: "Hidden picture bits", zip_list: "List the ZIP", zip_read: "Open a file in the ZIP", use_entry: "Analyze that file", decode: "Decode", caesar: "Try Caesar shifts", vigenere: "Vigenère cipher", xor: "XOR", frequency: "Count letters", acrostic: "First letters and words", nth_chars: "Every n-th character", invisible: "Invisible characters", look: "Look at the picture" };
+function challengeCard(b) {
+  const w = document.createElement("div"); w.className = "tcard";
+  w.innerHTML = `<div class="tcard-head"><span class="ic">${ICON_PUZZLE}</span><span style="min-width:0"><b></b><small></small></span></div><ol class="tsteps"></ol>`;
+  w.querySelector("b").textContent = b.active ? "Investigating " + b.file.name : (b.result?.found ? "Found something in " + b.file.name : "Investigated " + b.file.name);
+  w.querySelector("small").textContent = `${fsize(b.file.size)} · ${b.file.kind}` + (b.active ? " · " + (b.status || "working…") : ` · ${b.steps.length} step${b.steps.length === 1 ? "" : "s"}`);
+  const ol = w.querySelector(".tsteps");
+  if (b.active && !b.steps.length) ol.appendChild(toolRow({ state: "doing" }, { label: b.status || "Looking at the file…" }));
+  for (const st of b.steps) {
+    const argText = Object.entries(st.args || {}).map(([k, v]) => `${k}: ${String(v).replace(/\s+/g, " ").slice(0, 40)}${String(v).length > 40 ? "…" : ""}`).join(", ");
+    ol.appendChild(toolRow(st, { label: `${st.n}. ${CH_NAMES[st.action] || st.action}${argText ? " (" + argText + ")" : ""}`, sub: st.thought, out: st.out, open: st.open, toggle: (o) => { st.open = o; } }));
+  }
+  if (b.error) { const e = document.createElement("div"); e.className = "tool-err"; e.style.marginTop = "8px"; e.textContent = "Stopped: " + b.error; w.appendChild(e); }
+  if (b.result) {
+    const f = document.createElement("div"); f.className = "tfound" + (b.result.found ? "" : " no");
+    f.innerHTML = '<div class="k"></div><div class="v"></div><div class="chk"></div>';
+    f.querySelector(".k").textContent = b.result.found ? "Found" : "Not found";
+    f.querySelector(".v").textContent = b.result.found ? b.result.answer : "No answer yet";
+    f.querySelector(".chk").textContent = b.result.found ? (b.result.verified ? "✓ It appears in the file's data or in a step's result above." : "⚠ I couldn't see this exact text in the file or in any step, so treat it as a guess.") : "";
+    if (!b.result.found) f.querySelector(".chk").hidden = true;
+    w.appendChild(f);
+  }
+  return w;
+}
+
 function renderToolBlock(b) {
+  if (b.type === "code") return codeCard(b);
+  if (b.type === "challenge") return challengeCard(b);
   const wrap = document.createElement("div"); wrap.className = "tool-block";
   if (b.active) {
     wrap.innerHTML = `<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>`;
@@ -3679,6 +4014,15 @@ function renderAttachments() {
     d.querySelector("button").onclick = () => { attachments.splice(i, 1); renderAttachments(); };
     el.appendChild(d);
   });
+  try {
+    if (toolMode === "challenge" && challengeFile) {
+      const d = document.createElement("div"); d.className = "att file";
+      d.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span><b></b><small></small></span><button aria-label="Remove file">×</button>';
+      d.querySelector("b").textContent = challengeFile.name; d.querySelector("small").textContent = fsize(challengeFile.size);
+      d.querySelector("button").onclick = () => { challengeFile = null; renderAttachments(); };
+      el.appendChild(d);
+    }
+  } catch {}
 }
 
 // ======================================================================
@@ -4429,7 +4773,8 @@ $("#exportChat").onclick = () => {
 };
 $("#webSearch").onchange = e => { S.webSearch = e.target.checked; saveSettings(); checkSearch(); };
 $("#webBtn").onclick = () => { closeTools(); S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on: the AI can look things up" : "Web search off"); };
-$("#attachBtn").onclick = () => $("#fileInput").click();
+$("#attachBtn").onclick = () => $(toolMode === "challenge" ? "#challengeInput" : "#fileInput").click();
+$("#challengeInput").onchange = e => { setChallengeFile(e.target.files[0]); e.target.value = ""; };
 $("#fileInput").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 const box = $("#box");
 box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("drag"); });

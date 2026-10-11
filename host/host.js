@@ -63,6 +63,7 @@ const pcPower = {
   },
 };
 const jarvis = require("./jarvis");
+const codeTool = require("./code");
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
@@ -350,6 +351,12 @@ function connect() {
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
+    if (typeof p === "string" && p.startsWith("/code/")) {
+      let status = 500, out;
+      try { [status, out] = codeTool.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+      return send({ type: "end", id });
+    }
     if (typeof p === "string" && p.startsWith("/jarvis/")) {
       let status = 500, out;
       try { [status, out] = await jarvis.handle(method, p, body, note, freeImageModels); } catch (e) { out = { error: e.message }; }
@@ -540,6 +547,7 @@ panel = startPanel({
   port: Number(process.env.BURROW_PANEL_PORT) || 4747,
   getState: () => ({ ...stats, files: files.state(), now: Date.now() }),
   files,
+  code: (method, p, body) => codeTool.handle(method, p, body, note),
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },
   jarvis: (method, p, body) => p.startsWith("/pc/") ? pcPower.handle(method, p.split("?")[0], body, note) : jarvis.handle(method, p, body, note, freeImageModels),

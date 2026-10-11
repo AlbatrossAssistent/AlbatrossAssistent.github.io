@@ -11,7 +11,7 @@ const HTML = path.join(__dirname, "control.html");
 // Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
 const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.github\.io|burrow-uu7e\.onrender\.com)$|^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-function startPanel({ port, getState, actions, files, load, proxy, jarvis, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -47,6 +47,26 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, onLis
       req.on("end", async () => {
         let status = 500, out = {};
         try { [status, out] = await jarvis(req.method, jx[1], body); } catch (e) { out = { error: e.message }; }
+        res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify(out));
+      });
+      return;
+    }
+    // The Code tool (see code.js): projects written by the website's AI on this PC. Bigger bodies than Jarvis, so its own route.
+    const cx = req.url.match(/^(\/code\/(?:write|read|projects))$/);
+    if (cx && code) {
+      const origin = req.headers.origin || "";
+      if (origin && !ORIGINS.test(origin)) { res.writeHead(403); return res.end(); }
+      const cors = origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {};
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, { ...cors, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Allow-Private-Network": "true", "Access-Control-Max-Age": "600" });
+        return res.end();
+      }
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 8e6) req.destroy(); });
+      req.on("end", () => {
+        let status = 500, out = {};
+        try { [status, out] = code(req.method, cx[1], body); } catch (e) { out = { error: e.message }; }
         res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify(out));
       });
