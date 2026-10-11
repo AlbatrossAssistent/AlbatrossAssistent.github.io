@@ -13,7 +13,9 @@ const OUTBOX = path.join(RECEIVED, "Send to devices");
 const MAX_FILE = 4 * 1024 ** 3;        // 4 GB per file
 const MAX_CHUNK = 8 * 1024 * 1024;     // per request
 
+const KEEP = 48 * 3600e3;  // half-finished uploads wait this long for their sender to come back
 const uploads = new Map(); // id -> { name, size, got, tmp, fd, time }
+const finished = new Map(); // id -> { saved, time }, so a lost "done" answer can be repeated
 const received = [];       // newest first, for the control center
 
 function ensureDirs() { fs.mkdirSync(OUTBOX, { recursive: true }); }
@@ -37,10 +39,21 @@ function listDir(dir) {
       .sort((a, b) => b.time - a.time);
   } catch { return []; }
 }
-// Drop half-finished uploads after an hour without progress.
-setInterval(() => {
-  for (const [id, u] of uploads) if (Date.now() - u.time > 3600e3) { try { fs.closeSync(u.fd); fs.unlinkSync(u.tmp); } catch {} uploads.delete(id); }
-}, 600e3).unref();
+// Drop half-finished uploads that nobody continued for two days (the website keeps sending after the tab is closed,
+// or picks up again the next time it's opened, so they have to be kept for a while).
+function sweep() {
+  for (const [id, u] of uploads) if (Date.now() - u.time > KEEP) { try { fs.closeSync(u.fd); fs.unlinkSync(u.tmp); } catch {} uploads.delete(id); }
+  for (const [id, f] of finished) if (Date.now() - f.time > 3600e3) finished.delete(id);
+  try {
+    for (const d of fs.readdirSync(RECEIVED, { withFileTypes: true })) {
+      if (!d.isFile() || !d.name.endsWith(".albatross-part")) continue;
+      const f = path.join(RECEIVED, d.name);
+      if (!uploads.has(d.name.slice(0, -14)) && Date.now() - fs.statSync(f).mtimeMs > KEEP) fs.unlinkSync(f);
+    }
+  } catch {}
+}
+setInterval(sweep, 600e3).unref();
+const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Requests from the website, already decrypted. Returns [status, json].
 function handle(method, p, body, note) {
@@ -53,29 +66,39 @@ function handle(method, p, body, note) {
     const size = Number(j.size);
     if (!(size >= 0) || size > MAX_FILE) return [400, { error: "Files can be up to 4 GB." }];
     const name = safeName(j.name);
-    const id = crypto.randomUUID();
+    // The sender picks the id, so it can ask again after a break and continue where the PC stopped.
+    const id = ID_RE.test(String(j.tid || "")) ? String(j.tid).toLowerCase() : crypto.randomUUID();
+    if (finished.has(id)) return [200, { id, got: size, done: true, saved: finished.get(id).saved }];
+    const known = uploads.get(id);
+    if (known) { known.time = Date.now(); return [200, { id, got: known.got }]; }
     const tmp = path.join(RECEIVED, id + ".albatross-part");
-    uploads.set(id, { name, size, got: 0, tmp, fd: fs.openSync(tmp, "w"), time: Date.now() });
-    return [200, { id }];
+    let got = 0;
+    try { got = Math.min(size, fs.statSync(tmp).size); } catch {}     // left over from before a restart of the host
+    const fd = fs.openSync(tmp, got ? "r+" : "w");
+    uploads.set(id, { name, size, got, tmp, fd, time: Date.now() });
+    return [200, { id, got }];
   }
   if (method === "POST" && p === "/files/upload-chunk") {
     const u = uploads.get(j.id);
     if (!u) return [404, { error: "Upload not found (it may have timed out). Send the file again." }];
-    if (Number(j.offset) !== u.got) return [409, { error: "Out of order", got: u.got }];
+    const offset = Number(j.offset);
+    if (offset !== u.got) return [409, { error: "Out of order", got: u.got }];
     const data = Buffer.from(String(j.data || ""), "base64");
     if (data.length > MAX_CHUNK || u.got + data.length > u.size) return [400, { error: "Chunk too large" }];
-    fs.writeSync(u.fd, data);
+    fs.writeSync(u.fd, data, 0, data.length, u.got);
     u.got += data.length; u.time = Date.now();
     return [200, { got: u.got }];
   }
   if (method === "POST" && p === "/files/upload-end") {
     const u = uploads.get(j.id);
+    if (!u && finished.has(j.id)) return [200, { saved: finished.get(j.id).saved }];
     if (!u) return [404, { error: "Upload not found" }];
     uploads.delete(j.id);
     fs.closeSync(u.fd);
     if (u.got !== u.size) { fs.unlinkSync(u.tmp); return [400, { error: "The file arrived incomplete. Send it again." }]; }
     const dest = freePath(RECEIVED, u.name);
     fs.renameSync(u.tmp, dest);
+    finished.set(j.id, { saved: path.basename(dest), time: Date.now() });
     received.unshift({ name: path.basename(dest), size: u.size, time: Date.now() });
     received.length = Math.min(received.length, 30);
     note(`Received a file: ${path.basename(dest)} (${(u.size / 1e6).toFixed(1)} MB)`);

@@ -9,7 +9,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root {
@@ -884,6 +884,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
     </div>
     <button class="side-btn" id="openFiles"><svg class="i" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg>Files<span class="live" id="pubLive" hidden title="You are public"></span></button>
     <button class="side-btn" id="openConn"><svg class="i" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Connect with code</button>
+    <button class="side-btn" id="installBtn" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>Install app</button>
     <button class="side-btn" id="openSettings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
   </div>
 </aside>
@@ -1194,6 +1195,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 
 <script src="orb.js"></script>
 <script src="planet.js"></script>
+<script src="xfer.js"></script>
 <script>
 "use strict";
 // ======================================================================
@@ -3994,38 +3996,97 @@ function renderXfers() {
   }
 }
 let pcBusy = false;
+// Files for the PC are kept in the browser (AlbatrossXfer, xfer.js) until the PC has all of them, and the PC remembers how far each
+// one got. So a closed page, a dropped connection or a sleeping phone only pauses a file: it carries on from where it stopped
+// when the site is opened again, and the service worker (sw.js) keeps going on its own where the browser allows it.
+const canBg = () => !!(window.AlbatrossXfer && window.indexedDB && navigator.locks);
+function pcXfer(rec, state) {
+  const x = { tid: rec.tid, rec, file: rec.file, name: rec.name, size: rec.size, state: state || "waiting", pct: 0 };
+  x.active = () => ["waiting", "sending", "background"].includes(x.state);
+  x.label = () => ({ waiting: "Waiting… · " + fsize(x.size), sending: `Sending… ${Math.round(x.pct)}% of ${fsize(x.size)}`, background: "Sending in the background… · " + fsize(x.size), done: "Sent to your PC · " + fsize(x.size), cancelled: "Cancelled", error: "Paused: " + x.err + " · it continues next time" })[x.state];
+  x.cancel = () => {
+    x.state = "cancelled"; renderXfers();
+    if (canBg()) AlbatrossXfer.del(x.tid).catch(() => {});
+    hostCall("POST", "/files/upload-cancel", { id: x.tid }).catch(() => {});
+  };
+  return x;
+}
+async function keepAwake(on) {
+  try {
+    if (!on) { await keepAwake.lock?.release(); keepAwake.lock = null; return; }
+    if (!keepAwake.lock && "wakeLock" in navigator && document.visibilityState === "visible") keepAwake.lock = await navigator.wakeLock.request("screen");
+  } catch { keepAwake.lock = null; }
+}
+document.addEventListener("visibilitychange", () => { if (pcBusy && document.visibilityState === "visible") keepAwake(true); });
 function sendToPc(list) {
   if (hostState.kind !== "ok") return toast("Your PC isn't connected");
+  const route = splitCode(S.conn.code).route, base = hostBase();
+  if (canBg()) e2eKey().then(k => AlbatrossXfer.putKey(route, k)).catch(() => {});
   for (const file of list) {
-    const x = { file, name: file.name, size: file.size, state: "waiting", pct: 0, id: null };
-    x.active = () => x.state === "waiting" || x.state === "sending";
-    x.label = () => ({ waiting: "Waiting… · " + fsize(x.size), sending: `Sending… ${Math.round(x.pct)}% of ${fsize(x.size)}`, done: "Sent to your PC · " + fsize(x.size), cancelled: "Cancelled", error: "Failed: " + x.err })[x.state];
-    x.cancel = () => { x.state = "cancelled"; renderXfers(); if (x.id) hostCall("POST", "/files/upload-cancel", { id: x.id }).catch(() => {}); };
-    xfers.pc.push(x);
+    const rec = { tid: crypto.randomUUID(), name: file.name, size: file.size, file, base, route, added: Date.now() };
+    const x = pcXfer(rec); xfers.pc.push(x);
+    if (canBg()) AlbatrossXfer.put(rec).catch(() => { x.noStore = true; });
   }
+  navigator.serviceWorker?.ready.then(r => r.sync?.register("albatross-upload")).catch(() => {});   // lets the browser finish them later too
   renderXfers(); runPcQueue();
 }
 async function runPcQueue() {
-  if (pcBusy) return; pcBusy = true;
-  const CH = 4 * 1024 * 1024;
+  if (pcBusy) return; pcBusy = true; keepAwake(true);
   for (let x; (x = xfers.pc.find(t => t.state === "waiting"));) {
     x.state = "sending"; renderXfers();
     try {
-      x.id = (await hostCall("POST", "/files/upload-start", { name: x.name, size: x.size })).id;
-      for (let off = 0; off < x.size; off += CH) {
-        if (x.state === "cancelled") break;
-        const buf = new Uint8Array(await x.file.slice(off, off + CH).arrayBuffer());
-        await hostCall("POST", "/files/upload-chunk", { id: x.id, offset: off, data: toB64(buf) });
-        x.pct = Math.min(100, (off + buf.length) / x.size * 100); renderXfers();
+      const key = await e2eKey();
+      const run = () => AlbatrossXfer.upload(x.rec, { key, checkRecord: false, cancelled: () => x.state === "cancelled",
+        onProgress: (got, size) => { x.pct = Math.min(100, got / Math.max(1, size) * 100); renderXfers(); } });
+      if (!canBg()) await run();
+      else {
+        // the lock tells the worker that this page is on it
+        const ran = await navigator.locks.request("albatross-up-" + x.tid, { ifAvailable: true }, async (lock) => { if (lock) await run(); return !!lock; });
+        if (!ran) { x.state = "background"; renderXfers(); await waitBackground(x); continue; }
       }
       if (x.state === "cancelled") continue;
-      await hostCall("POST", "/files/upload-end", { id: x.id });
+      if (canBg()) await AlbatrossXfer.del(x.tid).catch(() => {});
       x.state = "done";
-    } catch (e) { if (x.state !== "cancelled") { x.state = "error"; x.err = e.message; } }
+    } catch (e) { if (x.state !== "cancelled" && !e.cancelled) { x.state = "error"; x.err = e.message; } }
     renderXfers();
   }
-  pcBusy = false;
+  pcBusy = false; keepAwake(false);
 }
+// The worker is already sending this file (the page was reopened): watch until it's gone from storage.
+async function waitBackground(x) {
+  while (x.state === "background") {
+    await new Promise(r => setTimeout(r, 2500));
+    if (!(await AlbatrossXfer.get(x.tid).catch(() => null))) { x.state = "done"; renderXfers(); return; }
+    const free = await navigator.locks.request("albatross-up-" + x.tid, { ifAvailable: true }, lock => !!lock);
+    if (free) { x.state = "waiting"; renderXfers(); return; }          // the worker stopped: take over
+  }
+}
+// Pick up files that were left unfinished (page closed, PC off, no connection…) for the PC that's linked now.
+async function resumeUploads() {
+  if (!canBg() || !CODE_RE.test(S.conn.code)) return;
+  let left = []; try { left = await AlbatrossXfer.all(); } catch { return; }
+  const route = splitCode(S.conn.code).route;
+  left = left.filter(r => r.route === route && r.file && !xfers.pc.some(x => x.tid === r.tid));
+  if (!left.length) return;
+  for (const rec of left) xfers.pc.push(pcXfer(rec));
+  toast(`Continuing ${left.length} unfinished file${left.length > 1 ? "s" : ""} to your PC`);
+  renderXfers(); runPcQueue();
+}
+// When the page goes away, the worker takes over (browsers that can't run it that long just continue at the next visit).
+addEventListener("pagehide", () => { if (xfers.pc.some(x => x.active())) navigator.serviceWorker?.controller?.postMessage({ t: "resume" }); });
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  setTimeout(resumeUploads, 2500);
+}
+// Install as an app (Chrome, Edge…)
+let installEvt = null;
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("#installBtn").hidden = false; });
+addEventListener("appinstalled", () => { installEvt = null; $("#installBtn").hidden = true; toast("Albatross is installed"); });
+$("#installBtn").onclick = async () => {
+  if (!installEvt) return;
+  installEvt.prompt(); await installEvt.userChoice.catch(() => {});
+  installEvt = null; $("#installBtn").hidden = true;
+};
 wireDrop($("#pcDrop"), $("#pcPick"), sendToPc);
 $("#pcRefresh").onclick = checkHost;
 
