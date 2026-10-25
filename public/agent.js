@@ -167,6 +167,18 @@ function runInPlayer(lang, code) {
     setTimeout(end, 6000);
   });
 }
+// "Run" on an HTML/JavaScript code block in a chat answer: the same sandboxed player, right under the code
+window.runCodeBlock = (box) => {
+  let host = box.querySelector(".run-out");
+  if (host) { host._off && host._off(); host.remove(); return; }
+  const lang = box.querySelector(".cc-toggle span").textContent.toLowerCase(), code = box.querySelector("code").textContent;
+  host = document.createElement("div"); host.className = "run-out"; host.innerHTML = '<iframe sandbox="allow-scripts" title="Result of the code"></iframe><pre></pre>';
+  const token = "r" + Math.random().toString(36).slice(2), pre = host.querySelector("pre"), logs = [];
+  const onMsg = (e) => { if (!e.data || e.data.ag !== token || e.data.t === "done") return; logs.push((e.data.t === "log" || e.data.t === "info" ? "" : e.data.t + ": ") + e.data.m); pre.textContent = logs.join("\n").slice(-4000); };
+  addEventListener("message", onMsg); host._off = () => removeEventListener("message", onMsg);
+  host.querySelector("iframe").srcdoc = playerHtml(/^(js|javascript)$/.test(lang) ? "js" : "html", code, token);
+  box.appendChild(host);
+};
 function runEditor() { return runInPlayer($("#agCodeLang").value, $("#agCodeSrc").value); }
 
 // ---------- running tools ----------
