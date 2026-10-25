@@ -356,7 +356,7 @@ async function cpRun() {
       if (r !== undefined && r !== null) out.push(String(r));
       log.textContent = out.join("\n") || "(finished, nothing was printed)";
     } catch (e) { log.textContent += (log.textContent ? "\n" : "") + String(e.message || e).split("\n").slice(-6).join("\n"); }
-    return;
+    return log.textContent;
   }
   const frame = $("#cpFrame"); frame.hidden = false;
   const code = f.code;
@@ -364,7 +364,10 @@ async function cpRun() {
     ? await window.runInFrame(frame, "html", window.bundleFiles(cpFiles, cpFiles.indexOf(f)), (x) => { log.textContent = x; })
     : await window.runInFrame(frame, f.lang === "js" ? "js" : "html", f.lang === "css" ? `<style>${code}</style><h1>Heading</h1><p>A paragraph with a <a href="#">link</a> and <b>bold text</b>.</p><button>Button</button> <input placeholder="Input">` : code, (x) => { log.textContent = x; });
   if (out === "(nothing was printed)") log.textContent = "";
+  return out;
 }
+// the Agent runs a project: all its files open here in the Code tab and run, so the user sees it (and plays it); it gets what was printed
+window.codeRunProject = async (files, at) => { window.codeSide(null, null, true, { files, at }); return cpRun(); };
 // a folder name for the project: the page's <title>, or the date
 function cpFolderName() {
   if (cpFolder) return cpFolder;

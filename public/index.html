@@ -622,6 +622,110 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .tsteps li.done .mk::after, .tsteps li.saved .mk::after { content: ""; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .tsteps li.doing .mk { border-color: var(--t1); border-top-color: transparent; animation: tspin .8s linear infinite; }
 .tsteps li.fail .mk { border-color: var(--bad); }
+/* ---------- the Agent's actions as small animated squares (agent.js actTile) ---------- */
+.ag-flow { display: flex; flex-direction: column; gap: 8px; }
+.act-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin: 2px 0; }
+.act { --ink: var(--t1, var(--fg)); --dim: var(--t3, var(--muted)); --paper: var(--surface, #fff); position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; padding: 8px 10px 9px; border-radius: 16px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  background: color-mix(in srgb, var(--ink) 4%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); transition: transform .3s cubic-bezier(.3,1.6,.4,1), border-color .2s; }
+.act:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.act:active { transform: scale(.96); }
+.act.doing { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.act .art-box { width: 100%; aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+.act b { font-size: 12.5px; font-weight: 650; }
+.act .x { font-size: 12px; color: var(--dim); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act small { font-size: 11px; color: var(--dim); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
+.act .badge { position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 50%; display: none; }
+.act.done .badge, .print-pop.done .badge { display: block; background: var(--ok); }
+.act.done .badge::after, .print-pop.done .badge::after { content: ""; position: absolute; left: 6px; top: 3px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.act.fail .badge, .print-pop.fail .badge { display: block; background: var(--bad); }
+.act.fail .badge::after, .print-pop.fail .badge::after { content: "!"; position: absolute; inset: 0; color: #fff; font: 700 12px/18px system-ui; text-align: center; }
+.act-detail { grid-column: 1 / -1; margin: 0; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--t1, var(--fg)) 5%, transparent); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; }
+/* the drawings: paper, ink lines and blue highlights; they move only while the step runs, and stop where they look finished */
+.art { width: 64px; height: 64px; overflow: visible; fill: none; stroke: var(--ink, var(--fg)); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.art .a-pa, .art .a-env, .art .a-bd { fill: var(-.a-paper, #fff); }
+.art .a-bd { fill: color-mix(in srgb, var(--ink, var(--fg)) 10%, var(-.a-paper, #fff)); }
+.art .a-ln { stroke: var(--dim, var(--muted)); stroke-width: 1.8; }
+.art .a-sl { fill: var(--ink, var(--fg)); stroke: none; }
+.art .a-led, .art .a-dot { fill: var(--accent); stroke: none; }
+.art .a-envf { fill: color-mix(in srgb, var(--accent) 16%, var(-.a-paper, #fff)); }
+.art .a-pen { fill: var(--accent); stroke: var(--accent); stroke-width: 1.2; }
+.art .a-scan { fill: color-mix(in srgb, var(--accent) 30%, tran.a-parent); stroke: none; }
+.art .a-fold { fill: color-mix(in srgb, var(--accent) 22%, var(-.a-paper, #fff)); stroke: var(--accent); }
+.art .a-load { fill: var(--accent); stroke: none; transform-origin: 6px 0; }
+.art .a-blk { fill: color-mix(in srgb, var(--ink, var(--fg)) 12%, tran.a-parent); stroke: none; }
+.art .a-ripple { stroke: var(--accent); fill: none; transform-box: fill-box; transform-origin: center; .a-pacity: 0; }
+.art .a-cursor { fill: var(-.a-paper, #fff); stroke: var(--ink, var(--fg)); stroke-width: 1.6; }
+.art .a-typed { fill: color-mix(in srgb, var(--accent) 35%, tran.a-parent); stroke: none; transform-origin: 12px 0; }
+.art .a-caret { fill: var(--accent); stroke: none; }
+.art .a-glass { fill: color-mix(in srgb, var(--accent) 14%, var(-.a-paper, #fff)); stroke: var(--accent); stroke-width: 2.4; }
+.art .a-handle { stroke: var(--accent); stroke-width: 3.2; }
+.art .a-code1 { stroke: var(--accent); stroke-width: 2.2; }
+.art .a-play { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; }
+.art .a-wave { stroke: var(--accent); }
+.art .a-tray { stroke: var(--ink, var(--fg)); }
+.art * { animation-delay: var(--ago, 0s); animation-iteration-count: infinite; animation-timing-function: ease-in-out; animation-play-state:.a-paused; }
+:is(.act, .print.a-pop).doing .art * { animation-play-state: running; }
+:is(.act, .print.a-pop):not(.doing) .art * { animation: none !important; }
+.art-print .a-sheet { animation-name: aPrint; animation-duration: 2.4s; }
+@keyframes aPrint { 0% { transform: translateY(-14px); } 70%, 100% { transform: translateY(14px); } }
+.art-print .a-led { animation-name: aBlink; animation-duration: .8s; }
+@keyframes aBlink { 50% { opacity: .2; } }
+.art-printers .a-wave { animation-name: aWave; animation-duration: 1.6s; } .art-printers .a-w2 { animation-delay: calc(var(--ago, 0s) + .3s); }
+@keyframes aWave { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
+.art-mail .a-ln { stroke-dasharray: 26; animation-name: aWriteLine; animation-duration: 3.6s; }
+.art-mail .a-wl2 { animation-name: aWriteLine2; } .art-mail .a-wl3 { animation-name: aWriteLine3; }
+.art-mail .a-letter { animation-name: aIntoEnvelope; animation-duration: 3.6s; }
+.art-mail .a-pen { animation-name: aPenMail; animation-duration: 3.6s; }
+@keyframes aWriteLine { 0% { stroke-dashoffset: 26; } 18%, 100% { stroke-dashoffset: 0; } }
+@keyframes aWriteLine2 { 0%, 18% { stroke-dashoffset: 26; } 36%, 100% { stroke-dashoffset: 0; } }
+@keyframes aWriteLine3 { 0%, 36% { stroke-dashoffset: 26; } 50%, 100% { stroke-dashoffset: 0; } }
+@keyframes aPenMail { 0% { transform: translate(-26px, 8px); } 18% { transform: translate(0, 8px); } 19% { transform: translate(-26px, 14px); } 36% { transform: translate(0, 14px); } 37% { transform: translate(-26px, 20px); } 50% { transform: translate(-9px, 20px); opacity: 1; } 56%, 100% { transform: translate(6px, -6px); opacity: 0; } }
+@keyframes aIntoEnvelope { 0%, 58% { transform: translateY(0); } 80%, 100% { transform: translateY(16px); } }
+.art-inbox .a-drop { animation-name: aDrop; animation-duration: 1.8s; }
+@keyframes aDrop { 0% { transform: translateY(-6px); opacity: 0; } 20% { opacity: 1; } 70%, 100% { transform: translateY(20px); opacity: 0; } }
+.art-read .a-scan { animation-name: aScan; animation-duration: 2.2s; animation-direction: alternate; }
+@keyframes aScan { 0% { transform: translateY(0); } 100% { transform: translateY(36px); } }
+.art-write .a-ln { stroke-dasharray: 24; animation-name: aW1; animation-duration: 4s; }
+.art-write .a-wl2 { animation-name: aW2; } .art-write .a-wl3 { animation-name: aW3; } .art-write .a-wl4 { animation-name: aW4; }
+@keyframes aW1 { 0% { stroke-dashoffset: 24; } 20%, 100% { stroke-dashoffset: 0; } }
+@keyframes aW2 { 0%, 22% { stroke-dashoffset: 24; } 42%, 100% { stroke-dashoffset: 0; } }
+@keyframes aW3 { 0%, 44% { stroke-dashoffset: 24; } 64%, 100% { stroke-dashoffset: 0; } }
+@keyframes aW4 { 0%, 66% { stroke-dashoffset: 24; } 80%, 100% { stroke-dashoffset: 0; } }
+.art-write .a-pencil { animation-name: aPencil; animation-duration: 4s; }
+@keyframes aPencil { 0% { transform: translate(-24px, 0); } 20% { transform: translate(0, 0); } 22% { transform: translate(-24px, 7px); } 42% { transform: translate(0, 7px); } 44% { transform: translate(-24px, 14px); } 64% { transform: translate(0, 14px); } 66% { transform: translate(-24px, 21px); } 80% { transform: translate(-9px, 21px); } 100% { transform: translate(-9px, 21px); } }
+.art-move .a-fly { animation-name: aFly; animation-duration: 1.8s; }
+@keyframes aFly { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: 1; } 50% { transform: translate(17px, -16px) rotate(8deg); } 88% { opacity: 1; } 100% { transform: translate(33px, 0); opacity: 0; } }
+.art.a-folder .a-pop { animation-name: aPop; animation-duration: 2.4s; } .art.a-folder .a-p2 { animation-delay: calc(var(--ago, 0s) + .25s); } .art.a-folder .a-p3 { animation-delay: calc(var(--ago, 0s) + .5s); }
+@keyframes aPop { 0%, 100% { transform: translateY(10px); } 40%, 70% { transform: translateY(0); } }
+.art-web .a-load { animation-name: aLoad; animation-duration: 2s; }
+@keyframes aLoad { 0% { transform: scaleX(0); opacity: 1; } 80% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+.art-web .a-blk, .art-run .a-blk { animation-name: aFadeIn; animation-duration: 2s; } .art-web .a-b2, .art-run .a-b2 { animation-delay: calc(var(--ago, 0s) + .2s); } .art-web .a-b3 { animation-delay: calc(var(--ago, 0s) + .4s); }
+@keyframes aFadeIn { 0%, 30% { opacity: .15; } 60%, 100% { opacity: 1; } }
+.art-click .a-cursor { animation-name: aCursor; animation-duration: 1.8s; }
+@keyframes aCursor { 0% { transform: translate(14px, 12px); } 45%, 100% { transform: translate(0, 0); } }
+.art-click .a-ripple { animation-name: aRipple; animation-duration: 1.8s; }
+@keyframes aRipple { 0%, 45% { transform: scale(.4); opacity: 0; } 55% { opacity: 1; } 100% { transform: scale(3); opacity: 0; } }
+.art-type .a-typed { animation-name: aTyped; animation-duration: 2.6s; animation-timing-function: steps(8); }
+@keyframes aTyped { 0% { transform: scaleX(0); } 85%, 100% { transform: scaleX(1); } }
+.art-type .a-caret { animation-name: aCaret; animation-duration: 2.6s; animation-timing-function: steps(8); }
+@keyframes aCaret { 0% { transform: translateX(0); } 85%, 100% { transform: translateX(30px); } }
+.art-search .a-lens { animation-name: aLens; animation-duration: 2.8s; }
+@keyframes aLens { 0% { transform: translate(0, 0); } 25% { transform: translate(16px, 2px); } 50% { transform: translate(14px, 14px); } 75% { transform: translate(-2px, 12px); } 100% { transform: translate(0, 0); } }
+.art-run .a-play { animation-name: aPlay; animation-duration: 1.2s; }
+@keyframes aPlay { 50% { transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .art * { animation: none !important; } }
+/* the pop-up while something prints */
+.print-pop { position: fixed; top: calc(14px + var(--st)); left: 50%; z-index: 250; display: flex; align-items: center; gap: 12px; min-width: 260px; max-width: min(460px, calc(100vw - 24px)); padding: 10px 18px 10px 10px; border-radius: 22px;
+  background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 18px 50px rgba(10,15,40,.22);
+  transform: translate(-50%, -24px) scale(.94); opacity: 0; transition: transform .45s cubic-bezier(.3,1.5,.4,1), opacity .3s; color: var(--fg); --ink: var(--fg); --dim: var(--muted); --paper: #fff; }
+[data-theme="dark"] .print-pop { --paper: #2a2d38; }
+.print-pop.in { transform: translate(-50%, 0) scale(1); opacity: 1; }
+.print-pop .art-box { width: 56px; height: 56px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 16px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.print-pop .art { width: 48px; height: 48px; }
+.print-pop .tx { display: flex; flex-direction: column; min-width: 0; }
+.print-pop .tx b { font-size: 15px; }
+.print-pop .tx span { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.print-pop .badge { position: relative; width: 20px; height: 20px; border-radius: 50%; flex: none; margin-left: auto; display: none; }
 .tsteps li.fail .mk::after { content: "×"; position: absolute; inset: 0; text-align: center; font-size: 14px; line-height: 14px; color: var(--bad); }
 @keyframes tspin { to { transform: rotate(360deg); } }
 .tsteps .lb { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
@@ -874,6 +978,12 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .deck-bar .cnt { font-size: 13px; color: var(--muted); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 .present { position: fixed; inset: 0; z-index: 300; background: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .present .stage16.big { width: min(100vw, 177.78vh); border: none; border-radius: 0; box-shadow: none; }
+.present-notes { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: min(900px, calc(100vw - 32px)); max-height: 30vh; overflow-y: auto; padding: 14px 18px; border-radius: 16px; background: rgba(10,12,20,.82); color: #f2f4f8; font-size: 17px; line-height: 1.45; white-space: pre-wrap; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.14); cursor: default; }
+.deck-notes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px 12px; border-radius: 16px; background: var(--soft); border: 1px solid var(--line); }
+.deck-notes[hidden] { display: none; }
+.deck-notes small { color: var(--muted); font-size: 12px; }
+.deck-notes textarea { font: inherit; font-size: 14px; line-height: 1.45; color: var(--fg); background: transparent; border: 0; resize: vertical; padding: 0; outline: none; min-height: 60px; }
+.deck-bar .btn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .present-hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 12px; color: rgba(255,255,255,.4); }
 
 /* ---------- Jarvis ---------- */
@@ -1516,9 +1626,8 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <label class="check"><span>Slides<small>Builds a presentation slide by slide when you ask for one.</small></span><input type="checkbox" class="switch" data-tool="slides"></label>
           <label class="check"><span>Graphs<small>Draws a chart from your numbers or real data.</small></span><input type="checkbox" class="switch" data-tool="graph"></label>
           <label class="check"><span>Chances &amp; predictions<small>Estimates how likely something is and how it may develop.</small></span><input type="checkbox" class="switch" data-tool="chances"></label>
-          <label class="check"><span>Code<small>Writes a program into a folder on your PC.</small></span><input type="checkbox" class="switch" data-tool="code"></label>
           <label class="check"><span>Challenge<small>Attach a puzzle file with the paperclip and the AI digs for the hidden word.</small></span><input type="checkbox" class="switch" data-tool="challenge"></label>
-          <label class="check"><span>Agent<small>Handles jobs with your files, mail, web pages, code and printer by itself, step by step, inside the chat. Sending mail and printing always ask you first. Needs a model that can use tools. (Also open as the Agent tab in Home.)</small></span><input type="checkbox" class="switch" data-tool="agent"></label>
+          <label class="check"><span>Agent<small>Handles jobs with your files, mail, web pages and printer by itself, step by step, inside the chat. Also writes programs, websites and games: it saves them in Code projects on your PC, runs them in the Code tab and fixes what doesn't work. Sending mail and printing always ask you first. Needs a model that can use tools. (Also open as the Agent tab in Home.)</small></span><input type="checkbox" class="switch" data-tool="agent"></label>
         </section>
 
         <!-- Chat -->
@@ -3045,9 +3154,17 @@ function renderDeck(b) {
   }
   if (b.error && !(d.slides || []).some(x => x.ready !== false && (x.bullets?.length || x.stats || x.cards || x.steps || x.columns || x.quote || x.statement))) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = "Couldn't build the slides: " + b.error; return wrap; }
   b.idx = Math.min(b.idx || 0, total - 1);
-  wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span>${b.steps ? '<button class="btn small" data-a="side">Steps</button>' : ""}<button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>`;
+  wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span>${b.steps ? '<button class="btn small" data-a="side">Steps</button>' : ""}<button class="btn small" data-a="notes" aria-pressed="false">Speaker notes</button><button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>
+    <div class="deck-notes" hidden><small>Speaker notes for this slide: what to say. You can change them; they go into the PowerPoint file too.</small><textarea rows="3" placeholder="Nothing yet: write what you want to say on this slide."></textarea></div>`;
   const stage = wrap.querySelector(".stage16"), cnt = wrap.querySelector(".cnt");
-  const show = (dir) => { swapSlide(stage, d, b.idx, dir, { animate: !!dir, preview: true }); cnt.textContent = `${b.idx + 1} / ${total}`; };
+  // speaker notes: the title slide's are the deck's own (d.notes), every other slide has its own
+  const notesBox = wrap.querySelector(".deck-notes"), notesTa = notesBox.querySelector("textarea"), notesBtn = wrap.querySelector('[data-a="notes"]');
+  const noteOwner = () => (b.idx === 0 ? d : d.slides[b.idx - 1]);
+  const paintNotes = () => { notesBox.hidden = !S.deckNotes; notesBtn.classList.toggle("on", !!S.deckNotes); notesBtn.setAttribute("aria-pressed", String(!!S.deckNotes)); notesTa.value = noteOwner()?.notes || ""; };
+  notesBtn.onclick = () => { S.deckNotes = !S.deckNotes; saveSettings(); paintNotes(); };
+  notesTa.oninput = () => { const o = noteOwner(); if (o) o.notes = notesTa.value; };
+  notesTa.onchange = () => saveChats();
+  const show = (dir) => { swapSlide(stage, d, b.idx, dir, { animate: !!dir, preview: true }); cnt.textContent = `${b.idx + 1} / ${total}`; paintNotes(); };
   show(0);
   wrap.querySelector('[data-a="prev"]').onclick = () => { if (b.idx > 0) { b.idx--; show(-1); } };
   wrap.querySelector('[data-a="next"]').onclick = () => { if (b.idx < total - 1) { b.idx++; show(1); } };
@@ -3127,9 +3244,12 @@ function presentDeck(d, start = 0) {
   const total = d.slides.length + 1, { mode } = deckAnim(d);
   let i = start;
   const ov = document.createElement("div"); ov.className = "present";
-  ov.innerHTML = '<div class="stage16 big"></div><div class="present-hint">← → to move · Esc to end</div>';
-  const stage = ov.firstChild;
-  const show = (dir, all) => swapSlide(stage, d, i, dir, { animate: true, all });
+  ov.innerHTML = '<div class="stage16 big"></div><div class="present-notes" hidden></div><div class="present-hint">← → to move · N for your speaker notes · Esc to end</div>';
+  const stage = ov.firstChild, notes = ov.querySelector(".present-notes");
+  let showNotes = false;
+  notes.onclick = (e) => e.stopPropagation();   // reading or selecting notes doesn't move to the next slide
+  const paintNotes = () => { const n = (i === 0 ? d.notes : d.slides[i - 1]?.notes) || ""; notes.textContent = n || "(no notes for this slide)"; notes.hidden = !showNotes; };
+  const show = (dir, all) => { swapSlide(stage, d, i, dir, { animate: true, all }); paintNotes(); };
   const next = () => {
     if (mode === "build") {
       const hidden = stage.querySelector(".sl:not(.leaving)")?.querySelector(".bld:not(.in)");
@@ -3142,6 +3262,7 @@ function presentDeck(d, start = 0) {
   const key = (e) => {
     if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown" || e.key === "Enter") { e.preventDefault(); next(); }
     else if (e.key === "ArrowLeft" || e.key === "PageUp") prev();
+    else if (e.key === "n" || e.key === "N") { showNotes = !showNotes; paintNotes(); }
     else if (e.key === "Escape") end();
   };
   const end = () => { removeEventListener("keydown", key, true); ov.remove(); if (document.fullscreenElement) document.exitFullscreen?.(); };
@@ -3230,6 +3351,7 @@ async function makePptx(d) {
     const c = photo ? "FFFFFF" : t.fg;
     s.addText(d.title, { x: X, y: photo ? 3.6 : 2.0, w: CW, h: 2.0, fontSize: 50, bold: hb, color: c, fontFace: HF, valign: "bottom", fit: "shrink", objectName: "anim-title" });
     if (d.subtitle) s.addText(d.subtitle, { x: X, y: photo ? 5.65 : 4.1, w: CW, h: .8, fontSize: 22, color: photo ? "E6E6E6" : t.muted, fontFace: BF, valign: "top", objectName: "anim-sub" });
+    if (d.notes) s.addNotes(d.notes);
     anims.push([]);
   }
   for (const [n, sl] of d.slides.entries()) {
@@ -3541,19 +3663,42 @@ async function send(textOverride) {
     if (r.aborted) return;
     tool = r.tool && r.tool !== "chat" ? r.tool : ""; task = r.task || "";
   }
-  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "code" ? buildCode(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model));
+}
+
+// What the chat model is told it can do: when the user asks for one of these the app hands the message to that tool by itself
+// (routeTool), so the model must never answer "I can't print / send mail / see your files / run code".
+function whatYouCanDo() {
+  const can = [];
+  if (toolOn("agent")) can.push("through the Agent, work on the user's own PC: print files on their printer (or save them as PDF), read, write, sort and move their files, read their email and write and send mails (the user approves each one), use websites in a real browser, and write programs, scripts, websites and games that are saved on their PC (PC files → Code projects) and run in the Code tab, where the user can play or use them");
+  if (toolOn("slides")) can.push("make presentations (slides with speaker notes, downloadable for PowerPoint)");
+  if (toolOn("graph")) can.push("draw charts from numbers or real data");
+  if (toolOn("chances")) can.push("estimate chances and predictions");
+  if (toolOn("image")) can.push("make and change pictures");
+  if (toolOn("challenge")) can.push("dig a hidden word out of a puzzle file attached with the paperclip (Challenge)");
+  const off = ["agent", "slides", "graph", "chances"].filter((k) => !toolOn(k));
+  return `You are the AI of Albatross, an app that runs on the user's own PC. Besides chatting you can ${can.length ? can.join("; ") : "only chat right now"}. When the user asks for one of these, the app hands the job to the right tool automatically, so never say you can't print, send mail, see their files, run code or make slides: say you'll do it, or ask what exactly they want (for example which file to print).` +
+    (off.length ? ` Switched off by the user in Settings → Tools: ${off.join(", ")}; if they want one of those, tell them to switch it on there.` : "");
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
-const capsCache = {};
+// Only real answers are remembered: a check that failed (the PC not connected yet, a slow relay) is asked again next time,
+// else every model would look unable to use tools until the page is reloaded. Checks running at once share one request.
+const capsCache = {}, capsAsking = {};
 async function getCaps(model) {
   const key = baseUrl() + "|" + model;
   if (capsCache[key]) return capsCache[key];
-  try {
-    const j = await (await api("/api/show", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) })).json();
-    capsCache[key] = j.capabilities || [];
-  } catch { capsCache[key] = []; }
-  return capsCache[key];
+  if (!capsAsking[key]) capsAsking[key] = (async () => {
+    for (let i = 0; i < 2; i++) {
+      try {
+        const j = await (await api("/api/show", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) })).json();
+        if (Array.isArray(j.capabilities)) return (capsCache[key] = j.capabilities);
+      } catch {}
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    return [];
+  })().finally(() => delete capsAsking[key]);
+  return capsAsking[key];
 }
 
 // ---------- web search tools ----------
@@ -3646,7 +3791,7 @@ async function chat(model) {
 
     let system = current.system || S.defaultSystem;
     if (toolsOk && imageSearchAvailable) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search.";
-    system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, a graph or chart, or for chances, odds or a prediction, tell them to open \"Tools\" next to the message box, switch on Slides, Graph or Chances, and ask again. For writing a program into a file on their PC there is Code, and for digging a hidden word out of a puzzle file there is Challenge.";
+    system = (system ? system + "\n\n" : "") + whatYouCanDo();
     system += "\n\nWhen a program needs more than one file (for example a game with index.html, style.css and game.js), write every file in full in its own code block and put its file name in bold on the line right before the block, like **game.js**. Link the files to each other with relative paths (<link rel=\"stylesheet\" href=\"style.css\">, <script src=\"game.js\"><\/script>, import ... from \"./util.js\"), so they run together in the built-in player.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     if (EFFORT_HINT[effort]) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
@@ -3760,18 +3905,18 @@ const TOOLISH = {
   chances: W("chances?|odds|probabilit\\p{L}*|likel(?:y|ihood)|predict\\p{L}*|forecast\\p{L}*|prognose\\p{L}*|vorhersage\\p{L}*|wahrscheinlich\\p{L}*|chancen"),
 };
 TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|browser|webpage|web ?page|website|url|https?|html|javascript|run (?:this|the|my) code");
-TOOLISH.code = new RegExp("(?<![\\p{L}\\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|schreib\\p{L}*|erstell\\p{L}*|programmier\\p{L}*|bau\\p{L}*)(?![\\p{L}\\p{N}])[^.?!]{0,60}(?<![\\p{L}\\p{N}])(?:program|script|app|application|website|web ?page|game|bot|tool|html|python|javascript|node|java|c\\+\\+|css|api|function|class|code|programm|skript|webseite|spiel)(?![\\p{L}\\p{N}])", "iu");
+// asking for a program, website or game to be made: that's the Agent's job too (it writes the files and runs them)
+TOOLISH.agentCode = new RegExp("(?<![\\p{L}\\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|schreib\\p{L}*|erstell\\p{L}*|programmier\\p{L}*|bau\\p{L}*)(?![\\p{L}\\p{N}])[^.?!]{0,60}(?<![\\p{L}\\p{N}])(?:program|script|app|application|website|web ?page|game|bot|tool|html|python|javascript|node|java|c\\+\\+|css|api|function|class|code|programm|skript|webseite|spiel)(?![\\p{L}\\p{N}])", "iu");
 const ROUTE_ABOUT = {
   slides: "they want a presentation, slide deck or keynote made",
   graph: "they want a chart or graph drawn from numbers or real data",
   chances: "they ask how likely something is (chances, odds, probability) or want a prediction or forecast of how something will develop",
-  code: "they want a program, script, website, game or app written and saved as files on their PC",
-  agent: "they want a job done with their own stuff on the PC or their accounts: read or summarize their email inbox, or send an email; look in, sort, move, read, create or edit files and folders on the PC; read a specific web page, or use a website in the browser on their PC (search on a site, click through it, fill in a form); print a file; or run a small HTML or JavaScript snippet in the code player. Not for general questions",
+  agent: "they want a job done with their own stuff on the PC or their accounts: read or summarize their email inbox, or send an email; look in, sort, move, read, create or edit files and folders on the PC; read a specific web page, or use a website in the browser on their PC (search on a site, click through it, fill in a form); print a file; or have a program, script, website, game or app made or changed (the Agent writes the files and runs them). Not for general questions or for explaining code",
 };
 // Decides, for a message that smells like a tool, whether it really needs one. One short answer from the model
 // (no thinking), with its own little bubble so the wait is never silent. Returns { tool, task } or { aborted }.
 async function routeTool(model, text) {
-  const hit = Object.keys(TOOLISH).some(k => toolOn(k) && TOOLISH[k].test(text));
+  const hit = Object.keys(TOOLISH).some(k => toolOn(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text));
   const enabled = Object.keys(ROUTE_ABOUT).filter(toolOn);
   if (!hit || !enabled.length) return { tool: "" };
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
@@ -3792,7 +3937,8 @@ async function routeTool(model, text) {
     const sys = `You decide whether the user's last message needs one of these tools or is a normal chat message. Reply only with JSON.
 Tools:
 ${list}
-- chat: anything else: questions, explanations, writing text (emails, essays, stories, poems), advice, translation, maths, jokes, and talking about code, presentations or charts without asking for one to be made.
+- chat: anything else: questions, explanations, writing text (emails, essays, stories, poems), advice, translation, maths, jokes, and talking about code, presentations or charts without asking for one to be made.${enabled.includes("agent") ? `
+Asking for any program, script, website, game or app to be written or changed (in any language, small or big) is "agent". Explaining or discussing code is "chat".` : ""}
 For "agent", "task" is the instruction in the user's language, as a clear command (for example "Summarize my unread mail and list what needs an answer"). For every other tool "task" is "".
 When unsure, choose "chat".`;
     const recent = current.messages.slice(0, -1).filter(m => m.content && !m.isError && !m.isEvent && m.genImage === undefined).slice(-2).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`).join("\n");
@@ -4232,8 +4378,6 @@ async function buildChances(model, text) {
 // ---------- Challenge tool: you give it a puzzle file, the AI digs through it with a toolbox (puzzle.js) to find a hidden word ----------
 const ICON_CODE = '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>';
 const ICON_PUZZLE = '<svg class="i" viewBox="0 0 24 24"><circle cx="9.5" cy="14.5" r="4.5"/><path d="M13 11l7-7M17 7l3 3M15 9l2 2"/></svg>';
-const slugProject = (n) => String(n || "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 60) || "project";
-const cleanCodePath = (p) => { const s = String(p || "").replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/^\/+/, "").trim(); return s && s.length <= 200 && !/^[a-z]:/i.test(s) && !s.split("/").some(x => x === ".." || x === "") ? s : ""; };
 const byteLen = (s) => new TextEncoder().encode(s).length;
 
 // One streamed answer as plain text (the JSON helper is askJSON).
@@ -4245,116 +4389,6 @@ async function askText(model, caps, messages, onText, options = {}) {
   let text = "", tokens = 0, ns = 0;
   await readNdjson(res, j => { if (j.error) throw new Error(j.error); const c = j.message?.content || ""; if (c) { text += c; onText?.(text); } if (j.done) { tokens = j.eval_count || 0; ns = j.eval_duration || 0; } });
   return { text, tokens, ns };
-}
-// A model sometimes wraps the file in ``` fences or adds a sentence around it: keep only the file.
-function stripFences(t) {
-  let s = String(t).replace(/\r\n/g, "\n").trim();
-  const open = s.search(/(^|\n)```/);
-  if (open >= 0 && open < 220) {
-    s = s.slice(s.indexOf("```", open)).replace(/^```[^\n]*\n?/, "");
-    const close = s.lastIndexOf("\n```");
-    if (close >= 0) s = s.slice(0, close);
-    else s = s.replace(/\n?```\s*$/, "");
-  }
-  return s;
-}
-// Talks to the host on this PC (its control center) or, from another device, end-to-end encrypted through the code.
-async function codeCall(path, body) {
-  const local = viaHost || (S.conn.mode !== "remote" && !CODE_RE.test(S.conn.code));
-  let status, j;
-  try {
-    if (local) {
-      const r = await fetch("http://127.0.0.1:4747" + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller?.signal });
-      status = r.status; j = await r.json().catch(() => ({}));
-    } else {
-      const res = await e2eFetch(path, { method: "POST", body: JSON.stringify(body), base: hostBase(), signal: controller?.signal });
-      status = res.status; j = await res.json().catch(() => ({}));
-    }
-  } catch (e) {
-    if (e.name === "AbortError") throw e;
-    if (/not allowed/i.test(e.message)) throw new Error("Your PC runs an older Albatross host. Restart the PC or burrow-host.bat to update it.");
-    throw new Error(local ? "The Albatross host isn't running on this PC, so nothing could be saved." : "Your PC didn't answer. Is the Albatross host running?");
-  }
-  if (status !== 200) throw new Error(j.error || "HTTP " + status);
-  return j;
-}
-
-async function buildCode(model, text) {
-  const block = { type: "code", active: true, thinkLabel: "Planning the project…", project: "", folder: "", files: [], run: "" };
-  await toolAnswer(model, text, block, async ({ ask, history, research, today, redraw, track, caps }) => {
-    // changing a project from earlier in this chat? Read it back from the PC (also picks up what you edited yourself)
-    const prev = [...current.messages].reverse().map(m => m.blocks?.find(x => x.type === "code" && x.project)).find(Boolean);
-    let existing = null, existingText = "";
-    if (prev) {
-      try {
-        redraw("Reading the project on your PC…");
-        existing = await codeCall("/code/read", { project: prev.project });
-        let left = 20000;
-        existingText = existing.files.filter(f => f.content != null && f.content.length <= left).map(f => { left -= f.content.length; return `--- ${f.path}\n${f.content}`; }).join("\n\n");
-        if (!existing.files.length) existing = null;
-      } catch (e) { if (e.name === "AbortError") throw e; }
-    }
-    const str = { type: "string" };
-    const schema = { type: "object", properties: {
-      language: str, project: str, summary: str, run: str,
-      files: { type: "array", items: { type: "object", properties: { path: str, purpose: str }, required: ["path", "purpose"] } } },
-      required: ["language", "project", "summary", "run", "files"] };
-    const sys = `You are a careful programmer. The user asks for a program, script, website or small project. Plan the files of one small, complete, working project. Reply only with JSON. Today is ${today}.
-- "language": the language of the request; write "summary" and "run" in it.
-- "project": a short folder name in lowercase letters, digits and dashes, like "snake-game".${existing ? ` The project already exists on the user's PC, so keep the name "${prev.project}".` : ""}
-- "summary": 1 to 3 sentences on what it does${existing ? " now, including the change" : ""}.
-- "run": how to start it on Windows in one or two short sentences, like "Open index.html in your browser." or "Run: python main.py".
-- "files": ${existing ? "only the files that must be created or rewritten for this request (each is rewritten completely), 1 to 10" : "1 to 10 files"}, in the order they should be written (code that others use comes first). Each has "path" (relative, with forward slashes) and "purpose" (one sentence about what is inside).
-- Prefer the simplest thing that works with nothing to install: for anything visual one HTML file with its CSS and JavaScript inside; for scripts plain Python (standard library only) or Node.js without packages. Only add a short README.md when the project has several files or needs setup.`;
-    const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, existingText && `The project's files right now:\n${existingText}`, `Request: ${text}`].filter(Boolean).join("\n\n");
-    redraw("Planning the project…");
-    const plan = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
-    block.project = existing ? prev.project : slugProject(plan.project);
-    block.run = String(plan.run || "").trim().slice(0, 300);
-    const seen = new Set();
-    for (const f of (Array.isArray(plan.files) ? plan.files : []).slice(0, 10)) {
-      const path = cleanCodePath(f?.path); if (!path || seen.has(path.toLowerCase())) continue; seen.add(path.toLowerCase());
-      block.files.push({ path, purpose: String(f?.purpose || "").trim().slice(0, 160), state: "", size: 0 });
-    }
-    if (!block.files.length) throw new Error("the model didn't plan any files. Try describing what the program should do.");
-    redraw("Writing the files…");
-
-    const summary = String(plan.summary || "").trim();
-    const listing = block.files.map(f => `- ${f.path}: ${f.purpose}`).join("\n");
-    const written = [];                                             // files finished in this run, so later files use the same names
-    let lastDraw = 0;
-    const soft = () => { const now = performance.now(); if (now - lastDraw > 140) { lastDraw = now; redraw(); } };
-    try {
-      for (const f of block.files) {
-        f.state = "doing"; f.live = ""; redraw(`Writing ${f.path}…`);
-        const old = existing?.files.find(x => x.path.toLowerCase() === f.path.toLowerCase() && x.content != null);
-        const others = written.map(w => `--- ${w.path}\n${w.content.slice(0, 2500)}`).join("\n\n").slice(0, 9000);
-        const fsys = `You write one file of a project. Reply with the complete content of that file and nothing else: no explanation, no markdown fences, no placeholders like "rest of the code here". The file must be complete and work together with the other files. Keep it readable, with short comments where they help.`;
-        const fuser = [`Project: ${block.project}`, `What it does: ${summary}`, `The user's request: ${text}`, `All files of this ${existing ? "change" : "project"}:\n${listing}`,
-          others && `Files already written (use the same names and functions):\n${others}`, old && `The current version of ${f.path} (change it as needed):\n${old.content}`, `Write the file ${f.path} now.`].filter(Boolean).join("\n\n");
-        const r = await askText(model, caps, [{ role: "system", content: fsys }, { role: "user", content: fuser }], (t) => { f.live = t; soft(); }, { num_predict: 8000 });
-        track(r);
-        const content = stripFences(r.text).replace(/\s+$/, "") + "\n";
-        if (!content.trim()) throw new Error(`the model wrote nothing for ${f.path}. Try again.`);
-        f.size = byteLen(content); f.lines = content.split("\n").length - 1; f.preview = content.slice(0, 1800) + (content.length > 1800 ? "\n…" : "");
-        delete f.live;
-        written.push({ path: f.path, content });
-        try {
-          const res = await codeCall("/code/write", { project: block.project, files: [{ path: f.path, content }] });
-          block.folder = res.folder || block.folder;
-          if (res.skipped?.length) throw new Error(res.skipped[0].reason);
-          f.state = "saved";
-        } catch (e) {
-          if (e.name === "AbortError") throw e;
-          f.state = "fail"; f.error = e.message; f.content = content.slice(0, 400000); block.saveError = e.message;
-          redraw(); break;                                          // no point writing the rest when the PC can't be reached
-        }
-        redraw();
-      }
-    } finally { for (const f of block.files) delete f.live; }
-    if (block.saveError) return `I wrote ${written.length === 1 ? "the file" : "the files"}, but couldn't save ${written.length === 1 ? "it" : "them"} on your PC: ${block.saveError}\nYou can still download what's finished below, or fix that and ask again.`;
-    return [summary, block.run].filter(Boolean).join("\n\n");
-  });
 }
 function toolRow(st, opts) {
   const li = document.createElement("li");
@@ -4646,16 +4680,17 @@ async function buildSlides(model, text) {
       theme: { type: "string", enum: Object.keys(DECK_THEMES) }, fonts: { type: "string", enum: Object.keys(DECK_FONTS) },
       transition: { type: "string", enum: DECK_TRANSITIONS }, animation: { type: "string", enum: ["entrance", "build", "none"] },
       anim_style: { type: "string", enum: DECK_STYLES },
-      cover: { type: "string" },
+      cover: { type: "string" }, title_notes: { type: "string" },
       slides: { type: "array", items: { type: "object", properties: {
         title: { type: "string" }, about: { type: "string" }, layout: { type: "string", enum: Object.keys(DECK_LAYOUTS) },
         image: { type: "string" }, transition: { type: "string", enum: ["default", ...DECK_TRANSITIONS] }, keep: { type: "integer" } }, required: ["title", "about", "layout", "image", "transition"] } } },
-      required: ["language", "title", "subtitle", "theme", "fonts", "transition", "animation", "anim_style", "cover", "slides"] };
+      required: ["language", "title", "subtitle", "theme", "fonts", "transition", "animation", "anim_style", "cover", "title_notes", "slides"] };
     const plan = await run(sPlan, async () => {
       const sys = `You plan and design presentations. Reply only with JSON.
 - "language": the language the user's request is written in (for example English or German). Write all titles in that language.
 - Design, chosen to fit the topic and mood: "theme" is one of: ${themeList}. "fonts" is one of: ${fontList}. Motion: the presentation should feel alive and polished. "transition" is the main slide transition: fade or dissolve (calm), push, wipe, cover or uncover (clean), zoom, split or circle (energetic), flip or cube (playful, use sparingly). Each slide also has its own "transition": usually "default", but give section starts, the key message and the last slide a bolder one. "animation": "entrance" makes each slide's title, photo and points animate in by themselves, "build" brings the title in by itself and then each point on a click (great for talks and teaching), "none" only if the user asks for no animations. "anim_style": fade (calm), rise (smooth and modern), fly (energetic), zoom (punchy), wipe (graphic and clean) or blur (soft, cinematic).
 - "cover": an English photo search query for a striking title-slide photo of something concrete (like "erupting volcano at night"), or "" if the topic is abstract.
+- "title_notes": speaker notes for the title slide, in the presentation's language: 2 or 3 sentences the speaker says to open the talk (a greeting, what it is about and why it matters).
 - Plan 5 to 10 content slides (the title slide is added automatically, don't include it). Each slide has a short "title", "about" (one sentence: what it says) and a "layout":
 ${layoutList}
   Vary the layouts so the deck looks interesting: never the same layout three times in a row, at most one quote, and only quotes you really know. Photo layouts need "image": an English search query naming exactly what the photo must show (a concrete thing, place, animal, event or person, like "Saturn V rocket launch"), never an abstract idea. Other layouts have "image": "".`
@@ -4667,6 +4702,7 @@ ${layoutList}
     });
     const language = String(plan.language || "").trim() || "the language of the request";
     deck.title = String(plan.title || "Presentation"); deck.subtitle = String(plan.subtitle || "");
+    deck.notes = String(plan.title_notes || "").trim().slice(0, 1500) || (prev && prev.notes) || "";
     deck.theme = DECK_THEMES[plan.theme] ? plan.theme : "midnight";
     deck.fonts = DECK_FONTS[plan.fonts] ? plan.fonts : DECK_THEMES[deck.theme].fonts;
     deck.transition = DECK_TRANSITIONS.includes(plan.transition) ? plan.transition : "fade";
