@@ -1971,7 +1971,7 @@ async function connect(quiet) {
     setStatus("ok", `${S.conn.mode === "remote" ? "Remotely" : "Locally"} connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"} · ${launcher}`);
     if (document.body.classList.contains("home-view")) renderHome();
     updatePowerBox(true);
-    chatSyncSoon(400); pollLock();
+    chatSyncSoon(400); pollLock(); syncLoadTimes();
     return true;
   } catch (e) {
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
@@ -2466,17 +2466,30 @@ function botBubble(m, idx) {
 // ---------- the line above every answer: the model's name, and (while it works) what it is doing ----------
 // Loading times of each model are remembered, so the wait can count down: "usually 12 s · 8 s left".
 const liveHeads = new Map();
-const loadAvg = (model) => { const a = (store.get("loadTimes", {})[model] || []).slice(-3); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0; };
+// The averages live on the PC (host/loadtimes.js), so every device counts down from the same numbers; this device keeps a copy.
+const loadKnown = (model) => ((store.get("loadTimes", {})[model] || []).length > 0);
+// A model never loaded before: guess from its size (about a second per GB from the disk, plus a few seconds to start)
+const loadGuess = (model) => { const m = (typeof models !== "undefined" ? models : []).find(x => x.name === model); return m && m.size ? Math.round(4 + m.size / 1e9 * 1.2) : 0; };
+const loadAvg = (model) => { const a = (store.get("loadTimes", {})[model] || []).slice(-3); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : loadGuess(model); };
 function recordLoad(model, secs) {
   if (!(secs >= 1)) return;
   const all = store.get("loadTimes", {}); all[model] = [...(all[model] || []), Math.round(secs)].slice(-6); store.set("loadTimes", all);
+  if (connected) pcCall("/pc/loadtime", { model, secs }).catch(() => {});      // and on the PC, for every device
+}
+async function syncLoadTimes() {
+  try {
+    const t = (await pcCall("/pc/loadtimes", null, "GET")).times || {}, all = store.get("loadTimes", {});
+    for (const m in t) if (Array.isArray(t[m]) && t[m].length) all[m] = t[m].slice(-6);
+    for (const m in all) if (!t[m] && all[m].length) pcCall("/pc/loadtime", { model: m, secs: all[m][all[m].length - 1] }).catch(() => {});   // this device knew one the PC didn't
+    store.set("loadTimes", all);
+  } catch {}
 }
 function etaText(model, elapsed, pct) {
-  const avg = loadAvg(model), left = Math.max(0, Math.round(avg - elapsed));
+  const avg = loadAvg(model), left = Math.max(0, Math.round(avg - elapsed)), known = loadKnown(model);
   const p = pct != null ? ` ${pct}%` : "";
   if (!avg) return `Loading into memory${p}… ${Math.round(elapsed)} s so far (the first time takes a while)`;
-  if (elapsed > avg + 2) return `Loading into memory${p}… taking longer than the usual ${Math.round(avg)} s`;
-  return `Loading into memory${p} · usually ${Math.round(avg)} s · ${left} s left`;
+  if (elapsed > avg + 2) return `Loading into memory${p}… taking longer than ${known ? "the usual" : "expected,"} ${Math.round(avg)} s`;
+  return `Loading into memory${p} · ${known ? "usually" : "about"} ${Math.round(avg)} s${known ? "" : " (estimate)"} · ${left} s left`;
 }
 // The first steps ("Request sent", "Request received") stay readable for a moment even when the PC answers at once.
 // Only the label waits: the answer itself is never held back.

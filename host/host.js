@@ -100,6 +100,8 @@ const pcPower = {
       const cpus = os.cpus();
       return [200, { name: NAME, cpu: cpuLast, coresPct: coreLast, net: await netRates(), cpuName: (cpus[0]?.model || "").trim(), cores: cpus.length, memUsedGB: (os.totalmem() - os.freemem()) / 1e9, memTotalGB: os.totalmem() / 1e9, uptimeH: os.uptime() / 3600, gpu: await gpuStats(), disk, locked: await isLocked() }];
     }
+    if (method === "GET" && p === "/pc/loadtimes") return [200, { times: loadTimes.all() }];
+    if (method === "POST" && p === "/pc/loadtime") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, { ok: loadTimes.record(j.model, j.secs) }]; }
     if (method === "GET" && p === "/pc/devices") return [200, { devices: [...devices.values()].sort((a, b) => b.last - a.last).map((d) => ({ ...d, online: Date.now() - d.last < 5 * 60e3 })) }];
     if (method === "GET" && p === "/pc/lock") return [200, { locked: await isLocked() }];
     if (method === "POST" && p === "/pc/shutdown") {
@@ -133,6 +135,7 @@ const jarvis = require("./jarvis");
 const codeTool = require("./code");
 const chatStore = require("./chats");
 const jobStore = require("./jobs");
+const loadTimes = require("./loadtimes");
 const agentTools = require("./agent");
 const mailTools = require("./mail");
 const agentHandle = (method, p, body) => (p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : agentTools.handle(method, p, body, note));
