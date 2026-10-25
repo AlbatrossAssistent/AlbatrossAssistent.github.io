@@ -1723,33 +1723,57 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { ch
 // sleeps doesn't cut the answer off: the PC keeps the model working and the next piece is picked up where it stopped.
 let jobsBadUntil = 0;
 const sleepMs = (ms) => new Promise(r => setTimeout(r, ms));
+async function pcStream(path, body, signal) {
+  return remotePC() ? e2eFetch(path, { method: "POST", body: JSON.stringify(body), base: hostBase(), signal })
+    : fetch("http://127.0.0.1:4747" + path, { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" }, signal });
+}
 async function chatApi(body, signal, chatId) {
   const direct = () => api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
   if (S.bgJobs === false || Date.now() < jobsBadUntil) return direct();
   let id;
   try { id = (await pcCall("/jobs/start", { body: JSON.stringify(body), chatId: chatId === undefined ? current && current.id : chatId })).id; }
   catch (e) { if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError"); jobsBadUntil = Date.now() + 120e3; return direct(); }   // no host with jobs (older host, or direct Ollama)
-  let next = 0, fails = 0, finished = false;
+  let next = 0, finished = false;
   const stop = () => { if (!finished) pcCall("/jobs/cancel", { id }).catch(() => {}); };
   if (signal) signal.addEventListener("abort", stop, { once: true });
-  const enc = new TextEncoder();
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  const abort = () => new DOMException("Aborted", "AbortError");
   return new Response(new ReadableStream({
-    async pull(c) {
-      while (true) {
-        if (signal && signal.aborted) return c.error(new DOMException("Aborted", "AbortError"));
-        let j;
-        try { j = await pcCall("/jobs/poll", { id, from: next }); fails = 0; }
-        catch (e) {
-          if (/gone|too old/i.test(e.message)) return c.error(new Error(e.message));
-          if (++fails > 60) return c.error(new Error("Lost contact with the PC while it was answering. " + e.message));
-          await sleepMs(Math.min(3000, 500 * fails)); continue;       // phone asleep or network change: try again
+    // Words flow in as the PC writes them. If the connection breaks (the phone went to sleep, the network changed),
+    // attach again from the last line received: the PC kept the model working.
+    async start(c) {
+      let fails = 0;
+      try {
+        while (!finished) {
+          if (signal && signal.aborted) throw abort();
+          let reader = null, buf = "";
+          try {
+            const res = await pcStream("/jobs/stream", { id, from: next }, signal);
+            if (!res.ok) { const j = await res.json().catch(() => ({})); const err = new Error(j.error || "HTTP " + res.status); err.fatal = res.status === 404; throw err; }
+            reader = res.body.getReader(); fails = 0;
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buf += dec.decode(value, { stream: true });
+              let out = "", k;
+              while ((k = buf.indexOf("\n")) >= 0) {
+                const line = buf.slice(0, k); buf = buf.slice(k + 1);
+                if (!line.trim() || line === '{"_ka":1}') continue;
+                if (line === '{"_end":true}') { finished = true; break; }
+                out += line + "\n"; next++;
+              }
+              if (out) c.enqueue(enc.encode(out));
+              if (finished) break;
+            }
+          } catch (e) {
+            if (signal && signal.aborted) throw abort();
+            if (e.fatal || /gone|too old/i.test(e.message)) throw e;
+            if (++fails > 60) throw new Error("Lost contact with the PC while it was answering. " + e.message);
+          } finally { try { reader && reader.cancel(); } catch {} }
+          if (!finished) await sleepMs(Math.min(3000, 400 * (fails + 1)));
         }
-        if (signal && signal.aborted) return c.error(new DOMException("Aborted", "AbortError"));   // stopped while the PC was answering
-        next = j.next;
-        if (j.lines.length) c.enqueue(enc.encode(j.lines.join("\n") + "\n"));
-        if (j.done) { finished = true; return c.close(); }
-        if (j.lines.length) return;
-      }
+        c.close();
+      } catch (e) { try { c.error(e); } catch {} }
     },
     cancel() { stop(); },
   }), { status: 200, headers: { "Content-Type": "application/x-ndjson" } });

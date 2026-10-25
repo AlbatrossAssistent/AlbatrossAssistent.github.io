@@ -11,7 +11,7 @@ const HTML = path.join(__dirname, "control.html");
 // Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
 const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.github\.io|burrow-uu7e\.onrender\.com)$|^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, chats, jobs, agent, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -113,7 +113,7 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
       return;
     }
     // Chat requests that keep running on this PC (see jobs.js), for the website on this PC.
-    const kx = req.url.match(/^(\/jobs\/(?:start|poll|cancel|list))$/);
+    const kx = req.url.match(/^(\/jobs\/(?:start|poll|cancel|list|stream))$/);
     if (kx && jobs) {
       const origin = req.headers.origin || "";
       if (origin && !ORIGINS.test(origin)) { res.writeHead(403); return res.end(); }
@@ -125,6 +125,12 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
       let body = "";
       req.on("data", (c) => { body += c; if (body.length > 64e6) req.destroy(); });
       req.on("end", async () => {
+        if (kx[1] === "/jobs/stream" && jobsStream) {
+          const ac = new AbortController(); res.on("close", () => ac.abort());
+          res.writeHead(200, { ...cors, "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" });
+          try { await jobsStream(body, (t) => res.write(t), ac.signal); } catch {}
+          return res.end();
+        }
         let status = 500, out = {};
         try { [status, out] = await jobs(req.method, kx[1], body); } catch (e) { out = { error: e.message }; }
         res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });

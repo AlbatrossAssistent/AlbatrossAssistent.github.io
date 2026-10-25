@@ -89,6 +89,26 @@ function cancel({ id }) {
   const job = jobs.get(id); if (!job) return [200, { ok: true }];
   job.cancelled = true; job.ctrl.abort(); return [200, { ok: true }];
 }
+// The live way to read a job: lines flow as the model writes them, starting at line `from`. If the connection drops (a phone goes to sleep),
+// the device simply attaches again from the last line it got. A line {"_ka":1} keeps proxies from closing a quiet connection, {"_end":true} says
+// the answer is complete.
+async function stream({ id, from }, write, signal) {
+  const job = jobs.get(id);
+  if (!job) return write(JSON.stringify({ error: "That request is gone (the PC restarted or it is too old)." }) + "\n");
+  let i = Math.max(0, Number(from) || 0);
+  for (;;) {
+    if (signal && signal.aborted) return;
+    job.polled = Date.now();
+    if (i < job.lines.length) { write(job.lines.slice(i, i + 200).join("\n") + "\n"); i = Math.min(job.lines.length, i + 200); continue; }
+    if (job.done) { job.taken = true; return write(JSON.stringify({ _end: true }) + "\n"); }
+    await new Promise((res) => {
+      const t = setTimeout(() => { res(); write(JSON.stringify({ _ka: 1 }) + "\n"); }, 15e3);
+      const w = () => { clearTimeout(t); res(); };
+      job.waiters.push(w);
+      if (signal) signal.addEventListener("abort", w, { once: true });
+    });
+  }
+}
 // What is running now (the page shows "still working on the PC" after a reopen)
 function list() {
   return [200, { jobs: [...jobs.values()].map((j) => ({ id: j.id, chatId: j.chatId, model: j.model, done: j.done, started: j.started, chars: j.content.length })) }];
@@ -105,4 +125,4 @@ async function handle(method, p, body, ctx) {
 const active = () => [...jobs.values()].filter((j) => !j.done).length;
 setInterval(() => { for (const [id, j] of jobs) if (j.done && Date.now() - j.started > KEEP_MS && Date.now() - j.polled > KEEP_MS) jobs.delete(id); }, 60e3).unref();
 
-module.exports = { handle, active };
+module.exports = { handle, active, stream };

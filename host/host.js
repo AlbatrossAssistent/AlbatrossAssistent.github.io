@@ -454,6 +454,16 @@ function connect() {
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
+    if (p === "/jobs/stream") {
+      const ctrl = new AbortController(); running.set(id, ctrl);
+      try {
+        reply({ k: "m", s: 200, c: "application/x-ndjson" });
+        let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+        await jobStore.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal);
+        reply({ k: "e" });
+      } catch {} finally { running.delete(id); }
+      return send({ type: "end", id });
+    }
     if (typeof p === "string" && p.startsWith("/jobs/")) {
       let status = 500, out;
       try { [status, out] = await jobStore.handle(method, p, body, { upstream, note }); } catch (e) { out = { error: e.message }; }
@@ -662,6 +672,7 @@ panel = startPanel({
   chats: (method, p, body) => chatStore.handle(method, p, body, note),
   agent: (method, p, body) => agentHandle(method, p, body),
   jobs: (method, p, body) => jobStore.handle(method, p, body, { upstream, note }),
+  jobsStream: (body, write, signal) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return jobStore.stream(j, write, signal); },
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },
   jarvis: (method, p, body) => p.startsWith("/pc/") ? pcPower.handle(method, p.split("?")[0], body, note) : jarvis.handle(method, p, body, note, freeImageModels),
