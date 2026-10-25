@@ -1127,7 +1127,7 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
         <button data-tab="connection" class="on">Connection</button>
         <button data-tab="chat">Chat</button>
         <button data-tab="tools">Tools</button>
-        <button data-tab="image">Image</button>
+        <button data-tab="image">Pictures</button>
         <button data-tab="model">Model</button>
         <button data-tab="models">Installed models</button>
         <button data-tab="appearance">Appearance</button>
@@ -1197,7 +1197,7 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
         <!-- Image -->
         <section class="pane" data-pane="image">
           <div class="row">
-            <div class="field"><label for="imgModel">Image model</label><select id="imgModel"></select></div>
+            <div class="field" style="flex:2 1 280px"><label for="imgModel">Picture model</label><select id="imgModel"></select><small>The one the AI uses when you ask for a picture, by itself, you don't pick it in the model list. It stays loaded between pictures until a chat model needs the graphics card. Z-Image Turbo is the fast one; Qwen-Image 2.1 and OmniGen2 also edit photos you attach.</small></div>
             <div class="field"><label for="imgSize">Size</label><select id="imgSize"><option value="512x512">512²</option><option value="768x768">768²</option><option value="1024x1024">1024²</option><option value="1024x768">1024×768</option><option value="768x1024">768×1024</option><option value="1280x720">1280×720</option></select></div>
             <div class="field"><label for="imgSteps">Steps</label><input id="imgSteps" type="number" min="1" max="100" placeholder="auto"></div>
             <div class="field"><label for="imgSeed">Seed</label><input id="imgSeed" type="number" placeholder="random"></div>
@@ -1645,13 +1645,8 @@ function fillModelSelect() {
     o.textContent = (m.running ? "● " : "") + m.name + (m.kind === "vision" ? " (vision)" : "") + (m.cloud ? " (cloud)" : "");
     parent.appendChild(o);
   };
-  const imgs = imageMode ? [] : models.filter(m => m.kind === "image");
-  if (imgs.length) {
-    // chat models first, then the image models: picking one makes every message a picture with it
-    const g1 = document.createElement("optgroup"); g1.label = "Chat"; list.forEach(m => opt(m, g1)); sel.appendChild(g1);
-    const g2 = document.createElement("optgroup"); g2.label = "Pictures"; imgs.forEach(m => opt(m, g2)); sel.appendChild(g2);
-  } else list.forEach(m => opt(m, sel));
-  const want = imageMode ? S.imageModel : (S.pickedImage && imgs.some(m => m.name === S.pickedImage) ? S.pickedImage : S.model);
+  list.forEach(m => opt(m, sel));
+  const want = imageMode ? S.imageModel : S.model;
   if ([...sel.options].some(o => o.value === want)) sel.value = want;
   fillCtxModels();
 }

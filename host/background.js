@@ -55,7 +55,9 @@ function runtimeCopy() {
     // The website talks to Ollama directly when used on this PC, so Ollama must accept its origin.
     const origins = new Set((process.env.OLLAMA_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean));
     for (const o of ["https://albatrossassistent.github.io", "https://burrowgeneral.github.io", "https://burrow-uu7e.onrender.com"]) origins.add(o);
-    const env = { ...process.env, OLLAMA_MAX_LOADED_MODELS: "1", OLLAMA_ORIGINS: [...origins].join(",") };
+    // Flash attention and an 8-bit memory of the conversation (the "KV cache"): the same answers, about half the memory for long
+    // conversations. Without it qwen3:14b at 16k context needs 12.2 GB, doesn't fit the 12 GB card and drops from 60 to 16 tokens/s.
+    const env = { ...process.env, OLLAMA_MAX_LOADED_MODELS: "1", OLLAMA_FLASH_ATTENTION: "1", OLLAMA_KV_CACHE_TYPE: "q8_0", OLLAMA_ORIGINS: [...origins].join(",") };
     // Models live in <Burrow folder>\Ollama\models. If OLLAMA_MODELS points at a folder that is gone (the folder was moved to another drive), use that one.
     const modelsHere = path.join(path.dirname(path.dirname(__dirname)), "Ollama", "models");
     if ((!env.OLLAMA_MODELS || !fs.existsSync(env.OLLAMA_MODELS)) && fs.existsSync(modelsHere)) env.OLLAMA_MODELS = modelsHere;
