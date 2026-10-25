@@ -47,7 +47,7 @@ async function start() {
     let ver = await version();
     if (!ver) {
       B.proc = spawn(exe, ["--headless=new", `--remote-debugging-port=${PORT}`, "--remote-debugging-address=127.0.0.1", `--user-data-dir=${PROFILE}`,
-        "--no-first-run", "--no-default-browser-check", "--mute-audio", "--hide-scrollbars", "--disable-features=Translate", "about:blank"], { stdio: "ignore", windowsHide: true });
+        "--no-first-run", "--no-default-browser-check", "--mute-audio", "--hide-scrollbars", "--disable-features=Translate", "https://www.google.com/"], { stdio: "ignore", windowsHide: true });
       B.proc.on("exit", () => { B.proc = null; });
       for (let i = 0; i < 60 && !ver; i++) { await sleep(250); ver = await version(); }
       if (!ver) throw new Error("The browser didn't start.");
@@ -110,7 +110,9 @@ function onMessage(raw) {
 }
 async function refreshTabs() {
   const t = (await send("Target.getTargets")).targetInfos || [];
-  B.tabs = t.filter((x) => x.type === "page" && !/^devtools:/.test(x.url)).map((x) => ({ id: x.targetId, title: x.title, url: x.url }));
+  const pages = t.filter((x) => x.type === "page" && !/^devtools:/.test(x.url));
+  if (!B.defCtx) { const d = pages.find((x) => x.browserContextId); if (d) B.defCtx = d.browserContextId; }
+  B.tabs = pages.filter((x) => (B.priv ? x.browserContextId === B.priv : x.browserContextId !== B.privOld && (!B.defCtx || x.browserContextId === B.defCtx))).map((x) => ({ id: x.targetId, title: x.title, url: x.url }));
   wake();
 }
 async function updateNav() {
@@ -145,7 +147,7 @@ async function activate(id) {
   wake();
 }
 async function newTab(url) {
-  const { targetId } = await send("Target.createTarget", { url: url || "https://www.google.com/" });
+  const { targetId } = await send("Target.createTarget", { url: url || "https://www.google.com/", ...(B.priv ? { browserContextId: B.priv } : {}) });
   await refreshTabs(); await activate(targetId);
 }
 function fixUrl(u) {
@@ -219,9 +221,36 @@ async function act(j) {
   await settle(6000);
   return { ok: true, on: r.label };
 }
+// Private: a separate session like an incognito window. Nothing it sees is written to the profile (no history, cookies, logins),
+// and switching it off throws the whole session away.
+async function setPrivate(on) {
+  if (on && !B.priv) {
+    B.priv = (await send("Target.createBrowserContext", { disposeOnDetach: false })).browserContextId;
+    await newTab("https://www.google.com/");
+  } else if (!on && B.priv) {
+    const ctx = B.priv; B.priv = null; B.privOld = ctx;
+    const s = cur(); if (s) await send("Page.stopScreencast", {}, s).catch(() => {});
+    B.active = null;
+    await send("Target.disposeBrowserContext", { browserContextId: ctx }).catch(() => {});
+    await refreshTabs();
+    if (B.tabs.length) await activate(B.tabs[B.tabs.length - 1].id); else await newTab("https://www.google.com/");
+  }
+}
+// Clear the normal history: Chrome is closed, its history files are deleted (logins and cookies stay), and it starts again when used.
+async function clearHistory() {
+  await stop();
+  for (let i = 0; i < 40 && B.proc; i++) await sleep(250);
+  await sleep(500);
+  const dir = path.join(PROFILE, "Default"), gone = [];
+  for (const f of ["History", "History-journal", "Visited Links", "Top Sites", "Top Sites-journal", "Shortcuts", "Shortcuts-journal", "Network Action Predictor", "Network Action Predictor-journal"]) {
+    try { fs.unlinkSync(path.join(dir, f)); gone.push(f); } catch {}
+  }
+  B.priv = null; B.defCtx = null; B.privOld = null;
+  return gone.length;
+}
 function state() {
   const at = B.tabs.find((t) => t.id === B.active);
-  return { url: B.nav.url, title: (at && at.title) || B.nav.title, back: B.nav.back, fwd: B.nav.fwd, loading: B.loading, dialog: B.dialog, download: B.download, active: B.active, tabs: B.tabs.map((t) => ({ id: t.id, title: t.title || t.url, url: t.url })) };
+  return { private: !!B.priv, url: B.nav.url, title: (at && at.title) || B.nav.title, back: B.nav.back, fwd: B.nav.fwd, loading: B.loading, dialog: B.dialog, download: B.download, active: B.active, tabs: B.tabs.map((t) => ({ id: t.id, title: t.title || t.url, url: t.url })) };
 }
 
 // The live picture: a line per new frame (only the newest, never a backlog) plus the address bar, tabs and dialogs when they change.
@@ -269,6 +298,7 @@ async function handle(method, p, body, note) {
     }
     if (p === "/browser/state") return [200, B.ws ? state() : { closed: true }];
     if (p === "/browser/stop") { await stop(); return [200, { closed: true }]; }
+    if (p === "/browser/clearhistory") { const n = await clearHistory(); B.note("Browser: history cleared"); return [200, { cleared: n }]; }
     await start();
     if (p === "/browser/input") { await input(j); return [200, { ok: true }]; }
     if (p === "/browser/nav") {
@@ -285,6 +315,7 @@ async function handle(method, p, body, note) {
       else if (j.action === "switch" && j.id) await activate(j.id);
       return [200, state()];
     }
+    if (p === "/browser/private") { await setPrivate(!!j.on); return [200, state()]; }
     if (p === "/browser/open") { const u = fixUrl(j.url); if (!u) return [400, { error: "That address can't be opened here." }]; await send("Page.navigate", { url: u }, cur()); await settle(); return [200, await readPage()]; }
     if (p === "/browser/read") return [200, await readPage()];
     if (p === "/browser/act") { const r = await act(j); return [200, { ...r, page: await readPage() }]; }

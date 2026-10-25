@@ -67,6 +67,9 @@ function paint(st) {
   BV.st = st;
   if (document.activeElement !== $("#bvUrl")) $("#bvUrl").value = st.url && st.url !== "about:blank" ? st.url : "";
   $("#bvBack").disabled = !st.back; $("#bvFwd").disabled = !st.fwd;
+  $("#bvPriv").classList.toggle("on", !!st.private); $("#bvPriv").setAttribute("aria-pressed", String(!!st.private));
+  $("#browserPage").classList.toggle("private", !!st.private);
+  $("#bvUrl").placeholder = st.private ? "Private: nothing is saved" : "Search or type a web address";
   $("#bvLoad").classList.toggle("on", !!st.loading);
   $("#bvTabsBtn").textContent = String((st.tabs || []).length || 1);
   renderTabs();
@@ -87,6 +90,17 @@ function renderTabs() {
   const n = document.createElement("button"); n.type = "button"; n.className = "bv-new"; n.textContent = "+"; n.title = "New tab";
   n.onclick = () => call("/browser/tab", { action: "new" }).then(paint).catch((x) => toast(x.message));
   box.appendChild(n);
+  if (!st.private) {
+    const c = document.createElement("button"); c.type = "button"; c.className = "bv-clear"; c.textContent = "Clear history";
+    c.title = "Delete the browsing history on the PC (logins stay)";
+    let armed = 0;
+    c.onclick = async () => {
+      if (Date.now() - armed > 4000) { armed = Date.now(); c.textContent = "Tap again to clear"; setTimeout(() => (c.textContent = "Clear history"), 4000); return; }
+      c.textContent = "Clearing…";
+      try { const r = await call("/browser/clearhistory", {}); toast("History cleared on your PC"); await sleepMs(600); BV.open = false; open(); } catch (e) { toast("Couldn't clear it: " + e.message); }
+    };
+    box.appendChild(c);
+  }
 }
 // where on the page a pointer is (the picture is drawn at the top left, scaled to fit)
 function pos(e) {
@@ -109,6 +123,10 @@ function wire() {
   $("#bvReload").onclick = () => call("/browser/nav", { action: BV.st && BV.st.loading ? "stop" : "reload" }).then(paint).catch((e) => toast(e.message));
   $("#bvForm").onsubmit = (e) => { e.preventDefault(); const u = $("#bvUrl").value.trim(); if (!u) return; $("#bvUrl").blur(); call("/browser/nav", { url: u }).then(paint).catch((x) => toast(x.message)); };
   $("#bvUrl").onfocus = () => $("#bvUrl").select();
+  $("#bvPriv").onclick = () => {
+    const on = !(BV.st && BV.st.private);
+    call("/browser/private", { on }).then((st) => { paint(st); toast(on ? "Private: nothing you open now is saved" : "Private session closed and deleted"); }).catch((e) => toast(e.message));
+  };
   $("#bvTabsBtn").onclick = () => { $("#bvTabs").hidden = !$("#bvTabs").hidden; renderTabs(); };
   $("#bvMsg").onclick = () => { if (/closed/.test($("#bvMsg").textContent)) open(); };
   $("#bvDOk").onclick = () => call("/browser/dialog", { accept: true, text: $("#bvDIn").hidden ? undefined : $("#bvDIn").value }).then(paint).catch(() => {});
