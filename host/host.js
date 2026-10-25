@@ -27,7 +27,30 @@ const schedule = require("./schedule");
 // ---------- how busy the PC is (the PC page on the website) ----------
 const cpuSnap = () => { let idle = 0, total = 0; for (const c of os.cpus()) { const t = c.times; idle += t.idle; total += t.user + t.nice + t.sys + t.idle + t.irq; } return { idle, total }; };
 let cpuPrev = cpuSnap(), cpuLast = null;
-setInterval(() => { const n = cpuSnap(), dt = n.total - cpuPrev.total; if (dt > 0) cpuLast = Math.round((1 - (n.idle - cpuPrev.idle) / dt) * 100); cpuPrev = n; }, 2000).unref();
+const coreSnap = () => os.cpus().map((c) => { const t = c.times; return { idle: t.idle, total: t.user + t.nice + t.sys + t.idle + t.irq }; });
+let corePrev = coreSnap(), coreLast = [];
+setInterval(() => {
+  const n = cpuSnap(), dt = n.total - cpuPrev.total; if (dt > 0) cpuLast = Math.round((1 - (n.idle - cpuPrev.idle) / dt) * 100); cpuPrev = n;
+  const c = coreSnap(); coreLast = c.map((x, i) => { const d = x.total - (corePrev[i]?.total || 0); return d > 0 ? Math.round((1 - (x.idle - corePrev[i].idle) / d) * 100) : 0; }); corePrev = c;
+}, 2000).unref();
+// bytes sent and received by this PC, from `netstat -e` (fast; the detailed Windows counters take seconds), as a speed between two looks
+let netPrev = null, netCache = { t: 0, v: null };
+function netRates() {
+  return new Promise((res) => {
+    if (Date.now() - netCache.t < 1500) return res(netCache.v);
+    execFile("netstat", ["-e"], { windowsHide: true, timeout: 3000 }, (err, out) => {
+      let v = null;
+      const m = !err && /Bytes\s+(\d+)\s+(\d+)/.exec(String(out));
+      if (m) {
+        const now = Date.now(), rx = Number(m[1]), tx = Number(m[2]);
+        if (netPrev && now - netPrev.t > 300) { const dt = (now - netPrev.t) / 1000, wrap = (a, b) => (b >= a ? b - a : b + 2 ** 32 - a); v = { rx: wrap(netPrev.rx, rx) / dt, tx: wrap(netPrev.tx, tx) / dt }; }
+        if (!netPrev || now - netPrev.t > 300) netPrev = { t: now, rx, tx };
+      }
+      netCache = { t: Date.now(), v: v || netCache.v }; res(netCache.v);
+    });
+  });
+}
+netRates().catch(() => {});
 let gpuCache = { t: 0, v: null };
 function gpuStats() {
   return new Promise((res) => {
@@ -53,7 +76,7 @@ const pcPower = {
     if (method === "GET" && p === "/pc/stats") {
       let disk = null; try { const st = fs.statfsSync(process.platform === "win32" ? "C:\\" : "/"); disk = { freeGB: st.bavail * st.bsize / 1e9, totalGB: st.blocks * st.bsize / 1e9 }; } catch {}
       const cpus = os.cpus();
-      return [200, { name: NAME, cpu: cpuLast, cpuName: (cpus[0]?.model || "").trim(), cores: cpus.length, memUsedGB: (os.totalmem() - os.freemem()) / 1e9, memTotalGB: os.totalmem() / 1e9, uptimeH: os.uptime() / 3600, gpu: await gpuStats(), disk }];
+      return [200, { name: NAME, cpu: cpuLast, coresPct: coreLast, net: await netRates(), cpuName: (cpus[0]?.model || "").trim(), cores: cpus.length, memUsedGB: (os.totalmem() - os.freemem()) / 1e9, memTotalGB: os.totalmem() / 1e9, uptimeH: os.uptime() / 3600, gpu: await gpuStats(), disk }];
     }
     if (method === "POST" && p === "/pc/shutdown") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
@@ -307,15 +330,30 @@ async function upstream(method, p, body, signal) {
   return r;
 }
 
+// A free web host puts the server to sleep after 15 minutes without a request, and a sleeping PC or a changed network can
+// kill the connection without the socket ever saying so: then this PC thinks it is online while nobody can reach it.
+// So: touch the server over plain HTTPS every 4 minutes (that counts as a request), and ping through the socket.
+setInterval(() => { fetch(SERVER + "/tools/status", { signal: AbortSignal.timeout(20000) }).catch(() => {}); }, 4 * 60e3).unref();
+
 function connect() {
   const ws = new WebSocket(wsUrl, { maxPayload: 80 * 1024 * 1024 });
   const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
   setConnection("connecting");
+  let alive = true, tick = Date.now(), heart = 0;
 
   ws.on("open", () => {
     retry = 1000;
     send({ type: "register", code: state.code, secret: state.secret, name: NAME });
+    heart = setInterval(() => {
+      const now = Date.now(), gap = now - tick; tick = now;
+      if (gap > 90e3) { note("The PC was asleep or offline, reconnecting…"); return ws.terminate(); }   // woke up: the old connection is dead
+      if (!alive) { note("The server stopped answering, reconnecting…", "error"); return ws.terminate(); }
+      alive = false;
+      try { ws.ping(); } catch {}
+    }, 20e3);
   });
+  ws.on("pong", () => { alive = true; });
+  ws.on("ping", () => { alive = true; });
 
   ws.on("message", async (raw) => {
     let msg;
@@ -469,6 +507,7 @@ function connect() {
   });
 
   ws.on("close", () => {
+    clearInterval(heart);
     for (const c of running.values()) c.abort();
     running.clear();
     if (stats.connection === "online") note("Lost connection to the server, reconnecting…", "error");

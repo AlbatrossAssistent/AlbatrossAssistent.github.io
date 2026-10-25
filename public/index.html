@@ -9,7 +9,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root {
@@ -966,6 +967,22 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
 .pc-row .top { display: flex; justify-content: space-between; gap: 12px; }
 .pc-row .top span:first-child { color: var(--muted); flex: none; }
 .pc-row .top span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.pc-tabs { margin-top: 10px; }
+.ins-steps { margin: 0; padding: 0; list-style: none; counter-reset: ins; display: flex; flex-direction: column; gap: 10px; }
+.ins-steps li { counter-increment: ins; position: relative; padding-left: 40px; min-height: 30px; line-height: 1.5; font-size: 14.5px; }
+.ins-steps li::before { content: counter(ins); position: absolute; left: 0; top: -1px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background-color: var(--accent); color: var(--accent-fg); }
+.ins-steps b { font-weight: 600; }
+.ins-steps .ic { display: inline-flex; vertical-align: -4px; margin: 0 2px; }
+#installDlg { width: min(560px, calc(100vw - 24px)); }
+#pcPage .home-grid { grid-template-columns: minmax(0, 1fr); max-width: 640px; margin: 0 auto; width: 100%; }
+#pcPage[data-pt="status"] .pc-card, #pcPage[data-pt="power"] #pcStatusCard { display: none; }
+.cores { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 9px; }
+.cores i { height: 28px; border-radius: 7px; background: var(--soft); position: relative; overflow: hidden; }
+.cores i::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--h, 0%); background: var(--fg); opacity: .78; transition: height .5s ease; }
+.pc-sub { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.pc-net { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.pc-net b { display: block; font-size: 20px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.pc-net small { color: var(--muted); font-size: 12px; }
 .meter-line { height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; margin-top: 7px; }
 .meter-line i { display: block; height: 100%; border-radius: inherit; background: var(--fg); transition: width .6s ease; }
 .meter-line.warn i { background: var(--warn); } .meter-line.bad i { background: var(--bad); }
@@ -1049,7 +1066,8 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
   <div id="home"></div>
   <div id="pcPage">
     <div class="home-inner">
-      <div class="home-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg><h1>Your PC</h1><p id="pcSub">Power and status</p></div>
+      <div class="home-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg><h1>Your PC</h1><p id="pcSub">Power and status</p>
+        <div class="seg pc-tabs" id="pcTabs" role="tablist"><button data-pt="status" class="on">Status</button><button data-pt="power">Power</button></div></div>
       <div class="home-grid">
         <div class="home-card pc-card">
           <h3>Power</h3>
@@ -1064,7 +1082,7 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
           <p class="pc-note" id="pcNote"></p>
           <div class="row"><button class="btn small" id="pcSetup">Wake-on-LAN and schedule…</button></div>
         </div>
-        <div class="home-card"><h3>Status</h3><div id="pcStats"><div class="empty-note">Loading…</div></div></div>
+        <div class="home-card" id="pcStatusCard"><h3>Live status</h3><div id="pcStats"><div class="empty-note">Loading…</div></div></div>
       </div>
     </div>
   </div>
@@ -1361,6 +1379,18 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
   </div>
 </dialog>
 
+<dialog id="installDlg">
+  <div class="modal">
+    <div class="modal-head"><h2>Get the app</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="body" style="padding:18px 22px 22px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
+      <p style="margin:0;color:var(--muted);line-height:1.55">Albatross installs straight from this website: no app store, no price. It gets its own icon, opens full screen like an app, and works from anywhere with your PC's code.</p>
+      <div class="seg" id="insTabs" role="tablist"><button data-os="ios">iPhone / iPad</button><button data-os="android">Android</button><button data-os="desktop">Windows / Mac</button></div>
+      <ol class="ins-steps" id="insSteps"></ol>
+      <div class="row"><button class="btn primary" id="insNow" hidden>Install now</button><button class="btn" id="insCopy">Copy the link</button><button class="btn" id="insShare" hidden>Share…</button></div>
+      <div class="note" id="insNote"></div>
+    </div>
+  </div>
+</dialog>
 <div id="jvPop" hidden role="status" aria-live="polite">
   <div class="jvp-orb"><canvas id="jvPopOrb" aria-hidden="true"></canvas></div>
   <div class="jvp-text"><b>Jarvis</b><span id="jvPopStatus">Working…</span><small id="jvPopTask"></small></div>
@@ -4490,14 +4520,14 @@ loadImgFields();
 // ======================================================================
 // Home
 // ======================================================================
-function setView(v) {
+function setView(v, opt) {
   document.body.classList.toggle("home-view", v === "home");
   document.body.classList.toggle("jarvis-view", v === "jarvis");
   document.body.classList.toggle("pc-view", v === "pc");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   if (v === "home") renderHome();
-  if (v === "pc") pcOpen(); else pcClose();
+  if (v === "pc") pcOpen(opt && opt.tab); else pcClose();
   if (v === "jarvis") jarvisOpen(); else jarvisClose();
 }
 const isHome = () => document.body.classList.contains("home-view");
@@ -4517,11 +4547,12 @@ function renderHome() {
     ["chat", TYPE_ICON.chat, "Chat", "Ask, write, plan, code, draw"],
     ["beam", I.beam, "Beam", "Send files to your PC or to people"],
     ["connect", I.connect, "Connect", "Use a PC with its code"],
-    ["pc", I.pc, "PC", online],
+    ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
+    ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
   ];
-  if (installPrompt) tiles.push(["install", I.install, "Install app", "Open it in its own window"]);
+  if (!isAppWindow()) tiles.push(["install", I.install, "Get the app", "On your phone, tablet or PC"]);
   home.innerHTML = `<div class="home-inner">
     <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<h1></h1><p>Your own AI, on your own PC.</p></div>
     <div class="home-actions">${tiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>
@@ -4536,9 +4567,10 @@ function renderHome() {
     if (g === "chat") { newChat("chat", "", false); setView("chat"); }
     else if (g === "beam") openFiles();
     else if (g === "connect") openConnect();
-    else if (g === "pc") setView("pc");
+    else if (g === "pcstatus") setView("pc", { tab: "status" });
+    else if (g === "power") setView("pc", { tab: "power" });
     else if (g === "jarvis") setView("jarvis");
-    else if (g === "install") doInstall();
+    else if (g === "install") openInstall();
     else openSettings();
   }));
   const rec = $("#homeRecent");
@@ -4573,29 +4605,42 @@ setInterval(() => { if (isHome()) renderHomeStatus(); }, 2000);
 
 // ---------- the PC page: power and live status ----------
 const pcv = { timer: 0 };
-function pcOpen() {
+function pcOpen(tab) {
+  if (tab) $("#pcPage").dataset.pt = tab; else if (!$("#pcPage").dataset.pt) $("#pcPage").dataset.pt = "status";
+  syncPcTabs();
   $("#pcSub").textContent = connected ? `${remotePC() ? "Remotely" : "Locally"} connected` : "Not connected";
   $("#pcNote").textContent = remotePC() ? "" : "Sleep and shut down work for the PC that runs the Albatross host. Turn it on from another device with Wake-on-LAN.";
   pcStats(); clearInterval(pcv.timer); pcv.timer = setInterval(pcStats, 2000);
 }
+function syncPcTabs() { for (const b of $$("#pcTabs button")) b.classList.toggle("on", b.dataset.pt === $("#pcPage").dataset.pt); }
+for (const b of $$("#pcTabs button")) b.onclick = () => { $("#pcPage").dataset.pt = b.dataset.pt; syncPcTabs(); };
 function pcClose() { clearInterval(pcv.timer); }
 $("#pcSetup").onclick = () => openSettings("connection");
 const meter = (pct, warn = 75, bad = 90) => `<div class="meter-line ${pct >= bad ? "bad" : pct >= warn ? "warn" : ""}"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>`;
+// a speed: file transfers are talked about in MB/s (megabytes), links in Mbit/s
+const rate = (bps) => bps == null ? "…" : bps >= 1e9 ? (bps / 1e9).toFixed(2) + " GB/s" : bps >= 1e6 ? (bps / 1e6).toFixed(1) + " MB/s" : bps >= 1e3 ? Math.round(bps / 1e3) + " KB/s" : Math.round(bps) + " B/s";
+const mbit = (bps) => bps == null ? "" : (bps * 8 / 1e6 >= 1000 ? (bps * 8 / 1e9).toFixed(2) + " Gbit/s" : (bps * 8 / 1e6).toFixed(0) + " Mbit/s");
 async function pcStats() {
   if (!document.body.classList.contains("pc-view")) return pcClose();
   let j = null;
   try { j = await pcCall("/pc/stats", null, "GET"); } catch {}
   const el = $("#pcStats"); if (!el) return;
+  $("#pcSub").textContent = connected ? `${remotePC() ? "Remotely" : "Locally"} connected` : "Not connected";
   const rows = [];
   const row = (k, v, extra = "") => rows.push(`<div class="pc-row"><div class="top"><span>${esc(k)}</span><span>${v}</span></div>${extra}</div>`);
   row("Connection", `<span class="dot ${connected ? "ok" : "bad"}" style="display:inline-block;margin-right:7px"></span>${esc($("#statusText").textContent)}`);
   if (!j) { row("PC", esc(connected ? "No live status. Restart the Albatross host on that PC to update it." : "Not connected")); }
   else {
     row("PC", esc(j.name || "—"));
-    row("Processor", `${esc((j.cpuName || "").replace(/\(R\)|\(TM\)/g, "").replace(/\s+/g, " "))} · ${j.cores} threads${j.cpu != null ? ` · ${j.cpu}%` : ""}`, j.cpu != null ? meter(j.cpu) : "");
+    const cores = j.coresPct || [], busy = cores.filter(c => c >= 15).length;
+    row("Processor", `${esc((j.cpuName || "").replace(/\(R\)|\(TM\)/g, "").replace(/\s+/g, " "))}${j.cpu != null ? ` · ${j.cpu}%` : ""}`,
+      (j.cpu != null ? meter(j.cpu) : "") + (cores.length ? `<div class="cores">${cores.map((c, i) => `<i title="Core ${i + 1}: ${c}%" style="--h:${c}%"></i>`).join("")}</div><div class="pc-sub">${busy} of ${cores.length} cores working (each bar is one core, ${j.cores} in all)</div>` : ""));
+    if (j.gpu) {
+      row("Graphics card", `${esc(j.gpu.name)}`, `<div class="pc-sub" style="margin:4px 0 0">Load ${j.gpu.util}%${j.gpu.temp ? ` · ${j.gpu.temp} °C` : ""}${j.gpu.power ? ` · ${Math.round(j.gpu.power)} W` : ""}</div>${meter(j.gpu.util)}`);
+      row("Graphics memory (VRAM)", `${(j.gpu.usedMB / 1024).toFixed(1)} of ${(j.gpu.totalMB / 1024).toFixed(1)} GB · ${Math.round(j.gpu.usedMB / j.gpu.totalMB * 100)}%`, meter(j.gpu.usedMB / j.gpu.totalMB * 100));
+    }
     row("Memory", `${j.memUsedGB.toFixed(1)} of ${j.memTotalGB.toFixed(1)} GB`, meter(j.memUsedGB / j.memTotalGB * 100));
-    if (j.gpu) row("Graphics card", `${esc(j.gpu.name)} · ${j.gpu.util}%${j.gpu.temp ? ` · ${j.gpu.temp} °C` : ""}`, meter(j.gpu.util)),
-      row("Graphics memory", `${(j.gpu.usedMB / 1024).toFixed(1)} of ${(j.gpu.totalMB / 1024).toFixed(1)} GB`, meter(j.gpu.usedMB / j.gpu.totalMB * 100));
+    row("Network", j.net ? "" : "measuring…", j.net ? `<div class="pc-net"><div><small>Receiving ↓</small><b>${rate(j.net.rx)}</b><small>${mbit(j.net.rx)}</small></div><div><small>Sending ↑</small><b>${rate(j.net.tx)}</b><small>${mbit(j.net.tx)}</small></div></div>` : "");
     if (j.disk) row("Disk C:", `${j.disk.freeGB.toFixed(0)} GB free of ${j.disk.totalGB.toFixed(0)} GB`, meter((1 - j.disk.freeGB / j.disk.totalGB) * 100, 85, 95));
     row("Running for", j.uptimeH >= 24 ? `${Math.floor(j.uptimeH / 24)} d ${Math.floor(j.uptimeH % 24)} h` : `${Math.floor(j.uptimeH)} h ${Math.round((j.uptimeH % 1) * 60)} min`);
   }
@@ -4988,7 +5033,37 @@ $("#fullBtn").onclick = toggleFull; $("#fullBtn2").onclick = toggleFull;
 document.addEventListener("fullscreenchange", syncFull); document.addEventListener("webkitfullscreenchange", syncFull);
 let installPrompt = null;
 addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; $("#installBtn").hidden = false; if (isHome()) renderHome(); });
-addEventListener("appinstalled", () => { installPrompt = null; $("#installBtn").hidden = true; toast("Albatross is installed"); if (isHome()) renderHome(); });
+addEventListener("appinstalled", () => { $("#installDlg").open && $("#installDlg").close(); installPrompt = null; $("#installBtn").hidden = true; toast("Albatross is installed"); if (isHome()) renderHome(); });
+const isAppWindow = () => matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches || navigator.standalone === true;
+const SITE_URL = location.origin + location.pathname.replace(/index\.html$/, "");
+const SHARE_ICON = '<svg class="i ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>';
+const MENU_ICON = '<svg class="i ic" viewBox="0 0 24 24" style="width:17px;height:17px"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>';
+const INSTALL_STEPS = {
+  ios: [`Open <b>${esc(SITE_URL)}</b> in <b>Safari</b> on your iPhone or iPad. (Chrome or Firefox on iOS 16.4 or newer also work.)`, `Tap the <b>Share</b> button ${SHARE_ICON} (the square with the arrow, at the bottom or top of the screen).`, `Scroll down and tap <b>Add to Home Screen</b>.`, `Tap <b>Add</b>. Albatross is now on your home screen and opens full screen.`],
+  android: [`Open <b>${esc(SITE_URL)}</b> in <b>Chrome</b> on your Android phone.`, `Tap the menu ${MENU_ICON} (three dots) and choose <b>Install app</b> (or <b>Add to Home screen</b>). If you see an <b>Install now</b> button below, you can tap that instead.`, `Confirm with <b>Install</b>. Albatross appears in your app list and on your home screen.`],
+  desktop: [`In <b>Chrome</b> or <b>Edge</b>, open <b>${esc(SITE_URL)}</b>.`, `Click the install icon at the right end of the address bar, or open the menu ${MENU_ICON} and choose <b>Install Albatross</b> (Chrome: Cast, save and share → Install page as app).`, `On a Mac with Safari: <b>File → Add to Dock</b>.`],
+};
+const INSTALL_NOTES = {
+  ios: "iPhone and iPad only allow this through the Share menu: no website can show an Install button there. After installing, open Albatross from the home screen and use Connect with your PC's code once.",
+  android: "This installs a real app (a web app package), so it also shows up in the app drawer and can be removed like any other app.",
+  desktop: "Opens in its own window without browser bars, and you can pin it to the taskbar or Start menu.",
+};
+function installOs() { const ua = navigator.userAgent; return /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "ios" : /Android/.test(ua) ? "android" : "desktop"; }
+function showInstallOs(os) {
+  $$("#insTabs button").forEach(b => b.classList.toggle("on", b.dataset.os === os));
+  $("#insSteps").innerHTML = INSTALL_STEPS[os].map(x => `<li>${x}</li>`).join("");
+  $("#insNote").textContent = INSTALL_NOTES[os];
+  $("#insNow").hidden = !installPrompt || os === "ios";
+}
+function openInstall() {
+  showInstallOs(installOs());
+  $("#insShare").hidden = !navigator.share;
+  $("#installDlg").showModal();
+}
+$$("#insTabs button").forEach(b => (b.onclick = () => showInstallOs(b.dataset.os)));
+$("#insNow").onclick = async () => { await doInstall(); $("#installDlg").close(); };
+$("#insCopy").onclick = () => copy(SITE_URL);
+$("#insShare").onclick = () => navigator.share({ title: "Albatross", text: "Your own AI, on your own PC.", url: SITE_URL }).catch(() => {});
 async function doInstall() { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice.catch(() => {}); installPrompt = null; $("#installBtn").hidden = true; if (isHome()) renderHome(); }
 $("#installBtn").onclick = doInstall;
 if (matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) $("#installNote").hidden = true;
@@ -5271,6 +5346,8 @@ if (store.get("termsAccepted", "") !== TERMS_VERSION) {
   setTimeout(() => d.showModal(), S.intro ? 3400 : 300);
 }
 setView("home");
+{ const go = new URLSearchParams(location.search).get("go");
+  if (go === "chat") { newChat("chat", "", false); setView("chat"); } else if (go === "pc") setView("pc", { tab: "status" }); else if (go === "jarvis") setView("jarvis"); }
 if (S.files.public && S.files.name) peerConnect();
 checkHost();
 connect();
