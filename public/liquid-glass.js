@@ -80,7 +80,8 @@
       const i = (y * w + x) * 4;
       data[i] = Math.round(128 - nx * mag * 127); data[i + 1] = 128; data[i + 2] = Math.round(128 - ny * mag * 127); data[i + 3] = 255;
       if (inRim) {
-        const theta = Math.atan2(py, px), band = Math.exp(-(((d - .2) / .4) ** 2));
+        // a thin line of light right at the edge (Albatross: narrower than liqui's wide band, which read as smudges on dark glass)
+        const theta = Math.atan2(py, px), band = Math.exp(-(((d - .04) / .09) ** 2));
         const c1 = Math.max(Math.cos(theta - THETA_KEY), 0), c2 = Math.max(Math.cos(theta - THETA_COUNTER), 0);
         spec[i] = spec[i + 1] = spec[i + 2] = 255; spec[i + 3] = Math.round(Math.min(band * (1.15 * c1 ** 3 + .75 * c2 ** 3.5), 1) * 255);
       }
@@ -179,6 +180,22 @@
     scan(document);
     new MutationObserver((muts) => { for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1 && !n.classList.contains("lg-layer")) scan(n); })
       .observe(document.body, { childList: true, subtree: true });
+  }
+  // the light follows the pointer: the glass surface under it gets .lg-lit and --lx/--ly (where the pointer is on it)
+  let lit = null, lastEv = null, lightRaf = 0;
+  function light() {
+    lightRaf = 0;
+    const e = lastEv, el = e && e.target && e.target.closest ? e.target.closest(".lg") : null;
+    if (lit && lit !== el) lit.classList.remove("lg-lit");
+    lit = el;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--lx", (e.clientX - r.left).toFixed(0) + "px"); el.style.setProperty("--ly", (e.clientY - r.top).toFixed(0) + "px");
+    el.classList.add("lg-lit");
+  }
+  if (typeof addEventListener === "function") {
+    addEventListener("pointermove", (e) => { if (e.pointerType === "touch") return; lastEv = e; if (!lightRaf) lightRaf = requestAnimationFrame(light); }, { passive: true });
+    document.addEventListener("pointerout", (e) => { if (!e.relatedTarget && lit) { lit.classList.remove("lg-lit"); lit = null; } });
   }
   function setEnabled(on) { document.documentElement.classList.toggle("no-lg", !on); }
 

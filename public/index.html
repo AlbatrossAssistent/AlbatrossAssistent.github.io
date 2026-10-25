@@ -15,16 +15,17 @@
 <style>
 :root {
   /* Light: white frosted glass on a soft grey backdrop */
-  --bg: #F2F2F2; --fg: #0A0A0A; --muted: #6B6B6B; --line: rgba(0,0,0,.09); --soft: rgba(0,0,0,.045);
+  --bg: #F2F2F7; --fg: #0A0A0A; --muted: #6B6B6B; --line: rgba(0,0,0,.09); --soft: rgba(0,0,0,.045);
   --glass: rgba(255,255,255,.30); --glass-strong: rgba(255,255,255,.55); --glass-edge: rgba(255,255,255,.85);
   --glass-hi: inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -1.5px 1px rgba(255,255,255,.55), inset 0 0 0 1px rgba(255,255,255,.35), inset 0 10px 22px -12px rgba(255,255,255,.9), inset 0 -12px 22px -14px rgba(255,255,255,.6);
   --sheen: linear-gradient(135deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.14) 34%, rgba(255,255,255,0) 58%, rgba(255,255,255,.22) 100%);
   --btn-glass: rgba(255,255,255,.38); --art-glow: rgba(255,255,255,.6);
   --accent-sheen: linear-gradient(180deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%);
   --shadow: 0 10px 40px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
-  --blob-a: rgba(0,0,0,.16); --blob-b: rgba(0,0,0,.10); --blob-c: rgba(255,255,255,.95); --blob-d: rgba(0,0,0,.09);
-  --bubble: #0A0A0A; --bubble-fg: #FFFFFF;
-  --accent: #0A0A0A; --accent-fg: #FFFFFF; --danger: #C0251B; --danger-bg: rgba(192,37,27,.08);
+  --blob-a: rgba(40,120,255,.30); --blob-b: rgba(120,92,255,.20); --blob-c: rgba(255,255,255,.95); --blob-d: rgba(0,186,255,.18);
+  --bubble: #007AFF; --bubble-fg: #FFFFFF;
+  /* blue for what you act on and what is on: send, primary buttons, switches, progress, your messages, links */
+  --accent: #007AFF; --accent-fg: #FFFFFF; --accent-soft: rgba(0,122,255,.12); --link: #0066D6; --danger: #C0251B; --danger-bg: rgba(192,37,27,.08);
   --ok: #1FA855; --warn: #D89614; --bad: #D93A2B;
   --blur: blur(22px) saturate(210%) brightness(1.06);
   --font-size: 16px;
@@ -40,9 +41,9 @@
   --btn-glass: rgba(255,255,255,.07); --art-glow: rgba(255,255,255,.09);
   --accent-sheen: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%);
   --shadow: 0 12px 48px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4);
-  --blob-a: rgba(255,255,255,.14); --blob-b: rgba(255,255,255,.08); --blob-c: rgba(255,255,255,.05); --blob-d: rgba(255,255,255,.07);
-  --bubble: #F5F5F5; --bubble-fg: #0A0A0A;
-  --accent: #F5F5F5; --accent-fg: #0A0A0A; --danger: #FF8A80; --danger-bg: rgba(255,138,128,.10);
+  --blob-a: rgba(10,100,255,.34); --blob-b: rgba(110,70,255,.22); --blob-c: rgba(0,150,255,.10); --blob-d: rgba(30,120,255,.20);
+  --bubble: #0A84FF; --bubble-fg: #FFFFFF;
+  --accent: #0A84FF; --accent-fg: #FFFFFF; --accent-soft: rgba(10,132,255,.18); --link: #4DA3FF; --danger: #FF8A80; --danger-bg: rgba(255,138,128,.10);
   --ok: #3DDC84; --warn: #F2C14E; --bad: #FF6B5E;
   color-scheme: dark;
 }
@@ -983,6 +984,37 @@ html:not(.no-lg) .lg::after { display: none !important; }
 html:not(.no-lg) .box.lg:focus-within { box-shadow: var(--lq-shadow), 0 0 0 4px var(--soft) !important; }
 html:not(.no-lg) .home-action.lg:hover { box-shadow: 0 26px 60px rgba(10,15,40,.18), 0 2px 8px rgba(10,15,40,.08) !important; }
 html.no-lg .lg-layer { display: none; }
+/* the light that follows the pointer inside a glass surface (liquid-glass.js sets --lx/--ly and .lg-lit) */
+:root { --lq-glow: rgba(255,255,255,.55); } [data-theme="dark"] { --lq-glow: rgba(255,255,255,.12); }
+.lg-shine { background: radial-gradient(240px circle at var(--lx, 50%) var(--ly, 0%), var(--lq-glow), transparent 62%); background-repeat: no-repeat; background-size: 0 0; }
+.lg-lit > .lg-shine { background-size: 100% 100%; }
+/* glass that is pressed or pointed at: a little brighter and a springy squish */
+html:not(.no-lg) .lg:is(.suggestions button, .type-card):hover > .lg-tint { opacity: 1 !important; }
+html:not(.no-lg) .lg:is(.suggestions button):active { transform: scale(.96); }
+
+/* ---------- Colour: Apple's system blue for what matters, neutral glass for the rest ---------- */
+[data-theme="dark"] { --accent-sheen: linear-gradient(180deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,.05) 48%, rgba(255,255,255,0) 52%); }
+:focus-visible { outline-color: var(--accent); }
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+textarea, input { caret-color: var(--accent); }
+.md a, .fetch-line a { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent); }
+.md a:hover { text-decoration-color: var(--link); }
+.btn.primary, .send { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent); border-color: transparent; }
+.send:disabled { background-color: color-mix(in srgb, var(--fg) 16%, transparent); box-shadow: none; }
+.msg.user .text { box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent); }
+/* a chosen segment or settings tab is a lifted glass pill, as on iOS; blue is kept for actions */
+.seg button.on, .tabs button.on { background-color: var(--glass-strong); background-image: var(--sheen); color: var(--fg); box-shadow: var(--glass-hi), 0 2px 10px rgba(0,0,0,.12); }
+[data-theme="dark"] .seg button.on, [data-theme="dark"] .tabs button.on { background-color: rgba(255,255,255,.16); }
+/* where you are: the open view in the sidebar and the open chat */
+/* inside the glass sidebar its buttons need no glass of their own (a second blur picks up the blue behind and tints them all) */
+aside .side-btn:not(.power-form *), aside .search { -webkit-backdrop-filter: none; backdrop-filter: none; background-image: none; background-color: rgba(255,255,255,.55); border-color: rgba(255,255,255,.7); box-shadow: 0 1px 2px rgba(10,15,40,.05); }
+[data-theme="dark"] aside .side-btn:not(.power-form *), [data-theme="dark"] aside .search { background-color: rgba(255,255,255,.06); border-color: rgba(255,255,255,.1); box-shadow: none; }
+aside .side-btn:not(.power-form *):hover { background-color: rgba(255,255,255,.8); }
+[data-theme="dark"] aside .side-btn:not(.power-form *):hover { background-color: rgba(255,255,255,.11); }
+.side-btn.on, aside .side-btn.on:not(.power-form *) { color: var(--accent); font-weight: 600; background-color: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.chat-row.active .open .ti { background-color: var(--accent); background-image: var(--accent-sheen); border-color: transparent; color: var(--accent-fg); box-shadow: 0 0 0 3px var(--accent-soft); }
+.chat-row.active { border-color: color-mix(in srgb, var(--accent) 22%, var(--glass-edge)); }
+html:not(.no-lg) .type-card.lg.on { box-shadow: var(--lq-shadow), 0 0 0 2px var(--accent) !important; }
 
 /* Browsers without backdrop blur get solid glass so text stays readable */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -6058,9 +6090,13 @@ applyAppearance(); applyFold(); applyNavFold(); startSky();
 if (window.LiquidGlass) {
   LiquidGlass.setEnabled(S.glass !== false);
   LiquidGlass.auto([
-    ["aside", { bezel: 30, frost: .3 }], [".topbar", { bezel: 22, frost: .3 }], [".box", { bezel: 22, frost: .3 }], ["dialog", { bezel: 34, frost: .45 }],
+    // thin bars bend less (bezel, refraction), or what passes behind them smears into streaks
+    ["aside", { bezel: 30, frost: .3 }], [".topbar", { bezel: 14, refraction: 70, frost: .3 }], [".box", { bezel: 16, refraction: 90, frost: .3 }], ["dialog", { bezel: 34, frost: .45 }],
     [".home-action", { bezel: 24, frost: .3 }], [".home-card", { bezel: 24, frost: .35 }], [".jv-card", { bezel: 26, frost: .35 }],
-    ["#jvPop", { bezel: 28, frost: .4 }], [".toast", { bezel: 18, frost: .4 }], [".deck-side", { bezel: 30, frost: .4 }],
+    ["#jvPop", { bezel: 28, frost: .4 }], [".toast", { bezel: 14, refraction: 80, frost: .4 }], [".deck-side", { bezel: 30, frost: .4 }],
+    // the smaller glass: suggestions, the new-chat cards, segmented controls, menus (not inside other glass: that doubles the tint)
+    [".suggestions button", { bezel: 16, refraction: 90, frost: .3 }], [".type-card", { bezel: 22, frost: .3 }], [".seg", { bezel: 12, refraction: 60, frost: .3 }],
+    [".attach-menu, .effort-menu", { bezel: 16, refraction: 80, frost: .7 }],
   ]);
 }
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
