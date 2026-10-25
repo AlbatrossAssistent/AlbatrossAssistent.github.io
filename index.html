@@ -33,7 +33,7 @@ a { color: inherit; }
   radial-gradient(35% 30% at 25% 70%, rgba(150,150,170,.07), transparent 70%); transform: translateY(calc(var(--p, 0) * -12vh)); }
 
 /* top bar */
-.nav { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 999px; width: min(960px, calc(100vw - 24px));
+.nav { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 999px; width: min(960px, calc(100vw - 24px));
   background: var(--navbg); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
 .nav .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -.3px; text-decoration: none; }
 .nav .brand svg { width: 26px; height: 26px; fill: currentColor; }
@@ -305,6 +305,7 @@ footer a:hover { color: var(--fg); }
 
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
 <script src="public/orb.js"></script>
+<script src="public/starfield.js"></script>
 <script>
 "use strict";
 const $ = (s) => document.querySelector(s);
@@ -314,16 +315,12 @@ const seg = (p, a, b) => clamp((p - a) / (b - a));          // 0..1 while p goes
 const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
-// ---------- night sky ----------
-const sky = $("#sky"), ctx = sky.getContext("2d");
-let stars = [], W = 0, H = 0, DPR = 1, shooting = null;
-function resize() {
-  DPR = Math.min(2, devicePixelRatio || 1);
-  W = sky.width = innerWidth * DPR; H = sky.height = innerHeight * DPR;
-  const n = Math.round(innerWidth * innerHeight / 2600);
-  stars = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H * 1.6, r: (Math.random() ** 3 * 1.6 + .3) * DPR, a: Math.random() * .7 + .2, s: Math.random() * 2 + .5, d: Math.random() * .6 + .2 }));
-}
-addEventListener("resize", resize); resize();
+// ---------- night sky: a 360° starfield (public/starfield.js) that turns with the scroll and reacts to the pointer ----------
+const sky = $("#sky");
+const skyfield = createStarfield(sky, { count: Math.round(Math.min(1300, Math.max(450, innerWidth * innerHeight / 1700))) });
+addEventListener("resize", () => skyfield.resize());
+addEventListener("pointermove", (e) => skyfield.pointer(e.clientX, e.clientY), { passive: true });
+document.documentElement.addEventListener("pointerleave", () => skyfield.pointer(null));
 
 // ---------- scroll story ----------
 const story = $(".story");
@@ -440,30 +437,7 @@ function render(t) {
 
   place(L.start, { y: 2 + 6 * (1 - st), o: st * gone });   // between the title and the orb, not on it
 }
-function drawSky(t) {
-  ctx.clearRect(0, 0, W, H);
-  const shift = progress * H * .5;
-  for (const s of stars) {
-    const y = ((s.y - shift * s.d) % (H * 1.6) + H * 1.6) % (H * 1.6);
-    if (y > H) continue;
-    const tw = reduce ? s.a : s.a * (.65 + .35 * Math.sin(t / 1000 * s.s + s.x));
-    ctx.globalAlpha = tw * (darkPage() ? 1 : .5); ctx.fillStyle = darkPage() ? "#fff" : "#1a1c22";
-    ctx.beginPath(); ctx.arc(s.x, y, s.r, 0, Math.PI * 2); ctx.fill();
-  }
-  // a shooting star now and then
-  if (!reduce) {
-    if (!shooting && Math.random() < .004) shooting = { x: Math.random() * W * .8, y: Math.random() * H * .4, vx: (6 + Math.random() * 6) * DPR, vy: (2 + Math.random() * 2) * DPR, life: 1 };
-    if (shooting) {
-      const g = ctx.createLinearGradient(shooting.x, shooting.y, shooting.x - shooting.vx * 14, shooting.y - shooting.vy * 14);
-      g.addColorStop(0, `rgba(255,255,255,${shooting.life})`); g.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 1.6 * DPR;
-      ctx.beginPath(); ctx.moveTo(shooting.x, shooting.y); ctx.lineTo(shooting.x - shooting.vx * 14, shooting.y - shooting.vy * 14); ctx.stroke();
-      shooting.x += shooting.vx; shooting.y += shooting.vy; shooting.life -= .015;
-      if (shooting.life <= 0) shooting = null;
-    }
-  }
-  ctx.globalAlpha = 1;
-}
+function drawSky(t) { skyfield.draw(t, { scroll: progress, dark: darkPage() }); }
 
 // ---------- smooth scrolling ----------
 let lenis = null;
