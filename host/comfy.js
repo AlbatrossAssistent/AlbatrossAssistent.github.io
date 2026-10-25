@@ -250,6 +250,13 @@ async function generate(body, emit, signal, log) {
     if (!img) throw new Error("ComfyUI didn't return an image");
     const q = new URLSearchParams({ filename: img.filename, subfolder: img.subfolder || "", type: img.type || "temp" });
     const png = Buffer.from(await (await fetch(COMFY + "/view?" + q)).arrayBuffer());
+    // keep a copy on this PC too (Downloads\Albatross\Pictures), so the PC files menu and the Agent can use it
+    try {
+      const dir = path.join(process.env.ALBATROSS_FILES || path.join(require("os").homedir(), "Downloads", "Albatross"), "Pictures");
+      fs.mkdirSync(dir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19), tag = String(name).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 24);
+      fs.writeFileSync(path.join(dir, `${stamp}-${tag}.png`), png);
+    } catch {}
     emit({ model: name, image: png.toString("base64"), done: true });
   } finally { ws.close(); }
 }

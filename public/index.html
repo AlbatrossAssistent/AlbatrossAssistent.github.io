@@ -990,6 +990,64 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
 .pc-row .top span:first-child { color: var(--muted); flex: none; }
 .pc-row .top span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .pc-tabs { margin-top: 10px; }
+#agentPage { flex: 1; overflow-y: auto; padding: 8px 4px 28px; }
+body:not(.agent-view) #agentPage { display: none; }
+body.agent-view .messages, body.agent-view .composer, body.agent-view #home, body.agent-view #jarvis, body.agent-view #pcPage, body.agent-view #typeBadge, body.agent-view #model { display: none !important; }
+.ag-wrap { display: flex; flex-direction: column; gap: 14px; max-width: 760px; margin: 0 auto; width: 100%; }
+.ag-top { display: flex; flex-direction: column; gap: 12px; }
+.ag-top select, .ag-top textarea, .ag-form input, #agCodeSrc, #agCodeLang { font: inherit; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 12px; padding: 10px 12px; width: 100%; box-sizing: border-box; }
+#agCodeLang { width: auto; }
+.ag-top textarea { resize: vertical; min-height: 78px; }
+.ag-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.ag-tools button { position: relative; font: inherit; padding: 7px 14px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent); background: transparent; color: var(--muted); cursor: pointer; }
+.ag-tools button.on { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.ag-mail { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ag-mail .pc-note { flex: 1; min-width: 140px; }
+.ag-form { display: flex; flex-direction: column; gap: 8px; }
+.ag-two { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+.ag-ideas { display: flex; flex-wrap: wrap; gap: 8px; }
+.ag-ideas button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px dashed color-mix(in srgb, var(--fg) 28%, transparent); background: transparent; color: var(--muted); cursor: pointer; }
+.ag-plan h3, #agFinal h3 { margin-top: 0; }
+.ag-pl { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; font-size: 14px; }
+.ag-pl span { flex: none; width: 14px; height: 14px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--muted); }
+.ag-pl.doing span { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 50%, transparent); animation: pulseDot 1.2s infinite; }
+.ag-pl.done span { border-color: var(--ok); background: var(--ok); }
+.ag-pl.done { color: var(--muted); }
+.ag-step { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.ag-step:last-child { border-bottom: none; }
+.ag-dot { flex: none; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--muted); }
+.ag-step.run .ag-dot { background: var(--warn); animation: pulseDot 1.2s infinite; }
+.ag-step.ok .ag-dot { background: var(--ok); }
+.ag-step.bad .ag-dot { background: var(--bad); }
+.ag-step.ask .ag-dot { background: #5B8DEF; }
+.ag-step.goal .ag-dot, .ag-step.say .ag-dot { background: var(--fg); }
+.ag-body { min-width: 0; flex: 1; }
+.ag-body b { font-weight: 600; overflow-wrap: anywhere; }
+.ag-detail { margin-top: 4px; color: var(--muted); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; }
+.ag-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ag-input { font: inherit; flex: 1; min-width: 160px; padding: 7px 12px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent); background: transparent; color: var(--fg); }
+#agFrame { width: 100%; height: 240px; border: 1px solid var(--line); border-radius: 12px; background: #fff; margin-top: 10px; }
+#agConsole, #agBrowseText, .pf-view pre { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 6%, transparent); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; }
+#agConsole:empty { display: none; }
+#agBrowseUrl { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
+@keyframes pulseDot { 50% { opacity: .35; } }
+.pf-crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+.pf-crumb button { font: inherit; background: none; border: 0; color: var(--fg); cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+.pf-crumb button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.fitem.dir, #pfList .fitem { cursor: pointer; }
+.pf-prev { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.pf-name { display: flex; flex-direction: column; }
+.pf-name small { color: var(--muted); }
+.pf-view img { max-width: 100%; max-height: 260px; border-radius: 10px; display: block; }
+.attach-menu { position: fixed; z-index: 60; min-width: 250px; padding: 6px; border-radius: 16px; background: var(--bg-elev, var(--bg)); border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); box-shadow: 0 12px 40px rgba(0,0,0,.35); backdrop-filter: blur(20px) saturate(1.4); }
+.attach-menu button { display: block; width: 100%; text-align: left; font: inherit; padding: 9px 12px; border: 0; border-radius: 11px; background: transparent; color: var(--fg); cursor: pointer; }
+.attach-menu button:hover { background: color-mix(in srgb, var(--fg) 9%, transparent); }
+.attach-menu small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.cid-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+.cid-row code { flex: 1; padding: 9px 12px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 6%, transparent); font-size: 15px; letter-spacing: .06em; overflow-wrap: anywhere; }
+.add-contact { display: flex; gap: 8px; margin: 8px 0 4px; }
+.add-contact input { flex: 1; min-width: 0; font: inherit; padding: 9px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); background: transparent; color: var(--fg); text-transform: uppercase; }
+.fitem.device.on .ic { color: var(--ok); }
 .lock-ways { margin: 0; padding-left: 20px; line-height: 1.7; }
 .lock-wait { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 14px; }
 body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
@@ -1108,6 +1166,42 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <div class="row"><button class="btn small" id="pcSetup">Wake-on-LAN and schedule…</button></div>
         </div>
         <div class="home-card" id="pcStatusCard"><h3>Live status</h3><div id="pcStats"><div class="empty-note">Loading…</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div id="agentPage">
+    <div class="home-inner">
+      <div class="home-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><h1>Agent</h1><p>Give it a goal. It makes a plan, then works on your PC.</p></div>
+      <div class="ag-wrap">
+        <div class="home-card ag-top">
+          <label class="field"><span>Model</span><select id="agModel"></select></label>
+          <div class="pc-note" id="agNote"></div>
+          <div class="ag-tools" id="agTools" role="group" aria-label="What the Agent may use">
+            <button type="button" data-tg="files">Files</button><button type="button" data-tg="browser">Browser</button><button type="button" data-tg="mail">Mail</button><button type="button" data-tg="code">Code</button><button type="button" data-tg="print" data-needs-pc>Print</button>
+          </div>
+          <div class="ag-mail"><span id="agMailState" class="pc-note"></span><button class="btn small" id="agMailSetup" type="button">Mail account…</button><button class="btn small" id="agMailForget" type="button" hidden>Remove</button></div>
+          <div id="agMailForm" class="ag-form" hidden>
+            <input id="agMailUser" type="email" placeholder="Your email address" autocomplete="off">
+            <input id="agMailPw" type="password" placeholder="App password" autocomplete="new-password">
+            <div class="ag-two"><input id="agImap" placeholder="Incoming (IMAP) server"><input id="agImapPort" placeholder="993" inputmode="numeric"></div>
+            <div class="ag-two"><input id="agSmtp" placeholder="Outgoing (SMTP) server"><input id="agSmtpPort" placeholder="465" inputmode="numeric"></div>
+            <div class="pc-note">Use an app password (made in your mail account's security settings), not your normal password. It's stored on your PC only, encrypted by Windows, and the AI never sees it. Sending always asks you first.</div>
+            <div class="row"><button class="btn primary small" id="agMailGo" type="button">Save</button><span class="tool-err" id="agMailMsg"></span></div>
+          </div>
+          <textarea id="agGoal" rows="3" placeholder="What should the Agent do?"></textarea>
+          <div class="ag-ideas" id="agIdeas"><button type="button" data-g="Summarize my unread mail and list what needs an answer.">Summarize my mail</button><button type="button" data-g="Look at the files I sent to the PC and sort them into folders in your workspace.">Sort my files</button><button type="button" data-g="Build a small HTML game and run it in the code player.">Build a mini game</button></div>
+          <div class="row"><button class="btn primary" id="agRun" type="button">Run</button><button class="btn small" id="agSend" type="button">Send files to the PC</button><button class="btn small" id="agAddFiles" type="button">PC files</button><input type="file" id="agPick" multiple hidden></div>
+        </div>
+        <div class="home-card ag-plan" id="agPlan" hidden></div>
+        <div class="home-card"><h3>Activity</h3><div id="agLog"><div class="empty-note">Nothing yet. Describe a goal and press Run.</div></div></div>
+        <div class="home-card" id="agFinal" hidden></div>
+        <div class="home-card" id="agCodeCard" hidden><h3>Code player</h3>
+          <div class="row"><select id="agCodeLang"><option value="html">HTML</option><option value="js">JavaScript</option></select><button class="btn small primary" id="agCodeRun" type="button">Run</button></div>
+          <textarea id="agCodeSrc" rows="7" spellcheck="false"></textarea>
+          <iframe id="agFrame" sandbox="allow-scripts" title="Code player"></iframe>
+          <pre id="agConsole"></pre>
+        </div>
+        <div class="home-card" id="agBrowseCard" hidden><h3>Browser</h3><b id="agBrowseTitle"></b><a id="agBrowseUrl" target="_blank" rel="noopener noreferrer"></a><pre id="agBrowseText"></pre></div>
       </div>
     </div>
   </div>
@@ -1380,6 +1474,8 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 
       <section class="fpane" data-fp="pc">
         <div class="conn-status" id="hostLine"><span class="dot"></span><span class="t">Checking…</span></div>
+        <div class="sub-head"><h3>Devices on your PC</h3><button class="btn small" id="devRefresh">Refresh</button></div>
+        <div class="flist" id="devList"></div>
         <label class="drop" id="pcDrop"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><b>Send files to your PC</b><span>Drop files here or click to choose. They're saved in Downloads → Albatross on the PC.</span><input type="file" id="pcPick" multiple hidden></label>
         <div class="xfers" id="pcXfers"></div>
         <div class="sub-head"><h3>From your PC</h3><button class="btn small" id="pcRefresh">Refresh</button></div>
@@ -1392,10 +1488,17 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <label class="pub-toggle"><input type="checkbox" class="switch" id="pubOn">Public</label>
         </div>
         <div class="conn-status" id="pubLine"><span class="dot"></span><span class="t">Public is off</span></div>
+        <div class="sub-head"><h3>Your contact code</h3></div>
+        <div class="cid-row"><code id="myCid">…</code><button class="btn small" id="copyCid">Copy</button></div>
+        <div class="note">Share this code with someone you know. Only people who are in each other's contacts can connect and send files.</div>
+        <div class="sub-head"><h3>Contacts</h3></div>
+        <div class="flist" id="contactList"></div>
+        <div class="add-contact"><input id="cidInput" placeholder="Their code: XXXX-XXXX-XXXX-XXXX" maxlength="24" autocomplete="off" spellcheck="false"><button class="btn small primary" id="cidAdd">Add contact</button></div>
+        <div class="sub-head"><h3>Others online</h3></div>
         <div class="flist" id="peopleList"></div>
         <label class="drop disabled" id="peerDrop"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><b id="peerDropTitle">Pick someone above</b><span>Files go one at a time, each only after they accept it. End-to-end encrypted.</span><input type="file" id="peerPick" multiple hidden></label>
         <div class="xfers" id="peerXfers"></div>
-        <div class="note">While Public is on, everyone else who is public can see your name and offer you files. Nothing arrives without your OK.</div>
+        <div class="note">While Public is on, others who are public can see your name and add you as a contact. Files only come from your contacts, and nothing arrives without your OK.</div>
       </section>
     </div>
   </div>
@@ -1413,6 +1516,18 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
   </div>
 </dialog>
 
+<dialog id="pcFilesDlg">
+  <div class="modal">
+    <div class="modal-head"><h2 id="pfTitle">PC files</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="body" style="padding:14px 18px 20px;display:flex;flex-direction:column;gap:12px;overflow-y:auto">
+      <div class="seg" id="pfRoots" role="tablist"></div>
+      <div class="pf-crumb" id="pfCrumb"></div>
+      <div class="flist" id="pfList"></div>
+      <div class="pf-prev" id="pfPrev" hidden></div>
+    </div>
+  </div>
+</dialog>
+<div class="attach-menu" id="attachMenu" hidden role="menu"><button id="attDevice" role="menuitem"><b>From this device</b><small>A picture, or a file to investigate</small></button><button id="attPc" role="menuitem"><b>From my PC's files</b><small>Code projects, pictures, received files</small></button></div>
 <dialog id="lockDlg">
   <div class="modal">
     <div class="modal-head"><h2>Your PC is locked</h2></div>
@@ -1599,11 +1714,11 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { ch
 // sleeps doesn't cut the answer off: the PC keeps the model working and the next piece is picked up where it stopped.
 let jobsBadUntil = 0;
 const sleepMs = (ms) => new Promise(r => setTimeout(r, ms));
-async function chatApi(body, signal) {
+async function chatApi(body, signal, chatId) {
   const direct = () => api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
   if (S.bgJobs === false || Date.now() < jobsBadUntil) return direct();
   let id;
-  try { id = (await pcCall("/jobs/start", { body: JSON.stringify(body), chatId: current && current.id })).id; }
+  try { id = (await pcCall("/jobs/start", { body: JSON.stringify(body), chatId: chatId === undefined ? current && current.id : chatId })).id; }
   catch (e) { if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError"); jobsBadUntil = Date.now() + 120e3; return direct(); }   // no host with jobs (older host, or direct Ollama)
   let next = 0, fails = 0, finished = false;
   const stop = () => { if (!finished) pcCall("/jobs/cancel", { id }).catch(() => {}); };
@@ -4823,10 +4938,12 @@ function setView(v, opt) {
   document.body.classList.toggle("home-view", v === "home");
   document.body.classList.toggle("jarvis-view", v === "jarvis");
   document.body.classList.toggle("pc-view", v === "pc");
+  document.body.classList.toggle("agent-view", v === "agent");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   if (v === "home") renderHome();
   if (v === "pc") pcOpen(opt && opt.tab); else pcClose();
+  if (v === "agent") { window.agentOpen && window.agentOpen(); } else { window.agentClose && window.agentClose(); }
   if (v === "jarvis") jarvisOpen(); else jarvisClose();
 }
 const isHome = () => document.body.classList.contains("home-view");
@@ -4848,6 +4965,8 @@ function renderHome() {
     ["connect", I.connect, "Connect", "Use a PC with its code"],
     ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
     ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
+    ["agent", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg>', "Agent", "Plans and works for you: files, web, mail, code, print"],
+    ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
   ];
@@ -4870,6 +4989,8 @@ function renderHome() {
     else if (g === "pcstatus") setView("pc", { tab: "status" });
     else if (g === "power") setView("pc", { tab: "power" });
     else if (g === "jarvis") setView("jarvis");
+    else if (g === "agent") setView("agent");
+    else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
     else if (g === "install") openInstall();
     else openSettings();
   }));
@@ -4961,7 +5082,7 @@ function openFiles(tab) {
   if (tab) filesTab(tab);
   $("#pubName").value = S.files.name; $("#pubOn").checked = S.files.public;
   $("#filesDlg").showModal();
-  checkHost(); renderPeople(); renderXfers();
+  checkHost(); loadDevices(); renderPeople(); renderXfers();
 }
 function filesTab(t) {
   $$("#filesDlg [data-ft]").forEach(b => b.classList.toggle("on", b.dataset.ft === t));
@@ -5148,6 +5269,58 @@ $("#pcRefresh").onclick = checkHost;
 // Each browser makes an ECDH key pair when it goes public. Two people derive the same AES key from
 // their keys, so the server only passes along data it can't read.
 const peer = { ws: null, id: null, list: [], keys: null, pub: "", status: "off", target: null, retry: 0, sharedKeys: new Map() };
+// ---------- who I am to other people: a signing key kept on this device, and the contact code made from it ----------
+// The code is a fingerprint of the public key. Each time I go online I sign my session key with it, so nobody can pretend to be me.
+const CID_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+let ident = null;
+async function cidOf(raw) { const h = new Uint8Array(await crypto.subtle.digest("SHA-256", raw)); let t = ""; for (let i = 0; i < 16; i++) t += CID_ALPHA[h[i] % 32]; return t.match(/.{4}/g).join("-"); }
+async function identity() {
+  if (ident) return ident;
+  const alg = { name: "ECDSA", namedCurve: "P-256" };
+  let saved = store.get("identity", null), priv = null, raw = null;
+  if (saved) { try { priv = await crypto.subtle.importKey("jwk", saved.priv, alg, false, ["sign"]); raw = b64ToU8(saved.pub); } catch { saved = null; } }
+  if (!saved) {
+    const kp = await crypto.subtle.generateKey(alg, true, ["sign", "verify"]);
+    raw = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
+    const jwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
+    store.set("identity", { priv: jwk, pub: toB64(raw) });
+    priv = await crypto.subtle.importKey("jwk", jwk, alg, false, ["sign"]);
+  }
+  ident = { priv, pub: toB64(raw), cid: await cidOf(raw) };
+  return ident;
+}
+async function verifyPeer(p) {
+  try {
+    if (!p.idpub || !p.sig) return "";
+    const k = await crypto.subtle.importKey("raw", b64ToU8(p.idpub), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const ok = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, k, b64ToU8(p.sig), te.encode(p.pub));
+    return ok ? await cidOf(b64ToU8(p.idpub)) : "";
+  } catch { return ""; }
+}
+let contacts = store.get("contacts", []);
+const isContact = (cid) => !!cid && contacts.some(c => c.cid === cid);
+function saveContacts() { store.set("contacts", contacts); }
+function addContact(cid, name) {
+  if (isContact(cid)) return false;
+  contacts.push({ cid, name: String(name || "Contact").slice(0, 32), added: Date.now() }); saveContacts(); return true;
+}
+function removeContact(cid) { contacts = contacts.filter(c => c.cid !== cid); saveContacts(); if (peer.target && peer.target.cid === cid) peer.target = null; renderPeople(); }
+// ---------- devices connected to the PC (Beam -> Your PC) ----------
+const DEV_ICON = { phone: '<svg class="i" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M11 18.5h2"/></svg>', tablet: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.4"/><path d="M11 18h2"/></svg>', computer: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg>' };
+async function loadDevices() {
+  const el = $("#devList"); if (!el) return;
+  if (!connected) { el.innerHTML = '<div class="empty-note">Connect to your PC to see the devices that use it.</div>'; return; }
+  try {
+    const j = await pcCall("/pc/devices", null, "GET"), me = deviceInfo().id;
+    el.innerHTML = "";
+    if (!j.devices.length) el.innerHTML = '<div class="empty-note">No device has used the code yet (devices on this PC itself don\'t count).</div>';
+    for (const d of j.devices) {
+      const row = fileRow(d.name + (d.id === me ? " (this device)" : ""), `${d.kind} · ${d.online ? "online now" : "last seen " + ago(d.last)} · connected since ${new Date(d.first).toLocaleDateString()}`, null, "device" + (d.online ? " on" : ""));
+      row.querySelector(".ic").innerHTML = DEV_ICON[d.kind] || DEV_ICON.computer;
+      el.appendChild(row);
+    }
+  } catch (e) { el.innerHTML = `<div class="empty-note">Can't list devices: ${esc(/older|not allowed|Unknown/i.test(e.message) ? "your PC runs an older Albatross host (restart it to update)" : e.message)}</div>`; }
+}
 async function peerKeys() {
   if (peer.keys) return;
   peer.keys = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveKey"]);
@@ -5170,7 +5343,11 @@ function peerConnect() {
   peerKeys().then(() => {
     const ws = new WebSocket((S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "").replace(/^http/, "ws") + "/peer");
     peer.ws = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ type: "hello", name: S.files.name, pub: peer.pub }));
+    ws.onopen = async () => {
+      const id = await identity();
+      const sig = toB64(new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, id.priv, te.encode(peer.pub))));
+      ws.send(JSON.stringify({ type: "hello", name: S.files.name, pub: peer.pub, idpub: id.pub, sig }));
+    };
     // Decrypting is async, so handle messages strictly one after another to keep file pieces in order.
     let chain = Promise.resolve();
     ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } chain = chain.then(() => onPeerMessage(m)).catch(() => {}); };
@@ -5195,6 +5372,9 @@ async function onPeerMessage(m) {
   if (m.type === "error") { toast(m.error); return; }
   if (m.type === "peers") {
     peer.list = m.peers.filter(p => p.id !== peer.id);
+    for (const p of peer.list) p.cid = await verifyPeer(p);
+    peer.list = peer.list.filter(p => p.cid !== (ident && ident.cid));
+    { let upd = false; for (const p of peer.list) { const c = contacts.find(x => x.cid === p.cid); if (c && c.name !== p.name) { c.name = p.name; upd = true; } } if (upd) saveContacts(); }
     if (peer.target && !peer.list.some(p => p.id === peer.target.id)) { toast(peer.target.name + " went offline"); peer.target = null; }
     renderPeople(); return;
   }
@@ -5204,7 +5384,13 @@ async function onPeerMessage(m) {
   let o; try { o = JSON.parse(await unseal(await keyFor(from.pub), m.msg, "albatross-peer")); } catch { return; }
   const out = xfers.peer.find(x => x.tid === o.tid && x.dir === "out");
   const inc = xfers.peer.find(x => x.tid === o.tid && x.dir === "in");
-  if (o.t === "offer") return incomingOffer(from, o);
+  if (o.t === "offer") {
+    if (!isContact(from.cid)) {      // only contacts can send: everyone else is told no, without a popup
+      peerSend(from.id, { t: "decline", tid: o.tid }).catch(() => {});
+      return toast(`${from.name} tried to send you a file, but isn't in your contacts. Add them in Beam → People first.`);
+    }
+    return incomingOffer(from, o);
+  }
   if (o.t === "accept" && out) out.onAnswer(true);
   else if (o.t === "decline" && out) out.onAnswer(false);
   else if (o.t === "ack" && out) out.onAck();
@@ -5254,6 +5440,7 @@ let peerBusy = false;
 function sendToPeer(list) {
   const t = peer.target;
   if (!t) return toast("Pick someone first");
+  if (!isContact(t.cid)) return toast("Add " + t.name + " as a contact first");
   for (const file of list) {
     const x = baseXfer({ dir: "out", tid: crypto.randomUUID(), peerId: t.id, who: t.name, file, name: file.name, size: file.size, state: "waiting", pct: 0 });
     x.label = () => ({ waiting: `To ${x.who} · waiting in line`, asking: `To ${x.who} · waiting for them to accept…`, sending: `To ${x.who} · ${Math.round(x.pct)}% of ${fsize(x.size)}`, done: `To ${x.who} · delivered`, declined: `To ${x.who} · they declined`, error: `To ${x.who} · ${x.err}` })[x.state];
@@ -5288,23 +5475,46 @@ async function runPeerQueue() {
   peerBusy = false;
 }
 function renderPeople() {
-  $("#pubLive").hidden = peer.status !== "on";
   const l = $("#pubLine");
   l.querySelector(".dot").className = "dot " + (peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "");
   l.querySelector(".t").textContent = pubText();
+  identity().then(i => { $("#myCid").textContent = i.cid; }).catch(() => { $("#myCid").textContent = "needs https"; });
+  const cl = $("#contactList"); cl.innerHTML = "";
+  if (!contacts.length) cl.innerHTML = '<div class="empty-note">No contacts yet. Add someone with their code, or from the list below.</div>';
+  for (const c of contacts) {
+    const live = peer.list.find(p => p.cid === c.cid), on = !!live && peer.target?.id === live.id;
+    const btns = [];
+    if (live) btns.push(smallBtn(on ? "Connected" : "Connect", () => { peer.target = on ? null : live; renderPeople(); }, on));
+    btns.push(smallBtn("Remove", () => removeContact(c.cid)));
+    const row = fileRow(c.name, on ? "Connected · send files below" : live ? "Online" : "Offline", btns, "person" + (on ? " on" : ""));
+    row.querySelector(".ic").textContent = (c.name[0] || "?").toUpperCase();
+    cl.appendChild(row);
+  }
   const el = $("#peopleList"); el.innerHTML = "";
-  if (peer.status === "on" && !peer.list.length) el.innerHTML = '<div class="empty-note">Nobody else is public right now. Ask them to turn on Public in Beam → People.</div>';
-  for (const p of peer.list) {
-    const on = peer.target?.id === p.id;
-    const row = fileRow(p.name, on ? "Connected · send files below" : "#" + p.id.slice(0, 4), smallBtn(on ? "Connected" : "Connect", () => { peer.target = on ? null : p; renderPeople(); }, on), "person" + (on ? " on" : ""));
+  const others = peer.list.filter(p => !isContact(p.cid));
+  if (peer.status === "on" && !others.length) el.innerHTML = '<div class="empty-note">Nobody else is public right now.</div>';
+  if (peer.status !== "on") el.innerHTML = '<div class="empty-note">Turn Public on to see who else is online.</div>';
+  for (const p of others) {
+    const row = fileRow(p.name, p.cid ? "Not a contact" : "Couldn't verify who this is", p.cid ? smallBtn("Add as contact", () => { addContact(p.cid, p.name); toast(p.name + " is now a contact"); renderPeople(); }, true) : null, "person");
     row.querySelector(".ic").textContent = (p.name[0] || "?").toUpperCase();
     el.appendChild(row);
   }
-  $("#peerDrop").classList.toggle("disabled", !peer.target);
+  $("#peerDrop").classList.toggle("disabled", !peer.target || !isContact(peer.target.cid));
   $("#peerDropTitle").textContent = peer.target ? "Send files to " + peer.target.name : "Pick someone above";
   if (isHome()) renderHomeStatus();
 }
 wireDrop($("#peerDrop"), $("#peerPick"), sendToPeer);
+$("#copyCid").onclick = () => copy($("#myCid").textContent);
+$("#devRefresh").onclick = loadDevices;
+$("#cidAdd").onclick = async () => {
+  const raw = $("#cidInput").value.toUpperCase().replace(/[^A-Z2-9]/g, "");
+  if (raw.length !== 16) return toast("A contact code has 16 letters and numbers (XXXX-XXXX-XXXX-XXXX)");
+  const cid = raw.match(/.{4}/g).join("-");
+  if (ident && cid === ident.cid) return toast("That's your own code");
+  if (isContact(cid)) return toast("Already a contact");
+  const live = peer.list.find(p => p.cid === cid);
+  addContact(cid, live ? live.name : "Contact " + cid.slice(0, 4)); $("#cidInput").value = ""; toast(live ? live.name + " added" : "Added. Their name shows when they are online"); renderPeople();
+};
 $("#pubName").onchange = e => {
   S.files.name = e.target.value.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 32); e.target.value = S.files.name; saveSettings();
   if (peer.ws) { peerDisconnect(); peerConnect(); }
@@ -5605,7 +5815,16 @@ $("#webBtn").onclick = () => {
   if (!searchAvailable) return toast("Web search needs the Albatross server with its search key (see the README)");
   S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on: the AI can look things up" : "Web search off");
 };
-$("#attachBtn").onclick = () => $("#fileInput").click();
+$("#attachBtn").onclick = (ev) => {
+  if (!connected || !window.pcFilesOpen) return $("#fileInput").click();
+  ev.stopPropagation();
+  const m = $("#attachMenu"); if (!m.hidden) { m.hidden = true; return; }
+  const r = $("#attachBtn").getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(r.left, innerWidth - 270)) + "px"; m.style.bottom = (innerHeight - r.top + 8) + "px"; m.hidden = false;
+};
+$("#attDevice").onclick = () => { $("#attachMenu").hidden = true; $("#fileInput").click(); };
+$("#attPc").onclick = () => { $("#attachMenu").hidden = true; window.pcFilesOpen("pick"); };
+document.addEventListener("click", (ev) => { if (!ev.target.closest("#attachMenu")) $("#attachMenu").hidden = true; });
 $("#fileInput").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
 const box = $("#box");
 box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("drag"); });
@@ -5788,5 +6007,6 @@ $("#accDelete").onclick = () => armed2("cloud", async () => {
   catch (e) { msg(nice(e), true); }
 });
 </script>
+<script src="agent.js"></script>
 </body>
 </html>

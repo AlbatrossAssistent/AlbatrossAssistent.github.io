@@ -133,6 +133,9 @@ const jarvis = require("./jarvis");
 const codeTool = require("./code");
 const chatStore = require("./chats");
 const jobStore = require("./jobs");
+const agentTools = require("./agent");
+const mailTools = require("./mail");
+const agentHandle = (method, p, body) => (p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : agentTools.handle(method, p, body, note));
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
@@ -445,6 +448,12 @@ function connect() {
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
+    if (typeof p === "string" && (p.startsWith("/pcfiles/") || p.startsWith("/agent/"))) {
+      let status = 500, out;
+      try { [status, out] = await agentHandle(method, p, body); } catch (e) { out = { error: e.message }; }
+      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+      return send({ type: "end", id });
+    }
     if (typeof p === "string" && p.startsWith("/jobs/")) {
       let status = 500, out;
       try { [status, out] = await jobStore.handle(method, p, body, { upstream, note }); } catch (e) { out = { error: e.message }; }
@@ -651,6 +660,7 @@ panel = startPanel({
   files,
   code: (method, p, body) => codeTool.handle(method, p, body, note),
   chats: (method, p, body) => chatStore.handle(method, p, body, note),
+  agent: (method, p, body) => agentHandle(method, p, body),
   jobs: (method, p, body) => jobStore.handle(method, p, body, { upstream, note }),
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },

@@ -377,7 +377,7 @@ wss.on("connection", (ws, req) => {
 // Nothing is stored: a user disappears from the list when the page closes.
 const peers = new Map(); // id -> { ws, name, pub }
 const MAX_PEERS = 500;
-const peerList = () => [...peers].map(([id, p]) => ({ id, name: p.name, pub: p.pub }));
+const peerList = () => [...peers].map(([id, p]) => ({ id, name: p.name, pub: p.pub, idpub: p.idpub, sig: p.sig }));
 let peerTimer = 0;
 function broadcastPeers() {
   if (peerTimer) return;
@@ -403,7 +403,9 @@ peerWss.on("connection", (ws, req) => {
       if (!name || !/^[A-Za-z0-9+/=]{40,200}$/.test(pub)) return safeSend(ws, { type: "error", error: "Enter a name first." });
       if (!myId && peers.size >= MAX_PEERS) return safeSend(ws, { type: "error", error: "Too many people online, try later." });
       if (!myId) myId = crypto.randomBytes(6).toString("hex");
-      peers.set(myId, { ws, name, pub });
+      // the person's long-lived identity key and its signature over this session's key: the browsers check it, the server only passes it on
+      const b64 = /^[A-Za-z0-9+\/=]{80,100}$/;
+      peers.set(myId, { ws, name, pub, idpub: b64.test(String(msg.idpub || "")) ? String(msg.idpub) : "", sig: b64.test(String(msg.sig || "")) ? String(msg.sig) : "" });
       safeSend(ws, { type: "welcome", id: myId });
       return broadcastPeers();
     }
