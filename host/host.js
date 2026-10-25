@@ -24,6 +24,21 @@ const { startPanel } = require("./panel");
 const comfy = require("./comfy");
 const files = require("./files");
 const schedule = require("./schedule");
+// ---------- how busy the PC is (the PC page on the website) ----------
+const cpuSnap = () => { let idle = 0, total = 0; for (const c of os.cpus()) { const t = c.times; idle += t.idle; total += t.user + t.nice + t.sys + t.idle + t.irq; } return { idle, total }; };
+let cpuPrev = cpuSnap(), cpuLast = null;
+setInterval(() => { const n = cpuSnap(), dt = n.total - cpuPrev.total; if (dt > 0) cpuLast = Math.round((1 - (n.idle - cpuPrev.idle) / dt) * 100); cpuPrev = n; }, 2000).unref();
+let gpuCache = { t: 0, v: null };
+function gpuStats() {
+  return new Promise((res) => {
+    if (Date.now() - gpuCache.t < 1500) return res(gpuCache.v);
+    execFile("nvidia-smi", ["--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw", "--format=csv,noheader,nounits"], { windowsHide: true, timeout: 3000 }, (err, out) => {
+      let v = null;
+      if (!err) { const [name, util, used, total, temp, power] = String(out).trim().split(/\s*,\s*/); v = { name, util: Number(util), usedMB: Number(used), totalMB: Number(total), temp: Number(temp), power: Number(power) }; }
+      gpuCache = { t: Date.now(), v }; res(v);
+    });
+  });
+}
 // ---------- the PC's own power: what Wake-on-LAN needs to know, and shutting down ----------
 const pcPower = {
   publicIp: "",
@@ -35,6 +50,11 @@ const pcPower = {
   },
   async handle(method, p, body, note) {
     if (method === "GET" && p === "/pc/info") return [200, { mac: this.mac(), publicIp: this.publicIp, name: NAME, platform: process.platform }];
+    if (method === "GET" && p === "/pc/stats") {
+      let disk = null; try { const st = fs.statfsSync(process.platform === "win32" ? "C:\\" : "/"); disk = { freeGB: st.bavail * st.bsize / 1e9, totalGB: st.blocks * st.bsize / 1e9 }; } catch {}
+      const cpus = os.cpus();
+      return [200, { name: NAME, cpu: cpuLast, cpuName: (cpus[0]?.model || "").trim(), cores: cpus.length, memUsedGB: (os.totalmem() - os.freemem()) / 1e9, memTotalGB: os.totalmem() / 1e9, uptimeH: os.uptime() / 3600, gpu: await gpuStats(), disk }];
+    }
     if (method === "POST" && p === "/pc/shutdown") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       const secs = Math.min(600, Math.max(15, Number(j.seconds) || 60));
