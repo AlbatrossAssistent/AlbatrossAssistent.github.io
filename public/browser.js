@@ -182,7 +182,7 @@ function putBack() { const bp = $("#browserPage"); if (inSide() && home.parent) 
 function sideTab(tab) {
   const sp = $("#sidePanel"); sp.dataset.tab = tab;
   $$("#spTabs button").forEach((b) => b.classList.toggle("on", b.dataset.sp === tab));
-  $("#spBrowser").hidden = tab !== "browser"; $("#spAgent").hidden = tab !== "agent";
+  $("#spBrowser").hidden = tab !== "browser"; $("#spAgent").hidden = tab !== "agent"; $("#spCode").hidden = tab !== "code";
   if (tab === "browser") {
     const bp = $("#browserPage");
     if (!inSide()) { home.parent = bp.parentNode; home.next = bp.nextSibling; $("#spBrowser").appendChild(bp); }
@@ -206,6 +206,67 @@ window.sideAgentRender = (block) => {
   box.innerHTML = ""; box.appendChild(window.agentCard(block));
 };
 $$("#spTabs button").forEach((b) => (b.onclick = () => sideTab(b.dataset.sp)));
+
+// ---------- the Code tab: every code block from a chat can be opened here, edited, run, saved ----------
+// HTML, CSS and JavaScript run in a sandboxed frame; Python runs in this browser with Pyodide (downloaded once, about 10 MB).
+const LANG = (l) => { l = String(l || "").toLowerCase().trim(); return /^(html?|xml|svg|vue)$/.test(l) ? "html" : /^css|scss$/.test(l) ? "css" : /^(js|javascript|mjs|cjs|node)$/.test(l) ? "js" : /^(py|python|python3)$/.test(l) ? "python" : "text"; };
+const EXT = { html: "html", css: "css", js: "js", python: "py", text: "txt" };
+let cpOrig = "";
+window.codeSide = (lang, code, open) => {
+  const l = LANG(lang); cpOrig = String(lang || "");
+  $("#cpLang").value = l; $("#cpSrc").value = code; $("#cpLog").textContent = ""; $("#cpFrame").hidden = true;
+  if (!$("#cpName").dataset.touched) $("#cpName").value = "snippet-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + "." + (l === "text" ? ({ rust: "rs", typescript: "ts", ts: "ts", "c++": "cpp", cpp: "cpp", c: "c", csharp: "cs", "c#": "cs", java: "java", go: "go", golang: "go", bash: "sh", sh: "sh", shell: "sh", powershell: "ps1", ruby: "rb", kotlin: "kt", swift: "swift", php: "php", sql: "sql", json: "json", yaml: "yml", markdown: "md", md: "md" }[cpOrig.toLowerCase()] || (/^\w{1,5}$/.test(cpOrig) ? cpOrig.toLowerCase() : "txt")) : EXT[l]);
+  cpNote();
+  if (open) window.sideOpen("code");
+};
+function cpNote() {
+  const l = $("#cpLang").value;
+  $("#cpRun").disabled = l === "text";
+  $("#cpNote").textContent = l === "text" ? (cpOrig ? `${cpOrig} can't run inside the browser. Save it to your PC, or ask the Code tool to make a project of it.` : "Pick a language to run it.") : l === "python" ? "Python runs here in your browser (not on the PC). The first run downloads Python, about 10 MB." : "";
+}
+let pyodide = null;
+async function loadPy() {
+  if (pyodide) return pyodide;
+  if (!window.loadPyodide) await new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"; sc.onload = res; sc.onerror = () => rej(new Error("couldn't download Python")); document.head.appendChild(sc); });
+  pyodide = await window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" });
+  return pyodide;
+}
+async function cpRun() {
+  const l = $("#cpLang").value, code = $("#cpSrc").value, log = $("#cpLog");
+  log.textContent = "";
+  if (l === "python") {
+    $("#cpFrame").hidden = true; log.textContent = pyodide ? "Running…" : "Downloading Python (only the first time)…";
+    try {
+      const py = await loadPy(), out = [];
+      py.setStdout({ batched: (x) => { out.push(x); log.textContent = out.join("\n"); } });
+      py.setStderr({ batched: (x) => { out.push("error: " + x); log.textContent = out.join("\n"); } });
+      log.textContent = "Running…";
+      try { await py.loadPackagesFromImports(code); } catch {}
+      const r = await py.runPythonAsync(code);
+      if (r !== undefined && r !== null) out.push(String(r));
+      log.textContent = out.join("\n") || "(finished, nothing was printed)";
+    } catch (e) { log.textContent += (log.textContent ? "\n" : "") + String(e.message || e).split("\n").slice(-6).join("\n"); }
+    return;
+  }
+  const frame = $("#cpFrame"); frame.hidden = false;
+  const html = l === "css" ? `<style>${code}</style><h1>Heading</h1><p>A paragraph with a <a href="#">link</a> and <b>bold text</b>.</p><button>Button</button> <input placeholder="Input">` : code;
+  const out = await window.runInFrame(frame, l === "js" ? "js" : "html", html, (x) => { log.textContent = x; });
+  if (out === "(nothing was printed)") log.textContent = "";
+}
+$("#cpRun").onclick = cpRun;
+$("#cpLang").onchange = () => { cpOrig = ""; cpNote(); };
+$("#cpName").oninput = () => ($("#cpName").dataset.touched = "1");
+$("#cpCopy").onclick = () => copy($("#cpSrc").value);
+$("#cpDl").onclick = () => download(($("#cpName").value || "snippet.txt").replace(/[\\/:*?"<>|]/g, "_"), new Blob([$("#cpSrc").value], { type: "text/plain" }));
+$("#cpSave").onclick = async () => {
+  const name = ($("#cpName").value || "snippet.txt").replace(/[\\/:*?"<>|]/g, "_").replace(/^\.+/, "");
+  try { const j = await pcCall("/agent/write", { spec: "code:snippets/" + name, content: $("#cpSrc").value, mode: "overwrite" }); toast("Saved on your PC: PC files → Code projects → snippets → " + name); }
+  catch (e) { toast("Couldn't save: " + e.message); }
+};
+$("#cpSrc").addEventListener("keydown", (e) => {
+  if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); const ta = e.target, a = ta.selectionStart; ta.setRangeText("  ", a, ta.selectionEnd, "end"); }
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); cpRun(); }
+});
 $("#spClose").onclick = () => window.sideClose();
 $("#spFull").onclick = () => { const tab = $("#sidePanel").dataset.tab; setView(tab === "agent" ? "agent" : "browser"); };
 $("#sideBtn").onclick = () => ($("#sidePanel").hidden ? window.sideOpen() : window.sideClose());

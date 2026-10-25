@@ -127,6 +127,7 @@ function runInFrame(frame, lang, code, onLine) {
     setTimeout(end, 6000);
   });
 }
+window.playerHtml = playerHtml; window.runInFrame = runInFrame;
 function runHidden(lang, code) {
   const f = document.createElement("iframe"); f.setAttribute("sandbox", "allow-scripts"); f.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:0;left:-10px;top:-10px"; f.title = "Code runner";
   document.body.appendChild(f);
@@ -197,7 +198,7 @@ function chatUI(block, redraw) {
     async ask(q, opts) { const st = mk("ask", q, ""); const ans = await pend({ kind: "ask", options: (opts || []).slice(0, 5) }); st.state = ans == null ? "fail" : "done"; st.detail = ans == null ? "(not answered)" : "You answered: " + ans; redraw(); return ans; },
     plan(steps) { block.plan = steps; redraw(); },
     page(j) { block.page = { title: j.title || j.url, url: j.url }; redraw(); },
-    async code(lang, code) { block.code = { lang, code }; redraw(); return runHidden(lang, code); },
+    async code(lang, code) { block.code = { lang, code }; redraw(); window.codeSide && window.codeSide(lang, code, false); return runHidden(lang, code); },
   };
 }
 let ui = pageUI;
