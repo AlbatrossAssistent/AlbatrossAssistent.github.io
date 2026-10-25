@@ -7,9 +7,10 @@ const call = (p, body) => pcCall(p, body || {});
 const KEYS = new Set(["Enter", "Backspace", "Tab", "Escape", "Delete", "ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown", "Home", "End", "PageUp", "PageDown", "F5"]);
 
 // inputs go to the PC one after another, in order
+const inTime = (pr, ms) => Promise.race([pr, new Promise((r) => setTimeout(r, ms))]);
 function sendInput(o) {
   if (o.t !== "text" && BV.text) flushText();
-  BV.queue = BV.queue.then(() => call("/browser/input", o).catch(() => {}));
+  BV.queue = BV.queue.then(() => inTime(call("/browser/input", o).catch(() => {}), 6000));
   return BV.queue;
 }
 // typed letters are sent in small groups, not one request per letter
@@ -110,8 +111,15 @@ function pos(e) {
 }
 function queueWheel(p, dx, dy) {
   const w = BV.wheel; w.dx += dx; w.dy += dy; w.x = p.x; w.y = p.y;
-  if (w.timer) return;
-  w.timer = setTimeout(() => { const o = { t: "wheel", x: w.x, y: w.y, dx: Math.round(w.dx), dy: Math.round(w.dy) }; w.dx = w.dy = 0; w.timer = 0; sendInput(o); }, remotePC() ? 50 : 25);
+  if (w.timer || w.busy) return;
+  w.timer = setTimeout(flushWheel, remotePC() ? 50 : 25);
+}
+// one scroll request at a time: whatever the finger or wheel did meanwhile goes in the next one, so a slow connection never piles up a backlog
+function flushWheel() {
+  const w = BV.wheel; w.timer = 0;
+  if (!w.dx && !w.dy) return;
+  const o = { t: "wheel", x: w.x, y: w.y, dx: Math.round(w.dx), dy: Math.round(w.dy) }; w.dx = w.dy = 0; w.busy = true;
+  sendInput(o).then(() => { w.busy = false; if (w.dx || w.dy) flushWheel(); });
 }
 
 let wired = false;
@@ -137,9 +145,28 @@ function wire() {
   img.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     if (e.pointerType === "mouse") { scr.focus({ preventScroll: true }); ptr = { mouse: true }; sendInput({ t: "down", ...pos(e), button: ["left", "middle", "right"][e.button] || "left", count: e.detail || 1, ...mods(e) }); return; }
-    ptr = { x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, p: pos(e) };
-    try { img.setPointerCapture(e.pointerId); } catch {}
+    if (!("ontouchstart" in window)) { ptr = { x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, p: pos(e) }; try { img.setPointerCapture(e.pointerId); } catch {} }   // a pen, or touch without touch events
   });
+  let tch = null;
+  img.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    const t = e.touches[0]; if (!t || e.touches.length > 1) { tch = null; return; }
+    tch = { x0: t.clientX, y0: t.clientY, lx: t.clientX, ly: t.clientY, moved: false, p: pos(t), t0: Date.now() };
+  }, { passive: false });
+  img.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const t = e.touches[0]; if (!tch || !t) return;
+    const dx = t.clientX - tch.lx, dy = t.clientY - tch.ly;
+    if (Math.hypot(t.clientX - tch.x0, t.clientY - tch.y0) > 8) tch.moved = true;
+    tch.lx = t.clientX; tch.ly = t.clientY;
+    if (tch.moved) queueWheel(tch.p, -dx / tch.p.sc, -dy / tch.p.sc);
+  }, { passive: false });
+  img.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    if (tch && !tch.moved) sendInput({ t: "click", x: tch.p.x, y: tch.p.y, count: 1 });
+    tch = null;
+  }, { passive: false });
+  img.addEventListener("touchcancel", () => { tch = null; });
   img.addEventListener("pointermove", (e) => {
     if (e.pointerType === "mouse") {
       const now = Date.now(); if (now - BV.moveT < (remotePC() ? 70 : 30)) return; BV.moveT = now;

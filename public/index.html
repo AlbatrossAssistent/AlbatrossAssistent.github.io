@@ -1040,7 +1040,7 @@ body.browser-view .messages, body.browser-view .composer, body.browser-view #hom
 .bv-load { height: 2px; border-radius: 2px; background: transparent; }
 .bv-load.on { background: linear-gradient(90deg, transparent, var(--fg), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: bvload 1s linear infinite; }
 @keyframes bvload { from { background-position: -40% 0; } to { background-position: 140% 0; } }
-.bv-screen { position: relative; flex: 1; min-height: 0; border-radius: 14px; overflow: hidden; background: #fff; outline: none; border: 1px solid var(--line); }
+.bv-screen { position: relative; flex: 1; min-height: 0; border-radius: 14px; overflow: hidden; background: #fff; outline: none; border: 1px solid var(--line); touch-action: none; overscroll-behavior: contain; -webkit-user-select: none; user-select: none; }
 .bv-screen:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--fg) 40%, transparent); }
 #bvImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: top left; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 #bvImg:not([src]) { visibility: hidden; }
