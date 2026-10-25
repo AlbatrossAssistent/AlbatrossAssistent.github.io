@@ -716,6 +716,13 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .cp-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cp-bar select, .cp-bar input { font: inherit; font-size: 13px; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 10px; padding: 6px 9px; }
 .cp-bar input { flex: 1; min-width: 90px; }
+.cp-files { display: flex; gap: 4px; overflow-x: auto; flex: none; scrollbar-width: thin; }
+.cp-files button { display: inline-flex; align-items: center; gap: 2px; flex: none; max-width: 180px; font: inherit; font-size: 12.5px; padding: 3px 4px 3px 10px; border-radius: 9px; border: 1px solid var(--line); background: none; color: var(--muted); cursor: pointer; }
+.cp-files button.on { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); border-color: color-mix(in srgb, var(--fg) 28%, transparent); }
+.cp-files .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-files .x { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; font-size: 14px; line-height: 1; }
+.cp-files .x:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
+.cp-files .add { padding: 3px 11px; font-size: 15px; }
 #cpSrc { flex: 1 1 45%; min-height: 160px; font: 13px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent); border-radius: 12px; padding: 10px 12px; resize: vertical; tab-size: 2; white-space: pre; overflow: auto; }
 #cpFrame { flex: 1 1 40%; min-height: 180px; width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 #cpFrame[hidden] { display: none; }
@@ -1363,9 +1370,10 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
       <input id="cpName" placeholder="file name" spellcheck="false" autocomplete="off">
       <button class="btn small primary" id="cpRun" type="button">Run</button>
       <button class="btn small" id="cpCopy" type="button">Copy</button>
-      <button class="btn small" id="cpSave" type="button" title="Save into PC files → Code projects → snippets">Save to PC</button>
-      <button class="btn small" id="cpDl" type="button">Download</button>
+      <button class="btn small" id="cpSave" type="button" title="Save into PC files → Code projects (one file: snippets, several: a folder of their own)">Save to PC</button>
+      <button class="btn small" id="cpDl" type="button" title="Download the file (several files: one .zip)">Download</button>
     </div>
+    <div class="cp-files" id="cpFiles" aria-label="Files of this project"></div>
     <textarea id="cpSrc" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Code from a chat answer opens here (the Open button on any code block). Or type your own."></textarea>
     <div class="pc-note" id="cpNote"></div>
     <iframe id="cpFrame" sandbox="allow-scripts allow-modals allow-forms" title="Result" hidden></iframe>
@@ -3373,10 +3381,13 @@ function md(src) {
   let out = "";
   parts.forEach((part, i) => {
     if (i % 2) {
-      const lang = (part.match(/^([\w+#.-]*)\n/) || [])[1] || "";
-      const code = part.replace(/^[\w+#.-]*\n/, "").replace(/\n$/, "");
+      // the info line: ```js, or with a file name: ```js game.js, ```js title="game.js", ```game.js
+      const head = part.match(/^([\w+#.-]*)(?:[ \t]+(?:(?:title|file|filename)=)?["']?([\w./-]+\.\w{1,6})["']?)?[ \t]*\n/);
+      let lang = head ? head[1] : "", file = (head && head[2]) || "";
+      if (!file && /^[\w-][\w.-]*\.(html?|css|m?js|jsx|tsx?|json|py|txt|md|svg|xml|csv)$/i.test(lang)) { file = lang; lang = lang.split(".").pop(); }
+      const code = (head ? part.slice(head[0].length) : part).replace(/\n$/, "");
       const lines = code ? code.split("\n").length : 0;
-      out += `<div class="code"><div class="code-head"><button class="cc-toggle" aria-expanded="true" title="Show or hide the code"><svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg><span>${esc(lang) || "code"}</span><span class="meta">${lines} line${lines === 1 ? "" : "s"}</span></button><button class="open-code" title="Open in the side panel: edit, run, save" aria-label="Open in the side panel"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/></svg>Open</button>${/^(html?|js|javascript)$/i.test(lang) ? '<button class="run-code" title="Run it here, in the built-in code player" aria-label="Run the code"><svg class="i" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>Run</button>' : ""}<button class="copy-code" title="Copy the code" aria-label="Copy the code">${ICON.copy}</button></div><pre><code>${esc(code)}</code></pre></div>`;
+      out += `<div class="code"${file ? ` data-file="${esc(file)}"` : ""}><div class="code-head"><button class="cc-toggle" aria-expanded="true" title="Show or hide the code"><svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg><span>${esc(lang) || "code"}</span><span class="meta">${file ? esc(file) + " · " : ""}${lines} line${lines === 1 ? "" : "s"}</span></button><button class="open-code" title="Open in the side panel: edit, run, save" aria-label="Open in the side panel"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/></svg>Open</button>${/^(html?|js|javascript)$/i.test(lang) ? '<button class="run-code" title="Run it here, in the built-in code player" aria-label="Run the code"><svg class="i" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>Run</button>' : ""}<button class="copy-code" title="Copy the code" aria-label="Copy the code">${ICON.copy}</button></div><pre><code>${esc(code)}</code></pre></div>`;
       return;
     }
     const lines = esc(part).split("\n");
@@ -3395,11 +3406,44 @@ function md(src) {
   });
   return out;
 }
+// A code block's file name: from its info line (```js game.js), from the end of the line right before it ("**game.js**:",
+// "### style.css"), or from a comment on its first line (// game.js, <!-- index.html -->, # main.py). "" when it has none.
+const FILE_NAME = "([\\w-][\\w.-]*(?:\\/[\\w.-]+)*\\.(?:html?|css|m?js|jsx|tsx?|json|py|txt|md|svg|xml|csv|glsl|frag|vert))";
+function codeName(box) {
+  if (box.dataset.file) return box.dataset.file;
+  const prev = box.previousElementSibling;
+  if (prev && /^(P|H[1-6]|UL|OL)$/.test(prev.tagName)) {
+    const last = (/^[UO]L$/.test(prev.tagName) ? prev.lastElementChild?.textContent : (prev.innerText || prev.textContent).split("\n").pop()) || "";
+    const m = new RegExp(FILE_NAME + "[\\s`*:)\\].—–-]*$", "i").exec(last);
+    if (m) return m[1];
+  }
+  const first = box.querySelector("code").textContent.split("\n", 1)[0];
+  const c = new RegExp("^\\s*(?:\\/\\/|#|<!--|\\/\\*|--)\\s*(?:file(?:name)?\\s*:\\s*)?" + FILE_NAME + "\\s*(?:-->|\\*\\/)?\\s*$", "i").exec(first);
+  return c ? c[1] : "";
+}
+// all the named files of the answer this code block is in (a later block with the same name wins), and where this one is
+function codeFilesOf(box) {
+  const files = [];
+  for (const b of (box.closest(".md") || box.parentNode).querySelectorAll(".code")) {
+    const name = codeName(b); if (!name) continue;
+    const f = { name, lang: b.querySelector(".cc-toggle span").textContent, code: b.querySelector("code").textContent }, i = files.findIndex((x) => x.name === name);
+    if (i >= 0) files[i] = f; else files.push(f);
+  }
+  const me = codeName(box);
+  return { files, at: me ? files.findIndex((x) => x.name === me) : -1 };
+}
+window.codeFilesOf = codeFilesOf;
 document.addEventListener("click", e => {
   const b = e.target.closest(".copy-code");
   if (b) { copy(b.closest(".code").querySelector("code").textContent); b.classList.add("done"); const old = b.innerHTML; b.innerHTML = "✓"; setTimeout(() => { b.innerHTML = old; b.classList.remove("done"); }, 1200); return; }
   const oc = e.target.closest(".open-code");
-  if (oc) { const box = oc.closest(".code"); window.codeSide && window.codeSide(box.querySelector(".cc-toggle span").textContent, box.querySelector("code").textContent, true); return; }
+  if (oc) {
+    const box = oc.closest(".code"), p = codeFilesOf(box);
+    if (!window.codeSide) return;
+    if (p.files.length > 1 && p.at >= 0) window.codeSide(null, null, true, p);   // the whole project of this answer, this file open
+    else window.codeSide(box.querySelector(".cc-toggle span").textContent, box.querySelector("code").textContent, true, { name: codeName(box) });
+    return;
+  }
   const rn = e.target.closest(".run-code");
   if (rn) { window.runCodeBlock && window.runCodeBlock(rn.closest(".code")); return; }
   const t = e.target.closest(".cc-toggle");
@@ -3579,6 +3623,7 @@ async function chat(model) {
     let system = current.system || S.defaultSystem;
     if (toolsOk && imageSearchAvailable) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search.";
     system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, a graph or chart, or for chances, odds or a prediction, tell them to open \"Tools\" next to the message box, switch on Slides, Graph or Chances, and ask again. For writing a program into a file on their PC there is Code, and for digging a hidden word out of a puzzle file there is Challenge.";
+    system += "\n\nWhen a program needs more than one file (for example a game with index.html, style.css and game.js), write every file in full in its own code block and put its file name in bold on the line right before the block, like **game.js**. Link the files to each other with relative paths (<link rel=\"stylesheet\" href=\"style.css\">, <script src=\"game.js\"><\/script>, import ... from \"./util.js\"), so they run together in the built-in player.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     if (EFFORT_HINT[effort]) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
     if (S.askMid !== false) system = (system ? system + "\n\n" : "") + "If you really need something from the user before you can do the job well (a choice between options, a missing detail), ask by ending your reply with exactly one line like [[ask: Your question? | Option A | Option B | Option C]] with 2 to 4 short options, and write nothing after it. The user can also type their own answer. If a sensible assumption works, make it and don't ask.";

@@ -254,20 +254,76 @@ $$("#spTabs button").forEach((b) => (b.onclick = () => sideTab(b.dataset.sp)));
 
 // ---------- the Code tab: every code block from a chat can be opened here, edited, run, saved ----------
 // HTML, CSS and JavaScript run in a sandboxed frame; Python runs in this browser with Pyodide (downloaded once, about 10 MB).
+// An answer made of several files (a game: index.html, style.css, game.js ...) opens as one project with a tab per file,
+// and Run puts them together (window.bundleFiles in agent.js), Python files can import each other.
 const LANG = (l) => { l = String(l || "").toLowerCase().trim(); return /^(html?|xml|svg|vue)$/.test(l) ? "html" : /^css|scss$/.test(l) ? "css" : /^(js|javascript|mjs|cjs|node)$/.test(l) ? "js" : /^(py|python|python3)$/.test(l) ? "python" : "text"; };
 const EXT = { html: "html", css: "css", js: "js", python: "py", text: "txt" };
-let cpOrig = "";
-window.codeSide = (lang, code, open) => {
-  const l = LANG(lang); cpOrig = String(lang || "");
-  $("#cpLang").value = l; $("#cpSrc").value = code; $("#cpLog").textContent = ""; $("#cpFrame").hidden = true;
-  if (!$("#cpName").dataset.touched) $("#cpName").value = "snippet-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + "." + (l === "text" ? ({ rust: "rs", typescript: "ts", ts: "ts", "c++": "cpp", cpp: "cpp", c: "c", csharp: "cs", "c#": "cs", java: "java", go: "go", golang: "go", bash: "sh", sh: "sh", shell: "sh", powershell: "ps1", ruby: "rb", kotlin: "kt", swift: "swift", php: "php", sql: "sql", json: "json", yaml: "yml", markdown: "md", md: "md" }[cpOrig.toLowerCase()] || (/^\w{1,5}$/.test(cpOrig) ? cpOrig.toLowerCase() : "txt")) : EXT[l]);
-  cpNote();
+const OTHER_EXT = { rust: "rs", typescript: "ts", ts: "ts", "c++": "cpp", cpp: "cpp", c: "c", csharp: "cs", "c#": "cs", java: "java", go: "go", golang: "go", bash: "sh", sh: "sh", shell: "sh", powershell: "ps1", ruby: "rb", kotlin: "kt", swift: "swift", php: "php", sql: "sql", json: "json", yaml: "yml", markdown: "md", md: "md" };
+const extOf = (n) => (/\.(\w+)$/.exec(n || "") || [])[1] || "";
+const safePath = (n) => String(n || "").replace(/\\/g, "/").split("/").map((s) => s.replace(/[\\/:*?"<>|]/g, "_").replace(/^\.+/, "").replace(/[. ]+$/, "")).filter(Boolean).join("/");
+function cpMake(lang, code, name) {
+  const fromName = LANG(extOf(name)), l = fromName !== "text" ? fromName : LANG(lang), orig = String(lang || "");
+  name = name || "snippet-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + "." + (l === "text" ? (OTHER_EXT[orig.toLowerCase()] || (/^\w{1,5}$/.test(orig) ? orig.toLowerCase() : "txt")) : EXT[l]);
+  return { name, lang: l, orig, code: String(code || "") };
+}
+let cpFiles = [cpMake("html", "", "")], cpAt = 0, cpFolder = "";
+const cpCur = () => cpFiles[cpAt];
+// what Run starts: the open file if it runs, or else the project's page, or else its Python program
+function cpEntry() {
+  const f = cpCur();
+  if (f.lang !== "text") return f;
+  return cpFiles.find((x) => x.lang === "html") || cpFiles.find((x) => x.name.split("/").pop() === "main.py") || cpFiles.find((x) => x.lang === "python") || f;
+}
+// lang, code: one code block. o.files: a whole project ({ files: [{ name, lang, code }], at }). o.name: the block's file name, if known
+window.codeSide = (lang, code, open, o) => {
+  o = o || {};
+  if (o.files && o.files.length) { cpFiles = o.files.map((f) => cpMake(f.lang, f.code, f.name)); cpAt = Math.max(0, Math.min(cpFiles.length - 1, o.at | 0)); cpFolder = ""; }
+  else {
+    const f = cpMake(lang, code, o.name), i = o.name ? cpFiles.findIndex((x) => x.name === o.name) : -1;
+    if (i >= 0) { cpFiles[i] = f; cpAt = i; }                                          // a newer version of a file of the project
+    else if (o.name && cpFiles.length > 1) { cpFiles.push(f); cpAt = cpFiles.length - 1; }  // one more file for the project
+    else { cpFiles = [f]; cpAt = 0; cpFolder = ""; }
+  }
+  cpShow();
   if (open) window.sideOpen("code");
 };
+function cpShow(keepOut) {
+  const f = cpCur();
+  $("#cpLang").value = f.lang; $("#cpName").value = f.name; $("#cpSrc").value = f.code;
+  if (!keepOut) { $("#cpLog").textContent = ""; $("#cpFrame").hidden = true; }
+  cpTabs(); cpNote();
+}
+function cpTabs() {
+  const box = $("#cpFiles"); box.innerHTML = "";
+  cpFiles.forEach((f, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.dataset.i = i; b.className = i === cpAt ? "on" : ""; b.title = f.name;
+    b.innerHTML = '<span class="nm"></span><span class="x" role="button" title="Close this file" aria-label="Close this file">×</span>';
+    b.querySelector(".nm").textContent = f.name.split("/").pop();
+    box.appendChild(b);
+  });
+  box.insertAdjacentHTML("beforeend", '<button type="button" class="add" title="Add a file to this project" aria-label="Add a file">+</button>');
+}
+$("#cpFiles").onclick = (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.classList.contains("add")) {
+    let n = 1; while (cpFiles.some((f) => f.name === "new-" + n + ".js")) n++;
+    cpFiles.push(cpMake("js", "", "new-" + n + ".js")); cpAt = cpFiles.length - 1; cpShow(true);
+    $("#cpName").focus(); $("#cpName").select(); return;
+  }
+  const i = +b.dataset.i;
+  if (e.target.closest(".x")) {
+    cpFiles.splice(i, 1);
+    if (!cpFiles.length) { cpFiles = [cpMake("html", "", "")]; cpFolder = ""; }
+    cpAt = Math.min(i <= cpAt ? Math.max(0, cpAt - 1) : cpAt, cpFiles.length - 1); cpShow(true); return;
+  }
+  cpAt = i; cpShow(true);
+};
 function cpNote() {
-  const l = $("#cpLang").value;
-  $("#cpRun").disabled = l === "text";
-  $("#cpNote").textContent = l === "text" ? (cpOrig ? `${cpOrig} can't run inside the browser. Save it to your PC, or ask the Code tool to make a project of it.` : "Pick a language to run it.") : l === "python" ? "Python runs here in your browser (not on the PC). The first run downloads Python, about 10 MB." : "";
+  const f = cpCur(), run = cpEntry(), many = cpFiles.length > 1, page = run.lang === "html" ? run : cpFiles.find((x) => x.lang === "html");
+  $("#cpRun").disabled = run.lang === "text";
+  $("#cpNote").textContent = run.lang === "text" ? (f.orig ? `${f.orig} can't run inside the browser. Save it to your PC, or ask the Code tool to make a project of it.` : "Pick a language to run it.")
+    : run.lang === "python" ? `Python runs here in your browser (not on the PC)${many ? `, starting with ${run.name}; the other files are next to it` : ""}. The first run downloads Python, about 10 MB.`
+    : many ? `${cpFiles.length} files: Run starts ${page ? page.name : "a page"} with all of them together.` : "";
 }
 let pyodide = null;
 async function loadPy() {
@@ -277,41 +333,99 @@ async function loadPy() {
   return pyodide;
 }
 async function cpRun() {
-  const l = $("#cpLang").value, code = $("#cpSrc").value, log = $("#cpLog");
+  const f = cpEntry(), log = $("#cpLog");
   log.textContent = "";
-  if (l === "python") {
+  if (f.lang === "python") {
     $("#cpFrame").hidden = true; log.textContent = pyodide ? "Running…" : "Downloading Python (only the first time)…";
     try {
       const py = await loadPy(), out = [];
       py.setStdout({ batched: (x) => { out.push(x); log.textContent = out.join("\n"); } });
       py.setStderr({ batched: (x) => { out.push("error: " + x); log.textContent = out.join("\n"); } });
       log.textContent = "Running…";
-      try { await py.loadPackagesFromImports(code); } catch {}
-      const r = await py.runPythonAsync(code);
+      // every file of the project lies next to the program, so `import helpers` and open("level.txt") find them; edited modules load fresh
+      const home = "/home/pyodide", mods = [];
+      for (const x of cpFiles) {
+        const p = safePath(x.name); if (!p) continue;
+        if (p.includes("/")) py.FS.mkdirTree(home + "/" + p.slice(0, p.lastIndexOf("/")));
+        py.FS.writeFile(home + "/" + p, x.code);
+        if (x.lang === "python") mods.push(p.replace(/\.py$/, "").replace(/\//g, "."));
+      }
+      py.runPython(`import sys, os\nos.chdir(${JSON.stringify(home)})\nif ${JSON.stringify(home)} not in sys.path: sys.path.insert(0, ${JSON.stringify(home)})\nfor n in ${JSON.stringify(mods)}: sys.modules.pop(n, None)`);
+      try { await py.loadPackagesFromImports(cpFiles.filter((x) => x.lang === "python").map((x) => x.code).join("\n")); } catch {}
+      const r = await py.runPythonAsync(f.code);
       if (r !== undefined && r !== null) out.push(String(r));
       log.textContent = out.join("\n") || "(finished, nothing was printed)";
     } catch (e) { log.textContent += (log.textContent ? "\n" : "") + String(e.message || e).split("\n").slice(-6).join("\n"); }
     return;
   }
   const frame = $("#cpFrame"); frame.hidden = false;
-  const html = l === "css" ? `<style>${code}</style><h1>Heading</h1><p>A paragraph with a <a href="#">link</a> and <b>bold text</b>.</p><button>Button</button> <input placeholder="Input">` : code;
-  const out = await window.runInFrame(frame, l === "js" ? "js" : "html", html, (x) => { log.textContent = x; });
+  const code = f.code;
+  const out = cpFiles.length > 1
+    ? await window.runInFrame(frame, "html", window.bundleFiles(cpFiles, cpFiles.indexOf(f)), (x) => { log.textContent = x; })
+    : await window.runInFrame(frame, f.lang === "js" ? "js" : "html", f.lang === "css" ? `<style>${code}</style><h1>Heading</h1><p>A paragraph with a <a href="#">link</a> and <b>bold text</b>.</p><button>Button</button> <input placeholder="Input">` : code, (x) => { log.textContent = x; });
   if (out === "(nothing was printed)") log.textContent = "";
 }
+// a folder name for the project: the page's <title>, or the date
+function cpFolderName() {
+  if (cpFolder) return cpFolder;
+  const html = cpFiles.find((x) => x.lang === "html"), t = html && (/<title[^>]*>([^<]{1,60})<\/title>/i.exec(html.code) || [])[1];
+  const slug = String(t || "").toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/[\s_]+/g, "-").slice(0, 40);
+  return (cpFolder = slug || "project-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-"));
+}
+// a .zip of the project (stored, not compressed: these are a few small text files)
+function zipBlob(files) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  const crcT = Array.from({ length: 256 }, (_, n) => { for (let k = 0; k < 8; k++) n = n & 1 ? 0xedb88320 ^ (n >>> 1) : n >>> 1; return n >>> 0; });
+  const crc32 = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  let off = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), data = enc.encode(f.code), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30 + name.length)), c = new DataView(new ArrayBuffer(46 + name.length));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(12, 0x21, true);
+    h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);
+    new Uint8Array(h.buffer).set(name, 30);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(14, 0x21, true);
+    c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    new Uint8Array(c.buffer).set(name, 46);
+    parts.push(h, data); central.push(c); off += h.byteLength + data.length;
+  }
+  const size = central.reduce((s, c) => s + c.byteLength, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, size, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...central, end], { type: "application/zip" });
+}
 $("#cpRun").onclick = cpRun;
-$("#cpLang").onchange = () => { cpOrig = ""; cpNote(); };
-$("#cpName").oninput = () => ($("#cpName").dataset.touched = "1");
+$("#cpLang").onchange = () => { const f = cpCur(); f.lang = $("#cpLang").value; f.orig = ""; cpNote(); };
+$("#cpName").oninput = () => {
+  const f = cpCur(); f.name = $("#cpName").value;
+  const l = LANG(extOf(f.name)); if (l !== "text" && l !== f.lang) { f.lang = l; f.orig = ""; $("#cpLang").value = l; }
+  cpTabs(); cpNote();
+};
+$("#cpSrc").oninput = () => (cpCur().code = $("#cpSrc").value);
 $("#cpCopy").onclick = () => copy($("#cpSrc").value);
-$("#cpDl").onclick = () => download(($("#cpName").value || "snippet.txt").replace(/[\\/:*?"<>|]/g, "_"), new Blob([$("#cpSrc").value], { type: "text/plain" }));
+$("#cpDl").onclick = () => {
+  if (cpFiles.length === 1) return download(safePath(cpCur().name).replace(/\//g, "_") || "snippet.txt", new Blob([cpCur().code], { type: "text/plain" }));
+  const dir = cpFolderName();
+  download(dir + ".zip", zipBlob(cpFiles.map((f) => ({ name: dir + "/" + (safePath(f.name) || "file.txt"), code: f.code }))));
+};
 $("#cpSave").onclick = async () => {
-  const name = ($("#cpName").value || "snippet.txt").replace(/[\\/:*?"<>|]/g, "_").replace(/^\.+/, "");
-  try { const j = await pcCall("/agent/write", { spec: "code:snippets/" + name, content: $("#cpSrc").value, mode: "overwrite" }); toast("Saved on your PC: PC files → Code projects → snippets → " + name); }
-  catch (e) { toast("Couldn't save: " + e.message); }
+  if (cpFiles.length === 1) {
+    const name = safePath(cpCur().name).replace(/\//g, "_") || "snippet.txt";
+    try { await pcCall("/agent/write", { spec: "code:snippets/" + name, content: cpCur().code, mode: "overwrite" }); toast("Saved on your PC: PC files → Code projects → snippets → " + name); }
+    catch (e) { toast("Couldn't save: " + e.message); }
+    return;
+  }
+  const dir = cpFolderName(), bad = [];
+  for (const f of cpFiles) {
+    try { await pcCall("/agent/write", { spec: "code:" + dir + "/" + (safePath(f.name) || "file.txt"), content: f.code, mode: "overwrite" }); }
+    catch (e) { bad.push(f.name + ": " + e.message); }
+  }
+  toast(bad.length === cpFiles.length ? "Couldn't save: " + bad[0] : `Saved ${cpFiles.length - bad.length} file${cpFiles.length - bad.length === 1 ? "" : "s"} on your PC: PC files → Code projects → ${dir}` + (bad.length ? ` (not saved: ${bad.join("; ")})` : ""));
 };
 $("#cpSrc").addEventListener("keydown", (e) => {
-  if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); const ta = e.target, a = ta.selectionStart; ta.setRangeText("  ", a, ta.selectionEnd, "end"); }
+  if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); const ta = e.target, a = ta.selectionStart; ta.setRangeText("  ", a, ta.selectionEnd, "end"); cpCur().code = ta.value; }
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); cpRun(); }
 });
+cpTabs();
 $("#spClose").onclick = () => window.sideClose();
 $("#spFull").onclick = () => { const tab = $("#sidePanel").dataset.tab; setView(tab === "agent" ? "agent" : "browser"); };
 $("#sideBtn").onclick = () => ($("#sidePanel").hidden ? window.sideOpen() : window.sideClose());

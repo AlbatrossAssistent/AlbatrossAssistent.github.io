@@ -134,6 +134,69 @@ function runHidden(lang, code) {
   return runInFrame(f, lang, code).finally(() => f.remove());
 }
 
+// ---------- several files that belong together (a game: index.html, style.css, game.js ...) become one page for the player ----------
+// The frame has no address the files could be loaded from, so: <link>ed styles go inline, <script src>s and JavaScript modules
+// (with their imports) get data: addresses, so do pictures the page or its CSS names, and fetch("level.json") or
+// img.src = "player.svg" get the file from the project. files: [{ name, code }], at: the file that was open.
+const MIME_OF = { html: "text/html", htm: "text/html", css: "text/css", js: "text/javascript", mjs: "text/javascript", json: "application/json", svg: "image/svg+xml", csv: "text/csv", xml: "text/xml" };
+const IMPORT_RE = /(\bimport\s*(?:[\w$*{}\s,]+?\s*from\s*)?|\bexport\s*[\w$*{}\s,]*?\s*from\s*|\bimport\s*\(\s*)(["'])([^"'\n]+)\2/g;
+function bundleFiles(files, at) {
+  const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/[?#].*$/, "").split("/").reduce((a, s) => (s === ".." ? a.slice(0, -1) : s && s !== "." ? [...a, s] : a), []).join("/");
+  const dirOf = (n) => norm(n).split("/").slice(0, -1).join("/");
+  const ext = (f) => (/\.(\w+)$/.exec(f.name) || [])[1]?.toLowerCase() || "";
+  const find = (ref, from) => {
+    ref = String(ref || "").trim();
+    if (!ref || /^(?:[a-z][\w+.-]*:|\/\/|#)/i.test(ref)) return null;   // http:, data:, //cdn..., #anchor
+    const want = ref.startsWith("/") ? norm(ref) : norm((dirOf(from) ? dirOf(from) + "/" : "") + ref), base = want.split("/").pop();
+    return files.find((f) => norm(f.name) === want) || files.find((f) => norm(f.name) === norm(ref)) || files.find((f) => norm(f.name).split("/").pop() === base) || null;
+  };
+  const dataUrl = (f, body) => `data:${MIME_OF[ext(f)] || "text/plain"};charset=utf-8,` + encodeURIComponent(body == null ? f.code : body).replace(/'/g, "%27");   // ' too: the address can stand in '...'
+  const mods = new Map(), busy = new Set();
+  const imports = (code, from) => code.replace(IMPORT_RE, (m, a, q, spec) => { const g = find(spec, from); return g ? a + q + (/^m?js$/.test(ext(g)) ? modUrl(g) : dataUrl(g)) + q : m; });
+  const modUrl = (f) => {
+    if (mods.has(f)) return mods.get(f);
+    if (busy.has(f)) return dataUrl(f);   // modules importing each other in a circle: this one keeps its own imports as they are
+    busy.add(f); const u = dataUrl(f, imports(f.code, f.name)); busy.delete(f); mods.set(f, u); return u;
+  };
+  const isModule = (f) => /^\s*(?:import\s*[\w$*{"']|export\s)/m.test(f.code);
+  const css = (f, depth) => f.code
+    .replace(/@import\s+(?:url\(\s*)?(["']?)([^"')\s;]+)\1\s*\)?[^;]*;/g, (m, q, r) => { const g = (depth || 0) < 5 && find(r, f.name); return g ? css(g, (depth || 0) + 1) : m; })
+    .replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/g, (m, q, r) => { const g = find(r, f.name); return g ? `url("${dataUrl(g)}")` : m; });
+  const style = (f) => `<style>${css(f).replace(/<\/style/gi, "<\\/style")}</style>`;
+  const script = (f, attrs = "") => {
+    const typed = /\btype\s*=/i.test(attrs), mod = /type\s*=\s*["']?module/i.test(attrs) || (!typed && isModule(f));
+    return `<script${attrs}${mod && !typed ? ' type="module"' : ""} src="${mod ? modUrl(f) : dataUrl(f)}"></script>`;
+  };
+
+  const open = files[at];
+  const entry = open && ext(open).startsWith("htm") ? open : files.find((f) => /^index\.html?$/i.test(norm(f.name).split("/").pop())) || files.find((f) => ext(f).startsWith("htm"));
+  let html;
+  if (entry) {
+    html = entry.code
+      .replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (m, attrs, body) => {
+        const src = /\bsrc\s*=\s*(["'])([^"']+)\1/i.exec(attrs);
+        if (src) { const g = find(src[2], entry.name); return g ? script(g, attrs.replace(src[0], "").replace(/\s+$/, "")) : m; }
+        return /type\s*=\s*["']?module/i.test(attrs) ? `<script${attrs}>${imports(body, entry.name)}</script>` : m;
+      })
+      .replace(/<link\b[^>]*>/gi, (m) => {
+        const href = /\bhref\s*=\s*(["'])([^"']+)\1/i.exec(m), g = href && /\brel\s*=\s*["']?stylesheet/i.test(m) && find(href[2], entry.name);
+        return g ? style(g) : m;
+      })
+      .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, attrs, body) => `<style${attrs}>${css({ name: entry.name, code: body })}</style>`)
+      .replace(/(<(?:img|image|audio|video|source|use|object|embed|track|input)\b[^>]*?\s(?:src|href|xlink:href|poster|data)\s*=\s*)(["'])([^"']+)\2/gi, (m, a, q, r) => { const g = find(r, entry.name); return g && !ext(g).startsWith("htm") ? a + q + dataUrl(g) + q : m; });
+  } else {
+    // no page among the files: a plain one with all the styles and scripts, in order
+    const styles = files.filter((f) => ext(f) === "css"), scripts = files.filter((f) => /^m?js$/.test(ext(f)));
+    const sample = scripts.length ? "" : '<h1>Heading</h1><p>A paragraph with a <a href="#">link</a> and <b>bold text</b>.</p><button>Button</button> <input placeholder="Input">';
+    html = `<!doctype html><html><head><meta charset="utf-8">${styles.map(style).join("")}</head><body style="font:14px system-ui;margin:12px">${sample}${scripts.map((f) => script(f)).join("")}</body></html>`;
+  }
+  // the project's files for fetch() and img.src in the page's own code
+  const table = {}; for (const f of files) table[norm(f.name)] = [MIME_OF[ext(f)] || "text/plain", f.code];
+  const vfs = `<script>(function(){var F=${JSON.stringify(table).replace(/</g, "\\u003c")};function k(u){try{u=String(u&&u.url||u)}catch(e){return null}if(/^(?:[a-z][\\w+.-]*:|\\/\\/)/i.test(u))return null;u=u.replace(/[?#].*$/,"").replace(/^(?:\\.\\/|\\/)+/,"");if(F[u])return u;var b=u.split("/").pop();for(var n in F)if(n.split("/").pop()===b)return n;return null}var of=window.fetch;window.fetch=function(u){var n=k(u);return n?Promise.resolve(new Response(F[n][1],{status:200,headers:{"Content-Type":F[n][0]}})):of.apply(this,arguments)};var d=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"src");Object.defineProperty(HTMLImageElement.prototype,"src",{configurable:true,get:d.get,set:function(v){var n=k(v);d.set.call(this,n?"data:"+F[n][0]+";charset=utf-8,"+encodeURIComponent(F[n][1]):v)}})})()<\/script>`;
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + vfs) : /<html[^>]*>|<!doctype[^>]*>/i.test(html) ? html.replace(/<html[^>]*>|<!doctype[^>]*>/i, (m) => m + vfs) : vfs + html;
+}
+window.bundleFiles = bundleFiles;
+
 // ====================================================================== the two faces ======================================================================
 // 1) the Agent tab
 const logEl = () => $("#agLog");
@@ -472,11 +535,14 @@ window.agentShow = (what) => {
   (what === "browser" ? $("#agBrowseAddr") : $("#agCodeSrc")).focus({ preventScroll: true });
 };
 
-// "Run" on an HTML/JavaScript code block in a chat answer: the same sandboxed player, right under the code
+// "Run" on an HTML/JavaScript code block in a chat answer: the same sandboxed player, right under the code.
+// When the answer has more files (style.css, game.js ...), they run together with it.
 window.runCodeBlock = (box) => {
   let host = box.querySelector(".run-out");
   if (host) { host._off && host._off(); host.remove(); return; }
-  const lang = box.querySelector(".cc-toggle span").textContent.toLowerCase(), code = box.querySelector("code").textContent;
+  const p = window.codeFilesOf ? window.codeFilesOf(box) : { files: [], at: -1 };
+  let lang = box.querySelector(".cc-toggle span").textContent.toLowerCase(), code = box.querySelector("code").textContent;
+  if (p.files.length > 1 && p.at >= 0) { code = bundleFiles(p.files, p.at); lang = "html"; }
   host = document.createElement("div"); host.className = "run-out"; host.innerHTML = '<iframe sandbox="allow-scripts" title="Result of the code"></iframe><pre></pre>';
   const token = "r" + Math.random().toString(36).slice(2), pre = host.querySelector("pre"), logs = [];
   const onMsg = (e) => { if (!e.data || e.data.ag !== token || e.data.t === "done") return; logs.push((e.data.t === "log" || e.data.t === "info" ? "" : e.data.t + ": ") + e.data.m); pre.textContent = logs.join("\n").slice(-4000); };
