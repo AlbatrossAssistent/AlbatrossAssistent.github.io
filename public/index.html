@@ -291,6 +291,28 @@ body.compact .inner { gap: 14px; }
 @keyframes rkside { 0%, 100% { transform: translateX(-9px) rotate(90deg); } 50% { transform: translateX(9px) rotate(90deg); } }
 @keyframes twinkle { 0%, 100% { opacity: .15; scale: .6; } 50% { opacity: 1; scale: 1.2; } }
 @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.msg-event { display: flex; align-items: center; gap: 12px; margin: 14px auto; max-width: 760px; width: 100%; color: var(--muted); font-size: 12.5px; }
+.msg-event .ev-line { flex: 1; height: 1px; background: var(--line, rgba(128,128,128,.25)); }
+.msg-event .ev-body { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; max-width: 80%; overflow: hidden; text-overflow: ellipsis; }
+.msg-event .i { width: 14px; height: 14px; flex: none; }
+.msg-event.ev-stop .ev-body { color: var(--warn); }
+.msg-event.ev-model .ev-body { color: var(--fg); opacity: .8; }
+.ask-card { margin-top: 12px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.ask-card .ask-q { font-weight: 600; margin-bottom: 10px; }
+.ask-card .ask-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.ask-card button { font: inherit; padding: 8px 14px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent); background: transparent; color: var(--fg); cursor: pointer; }
+.ask-card button:hover:not(:disabled) { background: var(--accent); color: var(--accent-fg); }
+.ask-card button:disabled { opacity: .45; cursor: default; }
+.ask-card .ask-other { border-style: dashed; color: var(--muted); }
+.effort-row { display: flex; align-items: center; gap: 8px; margin: 0 6px 8px; position: relative; }
+.effort-btn { font: inherit; font-size: 12.5px; display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent); background: transparent; color: var(--muted); cursor: pointer; }
+.effort-btn b { color: var(--fg); font-weight: 600; }
+.effort-btn[data-e="max"] b, .effort-opt[data-e="max"] b { color: #E5484D; }
+.effort-btn[data-e="max"] { border-color: color-mix(in srgb, #E5484D 55%, transparent); }
+.effort-menu { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 30; min-width: 250px; padding: 6px; border-radius: 16px; background: var(--bg-elev, var(--bg)); border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); box-shadow: 0 12px 40px rgba(0,0,0,.35); backdrop-filter: blur(20px) saturate(1.4); }
+.effort-opt { display: block; width: 100%; text-align: left; font: inherit; padding: 9px 12px; border: 0; border-radius: 11px; background: transparent; color: var(--fg); cursor: pointer; }
+.effort-opt small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.effort-opt:hover, .effort-opt.on { background: color-mix(in srgb, var(--fg) 9%, transparent); }
 .msg.error { position: relative; padding-right: 40px !important; background: var(--danger-bg); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); border-radius: 18px; padding: 14px 16px; white-space: pre-wrap; font-size: .95em; }
 .msg.error .err-x { position: absolute; top: 6px; right: 8px; width: 28px; height: 28px; border: none; background: none; color: inherit; border-radius: 50%; font-size: 18px; line-height: 1; opacity: .7; }
 .msg.error .err-x:hover { opacity: 1; background: color-mix(in srgb, var(--danger) 14%, transparent); }
@@ -1120,6 +1142,10 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
   <div class="composer">
     <div class="composer-inner">
 <div class="attachments" id="attachments"></div>
+      <div class="effort-row" id="effortRow">
+        <button class="effort-btn" id="effortBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="How much the AI should think before it answers"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Thinking <b id="effortName">Medium</b></button>
+        <div class="effort-menu" id="effortMenu" role="menu" hidden></div>
+      </div>
       <div class="box" id="box">
         <input type="file" id="fileInput" multiple hidden>
         <button class="attach-btn globe-btn" id="webBtn" type="button" aria-pressed="false" title="Search the web"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></button>
@@ -1264,6 +1290,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <label class="check"><span>Save chats in this browser<small>Off: chats vanish when you close the page.</small></span><input type="checkbox" class="switch" id="persist"></label>
           <label class="check"><span>Keep chats on my PC<small>Chats are saved on the PC you connect to, so every device you connect with sees the same chats. Only devices with your code can read them.</small></span><input type="checkbox" class="switch" id="chatsOnPC"></label>
           <label class="check"><span>Also keep a copy on this device<small>Off: chats stay only on the PC and appear here while it is online.</small></span><input type="checkbox" class="switch" id="keepLocal"></label>
+          <label class="check"><span>Let the AI ask me questions<small>When it needs a choice or a detail, it stops and asks with buttons you can tap, instead of guessing.</small></span><input type="checkbox" class="switch" id="askMid"></label>
           <label class="check"><span>Keep answers running on the PC<small>If the app goes to the background or the screen locks, the PC finishes the answer and the app picks it up when you come back.</small></span><input type="checkbox" class="switch" id="bgJobs"></label>
           <label class="field"><span>This device's name<small>Shown in Beam → Devices on your PC.</small></span><input type="text" id="deviceName" maxlength="40" placeholder="e.g. My phone"></label>
         </section>
@@ -1593,6 +1620,7 @@ async function chatApi(body, signal) {
           if (++fails > 60) return c.error(new Error("Lost contact with the PC while it was answering. " + e.message));
           await sleepMs(Math.min(3000, 500 * fails)); continue;       // phone asleep or network change: try again
         }
+        if (signal && signal.aborted) return c.error(new DOMException("Aborted", "AbortError"));   // stopped while the PC was answering
         next = j.next;
         if (j.lines.length) c.enqueue(enc.encode(j.lines.join("\n") + "\n"));
         if (j.done) { finished = true; return c.close(); }
@@ -2169,9 +2197,66 @@ function renderMessages() {
   const inner = $("#inner"), box = $("#messages"), top = box.scrollTop, was = stick;
   inner.innerHTML = "";
   if (!current.messages.length) return renderEmpty();
-  current.messages.forEach((m, i) => inner.appendChild(m.role === "user" ? userBubble(m, i) : m.isError ? errorEl(m, i) : botBubble(m, i)));
+  current.messages.forEach((m, i) => inner.appendChild(m.isEvent ? eventEl(m) : m.role === "user" ? userBubble(m, i) : m.isError ? errorEl(m, i) : botBubble(m, i)));
   if (was) scrollDown(true); else box.scrollTop = top;          // someone reading further up stays where they are
 }
+// Notes the chat writes about itself: when it started, a pause, which model took over, a stopped answer.
+// They are part of the chat on screen and on the PC, but never part of what the model is given.
+const EV_ICON = { time: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>', model: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2"/></svg>', stop: '<svg class="i" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>', info: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>' };
+function whenText(t) {
+  const d = new Date(t), now = new Date(), day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 864e5);
+  const date = diff === 0 ? "Today" : diff === 1 ? "Yesterday" : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  return date + ", " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+function eventEl(m) {
+  const d = document.createElement("div");
+  d.className = "msg-event ev-" + (m.kind || "info");
+  d.innerHTML = `<span class="ev-line"></span><span class="ev-body">${EV_ICON[m.kind] || EV_ICON.info}<span class="ev-t"></span></span><span class="ev-line"></span>`;
+  d.querySelector(".ev-t").textContent = m.text;
+  d.title = whenText(m.time || Date.now());
+  return d;
+}
+function addEvent(kind, text, before) {
+  if (!current) return;
+  const m = { role: "event", isEvent: true, kind, content: "", text, time: Date.now() };
+  current.messages.push(m);
+  const el = eventEl(m);
+  if (before && before.parentNode) before.parentNode.insertBefore(el, before); else $("#inner").appendChild(el);
+  return m;
+}
+// A time stamp when the chat starts, after a pause of half an hour, and when the day changes.
+function awareTime() {
+  const real = current.messages.filter(m => !m.isEvent);
+  const first = !real.length, last = current.updated || Date.now(), now = Date.now();
+  const newDay = new Date(last).toDateString() !== new Date(now).toDateString();
+  if (first) { current.messages.length = 0; addEvent("time", "Chat started · " + whenText(now)); }
+  else if (now - last > 30 * 60e3 || newDay) addEvent("time", (newDay ? "" : "Back after " + Math.round((now - last) / 60e3) + " min · ") + whenText(now));
+}
+// How hard the AI should think. Low answers at once; the others let a thinking model think (a little more each step), and
+// High and Max also tell any model to check its work, so even models that cannot "think" on their own reason more carefully.
+const EFFORTS = [
+  ["low", "Low", "Quick answers, no thinking"],
+  ["medium", "Medium", "Thinks a little: the default"],
+  ["high", "High", "Thinks carefully and checks its work"],
+  ["max", "Max", "Takes its time: slowest, most thorough"],
+];
+const effortNow = () => S.think === false ? "low" : (EFFORTS.some(e => e[0] === S.effort) ? S.effort : "medium");
+const EFFORT_HINT = {
+  low: "Answer briefly and directly, without long preparation.",
+  high: "Think carefully and check your work before you answer.",
+  max: "Take your time. Work through the problem step by step, consider alternatives and edge cases, check your result, and only then give a clear final answer.",
+};
+function paintEffort() {
+  const e = effortNow(), row = EFFORTS.find(x => x[0] === e);
+  $("#effortName").textContent = row[1]; $("#effortBtn").dataset.e = e;
+  $("#effortMenu").innerHTML = EFFORTS.map(([k, n, sub]) => `<button class="effort-opt${k === e ? " on" : ""}" data-e="${k}" role="menuitemradio" aria-checked="${k === e}"><b>${n}</b><small>${sub}</small></button>`).join("");
+  $("#effortMenu").querySelectorAll(".effort-opt").forEach(b => (b.onclick = () => { S.effort = b.dataset.e; S.think = b.dataset.e !== "low"; saveSettings(); closeEffort(); paintEffort(); }));
+}
+function closeEffort() { $("#effortMenu").hidden = true; $("#effortBtn").setAttribute("aria-expanded", "false"); }
+$("#effortBtn").onclick = (ev) => { ev.stopPropagation(); const m = $("#effortMenu"); m.hidden = !m.hidden; $("#effortBtn").setAttribute("aria-expanded", String(!m.hidden)); };
+document.addEventListener("click", (ev) => { if (!ev.target.closest("#effortRow")) closeEffort(); });
+paintEffort();
 function renderAll() { stick = true; applyType(); renderSidebar(); renderMessages(); }
 
 function renderEmpty() {
@@ -2289,6 +2374,35 @@ function fillHead(d, m, live) {
   liveHeads.set(d, m); paintHead(d, m);
 }
 setInterval(() => { for (const [d, m] of liveHeads) { if (!d.isConnected || !m.phase) { liveHeads.delete(d); continue; } paintHead(d, m); } }, 200);
+// The AI can stop and ask: it ends its reply with [[ask: question | option 1 | option 2]]. The page shows the question with the
+// options as buttons (or the user types their own answer), and the choice goes back as the next message.
+function stripAsk(t) {
+  const i = t.lastIndexOf("[[");
+  if (i < 0) return /\[$/.test(t) ? t.slice(0, -1) : t;
+  const tail = t.slice(i);
+  return "[[ask:".startsWith(tail.toLowerCase()) || /^\[\[ask:/i.test(tail) ? t.slice(0, i).trimEnd() : t;
+}
+function parseAsk(t) {
+  const m = /\[\[ask:\s*([^\]]*?)\s*\]\]\s*$/i.exec(t || "");
+  if (!m) return null;
+  const parts = m[1].split("|").map(x => x.trim()).filter(Boolean);
+  return parts.length ? { q: parts[0], opts: parts.slice(1, 6) } : null;
+}
+function askCard(ask, active) {
+  const c = document.createElement("div"); c.className = "ask-card";
+  c.innerHTML = '<div class="ask-q"></div><div class="ask-opts"></div>';
+  c.querySelector(".ask-q").textContent = ask.q;
+  const box = c.querySelector(".ask-opts");
+  for (const o of ask.opts) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = o; b.disabled = !active;
+    b.onclick = () => { c.querySelectorAll("button").forEach(x => (x.disabled = true)); send(o); };
+    box.appendChild(b);
+  }
+  const other = document.createElement("button"); other.type = "button"; other.className = "ask-other"; other.textContent = "Write my own answer"; other.disabled = !active;
+  other.onclick = () => { const pr = $("#prompt"); pr.placeholder = ask.q; pr.focus(); };
+  box.appendChild(other);
+  return c;
+}
 function fillBot(d, m, idx, live) {
   fillHead(d, m, !!live);
   const c = d.querySelector(".content");
@@ -2308,8 +2422,10 @@ function fillBot(d, m, idx, live) {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
     blocks.forEach((b, bi) => c.appendChild(renderBlock(b, !!live && !b.done && bi === blocks.length - 1)));
     const body = document.createElement("div"); body.className = "md";
-    body.innerHTML = m.content ? md(m.content) : "";
+    body.innerHTML = m.content ? md(stripAsk(m.content)) : "";
     c.appendChild(body);
+    const ask = !live && parseAsk(m.content);
+    if (ask) c.appendChild(askCard(ask, idx === current.messages.map(x => !x.isEvent).lastIndexOf(true)));
   }
   const a = d.querySelector(".actions");
   a.innerHTML = "";
@@ -2349,7 +2465,7 @@ function fillLive(c, m) {
       ? { el, tt: el.querySelector(".think-text"), sum: el.querySelector("summary"), len: el.querySelector(".think-text").textContent.length, active }
       : { el, key };
   });
-  const body = L.body, src = m.content || "";
+  const body = L.body, src = stripAsk(m.content || "");
   const trimTail = () => { while (body.childNodes.length > L.n) body.lastChild.remove(); };
   const rest = src.slice(L.done), cut = settledLength(rest);
   if (cut) {
@@ -3063,12 +3179,14 @@ async function send(textOverride) {
   const fileForTool = fileTool ? challengeFile : null;
   const userMsg = { role: "user", content: text, images: attachments.length ? attachments.slice() : undefined, file: fileForTool ? { name: fileForTool.name, size: fileForTool.size } : undefined };
   if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; if (fileTool) challengeFile = null; renderAttachments(); }
+  const firstMessage = !current.messages.some(m => !m.isEvent);
+  if (firstMessage) $("#inner").innerHTML = "";
+  awareTime();
   current.messages.push(userMsg);
   if (!current.type) current.type = curMode();
   applyType();
   if (S.autoTitle && current.title === "New chat") current.title = text.slice(0, 48) || "New chat";
   current.updated = Date.now();
-  if (current.messages.length === 1) $("#inner").innerHTML = "";
   $("#inner").appendChild(userBubble(userMsg, current.messages.length - 1));
   renderSidebar();
   // which tool, if any? The AI decides (only for messages that hint at one), so there's nothing to switch on.
@@ -3172,10 +3290,10 @@ async function chat(model) {
   let raf = 0;
   const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; fillBot(bubble, reply, -1, true); scrollDown(); }); };
 
-  let totalTokens = 0, totalNs = 0, finished = false;
+  let totalTokens = 0, totalNs = 0, finished = false, stopped = false;
   try {
     const caps = await getCaps(model);
-    const useThink = S.think && caps.includes("thinking");
+    const effort = effortNow(), canThink = caps.includes("thinking"), useThink = canThink && effort !== "low", gptoss = /gpt-oss/i.test(model);
     const wantSearch = S.webSearch && searchAvailable;
     const toolsOk = caps.includes("tools");
     const useTools = wantSearch && toolsOk;
@@ -3185,6 +3303,9 @@ async function chat(model) {
     if (toolsOk && imageSearchAvailable) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search.";
     system = (system ? system + "\n\n" : "") + "If the user asks for slides, a presentation or a keynote, a graph or chart, or for chances, odds or a prediction, tell them to open \"Tools\" next to the message box, switch on Slides, Graph or Chances, and ask again. For writing a program into a file on their PC there is Code, and for digging a hidden word out of a puzzle file there is Challenge.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
+    if (EFFORT_HINT[effort]) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
+    if (S.askMid !== false) system = (system ? system + "\n\n" : "") + "If you really need something from the user before you can do the job well (a choice between options, a missing detail), ask by ending your reply with exactly one line like [[ask: Your question? | Option A | Option B | Option C]] with 2 to 4 short options, and write nothing after it. The user can also type their own answer. If a sensible assumption works, make it and don't ask.";
+    { const prev = [...current.messages].reverse().find(m => m.role === "assistant" && m.model && !m.isEvent); if (prev && prev.model !== model) addEvent("model", `${model} takes over from ${prev.model}`, bubble); }
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
     // Say so in the bubble and pop a notification once it's ready.
     let loadStart = 0;
@@ -3201,10 +3322,11 @@ async function chat(model) {
       const secs = (performance.now() - loadStart) / 1000;
       recordLoad(model, secs); ph(reply, "working"); delete reply.loadPct;
       toast(`${model} loaded (${secs < 1 ? "<1" : Math.round(secs)} s)`);
+      addEvent("model", `${model} loaded into memory (${secs < 1 ? "under 1" : Math.round(secs)} s)`, bubble);
       refreshLoaded();
     };
 
-    const msgs = current.messages.filter(m => !m.isError).map(m => m.genImage !== undefined
+    const msgs = current.messages.filter(m => !m.isError && !m.isEvent).map(m => m.genImage !== undefined
       ? { role: "assistant", content: `(I made a picture for that: ${m.prompt || m.asked || ""})` }
       : { role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) });
     if (system) msgs.unshift({ role: "system", content: system });
@@ -3212,7 +3334,7 @@ async function chat(model) {
     for (let round = 0; round < 6; round++) {
       const body = { model, messages: msgs, stream: true, options: buildOptions() };
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
-      if (useThink) body.think = true;
+      if (canThink) body.think = useThink ? (gptoss ? (effort === "max" ? "high" : effort) : true) : (gptoss ? "low" : false);
       const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : [])];
       if (toolsOk && round < 5 && tools.length) body.tools = tools;
 
@@ -3262,7 +3384,7 @@ async function chat(model) {
       }
     }
   } catch (e) {
-    if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message);
+    if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message); else stopped = true;
   } finally {
     controller = null; setBusy(false);
     delete reply.loading; delete reply.phase; delete reply.phaseText; delete reply.loadPct;
@@ -3273,8 +3395,9 @@ async function chat(model) {
       if (!finished) reply.stats += " · stopped";
       current.messages.push(reply);
       current.updated = Date.now();
-      saveChats();
     }
+    if (stopped && !finished) addEvent("stop", "Response stopped" + (reply.content ? "" : reply.blocks && reply.blocks.length ? " while it was thinking" : " before anything was written"));
+    saveChats();
     renderMessages();
   }
 }
@@ -3326,7 +3449,7 @@ ${list}
 - chat: anything else: questions, explanations, writing text (emails, essays, stories, poems), advice, translation, maths, jokes, and talking about code, presentations or charts without asking for one to be made.
 For "jarvis", "task" is the instruction for the PC in the user's language, as a clear command (for example "Open Spotify and play some jazz"). For every other tool "task" is "".
 When unsure, choose "chat".`;
-    const recent = current.messages.slice(0, -1).filter(m => m.content && !m.isError && m.genImage === undefined).slice(-2).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`).join("\n");
+    const recent = current.messages.slice(0, -1).filter(m => m.content && !m.isError && !m.isEvent && m.genImage === undefined).slice(-2).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`).join("\n");
     const r = (await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: (recent ? `Earlier:\n${recent}\n\n` : "") + `Last message: ${text}` }], schema)).data;
     if (loadStartedAt) recordLoad(model, (performance.now() - loadStartedAt) / 1000);
     out = { tool: enabled.includes(r.tool) ? r.tool : "chat", task: String(r.task || "").trim() };
@@ -3651,7 +3774,7 @@ async function toolAnswer(model, text, block, work) {
   try {
     const caps = await getCaps(model);
     const ask = async (messages, schema) => { const r = await askJSON(model, caps, messages, schema); tokens += r.tokens; ns += r.ns; if (reply.phase === "loading") { ph(reply, "working"); delete reply.loadPct; } return r.data; };
-    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined && !m.isError).slice(-6).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
+    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined && !m.isError && !m.isEvent).slice(-6).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
     let research = "";
     if (S.webSearch && searchAvailable) { redraw("Looking it up on the web…"); try { research = await webResearch(text); } catch (e) { if (e.name === "AbortError") throw e; } }
     let thinking = block.thinkLabel;
@@ -4141,7 +4264,7 @@ async function buildSlides(model, text) {
   try {
     const caps = await getCaps(model);
     // the chat so far (short), so "now make slides about it" works
-    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined && !m.isError).slice(-6)
+    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined && !m.isError && !m.isEvent).slice(-6)
       .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
     // changing an earlier presentation from this chat?
     const prev = [...current.messages].reverse().find(m => m.role === "assistant" && m.blocks?.some(x => x.type === "deck" && x.deck?.slides?.length))?.blocks.find(x => x.type === "deck").deck;
@@ -4569,7 +4692,7 @@ function openSettings(tab) {
   $("#chatTypeLine").hidden = true;
   $("#webSearch").checked = searchAvailable && S.webSearch;
   for (const k of ["enterSends", "showStats", "think", "autoTitle", "persist", "intro", "compact"]) $("#" + k).checked = !!S[k];
-  $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#bgJobs").checked = S.bgJobs !== false; $("#deviceName").value = S.deviceName || "";
+  $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#bgJobs").checked = S.bgJobs !== false; $("#askMid").checked = S.askMid !== false; $("#deviceName").value = S.deviceName || "";
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
   if (tab) switchTab(tab);
   d.showModal();
@@ -4621,6 +4744,7 @@ $("#defaultSystem").onchange = e => { S.defaultSystem = e.target.value; saveSett
 for (const k of ["enterSends", "showStats", "think", "autoTitle", "intro", "compact"]) $("#" + k).onchange = e => { S[k] = e.target.checked; saveSettings(); applyAppearance(); if (k === "showStats") renderMessages(); };
 $("#chatsOnPC").onchange = e => { S.chatsOnPC = e.target.checked; saveSettings(); if (S.chatsOnPC) chatSyncSoon(200); };
 $("#keepLocal").onchange = e => { S.keepLocal = e.target.checked; saveSettings(); if (e.target.checked) { store.set("chats", chats); store.set("chatSync", sync.sig); } else if (sync.ok) { store.del("chats"); store.del("chatSync"); } else { toast("Connect to your PC first, so the chats are safe there"); e.target.checked = true; S.keepLocal = true; saveSettings(); } };
+$("#askMid").onchange = e => { S.askMid = e.target.checked; saveSettings(); };
 $("#bgJobs").onchange = e => { S.bgJobs = e.target.checked; saveSettings(); };
 $("#deviceName").onchange = e => { S.deviceName = e.target.value.trim().slice(0, 40); saveSettings(); };
 $("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del("chats"); };
