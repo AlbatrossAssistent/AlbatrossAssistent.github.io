@@ -114,26 +114,42 @@ function mkdir(spec) { const r = resolve(spec + "/placeholder", { write: true })
 
 // ---------- printing ----------
 const ps = (cmd, env) => new Promise((res, rej) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { windowsHide: true, timeout: 30000, env: { ...process.env, ...(env || {}) } }, (e, out, err) => (e ? rej(new Error(String(err || e.message).trim().slice(0, 300))) : res(String(out).trim()))));
+// Fax and OneNote aren't printers anyone means; "Print to PDF" and the XPS writer save a file instead (into Albatross\Printed)
 async function printers() {
   if (process.platform !== "win32") return [];
-  const out = await ps("Get-CimInstance Win32_Printer | Select-Object Name,Default,WorkOffline | ConvertTo-Json -Compress");
+  const out = await ps("Get-CimInstance Win32_Printer | Select-Object Name,Default,WorkOffline,PortName | ConvertTo-Json -Compress");
   const j = out ? JSON.parse(out) : [];
-  return (Array.isArray(j) ? j : [j]).map((p) => ({ name: p.Name, default: !!p.Default, offline: !!p.WorkOffline }));
+  return (Array.isArray(j) ? j : [j]).filter((p) => !/^(fax|onenote)\b/i.test(p.Name) && !/^(SHRFAX:|nul:)$/i.test(p.PortName || ""))
+    .map((p) => ({ name: p.Name, default: !!p.Default, offline: !!p.WorkOffline, toFile: /^PORTPROMPT:$/i.test(p.PortName || "") }));
 }
+// Printing goes through print.ps1 (drawn with Windows' own printing, no app opens), because the host usually runs in Windows'
+// background session, where an app's own "Print" (Notepad, Photos, a PDF reader) can't work.
+const PRINTABLE = /\.(txt|md|csv|log|json|pdf|png|jpe?g|bmp|gif|docx?|rtf|odt|html?|xlsx?|ods|pptx?|odp)$/i;
 async function print(spec, printer) {
   if (process.platform !== "win32") throw new Error("Printing is only set up for Windows.");
   const r = resolve(spec);
   let st; try { st = fs.statSync(r.full); } catch { throw new Error("That file doesn't exist."); }
   if (!st.isFile()) throw new Error("That is a folder.");
   if (BAD_EXT.test(r.full)) throw new Error("Programs and scripts can't be printed.");
-  if (!/\.(txt|md|pdf|png|jpe?g|bmp|gif|docx?|xlsx?|pptx?|rtf|csv|log|json|html?)$/i.test(r.full)) throw new Error("That kind of file can't be printed from here.");
+  if (!PRINTABLE.test(r.full)) throw new Error("That kind of file can't be printed from here (text, PDF, pictures and Office files can).");
   const list = await printers();
   if (!list.length) throw new Error("No printer is installed on this PC.");
-  const pick = printer ? list.find((p) => p.name === printer) : list.find((p) => p.default) || list[0];
+  // no printer named: a real one (in Windows' background session "Print to PDF" is often the default, which isn't what anyone means)
+  const pick = printer ? list.find((p) => p.name.toLowerCase() === String(printer).toLowerCase()) : list.find((p) => p.default && !p.toFile) || list.find((p) => !p.toFile) || list[0];
   if (!pick) throw new Error("No printer called that. Printers: " + list.map((p) => p.name).join(", "));
-  // the file's own "Print" action (what right-click -> Print does); text and pictures go to the chosen printer
-  await ps(`Start-Process -FilePath $env:AP_FILE -Verb ${pick.default ? "Print" : "PrintTo"} ${pick.default ? "" : "-ArgumentList ('\"' + $env:AP_PRINTER + '\"')"} -WindowStyle Hidden`, { AP_FILE: r.full, AP_PRINTER: pick.name });
-  return { printed: r.spec, printer: pick.name };
+  if (pick.offline) throw new Error(`The printer ${pick.name} is offline. Switch it on, or pick another printer.`);
+  let outFile = "", savedAs = "";
+  if (pick.toFile) {
+    const dir = path.join(BASE, "Printed"); fs.mkdirSync(dir, { recursive: true });
+    const base = path.basename(r.full).replace(/\.[^.]+$/, ""), ext = /xps/i.test(pick.name) ? ".xps" : ".pdf";
+    let n = 0; do { outFile = path.join(dir, base + (n ? ` (${n})` : "") + ext); n++; } while (fs.existsSync(outFile));
+    savedAs = "all:Printed/" + path.basename(outFile);
+  }
+  const out = await new Promise((res, rej) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path.join(__dirname, "print.ps1")],
+    { windowsHide: true, timeout: 180000, env: { ...process.env, AP_FILE: r.full, AP_PRINTER: pick.name, AP_OUT: outFile } },
+    (e, so, se) => (e ? rej(new Error(e.killed ? "Printing took too long and was stopped." : String(se || e.message).trim().split(/\r?\n/)[0].replace(/^.*?\.ps1\s*:\s*/, "").slice(0, 300) || "Printing failed.")) : res(String(so)))));
+  const pages = Number((/"pages":(\d+)/.exec(out) || [])[1]) || 0;
+  return { printed: r.spec, printer: pick.name, pages, savedAs };
 }
 
 // ---------- reading a web page (for the Agent's browser) ----------
