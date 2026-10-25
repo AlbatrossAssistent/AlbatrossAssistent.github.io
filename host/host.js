@@ -274,6 +274,9 @@ async function upstream(method, p, body, signal) {
       }), { headers: { "Content-Type": "application/x-ndjson" } });
     }
   }
+  // Speculative decoding (a small "draft" model that Ollama 0.40 loads next to gemma4) crashes the load when the big model
+  // already fills the graphics card ("0 MiB free" -> HTTP 500). Switched off unless a request says otherwise.
+  if (j && !unload && (p === "/api/chat" || p === "/api/generate")) body = JSON.stringify({ ...j, options: { draft_num_predict: 0, ...(j.options || {}) } });
   const r = await fetch(OLLAMA + p, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body, signal });
   if (p === "/api/tags" && r.ok) {
     const t = await r.json();

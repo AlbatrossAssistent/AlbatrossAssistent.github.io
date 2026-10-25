@@ -134,8 +134,10 @@ aside { width: 272px; flex: 0 0 272px; display: flex; flex-direction: column; ga
 .chat-row.active { background-color: var(--glass-strong); background-image: var(--sheen); border-color: var(--glass-edge); box-shadow: var(--glass-hi), 0 6px 18px rgba(0,0,0,.08); }
 .chat-row .open { flex: 1; min-width: 0; text-align: left; min-height: 44px; padding: 0 8px; border: none; background: none; color: var(--muted); display: flex; align-items: center; gap: 10px; }
 .chat-row .open .ti { width: 28px; height: 28px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center; background-color: var(--btn-glass); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi); color: var(--muted); }
-.chat-row .open .ti svg { width: 15px; height: 15px; }
-.chat-row.active .open .ti { background-color: var(--accent); background-image: var(--accent-sheen); border-color: var(--accent); color: var(--accent-fg); }
+.chat-row .open .ti svg { width: 16px; height: 16px; stroke-width: 1.6; }
+.chat-row.active .open .ti { background-color: var(--glass-strong); border-color: color-mix(in srgb, var(--fg) 30%, transparent); color: var(--fg); box-shadow: var(--glass-hi), 0 0 0 3px var(--soft); }
+.chat-row.active { border-color: color-mix(in srgb, var(--fg) 14%, var(--glass-edge)); }
+.chat-row.active .open .tt b { font-weight: 600; }
 .chat-row .open .tt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .chat-row .open .tt b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-row .open .tt small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -271,7 +273,9 @@ body.compact .inner { gap: 14px; }
 @keyframes rkside { 0%, 100% { transform: translateX(-9px) rotate(90deg); } 50% { transform: translateX(9px) rotate(90deg); } }
 @keyframes twinkle { 0%, 100% { opacity: .15; scale: .6; } 50% { opacity: 1; scale: 1.2; } }
 @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
-.msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); border-radius: 18px; padding: 14px 16px; white-space: pre-wrap; font-size: .95em; }
+.msg.error { position: relative; padding-right: 40px !important; background: var(--danger-bg); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); border-radius: 18px; padding: 14px 16px; white-space: pre-wrap; font-size: .95em; }
+.msg.error .err-x { position: absolute; top: 6px; right: 8px; width: 28px; height: 28px; border: none; background: none; color: inherit; border-radius: 50%; font-size: 18px; line-height: 1; opacity: .7; }
+.msg.error .err-x:hover { opacity: 1; background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .empty { text-align: center; margin-top: 12vh; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .empty h1 { margin: 0; font-size: clamp(28px, 4vw, 40px); font-weight: 600; letter-spacing: -1.2px; }
 .empty p { margin: 0; color: var(--muted); }
@@ -279,6 +283,45 @@ body.compact .inner { gap: 14px; }
 .suggestions button { text-align: left; border-radius: 20px; padding: 14px 16px; color: var(--fg); min-height: 44px; transition: transform .15s, background .15s; }
 .suggestions button:hover { background-color: var(--glass-strong); transform: translateY(-3px); box-shadow: var(--glass-hi), 0 16px 40px rgba(0,0,0,.12); }
 .suggestions small { display: block; color: var(--muted); margin-top: 2px; }
+
+/* ---------- response header, the dot, collapsible code ---------- */
+.msg.bot { gap: 10px; }
+.pdot { width: 30px; height: 30px; flex: none; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 1px; }
+.pdot i { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--fg); transition: width .3s, height .3s, opacity .3s; }
+.pdot i:nth-child(n+2) { display: none; }
+.pdot[data-s="idle"] i:first-child { width: 8px; height: 8px; opacity: .8; }
+.pdot[data-s="pulse"] i:first-child { animation: dotPulse 1.15s ease-in-out infinite; }
+.pdot[data-s="wait"] i { display: block; width: 5.5px; height: 5.5px; animation: dotHop 1s ease-in-out infinite; }
+.pdot[data-s="wait"] i:nth-child(2) { animation-delay: .15s; }
+.pdot[data-s="wait"] i:nth-child(3) { animation-delay: .3s; }
+@keyframes dotPulse { 0%, 100% { transform: scale(.55); } 50% { transform: scale(1.8); } }
+@keyframes dotHop { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-6px); opacity: 1; } }
+.bot-body { padding-top: 0; }
+.mhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-height: 28px; padding-top: 5px; font-size: 13px; line-height: 1.3; color: var(--muted); }
+.mhead .mname { font-weight: 600; color: var(--fg); font-size: 13.5px; letter-spacing: -.1px; }
+.mhead .mstat { color: var(--muted); }
+.mhead .mstat:empty { display: none; }
+.mhead .mstat::before { content: "·"; margin-right: 8px; opacity: .6; }
+.mbar { height: 3px; width: min(260px, 100%); margin: 2px 0 8px; border-radius: 999px; background: var(--soft); overflow: hidden; }
+.mbar div { height: 100%; width: 0; border-radius: inherit; background: var(--fg); transition: width .9s linear; }
+.md .code { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--soft); }
+.md .code pre { border: 0; border-radius: 0; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.md .code-head { display: flex; align-items: center; gap: 6px; padding: 3px 6px 3px 6px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.md .cc-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; background: none; border: none; color: var(--muted); padding: 6px 6px; border-radius: 10px; text-align: left; }
+.md .cc-toggle:hover { color: var(--fg); background: var(--soft); }
+.md .cc-toggle svg { width: 14px; height: 14px; flex: none; transition: transform .2s; }
+.md .cc-toggle .meta { opacity: .7; }
+.md .code.collapsed .cc-toggle svg { transform: rotate(-90deg); }
+.md .code.collapsed pre { display: none; }
+.md .code.collapsed .code-head { border-bottom: 0; }
+.md .code-head .copy-code { position: static; width: 30px; height: 30px; padding: 0; border: none; background: none; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: var(--muted); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.md .code-head .copy-code:hover { background: var(--soft); color: var(--fg); }
+.md .code-head .copy-code svg { width: 15px; height: 15px; }
+.messages { overflow-anchor: none; }
+#topFold svg { transition: transform .25s; }
+.topbar.folded { align-self: flex-start; width: auto; padding: 4px; gap: 2px; }
+.topbar.folded > :not(#topFold):not(.menu-btn) { display: none !important; }
+.topbar.folded #topFold svg { transform: rotate(180deg); }
 
 /* ---------- Thinking ---------- */
 .think-block { margin: 0 0 12px; border-radius: 18px; overflow: hidden; box-shadow: var(--glass-hi); }
@@ -936,6 +979,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
     <button class="badge loaded" id="loadedPill" title="Model currently loaded in memory (click to manage)"><span class="ld"></span><span id="loadedText">Nothing loaded</span></button>
     <span class="badge hide-sm" id="connBadge">This device</span>
     <div class="spacer"></div>
+    <button class="icon-btn" id="topFold" aria-label="Fold the top bar" title="Fold the top bar"><svg class="i" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
     <button class="icon-btn" id="fullBtn" aria-label="Full screen" title="Full screen (F11)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
     
   </div>
@@ -1579,6 +1623,9 @@ function updateLoadedPill() {
   pill.title = "In memory: " + loadedInfo.map(m => `${m.name} (${gb(m)})`).join(", ") + " (click to manage)";
 }
 setInterval(() => { if (connected && !document.hidden && !controller) refreshLoaded(); }, 10000);
+// the top bar can be folded away to give the chat more room
+function applyFold() { $(".topbar").classList.toggle("folded", !!S.topFold); $("#topFold").title = S.topFold ? "Show the top bar" : "Fold the top bar"; }
+$("#topFold").onclick = () => { S.topFold = !S.topFold; saveSettings(); applyFold(); };
 // ---------- turning the remote PC on ----------
 // Your own turn-on link (Settings → Connection), e.g. a smart-plug or Alexa routine link. The browser opens it
 // directly, so the Albatross server never sees it. The button only shows while the remote PC is offline.
@@ -1711,7 +1758,7 @@ function showConnHelp(err) {
     ? `Couldn't reach the remote device (${err}).\n\n• Check the code is right and host.js is still running on the other PC.\n• Check the Albatross server address in Settings → Connection.`
     : `Couldn't reach Ollama at ${baseUrl()} (${err}).\n\n${location.protocol === "https:" ? "0. Your browser may be blocking this website from reaching programs on this PC. Click the icon left of the address bar → Site settings → allow \"Local network access\", then reload.\n" : ""}1. Make sure Ollama is running on this computer.\n2. Allow websites to talk to it: set the environment variable OLLAMA_ORIGINS to *\n   Windows: run  setx OLLAMA_ORIGINS "*"  then quit Ollama from the tray and start it again.\n3. Or use another computer's AI: Settings → Connection → Remote code.`;
   if (!current.messages.length) { $("#inner").innerHTML = ""; }
-  errorBubble(text);
+  errorBubble(text, false);
 }
 
 // ======================================================================
@@ -1766,7 +1813,7 @@ function newChat(type, context, reuse) {
   saveChats(); renderAll();
   $("#prompt").focus();
 }
-function openChat(c) { if (controller) controller.abort(); current = c; setView("chat"); renderAll(); $("#sidebar").classList.remove("open"); }
+function openChat(c) { if (controller) controller.abort(); current = c; stick = true; setView("chat"); renderAll(); $("#sidebar").classList.remove("open"); }
 function deleteChat(c) {
   if (!confirmInline(c)) return;
   chats = chats.filter(x => x !== c);
@@ -1781,7 +1828,7 @@ function confirmInline(c) {
   return false;
 }
 const TYPE_ICON = {
-  chat: '<svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>',
+  chat: '<svg class="i" viewBox="0 0 24 24"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3h9A2.5 2.5 0 0 1 19 5.5v7a2.5 2.5 0 0 1-2.5 2.5H12l-4 4v-4h-.5A2.5 2.5 0 0 1 5 12.5z"/><path d="M9 8.6h.01M12 8.6h.01M15 8.6h.01" stroke-width="2.4"/></svg>',
   image: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>',
 };
 function ago(t) {
@@ -1821,13 +1868,13 @@ function renderSidebar() {
   if (!filtered.length && q) { const d = document.createElement("div"); d.className = "group-label"; d.textContent = "No matches"; list.appendChild(d); }
 }
 function renderMessages() {
-  const inner = $("#inner");
+  const inner = $("#inner"), box = $("#messages"), top = box.scrollTop, was = stick;
   inner.innerHTML = "";
   if (!current.messages.length) return renderEmpty();
-  current.messages.forEach((m, i) => inner.appendChild(m.role === "user" ? userBubble(m, i) : botBubble(m, i)));
-  scrollDown(true);
+  current.messages.forEach((m, i) => inner.appendChild(m.role === "user" ? userBubble(m, i) : m.isError ? errorEl(m, i) : botBubble(m, i)));
+  if (was) scrollDown(true); else box.scrollTop = top;          // someone reading further up stays where they are
 }
-function renderAll() { applyType(); renderSidebar(); renderMessages(); }
+function renderAll() { stick = true; applyType(); renderSidebar(); renderMessages(); }
 
 function renderEmpty() {
   const imageMode = false;
@@ -1881,11 +1928,71 @@ function userBubble(m, idx) {
 function botBubble(m, idx) {
   const d = document.createElement("div");
   d.className = "msg bot";
-  d.innerHTML = `<div class="avatar">${LOGO}</div><div class="bot-body"><div class="content"></div><div class="actions"></div></div>`;
+  d.innerHTML = `<div class="pdot" data-s="idle" aria-hidden="true"><i></i><i></i><i></i></div><div class="bot-body"><div class="mhead"><b class="mname"></b><span class="mstat" role="status"></span></div><div class="mbar" hidden><div></div></div><div class="content"></div><div class="actions"></div></div>`;
   fillBot(d, m, idx);
   return d;
 }
+// ---------- the line above every answer: the model's name, and (while it works) what it is doing ----------
+// Loading times of each model are remembered, so the wait can count down: "usually 12 s · 8 s left".
+const liveHeads = new Map();
+const loadAvg = (model) => { const a = (store.get("loadTimes", {})[model] || []).slice(-3); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0; };
+function recordLoad(model, secs) {
+  if (!(secs >= 1)) return;
+  const all = store.get("loadTimes", {}); all[model] = [...(all[model] || []), Math.round(secs)].slice(-6); store.set("loadTimes", all);
+}
+function etaText(model, elapsed, pct) {
+  const avg = loadAvg(model), left = Math.max(0, Math.round(avg - elapsed));
+  const p = pct != null ? ` ${pct}%` : "";
+  if (!avg) return `Loading into memory${p}… ${Math.round(elapsed)} s so far (the first time takes a while)`;
+  if (elapsed > avg + 2) return `Loading into memory${p}… taking longer than the usual ${Math.round(avg)} s`;
+  return `Loading into memory${p} · usually ${Math.round(avg)} s · ${left} s left`;
+}
+// The first steps ("Request sent", "Request received") stay readable for a moment even when the PC answers at once.
+// Only the label waits: the answer itself is never held back.
+const phaseState = new WeakMap(), HOLD = { sent: 450, received: 450 };
+function ph(m, p) {
+  m.phase = p;
+  const st = phaseState.get(m) || phaseState.set(m, { q: [p], since: performance.now() }).get(m);
+  if (st.q[st.q.length - 1] !== p) st.q.push(p);
+}
+function displayPhase(m) {
+  let st = phaseState.get(m);
+  if (!st) st = phaseState.set(m, { q: [m.phase], since: performance.now() }).get(m);
+  const now = performance.now();
+  while (st.q.length > 1 && (HOLD[st.q[0]] || 0) <= now - st.since) { st.q.shift(); st.since = now; }
+  return st.q[0];
+}
+function phaseInfo(m, phase = m.phase) {
+  switch (phase) {
+    case "sent": return { t: "Request sent…", dot: "wait" };
+    case "received": return { t: "Request received", dot: "wait" };
+    case "working": return { t: m.phaseText || "Working on it…", dot: "wait" };
+    case "loading": { const el = (performance.now() - (m.loadStart || performance.now())) / 1000, avg = loadAvg(m.model);
+      return { t: etaText(m.model, el, m.loadPct), dot: "wait", bar: m.loadPct != null ? m.loadPct : avg ? Math.min(95, el / avg * 100) : null }; }
+    case "thinking": return { t: "Thinking…", dot: "pulse" };
+    case "answering": return { t: "Giving response…", dot: "pulse" };
+    case "drawing": return { t: m.phaseText || "Drawing…", dot: "pulse" };
+    default: return null;
+  }
+}
+function paintHead(d, m) {
+  const info = phaseInfo(m, displayPhase(m));
+  d.querySelector(".mstat").textContent = info ? info.t : "";
+  d.querySelector(".pdot").dataset.s = info ? info.dot : "idle";
+  const bar = d.querySelector(".mbar");
+  bar.hidden = !(info && info.bar != null);
+  if (!bar.hidden) bar.firstElementChild.style.width = info.bar + "%";
+}
+function fillHead(d, m, live) {
+  const head = d.querySelector(".mhead"); if (!head) return;
+  head.querySelector(".mname").textContent = m.model || "";
+  head.hidden = !m.model;
+  if (!live || !m.phase) { liveHeads.delete(d); d.querySelector(".mstat").textContent = ""; d.querySelector(".pdot").dataset.s = "idle"; d.querySelector(".mbar").hidden = true; return; }
+  liveHeads.set(d, m); paintHead(d, m);
+}
+setInterval(() => { for (const [d, m] of liveHeads) { if (!d.isConnected || !m.phase) { liveHeads.delete(d); continue; } paintHead(d, m); } }, 200);
 function fillBot(d, m, idx, live) {
+  fillHead(d, m, !!live);
   const c = d.querySelector(".content");
   if (live && m.genImage === undefined) { fillLive(c, m); return; }
   c.innerHTML = ""; c._live = null;
@@ -1902,7 +2009,7 @@ function fillBot(d, m, idx, live) {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
     blocks.forEach((b, bi) => c.appendChild(renderBlock(b, !!live && !b.done && bi === blocks.length - 1)));
     const body = document.createElement("div"); body.className = "md";
-    body.innerHTML = m.content ? md(m.content) : (live && !blocks.length ? TYPING : "");
+    body.innerHTML = m.content ? md(m.content) : "";
     c.appendChild(body);
   }
   const a = d.querySelector(".actions");
@@ -1951,7 +2058,7 @@ function fillLive(c, m) {
     body.insertAdjacentHTML("beforeend", md(rest.slice(0, cut)));
     L.done += cut; L.n = body.childNodes.length; L.tail = null; L.hist = null;
   }
-  const tail = src ? src.slice(L.done) : blocks.length ? "" : m.loading ? `<div class="shimmer" style="font-size:14px">Loading ${esc(m.model)} into memory…${m.loadPct != null ? " " + m.loadPct + "%" : ""}</div>${m.loadPct != null ? `<div class="progress" style="width:220px"><div style="width:${m.loadPct}%"></div></div>` : ""}` : TYPING;
+  const tail = src ? src.slice(L.done) : "";
   if (tail !== L.tail) { trimTail(); body.insertAdjacentHTML("beforeend", src ? md(tail) : tail); L.tail = tail; if (src) fadeFresh(body, L); }
 }
 // The words written in the last half second fade in. The paragraph being written is re-rendered on every
@@ -2530,13 +2637,37 @@ async function makePptx(d) {
   return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
 }
 function actBtn(icon, label, fn) { const b = document.createElement("button"); b.innerHTML = icon; b.title = label; b.setAttribute("aria-label", label); b.onclick = fn; return b; }
-function errorBubble(text) {
-  const empty = $("#inner .empty"); if (empty) empty.remove();
-  const d = document.createElement("div"); d.className = "msg error"; d.textContent = text; $("#inner").appendChild(d); scrollDown(true);
+function errorEl(m, idx) {
+  const d = document.createElement("div"); d.className = "msg error"; d.textContent = m.content;
+  const x = document.createElement("button"); x.className = "err-x"; x.textContent = "×"; x.title = "Dismiss"; x.setAttribute("aria-label", "Dismiss");
+  x.onclick = () => { const i = current.messages.indexOf(m); if (i >= 0) current.messages.splice(i, 1); saveChats(); d.remove(); };
+  d.appendChild(x);
+  return d;
 }
+function errorBubble(text, persist = true) {
+  const empty = $("#inner .empty"); if (empty) empty.remove();
+  const m = { role: "assistant", isError: true, content: text };
+  if (persist && current) { current.messages.push(m); current.updated = Date.now(); saveChats(); }
+  $("#inner").appendChild(errorEl(m)); scrollDown(true);
+}
+// Follow the end of a growing answer only while the reader is at the end. Scroll up (wheel, finger, scrollbar,
+// keys) and it lets go at once; scroll back down to the end and it follows again.
+let stick = true;
+const nearBottom = (el, px = 56) => el.scrollHeight - el.scrollTop - el.clientHeight < px;
+(function watchScroll() {
+  const el = $("#messages");
+  el.addEventListener("wheel", e => { if (e.deltaY < 0) stick = false; }, { passive: true });
+  el.addEventListener("touchstart", () => { el._touch = true; }, { passive: true });
+  const lift = () => { el._touch = false; stick = nearBottom(el); };
+  el.addEventListener("touchend", lift, { passive: true }); el.addEventListener("touchcancel", lift, { passive: true });
+  el.addEventListener("scroll", () => { if (el._auto || el._touch) return; stick = nearBottom(el, 24); }, { passive: true });
+})();
 function scrollDown(force) {
   const el = $("#messages");
-  if (force || el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+  if (force) stick = true;
+  if (!stick || el._touch) return;
+  el._auto = true; el.scrollTop = el.scrollHeight;
+  requestAnimationFrame(() => requestAnimationFrame(() => (el._auto = false)));
 }
 
 // ======================================================================
@@ -2554,8 +2685,10 @@ function md(src) {
   let out = "";
   parts.forEach((part, i) => {
     if (i % 2) {
-      const code = part.replace(/^[\w+#.-]*\n/, "");
-      out += `<div class="code"><button class="copy-code">Copy</button><pre><code>${esc(code.replace(/\n$/, ""))}</code></pre></div>`;
+      const lang = (part.match(/^([\w+#.-]*)\n/) || [])[1] || "";
+      const code = part.replace(/^[\w+#.-]*\n/, "").replace(/\n$/, "");
+      const lines = code ? code.split("\n").length : 0;
+      out += `<div class="code"><div class="code-head"><button class="cc-toggle" aria-expanded="true" title="Show or hide the code"><svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg><span>${esc(lang) || "code"}</span><span class="meta">${lines} line${lines === 1 ? "" : "s"}</span></button><button class="copy-code" title="Copy the code" aria-label="Copy the code">${ICON.copy}</button></div><pre><code>${esc(code)}</code></pre></div>`;
       return;
     }
     const lines = esc(part).split("\n");
@@ -2576,7 +2709,9 @@ function md(src) {
 }
 document.addEventListener("click", e => {
   const b = e.target.closest(".copy-code");
-  if (b) { copy(b.nextElementSibling.textContent); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1200); }
+  if (b) { copy(b.closest(".code").querySelector("code").textContent); b.classList.add("done"); const old = b.innerHTML; b.innerHTML = "✓"; setTimeout(() => { b.innerHTML = old; b.classList.remove("done"); }, 1200); return; }
+  const t = e.target.closest(".cc-toggle");
+  if (t) { const box = t.closest(".code"); const c = box.classList.toggle("collapsed"); t.setAttribute("aria-expanded", String(!c)); }
 });
 
 // ======================================================================
@@ -2721,7 +2856,7 @@ async function runTool(name, args, block) {
 }
 
 async function chat(model) {
-  const reply = { role: "assistant", content: "", blocks: [], model };
+  const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble);
   fillBot(bubble, reply, -1, true);
@@ -2750,7 +2885,7 @@ async function chat(model) {
     try {
       const running = (await (await api("/api/ps")).json()).models || [];
       if (!running.some(r => r.name === model)) {
-        loadStart = performance.now(); reply.loading = true; redraw();
+        loadStart = performance.now(); reply.loading = true; ph(reply, "loading"); reply.loadStart = loadStart; redraw();
         watchLoading(model, pct => { reply.loadPct = pct; redraw(); }, () => !reply.loading || !controller);
       }
     } catch {}
@@ -2758,11 +2893,12 @@ async function chat(model) {
       if (!reply.loading) return;
       reply.loading = false;
       const secs = (performance.now() - loadStart) / 1000;
+      recordLoad(model, secs); ph(reply, "working"); delete reply.loadPct;
       toast(`${model} loaded (${secs < 1 ? "<1" : Math.round(secs)} s)`);
       refreshLoaded();
     };
 
-    const msgs = current.messages.map(m => m.genImage !== undefined
+    const msgs = current.messages.filter(m => !m.isError).map(m => m.genImage !== undefined
       ? { role: "assistant", content: `(I made a picture for that: ${m.prompt || m.asked || ""})` }
       : { role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) });
     if (system) msgs.unshift({ role: "system", content: system });
@@ -2775,11 +2911,14 @@ async function chat(model) {
       if (toolsOk && round < 5 && tools.length) body.tools = tools;
 
       const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+      // the PC has the request (remote: its first answer frame is here; this PC: the first bytes)
+      if (round === 0 && reply.phase === "sent") { ph(reply, "received"); redraw(); setTimeout(() => { if (reply.phase === "received") { ph(reply, "working"); redraw(); } }, 700); }
       let think = null, roundText = "", calls = [];
       await readNdjson(res, j => {
         if (j.error) throw new Error(j.error);
         loaded();
         const m = j.message || {};
+        if (m.content) ph(reply, "answering"); else if (m.thinking && reply.phase !== "answering") ph(reply, "thinking");
         if (m.thinking) {
           if (!think) { think = { type: "thinking", text: "", start: performance.now() }; reply.blocks.push(think); }
           think.text += m.thinking;
@@ -2796,6 +2935,7 @@ async function chat(model) {
       if (!calls.length) { finished = true; break; }
 
       msgs.push({ role: "assistant", content: roundText, tool_calls: calls });
+      ph(reply, "working"); reply.phaseText = "Using a tool…";
       for (const tc of calls) {
         const name = tc.function?.name;
         let args = tc.function?.arguments || {};
@@ -2819,7 +2959,7 @@ async function chat(model) {
     if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message);
   } finally {
     controller = null; setBusy(false);
-    delete reply.loading;
+    delete reply.loading; delete reply.phase; delete reply.phaseText; delete reply.loadPct;
     reply.blocks.forEach(b => { b.active = false; b.done = true; delete b.fresh; delete b.start; delete b.userOpen; });
     if (reply.content || reply.blocks.length) {
       if (!reply.blocks.length) delete reply.blocks;
@@ -3170,7 +3310,7 @@ async function webResearch(q) {
   return (j.results || []).slice(0, 5).map(x => `${x.title} (${x.url}): ${(x.content || "").slice(0, 900)}`).join("\n\n");
 }
 async function toolAnswer(model, text, block, work) {
-  const reply = { role: "assistant", content: "", blocks: [block], model };
+  const reply = { role: "assistant", content: "", blocks: [block], model, phase: "working" };
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble); fillBot(bubble, reply, -1, true); scrollDown(true);
   setBusy(true); controller = new AbortController();
@@ -3178,14 +3318,14 @@ async function toolAnswer(model, text, block, work) {
   let tokens = 0, ns = 0, ok = false;
   try {
     const caps = await getCaps(model);
-    const ask = async (messages, schema) => { const r = await askJSON(model, caps, messages, schema); tokens += r.tokens; ns += r.ns; return r.data; };
-    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined).slice(-6).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
+    const ask = async (messages, schema) => { const r = await askJSON(model, caps, messages, schema); tokens += r.tokens; ns += r.ns; if (reply.phase === "loading") { ph(reply, "working"); delete reply.loadPct; } return r.data; };
+    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined && !m.isError).slice(-6).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
     let research = "";
     if (S.webSearch && searchAvailable) { redraw("Looking it up on the web…"); try { research = await webResearch(text); } catch (e) { if (e.name === "AbortError") throw e; } }
     let thinking = block.thinkLabel;
     try {
       const running = (await (await api("/api/ps")).json()).models || [];
-      if (!running.some(r => r.name === model)) { thinking = `Loading ${model}…`; watchLoading(model, pct => redraw(`Loading ${model}… ${pct}%`), () => !block.active || !controller || ok); }
+      if (!running.some(r => r.name === model)) { thinking = `Loading ${model}…`; ph(reply, "loading"); reply.loadStart = performance.now(); watchLoading(model, pct => { reply.loadPct = pct; redraw(`Loading ${model}… ${pct}%`); }, () => !block.active || !controller || ok); }
     } catch {}
     redraw(thinking);
     reply.content = await work({ ask, history, research, today: new Date().toDateString(), redraw, caps, track: (r) => { tokens += r.tokens; ns += r.ns; } });
@@ -3193,7 +3333,7 @@ async function toolAnswer(model, text, block, work) {
   } catch (e) {
     if (e.name !== "AbortError") block.error = e.message;
   } finally {
-    controller = null; setBusy(false);
+    controller = null; setBusy(false); delete reply.phase; delete reply.phaseText; delete reply.loadPct;
     block.active = false; block.done = true; delete block.status; block.doneAt = Date.now();
     if (ok || block.error) {
       reply.stats = tokens && ns ? `${model} · ${(tokens / (ns / 1e9)).toFixed(1)} tok/s · ${tokens} tokens` : model;
@@ -3652,7 +3792,7 @@ function cleanSlide(r) {
 async function buildSlides(model, text) {
   const deck = { title: "", subtitle: "", slides: [] };
   const block = { type: "deck", active: true, deck, idx: 0, steps: [], progress: 0 };
-  const reply = { role: "assistant", content: "", blocks: [block], model };
+  const reply = { role: "assistant", content: "", blocks: [block], model, phase: "working" };
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble);
   fillBot(bubble, reply, -1, true);
@@ -3669,7 +3809,7 @@ async function buildSlides(model, text) {
   try {
     const caps = await getCaps(model);
     // the chat so far (short), so "now make slides about it" works
-    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined).slice(-6)
+    const history = current.messages.slice(0, -1).filter(m => m.content && m.genImage === undefined && !m.isError).slice(-6)
       .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 1500)}`).join("\n\n");
     // changing an earlier presentation from this chat?
     const prev = [...current.messages].reverse().find(m => m.role === "assistant" && m.blocks?.some(x => x.type === "deck" && x.deck?.slides?.length))?.blocks.find(x => x.type === "deck").deck;
@@ -3808,7 +3948,7 @@ ${layoutList}
     if (e.name !== "AbortError") { block.error = e.message; errorBubble("Couldn't build the slides: " + e.message); }
     for (const st of block.steps) if (st.state === "doing") st.state = "fail";
   } finally {
-    controller = null; setBusy(false);
+    controller = null; setBusy(false); delete reply.phase;
     block.active = false; block.done = true;
     for (const sl of deck.slides) { delete sl.ready; delete sl.about; }
     if (deck.slides.length || reply.content) {
@@ -3883,7 +4023,7 @@ function watchLoading(model, onPct, isDone) {
 }
 
 async function generateImage(model, prompt, refs = []) {
-  const reply = { role: "assistant", content: "", genImage: "", prompt, model };
+  const reply = { role: "assistant", content: "", genImage: "", prompt, model, phase: "sent" };
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble);
   fillBot(bubble, reply, -1, true);
@@ -3905,19 +4045,26 @@ async function generateImage(model, prompt, refs = []) {
   try {
     let drawing = false;
     let label = "Starting " + model + "…", lastPct = 0;
+    let sawLoad = 0;
     const show = (text, pct) => {
       label = text; if (pct != null) lastPct = pct;
-      const bar = bubble.querySelector(".gen-wait .progress div"); if (bar) bar.style.width = lastPct + "%";
-      const t = bubble.querySelector(".gen-wait .pct"); if (t) t.textContent = lastPct ? `${label} ${lastPct}%` : label;
+      // "Loading … 95 s" from the PC counts up; turn it into a countdown from what earlier loads took
+      const mm = /^(Loading|Starting)\b.*?(\d+) s$/.exec(text);
+      if (mm) { sawLoad = Number(mm[2]); label = etaText(model, sawLoad); ph(reply, "loading"); reply.loadStart = performance.now() - sawLoad * 1000; reply.loadPct = null; }
+      else if (/^(Loading|Starting)/.test(text)) { ph(reply, "loading"); reply.loadStart = reply.loadStart || performance.now(); }
+      const bar = bubble.querySelector(".gen-wait .progress div"); if (bar) bar.style.width = (reply.phase === "loading" && !lastPct ? Math.min(95, sawLoad / Math.max(1, loadAvg(model) || 60) * 100) : lastPct) + "%";
+      const t = bubble.querySelector(".gen-wait .pct"); if (t) t.textContent = lastPct && reply.phase !== "loading" ? `${label} ${lastPct}%` : label;
     };
     show(label, 0);
     const stopWatch = watchLoading(model, pct => show(/from disk|engine/.test(label) ? label : "Loading " + model + " into memory…", pct), () => drawing || !controller);
     const res = await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+    if (reply.phase === "sent") { ph(reply, "received"); fillBot(bubble, reply, -1, true); setTimeout(() => { if (reply.phase === "received") { ph(reply, "working"); fillBot(bubble, reply, -1, true); } }, 700); }
     await readNdjson(res, j => {
       if (j.error) throw new Error(j.error);
       if (j.status && !drawing) show(j.status);      // ComfyUI starting / loading from disk (the host says what it's doing)
       if (j.total) {
-        drawing = true; stopWatch();
+        if (!drawing && sawLoad) recordLoad(model, sawLoad);
+        drawing = true; stopWatch(); ph(reply, "drawing"); delete reply.loadPct;
         show("Drawing…", Math.round((j.completed || 0) / j.total * 100));
       }
       const img = j.image || j.images?.[0];
@@ -3927,7 +4074,7 @@ async function generateImage(model, prompt, refs = []) {
   } catch (e) {
     if (e.name !== "AbortError") errorBubble("Image generation failed: " + e.message);
   } finally {
-    controller = null; setBusy(false);
+    controller = null; setBusy(false); delete reply.phase; delete reply.loadPct;
     if (reply.genImage) {
       reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
       current.messages.push(reply); current.updated = Date.now(); saveChats();
@@ -3964,6 +4111,9 @@ function buildOptions() {
   // Ollama's own default can be huge (its app was set to 128k): the memory for that pushes a 12B model partly
   // off the 12 GB graphics card and makes it ~7x slower. 16k is plenty for chats, slides and graphs.
   if (o.num_ctx == null) o.num_ctx = 16384;
+  // Ollama 0.40 also loads gemma4's small "draft" model for speculative decoding and crashes (HTTP 500) when the big model
+  // has already filled the graphics card. Off, unless the user sets it.
+  if (o.draft_num_predict == null) o.draft_num_predict = 0;
   return o;
 }
 function regenerate() {
@@ -4797,7 +4947,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 // Links look like …/#code=K7QM-4XPT-9F2C-HW3D: the part after # is never sent to any server, so the key stays private.
 const urlCode = new URLSearchParams(location.hash.slice(1)).get("code") || new URLSearchParams(location.search).get("code");
 if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER; saveSettings(); history.replaceState(null, "", location.pathname); }
-applyAppearance();
+applyAppearance(); applyFold();
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
 // the terms have to be accepted once (again when they change: bump TERMS_VERSION)
