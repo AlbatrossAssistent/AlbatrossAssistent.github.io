@@ -58,7 +58,9 @@ async function start() {
     B.ws = new WebSocket(ver.webSocketDebuggerUrl, { maxPayload: 256 * 1024 * 1024, perMessageDeflate: false });
     await new Promise((res, rej) => { B.ws.once("open", res); B.ws.once("error", rej); });
     B.ws.on("message", onMessage);
-    B.ws.on("close", () => { B.ws = null; B.sessions.clear(); B.active = null; for (const p of B.pend.values()) p.rej(new Error("The browser closed")); B.pend.clear(); wake(); });
+    // Chrome is gone (closed, crashed, cleared): its sessions went with it, the private one too, so their ids are forgotten
+    // (a new start would otherwise open its first tab in a private session that no longer exists)
+    B.ws.on("close", () => { B.ws = null; B.sessions.clear(); B.active = null; B.priv = null; B.defCtx = null; B.privOld = null; for (const p of B.pend.values()) p.rej(new Error("The browser closed")); B.pend.clear(); wake(); });
     await send("Target.setDiscoverTargets", { discover: true });
     await send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: DOWNLOADS, eventsEnabled: true }).catch(() => {});
     await refreshTabs();
