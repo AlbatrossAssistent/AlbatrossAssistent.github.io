@@ -4,7 +4,7 @@
 // (and stays end-to-end encrypted). OmniGen2 can also take reference pictures and edit them.
 // ComfyUI is started on the first image request and runs only on this PC (127.0.0.1).
 //
-// Env: COMFY_DIR (default: a ComfyUI folder next to the Burrow folder, e.g. D:\Burrow\ComfyUI\ComfyUI_windows_portable),
+// Env: COMFY_DIR (default: a ComfyUI folder next to the Burrow folder, e.g. C:\Burrow\ComfyUI\ComfyUI_windows_portable),
 //      COMFY_URL (default http://127.0.0.1:8188)
 
 const fs = require("fs");
@@ -14,7 +14,7 @@ const { spawn, execFile } = require("child_process");
 const WebSocket = require("ws");
 
 const COMFY_DIR = process.env.COMFY_DIR || [
-  path.join(__dirname, "..", "..", "ComfyUI", "ComfyUI_windows_portable"), // D:\Burrow\app\host -> D:\Burrow\ComfyUI
+  path.join(__dirname, "..", "..", "ComfyUI", "ComfyUI_windows_portable"), // C:\Burrow\app\host -> C:\Burrow\ComfyUI
   "D:\\ComfyUI\\ComfyUI_windows_portable",
 ].find((d) => fs.existsSync(d)) || "D:\\ComfyUI\\ComfyUI_windows_portable";
 const COMFY = (process.env.COMFY_URL || "http://127.0.0.1:8188").replace(/\/+$/, "");

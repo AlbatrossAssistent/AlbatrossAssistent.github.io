@@ -1,4 +1,4 @@
-// Jarvis (the desktop orb in D:\Jarvis) from the website.
+// Jarvis (the desktop orb in the Jarvis folder next to the Burrow folder, e.g. C:\Jarvis) from the website.
 // Jarvis listens on 127.0.0.1:4849 for its token only (see jarvis/remote.py there). The host passes the
 // website's requests along: end-to-end encrypted from a device with the code, or through the local
 // doorway on this PC. It can also start Jarvis when it isn't running.
@@ -6,12 +6,14 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn, execFile } = require("child_process");
-const TASK = "Albatross Jarvis";   // created by D:\Burrow\app\jarvis-setup.bat: runs Jarvis on the signed-in desktop
+const TASK = "Albatross Jarvis";   // created by jarvis-setup.bat in the app folder: runs Jarvis on the signed-in desktop
 
 const PORT = 4849;
 const APPDATA = process.env.APPDATA || path.join(require("os").homedir(), "AppData", "Roaming");
 const TOKEN_FILE = path.join(APPDATA, "Jarvis", "remote-token");
-const EXE = process.env.JARVIS_EXE || ["D:\\Jarvis\\dist\\Jarvis\\Jarvis.exe"].find((f) => fs.existsSync(f)) || "";
+// <drive>\Burrow\app\host -> <drive>\Jarvis, wherever the Burrow folder lives
+const ROOT = path.dirname(path.dirname(path.dirname(__dirname)));
+const EXE = process.env.JARVIS_EXE || [path.join(ROOT, "Jarvis", "dist", "Jarvis", "Jarvis.exe"), "D:\\Jarvis\\dist\\Jarvis\\Jarvis.exe"].find((f) => fs.existsSync(f)) || "";
 
 const token = () => { try { return fs.readFileSync(TOKEN_FILE, "utf8").trim(); } catch { return ""; } };
 const ALLOWED = new Set(["GET /state", "POST /ask", "POST /stop", "POST /settings", "POST /confirm", "GET /screen"]);
@@ -26,7 +28,7 @@ async function call(method, p, body, query = "") {
 
 let starting = 0;
 async function start(note) {
-  if (!EXE) return [404, { error: "Jarvis isn't installed on this PC (D:\\Jarvis\\dist\\Jarvis\\Jarvis.exe)." }];
+  if (!EXE) return [404, { error: "Jarvis isn't installed on this PC (Jarvis\\dist\\Jarvis\\Jarvis.exe next to the Burrow folder)." }];
   if (Date.now() - starting < 20000) return [200, { starting: true }];
   starting = Date.now();
   // The host often runs in Windows' background session (started at boot), where a program started directly
