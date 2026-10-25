@@ -260,7 +260,10 @@ body.compact .inner { gap: 14px; }
     radial-gradient(1px 1px at 61% 86%, #fff, transparent), radial-gradient(1.3px 1.3px at 78% 22%, #fff, transparent), radial-gradient(1px 1px at 88% 64%, #cfe0ff, transparent),
     radial-gradient(1px 1px at 47% 93%, #fff, transparent), radial-gradient(1.2px 1.2px at 94% 7%, #fff, transparent), radial-gradient(1px 1px at 5% 48%, #fff, transparent), radial-gradient(1px 1px at 70% 50%, #fff, transparent); }
 @keyframes twinkle { to { opacity: .35; } }
-.gen-wait .gplanet { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.gen-wait .gplanet { position: absolute; inset: 0; width: 100%; height: 100%; display: block; transition: opacity .6s; }
+.gen-wait .gprev { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; filter: blur(2.5px) saturate(1.15); transform: scale(1.03); transition: opacity .5s; }
+.gen-wait.has-prev .gprev { opacity: 1; }
+.gen-wait.has-prev .gplanet, .gen-wait.has-prev .grk { opacity: 0; }
 .gen-wait .grk svg { width: 64px; height: 64px; fill: var(--fg); filter: drop-shadow(0 0 14px rgba(170,190,255,.35)); transform: rotate(90deg); animation: rkside2 2s ease-in-out infinite; }
 @keyframes rkside2 { 0%, 100% { transform: translateX(-26px) rotate(90deg); } 50% { transform: translateX(26px) rotate(90deg); } }
 .gen-wait .grk .flame { transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; opacity: .8; }
@@ -905,19 +908,29 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 /* ---------- Liquid glass (Apple-style): the edge bends what's behind it like a lens ----------
    An SVG displacement filter refracts the backdrop near the rim; browsers that can't use it in backdrop-filter
    (Safari, Firefox) ignore that line and keep the normal frosted glass above it. */
-.topbar, .box, .side-btn, .btn, .seg, .badge.loaded, .home-action, .send, .icon-btn:hover, dialog, .toast {
-  backdrop-filter: url(#lglass) blur(14px) saturate(210%) brightness(1.06);
-}
 .btn, .side-btn, .home-action, .suggestions button, .send, .icon-btn, .seg button, .chat-row, .type-card {
   transition: transform .45s cubic-bezier(.3, 1.6, .4, 1), background-color .2s, box-shadow .25s;
 }
 .btn:active, .side-btn:active, .home-action:active, .suggestions button:active, .send:active, .seg button:active { transform: scale(.94); }
 .btn:hover, .home-action:hover, .send:hover { transform: scale(1.04); }
-/* a soft moving highlight, like light rolling over a bubble */
-.topbar, .box, aside { position: relative; isolation: isolate; }
-.topbar::after, .box::after, aside::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
-  background: radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,.35), transparent 55%); opacity: .9; }
-[data-theme="dark"] .topbar::after, [data-theme="dark"] .box::after, [data-theme="dark"] aside::after { background: radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,.10), transparent 55%); }
+/* ---------- Liquid glass: the engine of liqui.design (public/liquid-glass.js adds the layers) ----------
+   blur + refracting rim + tint + light rim, per surface. Chromium bends what is behind the rim like a lens; other browsers
+   get the frosted layer. Switch off in Settings → Appearance (html.no-lg), then the older flat glass above is used. */
+:root { --lq-tint: rgba(255,255,255,.5); --lq-tint-deep: rgba(255,255,255,.16); --lq-rim-hi: rgba(255,255,255,.95); --lq-rim-lo: rgba(255,255,255,.32);
+  --lq-shadow: 0 20px 56px rgba(10,15,40,.13), 0 2px 8px rgba(10,15,40,.07); }
+[data-theme="dark"] { --lq-tint: rgba(36,38,54,.5); --lq-tint-deep: rgba(14,16,28,.3); --lq-rim-hi: rgba(255,255,255,.55); --lq-rim-lo: rgba(255,255,255,.12);
+  --lq-shadow: 0 24px 64px rgba(0,0,6,.55), 0 2px 10px rgba(0,0,6,.35); }
+.lg { isolation: isolate; }
+.lg-layer { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.lg-backdrop { z-index: -5; } .lg-refract { z-index: -4; }
+.lg-tint { z-index: -3; background: linear-gradient(135deg, var(--lq-tint), var(--lq-tint-deep)); }
+.lg-spec { z-index: -2; background-size: 100% 100%; }
+.lg-shine { z-index: -1; box-shadow: inset 0 1px 1px var(--lq-rim-hi), inset 1px 0 1px .5px color-mix(in srgb, var(--lq-rim-hi) 55%, transparent), inset -1px -1px 1px var(--lq-rim-lo); }
+html:not(.no-lg) .lg { background: transparent !important; background-image: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: var(--lq-shadow) !important; border-color: transparent !important; }
+html:not(.no-lg) .lg::after { display: none !important; }
+html:not(.no-lg) .box.lg:focus-within { box-shadow: var(--lq-shadow), 0 0 0 4px var(--soft) !important; }
+html:not(.no-lg) .home-action.lg:hover { box-shadow: 0 26px 60px rgba(10,15,40,.18), 0 2px 8px rgba(10,15,40,.08) !important; }
+html.no-lg .lg-layer { display: none; }
 
 /* Browsers without backdrop blur get solid glass so text stays readable */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -987,11 +1000,6 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
 </style>
 </head>
 <body class="intro">
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="lglass" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
-  <feTurbulence type="fractalNoise" baseFrequency=".008 .012" numOctaves="2" seed="4" result="n"/>
-  <feGaussianBlur in="n" stdDeviation="2" result="nb"/>
-  <feDisplacementMap in="SourceGraphic" in2="nb" scale="38" xChannelSelector="R" yChannelSelector="G"/>
-</filter></svg>
 <div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 <canvas id="sky" aria-hidden="true"></canvas>
 
@@ -1239,6 +1247,7 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
         <section class="pane" data-pane="appearance">
           <div class="field"><label for="theme">Theme</label><select id="theme"><option value="light">White</option><option value="dark">Navy</option><option value="system">Match system</option></select></div>
           <div class="field"><label>Text size</label><div class="range-row"><input type="range" id="fontSize" min="13" max="20" step="1"><output></output></div></div>
+          <label class="check"><span>Liquid glass<small>Panels bend what is behind their edge like glass (from liqui.design). Needs a Chromium browser like Chrome, Edge or Opera for the bending; others get frosted glass.</small></span><input type="checkbox" class="switch" id="glassOn"></label>
           <label class="check"><span>Night sky background<small>Slowly turning stars behind the app. They move away from your pointer.</small></span><input type="checkbox" class="switch" id="starsOn"></label>
           <label class="check"><span>Opening animation<small>Plays when the site loads.</small></span><input type="checkbox" class="switch" id="intro"></label>
           <label class="check"><span>Compact messages<small>Less space between messages.</small></span><input type="checkbox" class="switch" id="compact"></label>
@@ -1365,6 +1374,7 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
 
 <script src="orb.js"></script>
 <script src="starfield.js"></script>
+<script src="liquid-glass.js"></script>
 <script src="planet.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
@@ -1391,7 +1401,7 @@ const DEFAULTS = {
   model: "", imageModel: "", mode: "chat",
   img: { size: "1024x1024", steps: "", seed: "", style: "", history: true, ctxModel: "" },
   files: { name: "", public: false },
-  tools: {}, stars: true,
+  tools: {}, stars: true, glass: true,
 };
 
 const store = {
@@ -2098,6 +2108,7 @@ function fillBot(d, m, idx, live) {
       const [gw, gh] = (S.img.size || "1024x1024").split("x").map(Number);
       c.innerHTML = `<div class="gen-wait" style="aspect-ratio:${gw}/${gh}"><canvas class="gplanet" aria-hidden="true"></canvas><div class="gfoot"><span class="pct">Starting…</span><div class="progress"><div></div></div></div></div>`;
       if (!window.createPlanet || !createPlanet(c.querySelector(".gplanet"))) c.querySelector(".gplanet").outerHTML = `<div class="grk">${LOGO}</div>`;   // no WebGL: the rocket
+      if (m.prev) setPreview(c.querySelector(".gen-wait"), m.prev);
     } else c.innerHTML = `<div style="color:var(--muted)">(image not stored)</div>`;
   } else {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
@@ -4140,6 +4151,14 @@ async function loadStatus(model) {
     return await (await fetch("http://127.0.0.1:4747/load?model=" + encodeURIComponent(model), { signal: AbortSignal.timeout(1500) })).json();
   } catch { return null; }
 }
+// the picture as it develops (small previews from the PC while it is being drawn)
+function setPreview(w, p) {
+  if (!w || !p) return;
+  let img = w.querySelector(".gprev");
+  if (!img) { img = document.createElement("img"); img.className = "gprev"; img.alt = ""; w.insertBefore(img, w.firstChild); }
+  img.src = `data:${p.mime};base64,${p.b64}`;
+  w.classList.add("has-prev");
+}
 function watchLoading(model, onPct, isDone) {
   const t = setInterval(async () => {
     if (isDone()) return clearInterval(t);
@@ -4194,6 +4213,7 @@ async function generateImage(model, prompt, refs = []) {
         drawing = true; stopWatch(); ph(reply, "drawing"); delete reply.loadPct;
         show("Drawing…", Math.round((j.completed || 0) / j.total * 100));
       }
+      if (j.preview) { reply.prev = { b64: j.preview, mime: j.mime || "image/jpeg" }; setPreview(bubble.querySelector(".gen-wait"), reply.prev); }
       const img = j.image || j.images?.[0];
       if (img) { reply.genImage = img; reply.genAt = Date.now(); }
     });
@@ -4201,7 +4221,7 @@ async function generateImage(model, prompt, refs = []) {
   } catch (e) {
     if (e.name !== "AbortError") errorBubble("Image generation failed: " + e.message);
   } finally {
-    controller = null; setBusy(false); delete reply.phase; delete reply.loadPct;
+    controller = null; setBusy(false); delete reply.phase; delete reply.loadPct; delete reply.prev;
     if (reply.genImage) {
       reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
       current.messages.push(reply); current.updated = Date.now(); saveChats();
@@ -4441,9 +4461,10 @@ addEventListener("pointermove", (e) => appSky && appSky.pointer(e.clientX, e.cli
 document.documentElement.addEventListener("pointerleave", () => appSky && appSky.pointer(null));
 document.addEventListener("visibilitychange", startSky);
 $("#starsOn").onchange = (e) => { S.stars = e.target.checked; saveSettings(); startSky(); };
+$("#glassOn").onchange = (e) => { S.glass = e.target.checked; saveSettings(); window.LiquidGlass && LiquidGlass.setEnabled(S.glass); };
 
 // Settings → Tools
-function fillToolSwitches() { $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
+function fillToolSwitches() { $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
 for (const el of $$("[data-tool]")) el.onchange = () => { S.tools = { ...(S.tools || {}), [el.dataset.tool]: el.checked }; saveSettings(); };
 const _openSettings = openSettings;
 openSettings = function (tab) { fillToolSwitches(); return _openSettings(tab); };
@@ -5235,6 +5256,14 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 const urlCode = new URLSearchParams(location.hash.slice(1)).get("code") || new URLSearchParams(location.search).get("code");
 if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER; saveSettings(); history.replaceState(null, "", location.pathname); }
 applyAppearance(); applyFold(); applyNavFold(); startSky();
+if (window.LiquidGlass) {
+  LiquidGlass.setEnabled(S.glass !== false);
+  LiquidGlass.auto([
+    ["aside", { bezel: 30, frost: .3 }], [".topbar", { bezel: 22, frost: .3 }], [".box", { bezel: 22, frost: .3 }], ["dialog", { bezel: 34, frost: .45 }],
+    [".home-action", { bezel: 24, frost: .3 }], [".home-card", { bezel: 24, frost: .35 }], [".jv-card", { bezel: 26, frost: .35 }],
+    ["#jvPop", { bezel: 28, frost: .4 }], [".toast", { bezel: 18, frost: .4 }], [".deck-side", { bezel: 30, frost: .4 }],
+  ]);
+}
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
 // the terms have to be accepted once (again when they change: bump TERMS_VERSION)

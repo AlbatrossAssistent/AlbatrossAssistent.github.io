@@ -69,7 +69,9 @@ function ensureRunning(log, status = () => {}) {
          "--disable-pinned-memory",
          // keep the loaded model between pictures: the default cache drops it whenever RAM runs low (always, with 16 GB),
          // and every picture then reloads ~10 GB from disk
-         "--cache-classic"],
+         "--cache-classic",
+         // small preview pictures while the picture is being drawn (the website shows them as it develops)
+         "--preview-method", "latent2rgb"],
         { cwd: COMFY_DIR, detached: true, stdio: ["ignore", out, out], windowsHide: true });
       child.on("error", () => {});
       child.unref();
@@ -215,8 +217,16 @@ async function generate(body, emit, signal, log) {
     signal?.addEventListener("abort", onAbort);
     try {
       await new Promise((ok, fail) => {
+        let lastPreview = 0;
         ws.on("message", (raw, isBinary) => {
-          if (isBinary) return; // live preview frames
+          if (isBinary) {      // a live preview of the picture being drawn: 4 bytes type (1), 4 bytes format (1 = JPEG, 2 = PNG), then the image
+            const b = Buffer.isBuffer(raw) ? raw : Buffer.concat([].concat(raw));
+            if (b.length > 8 && b.readUInt32BE(0) === 1 && Date.now() - lastPreview > 350) {
+              lastPreview = Date.now();
+              emit({ model: name, preview: b.subarray(8).toString("base64"), mime: b.readUInt32BE(4) === 2 ? "image/png" : "image/jpeg", done: false });
+            }
+            return;
+          }
           let m; try { m = JSON.parse(raw); } catch { return; }
           if (m.data?.prompt_id && m.data.prompt_id !== id) return;
           if (m.type === "progress") drawing = true;
@@ -246,7 +256,7 @@ async function generate(body, emit, signal, log) {
 
 // A ComfyUI started with older settings (by an earlier version of the host) is stopped while it's idle,
 // so the next picture starts it with the current ones.
-const FLAGS = ["--disable-pinned-memory", "--cache-classic"], NOT = ["--disable-mmap"];
+const FLAGS = ["--disable-pinned-memory", "--cache-classic", "--preview-method"], NOT = ["--disable-mmap"];
 const ps = (cmd) => new Promise((res) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd],
   { windowsHide: true, timeout: 15000 }, (e, out) => res(String(out || "").trim())));
 const COMFY_PROC = "Get-CimInstance Win32_Process -Filter \"name='python.exe'\" | Where-Object { $_.CommandLine -like '*ComfyUI*main.py*' }";
