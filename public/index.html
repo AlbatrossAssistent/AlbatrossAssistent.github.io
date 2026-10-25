@@ -1016,6 +1016,16 @@ body.agent-view .messages, body.agent-view .composer, body.agent-view #home, bod
 .ag-two { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
 .ag-ideas { display: flex; flex-wrap: wrap; gap: 8px; }
 .ag-ideas button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px dashed color-mix(in srgb, var(--fg) 28%, transparent); background: transparent; color: var(--muted); cursor: pointer; }
+.ag-links { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.ag-links button { text-align: left; font: inherit; font-size: 13px; background: none; border: 0; color: var(--fg); padding: 5px 6px; border-radius: 8px; cursor: pointer; overflow-wrap: anywhere; }
+.ag-links button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.ag-links small { display: block; color: var(--muted); }
+.agent-card .ag-plan-mini { margin: 4px 0 6px; }
+.agent-card .ag-plan-mini:empty { display: none; }
+.agent-card .ag-chat-extra { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.agent-card .ag-chat-extra:empty { display: none; }
+.agent-card .ag-pagelink { color: var(--fg); font-size: 13px; overflow-wrap: anywhere; }
+.agent-card .md .code { margin: 0; }
 .ag-plan h3, #agFinal h3 { margin-top: 0; }
 .ag-pl { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; font-size: 14px; }
 .ag-pl span { flex: none; width: 14px; height: 14px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--muted); }
@@ -1210,7 +1220,10 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <iframe id="agFrame" sandbox="allow-scripts" title="Code player"></iframe>
           <pre id="agConsole"></pre>
         </div>
-        <div class="home-card" id="agBrowseCard" hidden><h3>Browser</h3><b id="agBrowseTitle"></b><a id="agBrowseUrl" target="_blank" rel="noopener noreferrer"></a><pre id="agBrowseText"></pre></div>
+        <div class="home-card" id="agBrowseCard" hidden><h3>Browser</h3>
+          <div class="add-contact"><input id="agBrowseAddr" placeholder="Web address, e.g. example.com" autocomplete="off" spellcheck="false" style="text-transform:none"><button class="btn small primary" id="agBrowseGo" type="button">Open</button></div>
+          <div class="pc-note">A reading view: the page's text and links, opened by your PC. Pages inside your own network are blocked.</div>
+          <b id="agBrowseTitle"></b><a id="agBrowseUrl" target="_blank" rel="noopener noreferrer"></a><pre id="agBrowseText"></pre><div class="ag-links" id="agBrowseLinks"></div></div>
       </div>
     </div>
   </div>
@@ -1374,6 +1387,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <label class="check"><span>Chances &amp; predictions<small>Estimates how likely something is and how it may develop.</small></span><input type="checkbox" class="switch" data-tool="chances"></label>
           <label class="check"><span>Code<small>Writes a program into a folder on your PC.</small></span><input type="checkbox" class="switch" data-tool="code"></label>
           <label class="check"><span>Challenge<small>Attach a puzzle file with the paperclip and the AI digs for the hidden word.</small></span><input type="checkbox" class="switch" data-tool="challenge"></label>
+          <label class="check"><span>Agent<small>Handles jobs with your files, mail, web pages, code and printer by itself, step by step, inside the chat. Sending mail and printing always ask you first. Needs a model that can use tools. (Also open as the Agent tab in Home.)</small></span><input type="checkbox" class="switch" data-tool="agent"></label>
           <label class="check" data-needs-pc><span>Jarvis<small>Does things on your PC when you ask: open apps, click, type, play music. It pops up while it works. Works with every model, <b>gemma4:12b</b> is recommended.</small></span><input type="checkbox" class="switch" data-tool="jarvis"></label>
         </section>
 
@@ -2765,7 +2779,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
-  if (b.type === "chart" || b.type === "chances" || b.type === "code" || b.type === "challenge" || b.type === "jarvis") return renderToolBlock(b);
+  if (b.type === "chart" || b.type === "chances" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -3359,7 +3373,7 @@ async function send(textOverride) {
     if (r.aborted) return;
     tool = r.tool && r.tool !== "chat" ? r.tool : ""; task = r.task || "";
   }
-  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "code" ? buildCode(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "code" ? buildCode(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model));
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -3577,12 +3591,14 @@ const TOOLISH = {
   chances: W("chances?|odds|probabilit\\p{L}*|likel(?:y|ihood)|predict\\p{L}*|forecast\\p{L}*|prognose\\p{L}*|vorhersage\\p{L}*|wahrscheinlich\\p{L}*|chancen"),
   jarvis: W("jarvis|open|launch|start|close|quit|click|type|press|scroll|screenshots?|screen|volume|mute|unmute|play|pause|skip|minimi[sz]e|maximi[sz]e|mouse|keyboard|windows?|apps?|browser|spotify|youtube|discord|steam|shut ?down|restart|öffne\\p{L}*|starte\\p{L}*|schließ\\p{L}*|klick\\p{L}*|tipp\\p{L}*|lautstärke|bildschirm|fenster|maus|tastatur|spiel\\p{L}*"),
 };
+TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|webpage|web ?page|website|url|https?|html|javascript|run (?:this|the|my) code");
 TOOLISH.code = new RegExp("(?<![\\p{L}\\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|schreib\\p{L}*|erstell\\p{L}*|programmier\\p{L}*|bau\\p{L}*)(?![\\p{L}\\p{N}])[^.?!]{0,60}(?<![\\p{L}\\p{N}])(?:program|script|app|application|website|web ?page|game|bot|tool|html|python|javascript|node|java|c\\+\\+|css|api|function|class|code|programm|skript|webseite|spiel)(?![\\p{L}\\p{N}])", "iu");
 const ROUTE_ABOUT = {
   slides: "they want a presentation, slide deck or keynote made",
   graph: "they want a chart or graph drawn from numbers or real data",
   chances: "they ask how likely something is (chances, odds, probability) or want a prediction or forecast of how something will develop",
   code: "they want a program, script, website, game or app written and saved as files on their PC",
+  agent: "they want a job done with their own stuff on the PC or their accounts: read or summarize their email inbox, or send an email; look in, sort, move, read, create or edit files and folders on the PC; read a specific web page; print a file; or run a small HTML or JavaScript snippet in the code player. Not for general questions, and not for operating the screen with mouse and keyboard (that is jarvis)",
   jarvis: "they want something DONE on their PC itself: open or close an app, click, type, scroll, play or pause music or video, change the volume, take or read a screenshot, look at what is on the screen, use the mouse or keyboard",
 };
 // Decides, for a message that smells like a tool, whether it really needs one. One short answer from the model
@@ -3610,7 +3626,7 @@ async function routeTool(model, text) {
 Tools:
 ${list}
 - chat: anything else: questions, explanations, writing text (emails, essays, stories, poems), advice, translation, maths, jokes, and talking about code, presentations or charts without asking for one to be made.
-For "jarvis", "task" is the instruction for the PC in the user's language, as a clear command (for example "Open Spotify and play some jazz"). For every other tool "task" is "".
+For "jarvis" and "agent", "task" is the instruction in the user's language, as a clear command (for example "Open Spotify and play some jazz", or "Summarize my unread mail and list what needs an answer"). For every other tool "task" is "".
 When unsure, choose "chat".`;
     const recent = current.messages.slice(0, -1).filter(m => m.content && !m.isError && !m.isEvent && m.genImage === undefined).slice(-2).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`).join("\n");
     const r = (await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: (recent ? `Earlier:\n${recent}\n\n` : "") + `Last message: ${text}` }], schema)).data;
@@ -4327,6 +4343,7 @@ function challengeCard(b) {
 
 function renderToolBlock(b) {
   if (b.type === "jarvis") return jarvisCard(b);
+  if (b.type === "agent") return window.agentCard ? window.agentCard(b) : document.createElement("div");
   if (b.type === "code") return codeCard(b);
   if (b.type === "challenge") return challengeCard(b);
   const wrap = document.createElement("div"); wrap.className = "tool-block";
@@ -5014,6 +5031,8 @@ function renderHome() {
     ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
     ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
     ["agent", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg>', "Agent", "Plans and works for you: files, web, mail, code, print"],
+    ["browser", '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', "Browser", "Read web pages through your PC"],
+    ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
     ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
@@ -5038,6 +5057,7 @@ function renderHome() {
     else if (g === "power") setView("pc", { tab: "power" });
     else if (g === "jarvis") setView("jarvis");
     else if (g === "agent") setView("agent");
+    else if (g === "browser" || g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
     else if (g === "install") openInstall();
     else openSettings();
