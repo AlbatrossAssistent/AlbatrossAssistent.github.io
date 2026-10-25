@@ -1,0 +1,177 @@
+"use strict";
+// The Browser view: Chrome runs on the PC (host/browser.js), its screen arrives here as pictures, and clicks, taps, scrolling and typing
+// go back to it. Uses the main page's helpers: $, pcCall, pcStream, remotePC, connected, sleepMs, toast.
+(() => {
+const BV = { open: false, ctrl: null, st: null, frame: { w: 0, h: 0 }, vp: null, queue: Promise.resolve(), moveT: 0, wheel: { dx: 0, dy: 0, x: 0, y: 0, timer: 0 }, text: "", textT: 0, resizeT: 0 };
+const call = (p, body) => pcCall(p, body || {});
+const KEYS = new Set(["Enter", "Backspace", "Tab", "Escape", "Delete", "ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown", "Home", "End", "PageUp", "PageDown", "F5"]);
+
+// inputs go to the PC one after another, in order
+function sendInput(o) {
+  if (o.t !== "text" && BV.text) flushText();
+  BV.queue = BV.queue.then(() => call("/browser/input", o).catch(() => {}));
+  return BV.queue;
+}
+// typed letters are sent in small groups, not one request per letter
+function typeText(t) { BV.text += t; clearTimeout(BV.textT); BV.textT = setTimeout(flushText, remotePC() ? 120 : 40); }
+function flushText() { clearTimeout(BV.textT); const t = BV.text; BV.text = ""; if (t) BV.queue = BV.queue.then(() => call("/browser/input", { t: "text", text: t }).catch(() => {})); }
+const mods = (e) => ({ shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+
+function viewSize() {
+  const r = $("#bvScreen").getBoundingClientRect();
+  const touch = matchMedia("(pointer: coarse)").matches;
+  return { w: Math.max(240, Math.floor(r.width)), h: Math.max(240, Math.floor(r.height)), dpr: remotePC() ? 1 : Math.min(devicePixelRatio || 1, 1.5), mobile: touch && r.width < 760, quality: remotePC() ? 50 : 65 };
+}
+async function open() {
+  BV.open = true;
+  const msg = $("#bvMsg");
+  if (!connected) { msg.hidden = false; msg.textContent = "Connect to your PC first (Home → Connect)."; return; }
+  msg.hidden = false; msg.textContent = "Starting Chrome on your PC…";
+  await new Promise((r) => requestAnimationFrame(r));
+  try { BV.vp = viewSize(); paint(await call("/browser/start", BV.vp)); }
+  catch (e) { msg.textContent = "Couldn't start the browser: " + e.message + (/Unknown|404/.test(e.message) ? " (restart the Albatross host on your PC to update it)" : ""); return; }
+  watch();
+}
+function close() { BV.open = false; if (BV.ctrl) BV.ctrl.abort(); BV.ctrl = null; }
+async function watch() {
+  if (BV.ctrl) BV.ctrl.abort();
+  const ctrl = BV.ctrl = new AbortController(), dec = new TextDecoder();
+  let fails = 0;
+  while (BV.open && !ctrl.signal.aborted) {
+    try {
+      const res = await pcStream("/browser/stream", { fps: remotePC() ? 6 : 15 }, ctrl.signal);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const rd = res.body.getReader(); let buf = ""; fails = 0;
+      for (;;) {
+        const { value, done } = await rd.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let k;
+        while ((k = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, k); buf = buf.slice(k + 1);
+          if (!line.trim()) continue;
+          let o; try { o = JSON.parse(line); } catch { continue; }
+          if (o.img) frame(o);
+          if (o.st) paint(o.st);
+          if (o.error) { $("#bvMsg").hidden = false; $("#bvMsg").textContent = o.error; }
+          if (o.closed) { $("#bvMsg").hidden = false; $("#bvMsg").textContent = "The browser was closed. Tap here to start it again."; }
+        }
+      }
+    } catch (e) { if (ctrl.signal.aborted) return; fails++; }
+    if (!BV.open) return;
+    await sleepMs(Math.min(3000, 400 * (fails + 1)));
+  }
+}
+function frame(o) { BV.frame = { w: o.w, h: o.h }; $("#bvImg").src = "data:image/jpeg;base64," + o.img; $("#bvMsg").hidden = true; }
+function paint(st) {
+  if (!st || st.closed) return;
+  BV.st = st;
+  if (document.activeElement !== $("#bvUrl")) $("#bvUrl").value = st.url && st.url !== "about:blank" ? st.url : "";
+  $("#bvBack").disabled = !st.back; $("#bvFwd").disabled = !st.fwd;
+  $("#bvLoad").classList.toggle("on", !!st.loading);
+  $("#bvTabsBtn").textContent = String((st.tabs || []).length || 1);
+  renderTabs();
+  const d = st.dialog, box = $("#bvDialog");
+  box.hidden = !d;
+  if (d) { $("#bvDMsg").textContent = d.message || (d.type === "beforeunload" ? "Leave this page?" : ""); $("#bvDIn").hidden = d.type !== "prompt"; $("#bvDIn").value = d.prompt || ""; $("#bvDNo").hidden = d.type === "alert"; }
+  $("#bvFoot").hidden = !st.download; $("#bvFoot").textContent = st.download || "";
+}
+function renderTabs() {
+  const box = $("#bvTabs"), st = BV.st; if (!st || box.hidden) return;
+  box.innerHTML = "";
+  for (const t of st.tabs || []) {
+    const b = document.createElement("button"); b.type = "button"; b.className = t.id === st.active ? "on" : "";
+    b.innerHTML = "<span></span><i title=\"Close tab\">✕</i>"; b.firstChild.textContent = t.title || t.url || "New tab";
+    b.onclick = (e) => { if (e.target.tagName === "I") call("/browser/tab", { action: "close", id: t.id }).then(paint).catch((x) => toast(x.message)); else call("/browser/tab", { action: "switch", id: t.id }).then(paint).catch((x) => toast(x.message)); };
+    box.appendChild(b);
+  }
+  const n = document.createElement("button"); n.type = "button"; n.className = "bv-new"; n.textContent = "+"; n.title = "New tab";
+  n.onclick = () => call("/browser/tab", { action: "new" }).then(paint).catch((x) => toast(x.message));
+  box.appendChild(n);
+}
+// where on the page a pointer is (the picture is drawn at the top left, scaled to fit)
+function pos(e) {
+  const r = $("#bvImg").getBoundingClientRect(), fw = BV.frame.w || (BV.vp && BV.vp.w) || r.width, fh = BV.frame.h || (BV.vp && BV.vp.h) || r.height;
+  const sc = Math.min(r.width / fw, r.height / fh) || 1;
+  return { x: Math.round((e.clientX - r.left) / sc), y: Math.round((e.clientY - r.top) / sc), sc };
+}
+function queueWheel(p, dx, dy) {
+  const w = BV.wheel; w.dx += dx; w.dy += dy; w.x = p.x; w.y = p.y;
+  if (w.timer) return;
+  w.timer = setTimeout(() => { const o = { t: "wheel", x: w.x, y: w.y, dx: Math.round(w.dx), dy: Math.round(w.dy) }; w.dx = w.dy = 0; w.timer = 0; sendInput(o); }, remotePC() ? 90 : 35);
+}
+
+let wired = false;
+function wire() {
+  if (wired) return; wired = true;
+  const img = $("#bvImg"), scr = $("#bvScreen"), ta = $("#bvType");
+  $("#bvBack").onclick = () => call("/browser/nav", { action: "back" }).then(paint).catch((e) => toast(e.message));
+  $("#bvFwd").onclick = () => call("/browser/nav", { action: "forward" }).then(paint).catch((e) => toast(e.message));
+  $("#bvReload").onclick = () => call("/browser/nav", { action: BV.st && BV.st.loading ? "stop" : "reload" }).then(paint).catch((e) => toast(e.message));
+  $("#bvForm").onsubmit = (e) => { e.preventDefault(); const u = $("#bvUrl").value.trim(); if (!u) return; $("#bvUrl").blur(); call("/browser/nav", { url: u }).then(paint).catch((x) => toast(x.message)); };
+  $("#bvUrl").onfocus = () => $("#bvUrl").select();
+  $("#bvTabsBtn").onclick = () => { $("#bvTabs").hidden = !$("#bvTabs").hidden; renderTabs(); };
+  $("#bvMsg").onclick = () => { if (/closed/.test($("#bvMsg").textContent)) open(); };
+  $("#bvDOk").onclick = () => call("/browser/dialog", { accept: true, text: $("#bvDIn").hidden ? undefined : $("#bvDIn").value }).then(paint).catch(() => {});
+  $("#bvDNo").onclick = () => call("/browser/dialog", { accept: false }).then(paint).catch(() => {});
+
+  // mouse: press, move, release like on the PC. Touch: tap = click, drag = scroll.
+  let ptr = null;
+  img.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (e.pointerType === "mouse") { scr.focus({ preventScroll: true }); ptr = { mouse: true }; sendInput({ t: "down", ...pos(e), button: ["left", "middle", "right"][e.button] || "left", count: e.detail || 1, ...mods(e) }); return; }
+    ptr = { x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, p: pos(e) };
+    try { img.setPointerCapture(e.pointerId); } catch {}
+  });
+  img.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "mouse") {
+      const now = Date.now(); if (now - BV.moveT < (remotePC() ? 120 : 40)) return; BV.moveT = now;
+      sendInput({ t: "move", ...pos(e), drag: !!(e.buttons & 1) }); return;
+    }
+    if (!ptr || ptr.mouse) return;
+    const dx = e.clientX - ptr.lx, dy = e.clientY - ptr.ly;
+    if (Math.hypot(e.clientX - ptr.x0, e.clientY - ptr.y0) > 8) ptr.moved = true;
+    ptr.lx = e.clientX; ptr.ly = e.clientY;
+    if (ptr.moved) queueWheel(ptr.p, -dx / ptr.p.sc, -dy / ptr.p.sc);
+  });
+  img.addEventListener("pointerup", (e) => {
+    if (e.pointerType === "mouse") { sendInput({ t: "up", ...pos(e), button: ["left", "middle", "right"][e.button] || "left", count: e.detail || 1, ...mods(e) }); ptr = null; return; }
+    if (ptr && !ptr.moved) sendInput({ t: "click", x: ptr.p.x, y: ptr.p.y });
+    ptr = null;
+  });
+  img.addEventListener("pointercancel", () => { ptr = null; });
+  img.addEventListener("contextmenu", (e) => e.preventDefault());
+  img.addEventListener("wheel", (e) => { e.preventDefault(); const p = pos(e); queueWheel(p, e.deltaX, e.deltaY); }, { passive: false });
+
+  // keyboard on a computer: click the page, then type
+  scr.addEventListener("keydown", (e) => {
+    if (e.target === ta) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") return;       // the paste event brings the text
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); typeText(e.key); return; }
+    if (KEYS.has(e.key) || ((e.ctrlKey || e.metaKey) && /^[a-z0-9]$/i.test(e.key))) { e.preventDefault(); sendInput({ t: "key", key: e.key, ...mods(e) }); }
+  });
+  scr.addEventListener("paste", (e) => { const t = e.clipboardData && e.clipboardData.getData("text"); if (t) { e.preventDefault(); typeText(t); } });
+
+  // keyboard on a phone: an invisible text field takes the typing (it keeps one invisible character, so deleting is noticed too)
+  const SENT = "​";
+  const reset = () => { ta.value = SENT; try { ta.setSelectionRange(1, 1); } catch {} };
+  const flushTa = () => {
+    const v = ta.value;
+    if (!v.startsWith(SENT)) sendInput({ t: "key", key: "Backspace" });
+    else { const t = v.slice(1); const parts = t.split("\n"); parts.forEach((x, i) => { if (x) typeText(x); if (i < parts.length - 1) sendInput({ t: "key", key: "Enter" }); }); }
+    reset();
+  };
+  ta.addEventListener("input", (e) => { if (!e.isComposing) flushTa(); });
+  ta.addEventListener("compositionend", flushTa);
+  ta.addEventListener("keydown", (e) => { if (["Enter", "Tab", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Escape"].includes(e.key)) { e.preventDefault(); sendInput({ t: "key", key: e.key }); } });
+  $("#bvKbd").onclick = () => { reset(); ta.focus({ preventScroll: true }); };
+
+  // the page follows the size of this window
+  new ResizeObserver(() => {
+    if (!BV.open || !BV.vp) return;
+    clearTimeout(BV.resizeT);
+    BV.resizeT = setTimeout(() => { const v = viewSize(); if (v.w !== BV.vp.w || v.h !== BV.vp.h || v.mobile !== BV.vp.mobile) { BV.vp = v; call("/browser/viewport", v).catch(() => {}); } }, 400);
+  }).observe(scr);
+}
+window.browserOpen = () => { wire(); if (!BV.open) open(); };
+window.browserClose = () => { if (BV.open) close(); };
+})();

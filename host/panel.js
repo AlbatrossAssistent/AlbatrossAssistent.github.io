@@ -11,7 +11,7 @@ const HTML = path.join(__dirname, "control.html");
 // Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
 const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.github\.io|burrow-uu7e\.onrender\.com)$|^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -87,6 +87,32 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
       req.on("end", () => {
         let status = 500, out = {};
         try { [status, out] = chats(req.method, hx[1], body); } catch (e) { out = { error: e.message }; }
+        res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify(out));
+      });
+      return;
+    }
+    // The browser on this PC (see browser.js), for the website on this PC.
+    const bx = req.url.match(/^(\/browser\/(?:start|viewport|state|input|nav|tab|dialog|stop|stream))$/);
+    if (bx && browser) {
+      const origin = req.headers.origin || "";
+      if (origin && !ORIGINS.test(origin)) { res.writeHead(403); return res.end(); }
+      const cors = origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {};
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, { ...cors, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Allow-Private-Network": "true", "Access-Control-Max-Age": "600" });
+        return res.end();
+      }
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 1e6) req.destroy(); });
+      req.on("end", async () => {
+        if (bx[1] === "/browser/stream" && browserStream) {
+          const ac = new AbortController(); res.on("close", () => ac.abort());
+          res.writeHead(200, { ...cors, "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" });
+          try { await browserStream(body, (t) => res.write(t), ac.signal, () => res.writableLength > 1.5e6); } catch (e) { try { res.write(JSON.stringify({ error: e.message }) + "\n"); } catch {} }
+          return res.end();
+        }
+        let status = 500, out = {};
+        try { [status, out] = await browser(req.method, bx[1], body); } catch (e) { out = { error: e.message }; }
         res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify(out));
       });

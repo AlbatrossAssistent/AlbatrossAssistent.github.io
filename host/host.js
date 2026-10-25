@@ -136,6 +136,7 @@ const codeTool = require("./code");
 const chatStore = require("./chats");
 const jobStore = require("./jobs");
 const loadTimes = require("./loadtimes");
+const browserTool = require("./browser");
 const agentTools = require("./agent");
 const mailTools = require("./mail");
 const agentHandle = (method, p, body) => (p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : agentTools.handle(method, p, body, note));
@@ -457,6 +458,23 @@ function connect() {
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
+    if (p === "/browser/stream") {
+      const ctrl = new AbortController(); running.set(id, ctrl);
+      try {
+        reply({ k: "m", s: 200, c: "application/x-ndjson" });
+        let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+        // a slow connection only gets the newest picture: skip frames while the socket still has a lot to send
+        await browserTool.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 1.5e6);
+        reply({ k: "e" });
+      } catch (e) { try { reply({ k: "d", d: JSON.stringify({ error: e.message }) + "\n" }); reply({ k: "e" }); } catch {} } finally { running.delete(id); }
+      return send({ type: "end", id });
+    }
+    if (typeof p === "string" && p.startsWith("/browser/")) {
+      let status = 500, out;
+      try { [status, out] = await browserTool.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+      return send({ type: "end", id });
+    }
     if (p === "/jobs/stream") {
       const ctrl = new AbortController(); running.set(id, ctrl);
       try {
@@ -674,6 +692,8 @@ panel = startPanel({
   code: (method, p, body) => codeTool.handle(method, p, body, note),
   chats: (method, p, body) => chatStore.handle(method, p, body, note),
   agent: (method, p, body) => agentHandle(method, p, body),
+  browser: (method, p, body) => browserTool.handle(method, p, body, note),
+  browserStream: (body, write, signal, busy) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return browserTool.stream(j, write, signal, busy); },
   jobs: (method, p, body) => jobStore.handle(method, p, body, { upstream, note }),
   jobsStream: (body, write, signal) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return jobStore.stream(j, write, signal); },
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load

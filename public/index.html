@@ -999,6 +999,36 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
 .pc-row .top span:first-child { color: var(--muted); flex: none; }
 .pc-row .top span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .pc-tabs { margin-top: 10px; }
+#browserPage { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 4px 0 6px; }
+body:not(.browser-view) #browserPage { display: none; }
+body.browser-view .messages, body.browser-view .composer, body.browser-view #home, body.browser-view #jarvis, body.browser-view #pcPage, body.browser-view #agentPage, body.browser-view #typeBadge, body.browser-view #model { display: none !important; }
+.bv-bar { display: flex; align-items: center; gap: 4px; }
+.bv-bar .icon-btn:disabled { opacity: .35; }
+.bv-addr { flex: 1; min-width: 0; }
+.bv-addr input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; padding: 9px 14px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent); background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg); }
+.bv-count { flex: none; min-width: 30px; height: 30px; border-radius: 8px; border: 2px solid var(--fg); background: none; color: var(--fg); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.bv-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.bv-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 220px; font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: none; color: var(--muted); cursor: pointer; }
+.bv-tabs button.on { color: var(--fg); border-color: color-mix(in srgb, var(--fg) 45%, transparent); background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.bv-tabs button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bv-tabs button i { font-style: normal; opacity: .6; padding: 0 2px; }
+.bv-tabs .bv-new { font-size: 17px; padding: 3px 12px; }
+.bv-load { height: 2px; border-radius: 2px; background: transparent; }
+.bv-load.on { background: linear-gradient(90deg, transparent, var(--fg), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: bvload 1s linear infinite; }
+@keyframes bvload { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+.bv-screen { position: relative; flex: 1; min-height: 0; border-radius: 14px; overflow: hidden; background: #fff; outline: none; border: 1px solid var(--line); }
+.bv-screen:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--fg) 40%, transparent); }
+#bvImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: top left; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#bvImg:not([src]) { visibility: hidden; }
+.bv-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; color: #333; background: #fff; font-size: 15px; }
+.bv-msg[hidden] { display: none; }
+#bvType { position: absolute; left: 0; bottom: 0; width: 2px; height: 2px; opacity: 0; font-size: 16px; border: 0; padding: 0; resize: none; }
+.bv-dialog { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); }
+.bv-dialog[hidden] { display: none; }
+.bv-dbox { background: var(--bg); color: var(--fg); padding: 16px 18px; border-radius: 14px; max-width: 360px; width: calc(100% - 40px); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.bv-dbox p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bv-dbox input { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--fg); }
+.bv-foot { font-size: 12.5px; color: var(--muted); padding: 0 4px; }
 #agentPage { flex: 1; overflow-y: auto; padding: 8px 4px 28px; }
 body:not(.agent-view) #agentPage { display: none; }
 body.agent-view .messages, body.agent-view .composer, body.agent-view #home, body.agent-view #jarvis, body.agent-view #pcPage, body.agent-view #typeBadge, body.agent-view #model { display: none !important; }
@@ -1187,6 +1217,25 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
         <div class="home-card" id="pcStatusCard"><h3>Live status</h3><div id="pcStats"><div class="empty-note">Loading…</div></div></div>
       </div>
     </div>
+  </div>
+  <div id="browserPage">
+    <div class="bv-bar">
+      <button class="icon-btn" id="bvBack" type="button" title="Back" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="icon-btn" id="bvFwd" type="button" title="Forward" aria-label="Forward"><svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      <button class="icon-btn" id="bvReload" type="button" title="Reload" aria-label="Reload"><svg class="i" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+      <form id="bvForm" class="bv-addr" autocomplete="off"><input id="bvUrl" type="text" inputmode="url" placeholder="Search or type a web address" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go"></form>
+      <button class="bv-count" id="bvTabsBtn" type="button" title="Tabs" aria-label="Tabs">1</button>
+      <button class="icon-btn" id="bvKbd" type="button" title="Keyboard" aria-label="Show the keyboard"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
+    </div>
+    <div class="bv-tabs" id="bvTabs" hidden></div>
+    <div class="bv-load" id="bvLoad"></div>
+    <div class="bv-screen" id="bvScreen" tabindex="0">
+      <img id="bvImg" alt="The web page" draggable="false">
+      <div class="bv-msg" id="bvMsg">Starting Chrome on your PC…</div>
+      <textarea id="bvType" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Type into the page"></textarea>
+      <div class="bv-dialog" id="bvDialog" hidden><div class="bv-dbox"><p id="bvDMsg"></p><input id="bvDIn" type="text" hidden><div class="row"><button class="btn small primary" id="bvDOk" type="button">OK</button><button class="btn small" id="bvDNo" type="button">Cancel</button></div></div></div>
+    </div>
+    <div class="bv-foot" id="bvFoot" hidden></div>
   </div>
   <div id="agentPage">
     <div class="home-inner">
@@ -5004,11 +5053,13 @@ function setView(v, opt) {
   document.body.classList.toggle("jarvis-view", v === "jarvis");
   document.body.classList.toggle("pc-view", v === "pc");
   document.body.classList.toggle("agent-view", v === "agent");
+  document.body.classList.toggle("browser-view", v === "browser");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   if (v === "home") renderHome();
   if (v === "pc") pcOpen(opt && opt.tab); else pcClose();
   if (v === "agent") { window.agentOpen && window.agentOpen(); } else { window.agentClose && window.agentClose(); }
+  if (v === "browser") { window.browserOpen && window.browserOpen(); } else { window.browserClose && window.browserClose(); }
   if (v === "jarvis") jarvisOpen(); else jarvisClose();
 }
 const isHome = () => document.body.classList.contains("home-view");
@@ -5031,7 +5082,7 @@ function renderHome() {
     ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
     ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
     ["agent", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg>', "Agent", "Plans and works for you: files, web, mail, code, print"],
-    ["browser", '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', "Browser", "Read web pages through your PC"],
+    ["browser", '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', "Browser", "Chrome on your PC, on any device"],
     ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
     ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
@@ -5057,7 +5108,8 @@ function renderHome() {
     else if (g === "power") setView("pc", { tab: "power" });
     else if (g === "jarvis") setView("jarvis");
     else if (g === "agent") setView("agent");
-    else if (g === "browser" || g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
+    else if (g === "browser") setView("browser");
+    else if (g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
     else if (g === "install") openInstall();
     else openSettings();
@@ -6076,5 +6128,6 @@ $("#accDelete").onclick = () => armed2("cloud", async () => {
 });
 </script>
 <script src="agent.js"></script>
+<script src="browser.js"></script>
 </body>
 </html>
