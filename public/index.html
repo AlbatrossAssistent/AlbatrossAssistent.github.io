@@ -968,12 +968,15 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
 .pc-row .top span:first-child { color: var(--muted); flex: none; }
 .pc-row .top span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .pc-tabs { margin-top: 10px; }
+.lock-ways { margin: 0; padding-left: 20px; line-height: 1.7; }
+.lock-wait { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 14px; }
+body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 .ins-steps { margin: 0; padding: 0; list-style: none; counter-reset: ins; display: flex; flex-direction: column; gap: 10px; }
 .ins-steps li { counter-increment: ins; position: relative; padding-left: 40px; min-height: 30px; line-height: 1.5; font-size: 14.5px; }
 .ins-steps li::before { content: counter(ins); position: absolute; left: 0; top: -1px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background-color: var(--accent); color: var(--accent-fg); }
 .ins-steps b { font-weight: 600; }
 .ins-steps .ic { display: inline-flex; vertical-align: -4px; margin: 0 2px; }
-#installDlg { width: min(560px, calc(100vw - 24px)); }
+#installDlg, #lockDlg { width: min(560px, calc(100vw - 24px)); }
 #pcPage .home-grid { grid-template-columns: minmax(0, 1fr); max-width: 640px; margin: 0 auto; width: 100%; }
 #pcPage[data-pt="status"] .pc-card, #pcPage[data-pt="power"] #pcStatusCard { display: none; }
 .cores { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 9px; }
@@ -1242,7 +1245,7 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
           <label class="check"><span>Chances &amp; predictions<small>Estimates how likely something is and how it may develop.</small></span><input type="checkbox" class="switch" data-tool="chances"></label>
           <label class="check"><span>Code<small>Writes a program into a folder on your PC.</small></span><input type="checkbox" class="switch" data-tool="code"></label>
           <label class="check"><span>Challenge<small>Attach a puzzle file with the paperclip and the AI digs for the hidden word.</small></span><input type="checkbox" class="switch" data-tool="challenge"></label>
-          <label class="check"><span>Jarvis<small>Does things on your PC when you ask: open apps, click, type, play music. It pops up while it works. Works with every model, <b>gemma4:12b</b> is recommended.</small></span><input type="checkbox" class="switch" data-tool="jarvis"></label>
+          <label class="check" data-needs-pc><span>Jarvis<small>Does things on your PC when you ask: open apps, click, type, play music. It pops up while it works. Works with every model, <b>gemma4:12b</b> is recommended.</small></span><input type="checkbox" class="switch" data-tool="jarvis"></label>
         </section>
 
         <!-- Chat -->
@@ -1259,6 +1262,10 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
           <label class="check"><span>Show thinking<small>Live "Thinking…" for models that support it (qwen3, deepseek-r1, gpt-oss…). Others answer normally.</small></span><input type="checkbox" class="switch" id="think"></label>
           <label class="check"><span>Auto-name chats<small>Uses the first message as the chat title.</small></span><input type="checkbox" class="switch" id="autoTitle"></label>
           <label class="check"><span>Save chats in this browser<small>Off: chats vanish when you close the page.</small></span><input type="checkbox" class="switch" id="persist"></label>
+          <label class="check"><span>Keep chats on my PC<small>Chats are saved on the PC you connect to, so every device you connect with sees the same chats. Only devices with your code can read them.</small></span><input type="checkbox" class="switch" id="chatsOnPC"></label>
+          <label class="check"><span>Also keep a copy on this device<small>Off: chats stay only on the PC and appear here while it is online.</small></span><input type="checkbox" class="switch" id="keepLocal"></label>
+          <label class="check"><span>Keep answers running on the PC<small>If the app goes to the background or the screen locks, the PC finishes the answer and the app picks it up when you come back.</small></span><input type="checkbox" class="switch" id="bgJobs"></label>
+          <label class="field"><span>This device's name<small>Shown in Beam → Devices on your PC.</small></span><input type="text" id="deviceName" maxlength="40" placeholder="e.g. My phone"></label>
         </section>
 
         <!-- Appearance -->
@@ -1379,6 +1386,24 @@ body.pc-view .messages, body.pc-view .composer, body.pc-view #home, body.pc-view
   </div>
 </dialog>
 
+<dialog id="lockDlg">
+  <div class="modal">
+    <div class="modal-head"><h2>Your PC is locked</h2></div>
+    <div class="body" style="padding:18px 22px 22px;display:flex;flex-direction:column;gap:14px">
+      <div id="lockStep1">
+        <p style="margin:0 0 14px;line-height:1.55">The PC is locked, but <b id="lockWhat">this</b> needs the PC to be accessible (unlocked). Continue?</p>
+        <div class="row"><button class="btn primary" id="lockGo">Continue</button><button class="btn" id="lockCancel">Cancel</button></div>
+      </div>
+      <div id="lockStep2" hidden>
+        <p style="margin:0 0 10px;line-height:1.55">Unlock your PC the way you normally sign in:</p>
+        <ul class="lock-ways"><li><b>PIN or password</b> typed on the PC</li><li><b>Fingerprint or face</b> (Windows Hello) on the PC</li><li><b>Security key</b> plugged into the PC</li></ul>
+        <div class="note" style="margin:12px 0">For your safety Windows doesn't let any program or website type your password into the lock screen, so Albatross can't do it for you and never asks for it. As soon as the PC is unlocked this continues by itself.</div>
+        <div class="lock-wait"><span class="dot wait"></span> Waiting for the PC to be unlocked…</div>
+        <div class="row" style="margin-top:12px"><button class="btn" id="lockCancel2">Cancel and go back</button></div>
+      </div>
+    </div>
+  </div>
+</dialog>
 <dialog id="installDlg">
   <div class="modal">
     <div class="modal-head"><h2>Get the app</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -1446,6 +1471,15 @@ let S = deepMerge(structuredClone(DEFAULTS), store.get("settings", {}));
 if (store.get("settings", {}).serverVersion !== 2) { S.conn.relay = DEFAULT_SERVER; S.serverVersion = 2; store.set("settings", S); }
 if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER;
 let chats = S.persist ? store.get("chats", []) : [];
+// ---------- who this device is (shown to the PC, under Beam -> Devices) ----------
+function deviceInfo() {
+  let id = store.get("deviceId", ""); if (!id) { id = crypto.randomUUID(); store.set("deviceId", id); }
+  const ua = navigator.userAgent, phone = /iPhone|Android.+Mobile|Mobile/.test(ua), tablet = !phone && (/iPad|Android/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+  const os = /iPhone|iPad/.test(ua) ? "iPhone" : /Android/.test(ua) ? "Android" : /Windows/.test(ua) ? "Windows" : /Mac/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Device";
+  const br = /Edg\//.test(ua) ? "Edge" : /Firefox/.test(ua) ? "Firefox" : /Chrome/.test(ua) ? "Chrome" : /Safari/.test(ua) ? "Safari" : "Browser";
+  const name = (S.deviceName || "").trim() || (os === "iPhone" || os === "Android" ? os + (tablet ? " tablet" : " phone") : os + " · " + br);
+  return { id, name, kind: phone ? "phone" : tablet ? "tablet" : "computer" };
+}
 let current = null;
 let controller = null;
 let attachments = []; // base64 strings (no prefix)
@@ -1457,11 +1491,145 @@ function deepMerge(a, b) { for (const k in b) { if (b[k] && typeof b[k] === "obj
 function saveSettings() { store.set("settings", S); }
 function saveChats() {
   if (!S.persist) return;
+  chatSyncSoon();
+  if (S.keepLocal === false && sync.ok) { store.del("chats"); return; }     // the PC has them; this device keeps nothing
   if (!store.set("chats", chats)) {
     // storage full (usually generated images) — keep text, drop old images
     const slim = chats.map(c => ({ ...c, messages: c.messages.map(m => ({ ...m, images: undefined, genImage: m.genImage ? "" : undefined })) }));
     if (store.set("chats", slim)) toast("Browser storage full — older images won't be kept");
   }
+}
+
+// ======================================================================
+// Chats on the PC
+// ======================================================================
+// The PC keeps the master copy of every chat (host/chats.js). This device keeps a cache (unless switched off) and, whenever it
+// is connected, swaps what changed: newer there -> take it, newer here -> send it, deleted on one side -> deleted on the other.
+const sync = { sig: S.keepLocal === false ? {} : store.get("chatSync", {}), timer: 0, busy: false, ok: false, again: false, fail: 0 };
+const chatSig = (c) => [c.updated, c.messages.length, c.title, c.pinned ? 1 : 0, (c.system || "").length, (c.context || "").length, c.type || ""].join("|");
+const syncOn = () => S.persist && S.chatsOnPC !== false;
+function chatSyncSoon(ms = 1500) { if (!syncOn()) return; clearTimeout(sync.timer); sync.timer = setTimeout(syncChats, ms); }
+function slimChat(c) { return { ...c, messages: c.messages.map(m => ({ ...m, images: undefined, genImage: m.genImage ? "" : undefined })) }; }
+async function pushChat(c) {
+  let r;
+  try { r = await pcCall("/chats/put", { chat: c }); }
+  catch (e) { if (/too big/i.test(e.message)) r = await pcCall("/chats/put", { chat: slimChat(c) }); else throw e; }
+  sync.sig[c.id] = chatSig(c);
+  return r;
+}
+function adopt(old, nw) { const i = chats.indexOf(old); if (i >= 0) chats[i] = nw; else chats.push(nw); if (current === old) current = nw; sync.sig[nw.id] = chatSig(nw); }
+async function syncChats() {
+  if (!syncOn() || !connected) return;
+  if (sync.busy) { sync.again = true; return; }
+  if (controller) { chatSyncSoon(4000); return; }      // an answer is being written: don't swap chats under it
+  sync.busy = true;
+  let changed = false;
+  try {
+    const l = await pcCall("/chats/list", {});
+    const remote = new Map((l.chats || []).map(c => [c.id, c])), tomb = l.deleted || {};
+    // deleted on this device since the last time -> delete on the PC
+    const have = new Set(chats.map(c => c.id));
+    const gone = Object.keys(sync.sig).filter(id => !have.has(id));
+    if (gone.length) { await pcCall("/chats/delete", { ids: gone }); for (const id of gone) { delete sync.sig[id]; remote.delete(id); } }
+    for (const c of [...chats]) {
+      if (!c.messages.length && !remote.has(c.id)) continue;      // a chat nobody has written in yet stays on this device
+      const r = remote.get(c.id);
+      if (!r) {
+        if (tomb[c.id] && sync.sig[c.id] !== undefined) { chats = chats.filter(x => x !== c); delete sync.sig[c.id]; if (current === c) current = null; changed = true; continue; }   // deleted on another device
+        await pushChat(c); continue;
+      }
+      const mine = sync.sig[c.id] !== chatSig(c);
+      if (r.updated > c.updated || (r.updated === c.updated && !mine && (r.title !== c.title || r.pinned !== !!c.pinned))) {
+        const g = (await pcCall("/chats/get", { id: c.id })).chat; adopt(c, g); changed = true;
+      } else if (mine) {
+        const x = await pushChat(c);
+        if (x.kept === "pc") { const g = (await pcCall("/chats/get", { id: c.id })).chat; adopt(c, g); changed = true; }
+      } else sync.sig[c.id] = chatSig(c);
+    }
+    for (const r of remote.values()) {                  // chats this device has never seen
+      if (have.has(r.id) || sync.sig[r.id] !== undefined) continue;
+      const g = (await pcCall("/chats/get", { id: r.id })).chat; chats.push(g); sync.sig[g.id] = chatSig(g); changed = true;
+    }
+    sync.ok = true; sync.fail = 0;
+    if (S.keepLocal === false) { store.del("chats"); store.del("chatSync"); }
+    else { store.set("chats", chats); store.set("chatSync", sync.sig); }
+    if (changed) { if (!current || !chats.includes(current)) current = chats.find(c => c.messages.length) || current; renderSidebar(); if (isHome()) renderHome(); else if (current) renderMessages(); }
+  } catch (e) {
+    sync.ok = false; sync.fail++;
+    if (sync.fail < 4) chatSyncSoon(15000 * sync.fail);
+  } finally {
+    sync.busy = false;
+    if (sync.again) { sync.again = false; chatSyncSoon(500); }
+  }
+}
+setInterval(() => { if (connected && !document.hidden) syncChats(); }, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { chatSyncSoon(300); pollLock(); } });
+
+// ======================================================================
+// Answers that keep running on the PC
+// ======================================================================
+// The chat request is started on the PC as a "job" and then read in pieces, so a phone that locks its screen or a tab that
+// sleeps doesn't cut the answer off: the PC keeps the model working and the next piece is picked up where it stopped.
+let jobsBadUntil = 0;
+const sleepMs = (ms) => new Promise(r => setTimeout(r, ms));
+async function chatApi(body, signal) {
+  const direct = () => api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
+  if (S.bgJobs === false || Date.now() < jobsBadUntil) return direct();
+  let id;
+  try { id = (await pcCall("/jobs/start", { body: JSON.stringify(body), chatId: current && current.id })).id; }
+  catch (e) { if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError"); jobsBadUntil = Date.now() + 120e3; return direct(); }   // no host with jobs (older host, or direct Ollama)
+  let next = 0, fails = 0, finished = false;
+  const stop = () => { if (!finished) pcCall("/jobs/cancel", { id }).catch(() => {}); };
+  if (signal) signal.addEventListener("abort", stop, { once: true });
+  const enc = new TextEncoder();
+  return new Response(new ReadableStream({
+    async pull(c) {
+      while (true) {
+        if (signal && signal.aborted) return c.error(new DOMException("Aborted", "AbortError"));
+        let j;
+        try { j = await pcCall("/jobs/poll", { id, from: next }); fails = 0; }
+        catch (e) {
+          if (/gone|too old/i.test(e.message)) return c.error(new Error(e.message));
+          if (++fails > 60) return c.error(new Error("Lost contact with the PC while it was answering. " + e.message));
+          await sleepMs(Math.min(3000, 500 * fails)); continue;       // phone asleep or network change: try again
+        }
+        next = j.next;
+        if (j.lines.length) c.enqueue(enc.encode(j.lines.join("\n") + "\n"));
+        if (j.done) { finished = true; return c.close(); }
+        if (j.lines.length) return;
+      }
+    },
+    cancel() { stop(); },
+  }), { status: 200, headers: { "Content-Type": "application/x-ndjson" } });
+}
+
+// ======================================================================
+// Is the PC locked? (Jarvis and anything that drives the mouse and keyboard need an unlocked desktop)
+// ======================================================================
+let pcLocked = false;
+function setLocked(v) { v = !!v; if (v === pcLocked) return; pcLocked = v; document.body.classList.toggle("pc-locked", v); }
+async function pollLock() { if (!connected) return; try { setLocked((await pcCall("/pc/lock", null, "GET")).locked); } catch {} }
+setInterval(() => { if (connected && !document.hidden) pollLock(); }, 15000);
+// Asks to continue when the PC is locked and waits for it to be unlocked. Resolves true when it is, false if cancelled.
+function ensureUnlocked(what) {
+  return new Promise(async (resolve) => {
+    await pollLock();
+    if (!pcLocked) return resolve(true);
+    const d = $("#lockDlg"); let timer = 0, done = false;
+    const finish = (ok) => { if (done) return; done = true; clearInterval(timer); d.close(); resolve(ok); };
+    const show = (step) => {
+      $("#lockStep1").hidden = step !== 1; $("#lockStep2").hidden = step !== 2;
+      $("#lockWhat").textContent = what;
+    };
+    show(1);
+    $("#lockCancel").onclick = $("#lockCancel2").onclick = () => finish(false);
+    d.oncancel = () => finish(false);
+    $("#lockGo").onclick = () => {
+      show(2);
+      timer = setInterval(async () => { await pollLock(); if (!pcLocked) { toast("Your PC is unlocked, continuing"); finish(true); } }, 2000);
+    };
+    d.showModal();
+  });
 }
 
 // ======================================================================
@@ -1557,7 +1725,7 @@ async function unseal(key, b64, aad) {
 async function e2eFetch(path, opts = {}) {
   const key = await e2eKey();
   const id = crypto.randomUUID();
-  const envelope = await seal(key, JSON.stringify({ id, t: Date.now(), method: opts.method || "GET", path, body: opts.body }), "req");
+  const envelope = await seal(key, JSON.stringify({ id, t: Date.now(), method: opts.method || "GET", path, body: opts.body, dev: deviceInfo() }), "req");
   const res = await fetch((opts.base || baseUrl()) + "/e2e", { method: "POST", headers: { "Content-Type": "text/plain" }, body: envelope, signal: opts.signal });
   if (!res.ok) return res; // the server or PC refused before anything was encrypted (offline, wrong code…)
   // The answer is encrypted lines: meta, data…, end. They're numbered, so nothing can be dropped, swapped or added.
@@ -1627,6 +1795,7 @@ async function connect(quiet) {
     setStatus("ok", `${S.conn.mode === "remote" ? "Remotely" : "Locally"} connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"} · ${launcher}`);
     if (document.body.classList.contains("home-view")) renderHome();
     updatePowerBox(true);
+    chatSyncSoon(400); pollLock();
     return true;
   } catch (e) {
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
@@ -3047,7 +3216,7 @@ async function chat(model) {
       const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : [])];
       if (toolsOk && round < 5 && tools.length) body.tools = tools;
 
-      const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+      const res = await chatApi(body, controller.signal);
       // the PC has the request (remote: its first answer frame is here; this PC: the first bytes)
       if (round === 0 && reply.phase === "sent") { ph(reply, "received"); redraw(); setTimeout(() => { if (reply.phase === "received") { ph(reply, "working"); redraw(); } }, 700); }
       let think = null, roundText = "", calls = [];
@@ -4400,6 +4569,7 @@ function openSettings(tab) {
   $("#chatTypeLine").hidden = true;
   $("#webSearch").checked = searchAvailable && S.webSearch;
   for (const k of ["enterSends", "showStats", "think", "autoTitle", "persist", "intro", "compact"]) $("#" + k).checked = !!S[k];
+  $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#bgJobs").checked = S.bgJobs !== false; $("#deviceName").value = S.deviceName || "";
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
   if (tab) switchTab(tab);
   d.showModal();
@@ -4449,6 +4619,10 @@ $("#resetParams").onclick = () => { S.params = { ...DEFAULT_PARAMS }; S.keepAliv
 $("#refreshModels").onclick = () => connect(true);
 $("#defaultSystem").onchange = e => { S.defaultSystem = e.target.value; saveSettings(); };
 for (const k of ["enterSends", "showStats", "think", "autoTitle", "intro", "compact"]) $("#" + k).onchange = e => { S[k] = e.target.checked; saveSettings(); applyAppearance(); if (k === "showStats") renderMessages(); };
+$("#chatsOnPC").onchange = e => { S.chatsOnPC = e.target.checked; saveSettings(); if (S.chatsOnPC) chatSyncSoon(200); };
+$("#keepLocal").onchange = e => { S.keepLocal = e.target.checked; saveSettings(); if (e.target.checked) { store.set("chats", chats); store.set("chatSync", sync.sig); } else if (sync.ok) { store.del("chats"); store.del("chatSync"); } else { toast("Connect to your PC first, so the chats are safe there"); e.target.checked = true; S.keepLocal = true; saveSettings(); } };
+$("#bgJobs").onchange = e => { S.bgJobs = e.target.checked; saveSettings(); };
+$("#deviceName").onchange = e => { S.deviceName = e.target.value.trim().slice(0, 40); saveSettings(); };
 $("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del("chats"); };
 $("#theme").onchange = e => { S.theme = e.target.value; saveSettings(); applyAppearance(); };
 $("#fontSize").addEventListener("input", e => { S.fontSize = Number(e.target.value); e.target.nextElementSibling.textContent = S.fontSize + "px"; saveSettings(); applyAppearance(); });
@@ -4521,6 +4695,7 @@ loadImgFields();
 // Home
 // ======================================================================
 function setView(v, opt) {
+  if (v === "jarvis" && pcLocked) { ensureUnlocked("Jarvis").then(ok => ok && setView("jarvis", opt)); return; }
   document.body.classList.toggle("home-view", v === "home");
   document.body.classList.toggle("jarvis-view", v === "jarvis");
   document.body.classList.toggle("pc-view", v === "pc");
@@ -4562,6 +4737,7 @@ function renderHome() {
     </div>
   </div>`;
   home.querySelector("h1").textContent = greeting() + name;
+  home.querySelector('[data-go="jarvis"]').dataset.needsPc = "1";
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
     const g = b.dataset.go;
     if (g === "chat") { newChat("chat", "", false); setView("chat"); }
@@ -4626,6 +4802,7 @@ async function pcStats() {
   try { j = await pcCall("/pc/stats", null, "GET"); } catch {}
   const el = $("#pcStats"); if (!el) return;
   $("#pcSub").textContent = connected ? `${remotePC() ? "Remotely" : "Locally"} connected` : "Not connected";
+  if (j) setLocked(j.locked);
   const rows = [];
   const row = (k, v, extra = "") => rows.push(`<div class="pc-row"><div class="top"><span>${esc(k)}</span><span>${v}</span></div>${extra}</div>`);
   row("Connection", `<span class="dot ${connected ? "ok" : "bad"}" style="display:inline-block;margin-right:7px"></span>${esc($("#statusText").textContent)}`);
@@ -4642,6 +4819,7 @@ async function pcStats() {
     row("Memory", `${j.memUsedGB.toFixed(1)} of ${j.memTotalGB.toFixed(1)} GB`, meter(j.memUsedGB / j.memTotalGB * 100));
     row("Network", j.net ? "" : "measuring…", j.net ? `<div class="pc-net"><div><small>Receiving ↓</small><b>${rate(j.net.rx)}</b><small>${mbit(j.net.rx)}</small></div><div><small>Sending ↑</small><b>${rate(j.net.tx)}</b><small>${mbit(j.net.tx)}</small></div></div>` : "");
     if (j.disk) row("Disk C:", `${j.disk.freeGB.toFixed(0)} GB free of ${j.disk.totalGB.toFixed(0)} GB`, meter((1 - j.disk.freeGB / j.disk.totalGB) * 100, 85, 95));
+    row("Screen", j.locked ? "Locked" : "Unlocked");
     row("Running for", j.uptimeH >= 24 ? `${Math.floor(j.uptimeH / 24)} d ${Math.floor(j.uptimeH % 24)} h` : `${Math.floor(j.uptimeH)} h ${Math.round((j.uptimeH % 1) * 60)} min`);
   }
   row("Model in memory", esc($("#loadedText").textContent));
@@ -5222,8 +5400,9 @@ $("#jvPopClose").onclick = () => jvPopClose(0);
 $("#jvPopAllow").onclick = () => jarvisCall("POST", "/confirm", { yes: true }).catch(() => {});
 $("#jvPopDeny").onclick = () => jarvisCall("POST", "/confirm", { yes: false }).catch(() => {});
 async function jvState() { try { const { status, j } = await jarvisCall("GET", "/state"); return status === 200 && j.state ? j : null; } catch { return null; } }
-function runJarvisTool(model, text, task) {
+async function runJarvisTool(model, text, task) {
   task = task || text;
+  if (!(await ensureUnlocked("Jarvis"))) { toast("Cancelled: Jarvis needs the PC to be unlocked"); return; }
   const block = { type: "jarvis", active: true, task, thinkLabel: "Handing it to Jarvis…", steps: [], noModel: true };
   return toolAnswer(model, text, block, async ({ redraw }) => {
     jvPopOpen(task);

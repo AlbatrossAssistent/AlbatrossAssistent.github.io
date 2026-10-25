@@ -62,6 +62,28 @@ function gpuStats() {
     });
   });
 }
+// ---------- is the PC locked? (Jarvis, the mouse and keyboard need an unlocked desktop) ----------
+// While the lock screen or the sign-in screen is showing, Windows runs LogonUI.exe; it is not running on an unlocked desktop.
+let lockCache = { t: 0, v: false };
+function isLocked() {
+  return new Promise((res) => {
+    if (process.platform !== "win32") return res(false);
+    if (Date.now() - lockCache.t < 3000) return res(lockCache.v);
+    execFile("tasklist", ["/FI", "IMAGENAME eq LogonUI.exe", "/NH"], { windowsHide: true, timeout: 4000 }, (err, out) => {
+      const v = !err && /LogonUI\.exe/i.test(String(out));
+      lockCache = { t: Date.now(), v: err ? lockCache.v : v }; res(lockCache.v);
+    });
+  });
+}
+// ---------- devices that talk to this PC with the code ----------
+const devices = new Map();   // id -> { id, name, kind, first, last, requests }
+function seeDevice(d) {
+  if (!d || typeof d.id !== "string" || !/^[\w-]{6,64}$/.test(d.id)) return;
+  const now = Date.now(), name = String(d.name || "Device").slice(0, 40), kind = /^(phone|tablet|computer)$/.test(d.kind) ? d.kind : "computer";
+  const x = devices.get(d.id);
+  if (x) { x.last = now; x.requests++; x.name = name; x.kind = kind; }
+  else { devices.set(d.id, { id: d.id, name, kind, first: now, last: now, requests: 1 }); note(`A device connected: ${name}`); }
+}
 // ---------- the PC's own power: what Wake-on-LAN needs to know, and shutting down ----------
 const pcPower = {
   publicIp: "",
@@ -76,8 +98,10 @@ const pcPower = {
     if (method === "GET" && p === "/pc/stats") {
       let disk = null; try { const st = fs.statfsSync(process.platform === "win32" ? "C:\\" : "/"); disk = { freeGB: st.bavail * st.bsize / 1e9, totalGB: st.blocks * st.bsize / 1e9 }; } catch {}
       const cpus = os.cpus();
-      return [200, { name: NAME, cpu: cpuLast, coresPct: coreLast, net: await netRates(), cpuName: (cpus[0]?.model || "").trim(), cores: cpus.length, memUsedGB: (os.totalmem() - os.freemem()) / 1e9, memTotalGB: os.totalmem() / 1e9, uptimeH: os.uptime() / 3600, gpu: await gpuStats(), disk }];
+      return [200, { name: NAME, cpu: cpuLast, coresPct: coreLast, net: await netRates(), cpuName: (cpus[0]?.model || "").trim(), cores: cpus.length, memUsedGB: (os.totalmem() - os.freemem()) / 1e9, memTotalGB: os.totalmem() / 1e9, uptimeH: os.uptime() / 3600, gpu: await gpuStats(), disk, locked: await isLocked() }];
     }
+    if (method === "GET" && p === "/pc/devices") return [200, { devices: [...devices.values()].sort((a, b) => b.last - a.last).map((d) => ({ ...d, online: Date.now() - d.last < 5 * 60e3 })) }];
+    if (method === "GET" && p === "/pc/lock") return [200, { locked: await isLocked() }];
     if (method === "POST" && p === "/pc/shutdown") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       const secs = Math.min(600, Math.max(15, Number(j.seconds) || 60));
@@ -107,6 +131,8 @@ const pcPower = {
 };
 const jarvis = require("./jarvis");
 const codeTool = require("./code");
+const chatStore = require("./chats");
+const jobStore = require("./jobs");
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
@@ -177,6 +203,7 @@ function openRequest(msg) {
   if (typeof r.id !== "string" || !(Math.abs(Date.now() - r.t) < 10 * 60e3)) throw new Error("Request expired. Check that the clock on your device is right.");
   if (seen.has(r.id)) throw new Error("Repeated request rejected");
   seen.set(r.id, Date.now());
+  seeDevice(r.dev);
   return { rid: r.id, method: r.method, path: r.path, body: r.body };
 }
 
@@ -418,6 +445,19 @@ function connect() {
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
+    if (typeof p === "string" && p.startsWith("/jobs/")) {
+      let status = 500, out;
+      try { [status, out] = await jobStore.handle(method, p, body, { upstream, note }); } catch (e) { out = { error: e.message }; }
+      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+      if (p === "/jobs/start") schedule.activity();
+      return send({ type: "end", id });
+    }
+    if (typeof p === "string" && p.startsWith("/chats/")) {
+      let status = 500, out;
+      try { [status, out] = chatStore.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+      return send({ type: "end", id });
+    }
     if (typeof p === "string" && p.startsWith("/jarvis/")) {
       let status = 500, out;
       try { [status, out] = await jarvis.handle(method, p, body, note, freeImageModels); } catch (e) { out = { error: e.message }; }
@@ -610,6 +650,8 @@ panel = startPanel({
   getState: () => ({ ...stats, files: files.state(), now: Date.now() }),
   files,
   code: (method, p, body) => codeTool.handle(method, p, body, note),
+  chats: (method, p, body) => chatStore.handle(method, p, body, note),
+  jobs: (method, p, body) => jobStore.handle(method, p, body, { upstream, note }),
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },
   jarvis: (method, p, body) => p.startsWith("/pc/") ? pcPower.handle(method, p.split("?")[0], body, note) : jarvis.handle(method, p, body, note, freeImageModels),
