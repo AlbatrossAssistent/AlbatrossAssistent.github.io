@@ -13,14 +13,14 @@ function sendInput(o) {
   return BV.queue;
 }
 // typed letters are sent in small groups, not one request per letter
-function typeText(t) { BV.text += t; clearTimeout(BV.textT); BV.textT = setTimeout(flushText, remotePC() ? 120 : 40); }
+function typeText(t) { BV.text += t; clearTimeout(BV.textT); BV.textT = setTimeout(flushText, remotePC() ? 60 : 25); }
 function flushText() { clearTimeout(BV.textT); const t = BV.text; BV.text = ""; if (t) BV.queue = BV.queue.then(() => call("/browser/input", { t: "text", text: t }).catch(() => {})); }
 const mods = (e) => ({ shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
 
 function viewSize() {
   const r = $("#bvScreen").getBoundingClientRect();
   const touch = matchMedia("(pointer: coarse)").matches;
-  return { w: Math.max(240, Math.floor(r.width)), h: Math.max(240, Math.floor(r.height)), dpr: remotePC() ? 1 : Math.min(devicePixelRatio || 1, 1.5), mobile: touch && r.width < 760, quality: remotePC() ? 50 : 65 };
+  return { w: Math.max(240, Math.floor(r.width)), h: Math.max(240, Math.floor(r.height)), dpr: remotePC() ? 1 : Math.min(devicePixelRatio || 1, 1.5), mobile: touch && r.width < 760, quality: remotePC() ? 42 : 60 };
 }
 async function open() {
   BV.open = true;
@@ -39,7 +39,7 @@ async function watch() {
   let fails = 0;
   while (BV.open && !ctrl.signal.aborted) {
     try {
-      const res = await pcStream("/browser/stream", { fps: remotePC() ? 6 : 15 }, ctrl.signal);
+      const res = await pcStream("/browser/stream", { fps: remotePC() ? 12 : 25 }, ctrl.signal);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const rd = res.body.getReader(); let buf = ""; fails = 0;
       for (;;) {
@@ -111,7 +111,7 @@ function pos(e) {
 function queueWheel(p, dx, dy) {
   const w = BV.wheel; w.dx += dx; w.dy += dy; w.x = p.x; w.y = p.y;
   if (w.timer) return;
-  w.timer = setTimeout(() => { const o = { t: "wheel", x: w.x, y: w.y, dx: Math.round(w.dx), dy: Math.round(w.dy) }; w.dx = w.dy = 0; w.timer = 0; sendInput(o); }, remotePC() ? 90 : 35);
+  w.timer = setTimeout(() => { const o = { t: "wheel", x: w.x, y: w.y, dx: Math.round(w.dx), dy: Math.round(w.dy) }; w.dx = w.dy = 0; w.timer = 0; sendInput(o); }, remotePC() ? 50 : 25);
 }
 
 let wired = false;
@@ -142,7 +142,7 @@ function wire() {
   });
   img.addEventListener("pointermove", (e) => {
     if (e.pointerType === "mouse") {
-      const now = Date.now(); if (now - BV.moveT < (remotePC() ? 120 : 40)) return; BV.moveT = now;
+      const now = Date.now(); if (now - BV.moveT < (remotePC() ? 70 : 30)) return; BV.moveT = now;
       sendInput({ t: "move", ...pos(e), drag: !!(e.buttons & 1) }); return;
     }
     if (!ptr || ptr.mouse) return;

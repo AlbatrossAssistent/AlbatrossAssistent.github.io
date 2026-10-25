@@ -43,6 +43,7 @@ async function start() {
   B.starting = (async () => {
     const exe = chromePath(); if (!exe) throw new Error("Chrome or Edge isn't installed on this PC.");
     fs.mkdirSync(PROFILE, { recursive: true }); fs.mkdirSync(DOWNLOADS, { recursive: true });
+    noFormMemory();
     const version = () => fetch(`http://127.0.0.1:${PORT}/json/version`, { signal: AbortSignal.timeout(1500) }).then((r) => r.json()).catch(() => null);
     let ver = await version();
     if (!ver) {
@@ -66,8 +67,11 @@ async function start() {
   return B.starting;
 }
 async function stop() {
+  const proc = B.proc;
   try { await send("Browser.close"); } catch {}
-  try { B.proc && B.proc.kill(); } catch {}
+  for (let i = 0; i < 40 && B.ws; i++) await sleep(150);                                   // the connection ends when Chrome has closed
+  for (let i = 0; i < 40 && proc && proc.exitCode === null && !proc.killed && B.proc; i++) await sleep(150);
+  try { if (B.proc && B.proc.exitCode === null) B.proc.kill(); } catch {}
   B.active = null; B.frame = null; wake();
 }
 
@@ -237,15 +241,35 @@ async function setPrivate(on) {
   }
 }
 // Clear the normal history: Chrome is closed, its history files are deleted (logins and cookies stay), and it starts again when used.
+// Chrome's own memory of what was typed into fields (it suggests old entries below search boxes): switched off in the profile's settings.
+// Only written while Chrome is closed, since Chrome rewrites the file itself while it runs.
+function noFormMemory() {
+  try {
+    if (B.ws) return;
+    const f = path.join(PROFILE, "Default", "Preferences");
+    let j = {}; try { j = JSON.parse(fs.readFileSync(f, "utf8")); } catch {}
+    j.autofill = { ...(j.autofill || {}), enabled: false, profile_enabled: false, credit_card_enabled: false };
+    j.search = { ...(j.search || {}), suggest_enabled: false };
+    fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(j));
+  } catch {}
+}
+// Search sites keep their own list of recent searches in the site's storage (not in Chrome's history). Wiped for the big ones; cookies stay, so logins stay.
+const SEARCH_SITES = ["https://www.google.com", "https://google.com", "https://www.google.de", "https://www.google.at", "https://www.google.ch", "https://www.bing.com", "https://duckduckgo.com", "https://www.youtube.com", "https://m.youtube.com", "https://search.yahoo.com", "https://www.ecosia.org"];
 async function clearHistory() {
   await stop();
   for (let i = 0; i < 40 && B.proc; i++) await sleep(250);
   await sleep(500);
   const dir = path.join(PROFILE, "Default"), gone = [];
-  for (const f of ["History", "History-journal", "Visited Links", "Top Sites", "Top Sites-journal", "Shortcuts", "Shortcuts-journal", "Network Action Predictor", "Network Action Predictor-journal"]) {
+  for (const f of ["History", "History-journal", "Visited Links", "Top Sites", "Top Sites-journal", "Shortcuts", "Shortcuts-journal", "Network Action Predictor", "Network Action Predictor-journal", "Web Data", "Web Data-journal"]) {
     try { fs.unlinkSync(path.join(dir, f)); gone.push(f); } catch {}
   }
+  // what sites remember for themselves (Google's recent searches, YouTube's watch suggestions...) lives in their site storage:
+  // all of it is removed. Cookies stay, so you stay signed in.
+  for (const d of ["Local Storage", "Session Storage", "IndexedDB", "Service Worker", "Cache", "Code Cache", "GPUCache", "Shared Dictionary", "WebStorage", "databases"]) {
+    try { fs.rmSync(path.join(dir, d), { recursive: true, force: true }); gone.push(d); } catch {}
+  }
   B.priv = null; B.defCtx = null; B.privOld = null;
+  noFormMemory();
   return gone.length;
 }
 function state() {
