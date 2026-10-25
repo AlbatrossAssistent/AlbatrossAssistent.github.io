@@ -174,4 +174,39 @@ function wire() {
 }
 window.browserOpen = () => { wire(); if (!BV.open) open(); };
 window.browserClose = () => { if (BV.open) close(); };
+
+// ---------- the side panel: the browser and the Agent's work next to the chat (a sheet from the bottom on phones) ----------
+const home = { parent: null, next: null };
+const inSide = () => $("#browserPage").parentNode === $("#spBrowser");
+function putBack() { const bp = $("#browserPage"); if (inSide() && home.parent) home.parent.insertBefore(bp, home.next); }
+function sideTab(tab) {
+  const sp = $("#sidePanel"); sp.dataset.tab = tab;
+  $$("#spTabs button").forEach((b) => b.classList.toggle("on", b.dataset.sp === tab));
+  $("#spBrowser").hidden = tab !== "browser"; $("#spAgent").hidden = tab !== "agent";
+  if (tab === "browser") {
+    const bp = $("#browserPage");
+    if (!inSide()) { home.parent = bp.parentNode; home.next = bp.nextSibling; $("#spBrowser").appendChild(bp); }
+    window.browserOpen();
+  } else if (!document.body.classList.contains("browser-view")) window.browserClose();   // not visible: no pictures needed
+}
+window.sideOpen = (tab) => {
+  if (tab === "browser" && document.body.classList.contains("browser-view")) return;      // it is already open full size
+  const sp = $("#sidePanel"); $("#deckSide").hidden = true;
+  sp.hidden = false; $("#sideBtn").classList.add("on");
+  sideTab(tab || sp.dataset.tab || "browser");
+};
+window.sideClose = () => {
+  const sp = $("#sidePanel"); if (sp.hidden) return;
+  sp.hidden = true; $("#sideBtn").classList.remove("on");
+  putBack();
+  if (!document.body.classList.contains("browser-view")) window.browserClose();
+};
+window.sideAgentRender = (block) => {
+  const box = $("#spAgent"); if (!box || !window.agentCard) return;
+  box.innerHTML = ""; box.appendChild(window.agentCard(block));
+};
+$$("#spTabs button").forEach((b) => (b.onclick = () => sideTab(b.dataset.sp)));
+$("#spClose").onclick = () => window.sideClose();
+$("#spFull").onclick = () => { const tab = $("#sidePanel").dataset.tab; setView(tab === "agent" ? "agent" : "browser"); };
+$("#sideBtn").onclick = () => ($("#sidePanel").hidden ? window.sideOpen() : window.sideClose());
 })();
