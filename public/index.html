@@ -3638,14 +3638,14 @@ const TOOLISH = {
   graph: W("graphs?|charts?|plots?|diagrams?|bar ?chart|pie ?chart|line ?chart|histogram|diagramm\\p{L}*|schaubild\\p{L}*|grafik\\p{L}*"),
   chances: W("chances?|odds|probabilit\\p{L}*|likel(?:y|ihood)|predict\\p{L}*|forecast\\p{L}*|prognose\\p{L}*|vorhersage\\p{L}*|wahrscheinlich\\p{L}*|chancen"),
 };
-TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|webpage|web ?page|website|url|https?|html|javascript|run (?:this|the|my) code");
+TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|browser|webpage|web ?page|website|url|https?|html|javascript|run (?:this|the|my) code");
 TOOLISH.code = new RegExp("(?<![\\p{L}\\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|schreib\\p{L}*|erstell\\p{L}*|programmier\\p{L}*|bau\\p{L}*)(?![\\p{L}\\p{N}])[^.?!]{0,60}(?<![\\p{L}\\p{N}])(?:program|script|app|application|website|web ?page|game|bot|tool|html|python|javascript|node|java|c\\+\\+|css|api|function|class|code|programm|skript|webseite|spiel)(?![\\p{L}\\p{N}])", "iu");
 const ROUTE_ABOUT = {
   slides: "they want a presentation, slide deck or keynote made",
   graph: "they want a chart or graph drawn from numbers or real data",
   chances: "they ask how likely something is (chances, odds, probability) or want a prediction or forecast of how something will develop",
   code: "they want a program, script, website, game or app written and saved as files on their PC",
-  agent: "they want a job done with their own stuff on the PC or their accounts: read or summarize their email inbox, or send an email; look in, sort, move, read, create or edit files and folders on the PC; read a specific web page; print a file; or run a small HTML or JavaScript snippet in the code player. Not for general questions",
+  agent: "they want a job done with their own stuff on the PC or their accounts: read or summarize their email inbox, or send an email; look in, sort, move, read, create or edit files and folders on the PC; read a specific web page, or use a website in the browser on their PC (search on a site, click through it, fill in a form); print a file; or run a small HTML or JavaScript snippet in the code player. Not for general questions",
 };
 // Decides, for a message that smells like a tool, whether it really needs one. One short answer from the model
 // (no thinking), with its own little bubble so the wait is never silent. Returns { tool, task } or { aborted }.

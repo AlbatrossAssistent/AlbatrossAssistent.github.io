@@ -179,6 +179,46 @@ async function input(j) {
     }
   }
 }
+// ---------- for the AI: read the page as text with numbered things to click or type into, and act on a number ----------
+const READ_JS = `(() => {
+  const vis = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 2 && r.height > 2 && s.visibility !== "hidden" && s.display !== "none" && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; };
+  document.querySelectorAll("[data-alb]").forEach((e) => e.removeAttribute("data-alb"));
+  const els = [...document.querySelectorAll('a[href],button,input:not([type=hidden]),textarea,select,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=option],[contenteditable=true],summary')].filter(vis).slice(0, 80);
+  const elements = els.map((e, i) => {
+    e.setAttribute("data-alb", String(i + 1));
+    const label = (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || e.title || e.alt || e.name || "").replace(/\\s+/g, " ").trim().slice(0, 80);
+    return { n: i + 1, kind: e.tagName.toLowerCase() === "a" ? "link" : e.tagName.toLowerCase() === "input" ? "input:" + (e.type || "text") : e.tagName.toLowerCase(), label, href: e.href ? String(e.href).slice(0, 120) : undefined };
+  });
+  return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : "").replace(/\\n{3,}/g, "\\n\\n").slice(0, 6000), elements, scrolled: Math.round(scrollY), pageHeight: document.documentElement.scrollHeight, windowHeight: innerHeight };
+})()`;
+async function evalJs(expression) {
+  const r = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, cur());
+  if (r.exceptionDetails) throw new Error("The page didn't answer: " + (r.exceptionDetails.text || "error"));
+  return r.result ? r.result.value : null;
+}
+async function settle(ms = 10000) {   // wait until the page has loaded (or give up quietly)
+  const end = Date.now() + ms; await sleep(400);
+  while (B.loading && Date.now() < end) await sleep(200);
+  await sleep(300);
+}
+async function readPage() { return evalJs(READ_JS); }
+async function act(j) {
+  if (j.action === "scroll") { await input({ t: "wheel", x: Math.round(B.vp.w / 2), y: Math.round(B.vp.h / 2), dy: (j.direction === "up" ? -0.8 : 0.8) * B.vp.h }); await sleep(500); return { ok: true }; }
+  const n = Math.round(Number(j.n));
+  const r = await evalJs(`(() => { const e = document.querySelector('[data-alb="${n}"]'); if (!e) return null; e.scrollIntoView({ block: "center", inline: "center" }); const b = e.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), password: e.type === "password", label: (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || "").trim().slice(0, 80) }; })()`);
+  if (!r) throw new Error(`There is no number ${n} on the page any more. Read the page again.`);
+  if (j.action === "type" && r.password) throw new Error("Passwords are never typed by the AI. Ask the user to type it in the Browser themselves.");
+  await sleep(150);
+  await input({ t: "click", x: r.x, y: r.y });
+  if (j.action === "type") {
+    await sleep(120);
+    if (j.clear !== false) { await input({ t: "key", key: "a", ctrl: true }); await input({ t: "key", key: "Backspace" }); }
+    await input({ t: "text", text: String(j.text || "") });
+    if (j.submit) await input({ t: "key", key: "Enter" });
+  }
+  await settle(6000);
+  return { ok: true, on: r.label };
+}
 function state() {
   const at = B.tabs.find((t) => t.id === B.active);
   return { url: B.nav.url, title: (at && at.title) || B.nav.title, back: B.nav.back, fwd: B.nav.fwd, loading: B.loading, dialog: B.dialog, download: B.download, active: B.active, tabs: B.tabs.map((t) => ({ id: t.id, title: t.title || t.url, url: t.url })) };
@@ -245,6 +285,9 @@ async function handle(method, p, body, note) {
       else if (j.action === "switch" && j.id) await activate(j.id);
       return [200, state()];
     }
+    if (p === "/browser/open") { const u = fixUrl(j.url); if (!u) return [400, { error: "That address can't be opened here." }]; await send("Page.navigate", { url: u }, cur()); await settle(); return [200, await readPage()]; }
+    if (p === "/browser/read") return [200, await readPage()];
+    if (p === "/browser/act") { const r = await act(j); return [200, { ...r, page: await readPage() }]; }
     if (p === "/browser/dialog") { const s = cur(); await send("Page.handleJavaScriptDialog", { accept: !!j.accept, promptText: j.text != null ? String(j.text) : undefined }, s); B.dialog = null; wake(); return [200, state()]; }
   } catch (e) { return [400, { error: e.message }]; }
   return [404, { error: "Unknown browser request" }];
