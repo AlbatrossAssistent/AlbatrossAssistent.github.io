@@ -14,9 +14,16 @@ const DRUMS = { kick: 36, snare: 38, clap: 39, hat: 42, openhat: 46 };
 const COLORS = ["#0A84FF", "#FF9F0A", "#30D158", "#BF5AF2", "#FF375F", "#64D2FF", "#FFD60A", "#AC8E68"];
 
 // "C4/1 E4/0.5 R/0.5 [C4 E4 G4]/2" -> notes in beats (a quarter note is 1 beat); R is a rest, [ ] a chord
+// repeats: "(C4/0.25 E4/0.25)x4" plays the group four times (also nested), so fast parts stay short to write
+function expandRepeats(s) {
+  s = String(s || "");
+  const GROUP = /\(([^()]*)\)\s*[x×*]\s*(\d+)/gi;
+  for (let i = 0; i < 6 && /\([^()]*\)\s*[x×*]\s*\d+/i.test(s); i++) s = s.replace(GROUP, (m, g, n) => Array(Math.min(64, Number(n) || 1)).fill(g.trim()).join(" "));
+  return s.replace(/[()]/g, " ");
+}
 function parseNotes(s) {
   const out = []; let t = 0;
-  for (const tok of String(s || "").match(/\[[^\]]*\]\s*\/\s*[\d.]+|\S+/g) || []) {
+  for (const tok of expandRepeats(s).match(/\[[^\]]*\]\s*\/\s*[\d.]+|\S+/g) || []) {
     const m = /^(\[[^\]]*\]|[^/]+)\s*\/\s*([\d.]+)$/.exec(tok.trim()); if (!m) continue;
     const d = Math.max(.0625, Math.min(16, Number(m[2]) || 1));
     const pitches = m[1].replace(/[[\]]/g, "").split(/\s+/).filter(Boolean);
@@ -32,7 +39,7 @@ function toMidi(p) {
 }
 // the piece, ready to play: every note with its start and length in beats, per track; drums as hits
 function buildSong(r) {
-  const bpm = Math.max(50, Math.min(200, Math.round(Number(r.bpm) || 100)));
+  const bpm = Math.max(50, Math.min(240, Math.round(Number(r.bpm) || 100)));
   const bars = Math.max(2, Math.min(64, Math.round(Number(r.bars) || 16))), beats = bars * 4;
   const tracks = [];
   for (const [i, tr] of (Array.isArray(r.tracks) ? r.tracks : []).slice(0, 7).entries()) {
@@ -138,7 +145,7 @@ async function wavFile(song) {
 const fileName = (s, ext) => (s.title.replace(/[^\p{L}\p{N} _-]+/gu, "").trim().replace(/\s+/g, " ") || "song") + "." + ext;
 
 // ---------- the chat tool ----------
-const NOTATION = `Notes are written as PITCH/BEATS separated by spaces: C4/1 is middle C for one beat (a quarter note), E4/0.5 an eighth note, G4/2 a half note, R/1 a one-beat rest, and a chord is [C4 E4 G4]/2. Sharps and flats: F#4, Bb3. 4 beats make one bar. Melodies sit around octave 4 to 5, chords around 3 to 4, bass around 2 to 3.`;
+const NOTATION = `Notes are written as PITCH/BEATS separated by spaces: C4/1 is middle C for one beat (a quarter note), E4/0.5 an eighth note, G4/2 a half note, R/1 a one-beat rest, and a chord is [C4 E4 G4]/2. Repeat a group with (...)xN: (A2/0.5 A3/0.5)x8 is a driving bass for two bars; use it for every repeated figure so the answer stays short. Sharps and flats: F#4, Bb3. 4 beats make one bar. Melodies sit around octave 4 to 5, chords around 3 to 4, bass around 2 to 3.`;
 window.runMusicTool = async function (model, text) {
   const block = { type: "music", active: true, thinkLabel: "Composing…" };
   await toolAnswer(model, text, block, async ({ ask, history }) => {
@@ -151,6 +158,7 @@ window.runMusicTool = async function (model, text) {
     const sys = `You are a composer. You write a short, catchy, musically correct piece for what the user asks. Reply only with JSON.
 - "language": the language the request is written in (for example English or German). Write "title", "description" and "reply" in it.
 - "title", "description" (one sentence on mood and style), "key" (like "A minor"), "bpm", "bars" (8 to 32; 16 is a good length).
+- Speed: the tempo AND the note lengths make music feel fast or slow. Calm: 60 to 90 bpm with long notes. Fast, energetic, dance, techno, rock, drum and bass: 130 to 180 bpm, with a busy melody of mostly 0.5 and 0.25 notes (8 to 16 notes per bar), a driving bass in 0.5 notes, and drums with hats on every step.
 - "tracks": 2 to 5 instruments that fit the style, from: ${Object.keys(INSTR).join(", ")}. Usually chords (piano, epiano, pad, strings, guitar or organ), a bass line and a melody (lead, flute, bells, piano, brass…). Each track: "name", "instrument", "notes" and "loop". With "loop": true the notes repeat until the end (good for a 4-bar chord or bass pattern); with false they play once, so write all bars (a melody with a beginning, a repeat with variation and an ending).
 - ${NOTATION} Stay in the key, give the melody a clear idea that comes back, let the bass play the chord roots, and make every track the right length.
 - "drums": patterns of 16 steps per bar (sixteenth notes), x = hit, X = accented hit, . = nothing, for kick, snare, clap, hat, openhat; one bar repeats, or write several bars in a row. Leave a part "" if it doesn't play; all "" for no drums (calm, classical, lullabies).

@@ -1831,6 +1831,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <div class="note" id="chatTypeLine" style="margin-top:0"></div>
           <div class="field" id="ctxFieldChat" hidden><label for="chatContext">Context for the image AI (this chat)</label><textarea id="chatContext" placeholder="e.g. Watercolor style. The main character is a small red fox called Remy."></textarea><small>Every picture in this chat is drawn with this in mind.</small></div>
           <div class="field"><label for="chatTitle">Title</label><input id="chatTitle"></div>
+          <label class="check"><span>Only on this device<small>This chat isn't saved on your PC and doesn't show up on your other devices. Switching it on removes it from the PC.</small></span><input type="checkbox" class="switch" id="chatDeviceOnly"></label>
           <div class="field"><label for="chatSystem">System prompt for this chat</label><textarea id="chatSystem" placeholder="Leave empty to use the default"></textarea></div>
           <h3 style="margin:10px 0 0">All chats</h3>
           <div class="field"><label for="defaultSystem">Default system prompt</label><textarea id="defaultSystem" placeholder="e.g. You are a helpful assistant. Answer briefly."></textarea><small>Used for new chats. Each chat can override it (sliders icon in the top bar).</small></div>
@@ -1840,6 +1841,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <label class="check"><span>Auto-name chats<small>Uses the first message as the chat title.</small></span><input type="checkbox" class="switch" id="autoTitle"></label>
           <label class="check"><span>Save chats in this browser<small>Off: chats vanish when you close the page.</small></span><input type="checkbox" class="switch" id="persist"></label>
           <label class="check"><span>Keep chats on my PC<small>Chats are saved on the PC you connect to, so every device you connect with sees the same chats. Only devices with your code can read them.</small></span><input type="checkbox" class="switch" id="chatsOnPC"></label>
+          <label class="check"><span>New chats only on this device<small>Every new chat stays on this device: not saved on your PC, not shown on your other devices. Change it for one chat in its settings (the sliders icon).</small></span><input type="checkbox" class="switch" id="chatsDeviceOnly"></label>
           <label class="check"><span>Also keep a copy on this device<small>Off: chats stay only on the PC and appear here while it is online.</small></span><input type="checkbox" class="switch" id="keepLocal"></label>
           <label class="check"><span>Let the AI ask me questions<small>When it needs a choice or a detail, it stops and asks with buttons you can tap, instead of guessing.</small></span><input type="checkbox" class="switch" id="askMid"></label>
           <label class="check"><span>Keep answers running on the PC<small>If the app goes to the background or the screen locks, the PC finishes the answer and the app picks it up when you come back.</small></span><input type="checkbox" class="switch" id="bgJobs"></label>
@@ -2097,7 +2099,8 @@ function saveSettings() { store.set("settings", S); }
 function saveChats() {
   if (!S.persist) return;
   chatSyncSoon();
-  if (S.keepLocal === false && sync.ok) { store.del("chats"); return; }     // the PC has them; this device keeps nothing
+  // the PC has the others; this device keeps only its device-only chats then
+  if (S.keepLocal === false && sync.ok) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set("chats", own); else store.del("chats"); return; }
   if (!store.set("chats", chats)) {
     // storage full (usually generated images) — keep text, drop old images
     const slim = chats.map(c => ({ ...c, messages: c.messages.map(m => ({ ...m, images: undefined, genImage: m.genImage ? "" : undefined })) }));
@@ -2136,7 +2139,10 @@ async function syncChats() {
     const have = new Set(chats.map(c => c.id));
     const gone = Object.keys(sync.sig).filter(id => !have.has(id));
     if (gone.length) { await pcCall("/chats/delete", { ids: gone }); for (const id of gone) { delete sync.sig[id]; remote.delete(id); } }
+    const off = chats.filter((c) => c.deviceOnly && (remote.has(c.id) || sync.sig[c.id] !== undefined)).map((c) => c.id);
+    if (off.length) { await pcCall("/chats/delete", { ids: off }); for (const id of off) { delete sync.sig[id]; remote.delete(id); } }
     for (const c of [...chats]) {
+      if (c.deviceOnly) continue;                                 // "only on this device": never leaves it
       if (!c.messages.length && !remote.has(c.id)) continue;      // a chat nobody has written in yet stays on this device
       const r = remote.get(c.id);
       if (!r) {
@@ -2156,7 +2162,7 @@ async function syncChats() {
       const g = (await pcCall("/chats/get", { id: r.id })).chat; chats.push(g); sync.sig[g.id] = chatSig(g); changed = true;
     }
     sync.ok = true; sync.fail = 0;
-    if (S.keepLocal === false) { store.del("chats"); store.del("chatSync"); }
+    if (S.keepLocal === false) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set("chats", own); else store.del("chats"); store.del("chatSync"); }
     else { store.set("chats", chats); store.set("chatSync", sync.sig); }
     if (changed) { if (!current || !chats.includes(current)) current = chats.find(c => c.messages.length) || current; renderSidebar(); if (isHome()) renderHome(); else if (current) renderMessages(); }
   } catch (e) {
@@ -2736,7 +2742,7 @@ function newChat(type, context, reuse) {
   if (current && !current.messages.length && (reuse || !arguments.length)) {
     current.type = type; current.context = context || ""; saveChats(); renderAll(); $("#prompt").focus(); return;
   }
-  current = { id: uid(), title: "New chat", type, context: context || "", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
+  current = { id: uid(), title: "New chat", ...(S.chatsDeviceOnly ? { deviceOnly: true } : {}), type, context: context || "", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
   chats.unshift(current);
   saveChats(); renderAll();
   $("#prompt").focus();
@@ -2785,7 +2791,7 @@ function renderSidebar() {
       const op = row.querySelector(".open");
       op.innerHTML = `<span class="ti">${chatType(c) === "image" ? TYPE_ICON.image : TYPE_ICON.chat}</span><span class="tt"><b></b><small></small></span>`;
       op.querySelector("b").textContent = c.title;
-      op.querySelector("small").textContent = (chatType(c) === "image" ? "Image" : "Chat") + " · " + (c.messages.length ? ago(c.updated) : "empty");
+      op.querySelector("small").textContent = (chatType(c) === "image" ? "Image" : "Chat") + " · " + (c.messages.length ? ago(c.updated) : "empty") + (c.deviceOnly ? " · this device only" : "");
       row.querySelector(".open").onclick = () => openChat(c);
       row.querySelector('[data-act="pin"]').onclick = () => { c.pinned = !c.pinned; saveChats(); renderSidebar(); };
       row.querySelector('[data-act="rename"]').onclick = () => { current = c; renderAll(); openChatSettings(); };
@@ -3973,7 +3979,7 @@ const TOOL_LIST = [
 ];
 function whatYouCanDo() {
   const on = TOOL_LIST.filter(([k]) => toolOn(k)), off = TOOL_LIST.filter(([k]) => !toolOn(k));
-  return "You are the AI of Albatross, an app that runs AI models on the user's own PC." +
+  return "You are the AI of Albatross, an app that runs AI models on the user's own PC. Answer in the language the user writes in." +
     (on.length ? "\nTools of the app (used automatically when a message asks for them):\n" + on.map(([, n, d]) => `- ${n}: ${d}`).join("\n") : "") +
     (off.length ? "\nSwitched off in Settings → Tools: " + off.map(([, n]) => n).join(", ") + "." : "");
 }
@@ -5410,12 +5416,12 @@ function openSettings(tab) {
   // chat
   $("#defaultSystem").value = S.defaultSystem;
   loadImgFields(); fillCtxModels();
-  $("#chatTitle").value = current.title; $("#chatContext").value = current.context || ""; $("#chatSystem").value = current.system || "";
+  $("#chatTitle").value = current.title; $("#chatContext").value = current.context || ""; $("#chatSystem").value = current.system || ""; $("#chatDeviceOnly").checked = !!current.deviceOnly;
   $("#chatSystem").placeholder = S.defaultSystem ? "Default: " + S.defaultSystem.slice(0, 80) : "Leave empty for none";
   $("#chatTypeLine").hidden = true;
   $("#webSearch").checked = searchAvailable && S.webSearch;
   for (const k of ["enterSends", "showStats", "think", "autoTitle", "persist", "intro", "compact"]) $("#" + k).checked = !!S[k];
-  $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#bgJobs").checked = S.bgJobs !== false; $("#askMid").checked = S.askMid !== false; $("#deviceName").value = S.deviceName || "";
+  $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#chatsDeviceOnly").checked = !!S.chatsDeviceOnly; $("#bgJobs").checked = S.bgJobs !== false; $("#askMid").checked = S.askMid !== false; $("#deviceName").value = S.deviceName || "";
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
   if (tab) switchTab(tab);
   d.showModal();
@@ -5515,6 +5521,7 @@ $("#resetParams").onclick = () => { S.params = { ...DEFAULT_PARAMS }; S.keepAliv
 $("#refreshModels").onclick = () => connect(true);
 $("#defaultSystem").onchange = e => { S.defaultSystem = e.target.value; saveSettings(); };
 for (const k of ["enterSends", "showStats", "think", "autoTitle", "intro", "compact"]) $("#" + k).onchange = e => { S[k] = e.target.checked; saveSettings(); applyAppearance(); if (k === "showStats") renderMessages(); };
+$("#chatsDeviceOnly").onchange = e => { S.chatsDeviceOnly = e.target.checked; saveSettings(); };
 $("#chatsOnPC").onchange = e => { S.chatsOnPC = e.target.checked; saveSettings(); if (S.chatsOnPC) chatSyncSoon(200); };
 $("#keepLocal").onchange = e => { S.keepLocal = e.target.checked; saveSettings(); if (e.target.checked) { store.set("chats", chats); store.set("chatSync", sync.sig); } else if (sync.ok) { store.del("chats"); store.del("chatSync"); } else { toast("Connect to your PC first, so the chats are safe there"); e.target.checked = true; S.keepLocal = true; saveSettings(); } };
 $("#askMid").onchange = e => { S.askMid = e.target.checked; saveSettings(); };
@@ -5577,6 +5584,7 @@ function openChatSettings() { openSettings("chat"); setTimeout(() => $("#chatTit
 $("#chatContext").onchange = e => { current.context = e.target.value.trim(); saveChats(); };
 $("#chatTitle").onchange = e => { current.title = e.target.value.trim() || current.title; saveChats(); renderSidebar(); };
 $("#chatSystem").onchange = e => { current.system = e.target.value; saveChats(); };
+$("#chatDeviceOnly").onchange = e => { if (e.target.checked) current.deviceOnly = true; else delete current.deviceOnly; current.updated = Date.now(); saveChats(); renderSidebar(); toast(e.target.checked ? "This chat now stays on this device" : "This chat is shared with your PC again"); };
 
 // image options
 function loadImgFields() {
@@ -6529,8 +6537,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.12";
+const APP_VERSION = "2026-10-26.13";
 const WHATS_NEW = [
+  ["2026-10-26.13", ["Fast music sounds fast now: quick notes, driving bass and busy drums", "Answers stay in the language you write in", "Chats only on this device: for one chat (its settings) or for all new ones (Settings → Chat)"]],
   ["2026-10-26.12", ["Music answers in the language you asked in"]],
   ["2026-10-26.11", ["Music: ask for a song, beat or melody; it plays right in the chat (mute instruments one by one) and downloads as MIDI for GarageBand or as WAV"]],
   ["2026-10-26.10", ["Slides: 10 new designs and 3 new font styles, and a Design button to restyle any presentation yourself", "Slides: 6 new animations (pop, drop, slide, tilt, spin, glow) and 6 new transitions (lift, drop, spin, zoom-out, box, glitch)", "Slides: pictures from your own photos (attach them), from the web, or made by your image model"]],
