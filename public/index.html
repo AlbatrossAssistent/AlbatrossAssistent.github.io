@@ -56,6 +56,10 @@ body {
   padding: calc(12px + var(--st)) calc(12px + var(--sr)) calc(12px + var(--sb)) calc(12px + var(--sl));
   overflow: hidden; -webkit-font-smoothing: antialiased; position: relative;
 }
+/* Max thinking: the background turns red, light or dark (the moving background shows red embers then, see skyFrame) */
+html.effort-max:not([data-theme="dark"]) { --bg: #FFE4E1; --blob-a: rgba(255,59,48,.34); --blob-b: rgba(255,120,70,.24); --blob-c: rgba(255,255,255,.9); --blob-d: rgba(255,45,85,.2); }
+html.effort-max[data-theme="dark"] { --bg: #150205; --blob-a: rgba(255,40,40,.36); --blob-b: rgba(255,100,40,.22); --blob-c: rgba(255,60,60,.1); --blob-d: rgba(210,20,45,.26); }
+body { transition: background-color .8s ease; }
 /* The "liquid" behind the glass: slow-drifting grey blobs */
 body::before, body::after { content: ""; position: fixed; z-index: -1; border-radius: 50%; filter: blur(80px); pointer-events: none; }
 body::before { width: 60vmax; height: 60vmax; left: -15vmax; top: -20vmax; background: radial-gradient(circle, var(--blob-a), transparent 65%); animation: drift 28s ease-in-out infinite alternate; }
@@ -1676,7 +1680,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <div class="field"><label for="theme">Theme</label><select id="theme"><option value="light">White</option><option value="dark">Navy</option><option value="system">Match system</option></select></div>
           <div class="field"><label>Text size</label><div class="range-row"><input type="range" id="fontSize" min="13" max="20" step="1"><output></output></div></div>
           <label class="check"><span>Liquid glass<small>Panels bend what is behind their edge like glass (from liqui.design). Needs a Chromium browser like Chrome, Edge or Opera for the bending; others get frosted glass.</small></span><input type="checkbox" class="switch" id="glassOn"></label>
-          <label class="check"><span>Night sky background<small>Slowly turning stars behind the app. They move away from your pointer.</small></span><input type="checkbox" class="switch" id="starsOn"></label>
+          <label class="check"><span>Moving background<small>Slowly turning lights behind the app that move away from your pointer: stars at night (dark), soft blue lights by day (light), red embers while the AI thinks at Max.</small></span><input type="checkbox" class="switch" id="starsOn"></label>
           <label class="check"><span>Opening animation<small>Plays when the site loads.</small></span><input type="checkbox" class="switch" id="intro"></label>
           <label class="check"><span>Compact messages<small>Less space between messages.</small></span><input type="checkbox" class="switch" id="compact"></label>
           <div class="row"><button class="btn" id="replayIntro">Replay animation</button><button class="btn" id="fullBtn2">Full screen</button><button class="btn" id="installBtn" hidden>Install as app</button></div>
@@ -2671,6 +2675,7 @@ const EFFORT_HINT = {
 function paintEffort() {
   const e = effortNow(), row = EFFORTS.find(x => x[0] === e);
   $("#effortName").textContent = row[1]; $("#effortBtn").dataset.e = e;
+  document.documentElement.classList.toggle("effort-max", e === "max");   // Max: the background turns red (see .effort-max)
   $("#effortMenu").innerHTML = EFFORTS.map(([k, n, sub]) => `<button class="effort-opt${k === e ? " on" : ""}" data-e="${k}" role="menuitemradio" aria-checked="${k === e}"><b>${n}</b><small>${sub}</small></button>`).join("");
   $("#effortMenu").querySelectorAll(".effort-opt").forEach(b => (b.onclick = () => { S.effort = b.dataset.e; S.think = b.dataset.e !== "low"; saveSettings(); closeEffort(); paintEffort(); }));
 }
@@ -5227,8 +5232,9 @@ const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), 
 let skyOn = false;
 function skyFrame(t) {
   if (!appSky || S.stars === false || document.hidden) { skyOn = false; if (appSky && S.stars === false) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); } return; }
-  const dark = document.documentElement.dataset.theme === "dark";
-  appSky.draw(t, { dark, alpha: dark ? .9 : .3 });
+  // dark: the night sky; light: daytime lights; Max thinking: red embers rising slowly, in both themes
+  const root = document.documentElement, dark = root.dataset.theme === "dark", max = root.classList.contains("effort-max");
+  appSky.draw(t, max ? { palette: "ember", alpha: dark ? .95 : .8, flow: .025 } : dark ? { palette: "night", alpha: .9 } : { palette: "day", alpha: 1 });
   requestAnimationFrame(skyFrame);
 }
 function startSky() { if (appSky && S.stars !== false && !skyOn) { skyOn = true; requestAnimationFrame(skyFrame); } }
@@ -6190,8 +6196,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.3";
+const APP_VERSION = "2026-10-26.4";
 const WHATS_NEW = [
+  ["2026-10-26.4", ["Light mode has a moving background too: soft blue lights that move away from your pointer", "Thinking at Max turns the background red, with glowing embers, in light and dark"]],
   ["2026-10-26.3", ["Pop-ups like this one when Albatross was updated, and when a newer version is ready while it's open"]],
   ["2026-10-26.2", ["Arrows, maths and emoji in answers show properly (→, x², π, ✅)", "Arrows and maths written by the AI are drawn like in a textbook"]],
   ["2026-10-26.1", ["Games and pages in the Code tab no longer stay white", "A Bigger button gives a game the whole Code tab"]],
