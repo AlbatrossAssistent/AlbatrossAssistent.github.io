@@ -105,13 +105,12 @@ function redrawNote(el, n, onChange) { const fresh = noteEl(n, { edit: !el.class
 
 // ---------- the Notes page ----------
 function renderPage() {
-  document.querySelector(".notes-pop")?.remove();          // the opening card isn't needed on the Notes page itself
   const page = $("#notesPage"); if (!page) return;
   const list = notes().slice().sort((a, b) => (b.pinned - a.pinned) || (b.updated - a.updated));
   page.innerHTML = `<div class="home-inner notes-inner">
     <div class="home-hero notes-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg><h1>Notes</h1><p>Lists and thoughts, kept with your settings. Ask the AI too: “put milk on my shopping list”.</p></div>
     <div class="notes-bar"><button class="btn primary" id="noteNew" type="button">+ New note</button><span style="flex:1"></span>
-      <label class="notes-open"><input type="checkbox" class="switch" id="notesOnOpen"> Show pinned notes when Albatross opens</label></div>
+      <label class="notes-open"><input type="checkbox" class="switch" id="notesOnOpen"> Show my notes full screen when Albatross opens</label></div>
     <div class="notes-grid"></div></div>`;
   const grid = page.querySelector(".notes-grid");
   if (!list.length) grid.innerHTML = '<div class="empty-note">No notes yet. Make one with “New note”, or ask the AI to write one.</div>';
@@ -121,19 +120,23 @@ function renderPage() {
 }
 window.notesOpen = renderPage;
 
-// ---------- the yellow card when Albatross opens: the pinned notes ----------
+// ---------- when Albatross opens: the notes fill the whole screen, on plain yellow, until you close them ----------
+// The pinned notes, or all of them when none is pinned; you can write in them right there.
 window.notesOnStart = function () {
-  const pinned = notes().filter((n) => n.pinned);
-  if (S.notesOnOpen === false || !pinned.length) return;
-  const card = document.createElement("div"); card.className = "notes-pop";   // not an <aside>: every aside gets the sidebar's glass card.setAttribute("aria-label", "Your pinned notes");
-  card.innerHTML = '<div class="np-head"><b>Your notes</b><button class="btn small" type="button" data-a="open">Open notes</button><button class="icon-btn" type="button" data-a="x" aria-label="Close">✕</button></div><div class="np-list"></div>';
-  for (const n of pinned.slice(0, 4)) card.querySelector(".np-list").appendChild(noteEl(n, { edit: false }));
-  const close = () => { card.classList.remove("in"); setTimeout(() => card.remove(), 400); };
-  card.querySelector('[data-a="x"]').onclick = close;
-  card.querySelector('[data-a="open"]').onclick = () => { close(); setView("notes"); };
-  // ticking a checklist line works right here too
-  card.addEventListener("click", (e) => { const mk = e.target.closest(".note.mini li .mk"); if (!mk) return; const n = notes().find((x) => x.id === mk.closest(".note").dataset.id); const i = [...mk.closest("ol").children].indexOf(mk.closest("li")); if (n && n.kind === "checklist" && n.items[i]) { n.items[i].done = !n.items[i].done; save(n); mk.closest(".note").replaceWith(noteEl(n, { edit: false })); } });
-  document.body.appendChild(card); setTimeout(() => card.classList.add("in"), S.intro ? 3400 : 600);
+  const list = notes(), show = list.some((n) => n.pinned) ? list.filter((n) => n.pinned) : list;
+  if (S.notesOnOpen === false || !show.length) return;
+  const full = document.createElement("div"); full.className = "notes-full"; full.setAttribute("role", "dialog"); full.setAttribute("aria-label", "Your notes");
+  full.innerHTML = `<div class="nf-head"><h1>Your notes</h1><span style="flex:1"></span><button class="nf-btn" type="button" data-a="new">+ New note</button><button class="nf-btn" type="button" data-a="open">All notes</button><button class="nf-btn nf-go" type="button" data-a="x">Continue</button></div><div class="nf-grid"></div>`;
+  const grid = full.querySelector(".nf-grid");
+  const draw = () => { grid.innerHTML = ""; for (const n of (notes().some((x) => x.pinned) ? notes().filter((x) => x.pinned) : notes())) grid.appendChild(noteEl(n, { onChange: () => {} })); };
+  draw();
+  const close = () => { removeEventListener("keydown", key); full.classList.remove("in"); setTimeout(() => full.remove(), 450); if (document.body.classList.contains("notes-view")) renderPage(); };
+  const key = (e) => { if (e.key === "Escape" && !e.target.closest("input, textarea, select")) close(); };
+  addEventListener("keydown", key);
+  full.querySelector('[data-a="x"]').onclick = close;
+  full.querySelector('[data-a="open"]').onclick = () => { close(); setView("notes"); };
+  full.querySelector('[data-a="new"]').onclick = () => { const n = make("", "bullets", [""]); n.pinned = true; notes().unshift(n); saveSettings(); draw(); grid.querySelector(".note .note-title")?.focus(); };
+  document.body.appendChild(full); setTimeout(() => full.classList.add("in"), S.intro ? 3300 : 50);
 };
 
 // ---------- the chat tool: the AI reads and changes the notes ----------
