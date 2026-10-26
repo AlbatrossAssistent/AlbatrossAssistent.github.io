@@ -163,7 +163,10 @@ window.runMusicTool = async function (model, text) {
 - ${NOTATION} Stay in the key, give the melody a clear idea that comes back, let the bass play the chord roots, and make every track the right length.
 - "drums": patterns of 16 steps per bar (sixteenth notes), x = hit, X = accented hit, . = nothing, for kick, snare, clap, hat, openhat; one bar repeats, or write several bars in a row. Leave a part "" if it doesn't play; all "" for no drums (calm, classical, lullabies).
 - "reply": 1 or 2 sentences to the user about the piece, in the same language as the request.`;
-    const user = [history && `The conversation so far:\n${history}`, `Request: ${text}`].filter(Boolean).join("\n\n");
+    // a follow-up ("make it faster", "add drums") changes the last piece of this chat: the model sees what it was
+    const prevSong = [...current.messages].reverse().map((m) => (m.blocks || []).find((b) => b.type === "music" && b.song)).find(Boolean)?.song;
+    const prevText = prevSong ? `The last piece in this chat (change it if the request asks for a change): "${prevSong.title}", ${prevSong.key}, ${prevSong.bpm} bpm, ${prevSong.beats / 4} bars; ${prevSong.tracks.map((t) => t.name + " (" + t.inst + ")").join(", ")}. ${prevSong.about}` : "";
+    const user = [history && `The conversation so far:\n${history}`, prevText, `Request: ${text}`].filter(Boolean).join("\n\n");
     const r = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
     block.song = buildSong(r);
     return String(r.reply || "").trim() || `Here is “${block.song.title}”. Press play, or download it for GarageBand.`;

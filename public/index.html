@@ -4266,8 +4266,13 @@ const ROUTE_ABOUT = {
 };
 // Decides, for a message that smells like a tool, whether it really needs one. One short answer from the model
 // (no thinking), with its own little bubble so the wait is never silent. Returns { tool, task } or { aborted }.
+// which tool made an answer ("" for a plain one); a follow-up to a tool's answer ("make it faster", "add bread too") has no
+// keyword of its own, so it always goes to the router, which is told what the earlier answer was
+const BLOCK_TOOL = { music: "music", notes: "notes", deck: "slides", chart: "graph", chances: "chances", agent: "agent", challenge: "challenge" };
+const toolOfMsg = (m) => ((m && m.blocks) || []).map((b) => BLOCK_TOOL[b.type]).find(Boolean) || "";
 async function routeTool(model, text) {
-  const hit = Object.keys(TOOLISH).some(k => toolOn(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text));
+  const lastBot = current.messages.slice(0, -1).filter(m => m.role === "assistant" && !m.isEvent).at(-1), lastTool = toolOfMsg(lastBot);
+  const hit = Object.keys(TOOLISH).some(k => toolOn(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text)) || (!!lastTool && toolOn(lastTool));
   const enabled = Object.keys(ROUTE_ABOUT).filter(toolOn);
   if (!hit || !enabled.length) return { tool: "" };
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
@@ -4291,8 +4296,9 @@ ${list}
 - chat: anything else: questions, explanations, writing text (emails, essays, stories, poems), advice, translation, maths, jokes, and talking about code, presentations or charts without asking for one to be made.${enabled.includes("agent") ? `
 Asking for any program, script, website, game or app to be written or changed (in any language, small or big) is "agent". Explaining or discussing code is "chat".` : ""}
 For "agent", "task" is the instruction in the user's language, as a clear command (for example "Summarize my unread mail and list what needs an answer"). For every other tool "task" is "".
+A follow-up that asks to change or continue what a tool just made ("make it faster", "add bread too", "another one") goes to that same tool.
 When unsure, choose "chat".`;
-    const recent = current.messages.slice(0, -1).filter(m => m.content && !m.isError && !m.isEvent && m.genImage === undefined).slice(-2).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`).join("\n");
+    const recent = current.messages.slice(0, -1).filter(m => m.content && !m.isError && !m.isEvent && m.genImage === undefined).slice(-2).map(m => `${m.role === "user" ? "User" : "Assistant"}${toolOfMsg(m) ? ` (answered with the ${toolOfMsg(m)} tool)` : ""}: ${m.content.slice(0, 300)}`).join("\n");
     const r = (await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: (recent ? `Earlier:\n${recent}\n\n` : "") + `Last message: ${text}` }], schema)).data;
     if (loadStartedAt) recordLoad(model, (performance.now() - loadStartedAt) / 1000);
     out = { tool: enabled.includes(r.tool) ? r.tool : "chat", task: String(r.task || "").trim() };
@@ -6620,8 +6626,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.16";
+const APP_VERSION = "2026-10-26.17";
 const WHATS_NEW = [
+  ["2026-10-26.17", ["Follow-ups keep using the tool: “make it faster”, “add bread too”, “another one” no longer fall back to a plain answer"]],
   ["2026-10-26.16", ["Jarvis: watch the live view full screen, with a small red Stop button and the chat at the bottom"]],
   ["2026-10-26.15", ["Choose the look of new presentations yourself: Settings → Tools → Slides (design, fonts, transition, animation), or “Use this look for new presentations” in a deck's Design panel"]],
   ["2026-10-26.14", ["Your notes open full screen on yellow when Albatross starts (pinned ones, or all of them); write in them right there, then Continue"]],
