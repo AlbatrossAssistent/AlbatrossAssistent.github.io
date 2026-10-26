@@ -6281,6 +6281,18 @@ $("#pubOn").onchange = e => {
 };
 
 // ---------- full screen & install as app ----------
+// Real full screen for one view (the Browser, Jarvis). Not on iPad and iPhone: Safari there leaves an element's full screen
+// again at once, so those views just cover the window. fsElemOn() remembers when it started: an exit in the first second isn't
+// the user leaving, so the view stays.
+const appleTouch = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+function fsElemOn(el) {
+  fsElemOn.at = Date.now();
+  if (appleTouch) return;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req) try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch {}
+}
+const fsElemLeftByUser = () => Date.now() - (fsElemOn.at || 0) > 1000 && !(document.fullscreenElement || document.webkitFullscreenElement);
+window.fsElemOn = fsElemOn; window.fsElemLeftByUser = fsElemLeftByUser;
 const FS_ON = '<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>', FS_OFF = '<path d="M9 4v4a1 1 0 0 1-1 1H4M20 9h-4a1 1 0 0 1-1-1V4M15 20v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4"/>';
 const canFull = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 function toggleFull() {
@@ -6419,14 +6431,15 @@ $("#jvAsk").addEventListener("submit", async (e) => {
 function jvFullOpen() {
   $("#jvFull").hidden = false; $("#jvFullPh").hidden = !!$("#jvFullImg").getAttribute("src");
   if (!$("#jvLive").checked) { $("#jvLive").checked = true; $("#jvLive").onchange({ target: $("#jvLive") }); }
-  $("#jvFull").requestFullscreen?.().catch(() => {});
+  fsElemOn($("#jvFull"));
   setTimeout(() => $("#jvFullInput").focus(), 100);
 }
-function jvFullClose() { $("#jvFull").hidden = true; if (document.fullscreenElement === $("#jvFull")) document.exitFullscreen?.().catch(() => {}); }
+function jvFullClose() { $("#jvFull").hidden = true; const d = document; if ((d.fullscreenElement || d.webkitFullscreenElement) === $("#jvFull")) try { (d.exitFullscreen || d.webkitExitFullscreen).call(d); } catch {} }
 $("#jvFullBtn").onclick = jvFullOpen;
 $("#jvFullX").onclick = jvFullClose;
 // leaving the browser's full screen (Esc) also leaves this view
-document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && !$("#jvFull").hidden) jvFullClose(); });
+const jvFsLeft = () => { if (!$("#jvFull").hidden && fsElemLeftByUser()) jvFullClose(); };
+document.addEventListener("fullscreenchange", jvFsLeft); document.addEventListener("webkitfullscreenchange", jvFsLeft);
 addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#jvFull").hidden) jvFullClose(); });
 $("#jvFullStop").onclick = async () => { $("#jvFullStop").disabled = true; try { await jarvisCall("POST", "/stop"); toast("Jarvis stopped"); } catch (e) { toast("Couldn't reach Jarvis: " + e.message); } $("#jvFullStop").disabled = false; jarvisPoll(); };
 $("#jvFullAsk").addEventListener("submit", async (e) => {
@@ -6630,8 +6643,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.18";
+const APP_VERSION = "2026-10-26.19";
 const WHATS_NEW = [
+  ["2026-10-26.19", ["Full screen for the Browser and Jarvis stays open on iPad and iPhone"]],
   ["2026-10-26.18", ["The Browser has a full-screen button (also on iPhone); Esc or the same button leaves"]],
   ["2026-10-26.17", ["Follow-ups keep using the tool: “make it faster”, “add bread too”, “another one” no longer fall back to a plain answer"]],
   ["2026-10-26.16", ["Jarvis: watch the live view full screen, with a small red Stop button and the chat at the bottom"]],
