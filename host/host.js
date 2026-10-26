@@ -123,6 +123,16 @@ const pcPower = {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       return [200, await schedule.set(j)];
     }
+    // the Hub: media and volume keys, the Start menu's programs, opening a website, locking (done on the desktop by desktop.js)
+    if (p === "/pc/apps" || p === "/pc/media" || p === "/pc/launch" || p === "/pc/openurl" || p === "/pc/lockpc") {
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      if (method === "GET" && p === "/pc/apps") return [200, await pcDesk.call("apps")];
+      if (method !== "POST") return [405, { error: "POST only" }];
+      if (p === "/pc/media") return [200, await pcDesk.call("key", String(j.key || ""))];
+      if (p === "/pc/launch") { const r = await pcDesk.call("launch", String(j.id || "")); note(`Hub: opened ${r.name}`); return [200, r]; }
+      if (p === "/pc/openurl") { const r = await pcDesk.call("url", String(j.url || "")); note("Hub: opened a web page"); return [200, r]; }
+      if (p === "/pc/lockpc") { const r = await pcDesk.call("lock"); note("Hub: locked the PC"); return [200, r]; }
+    }
     if (method === "POST" && p === "/pc/cancel") {
       execFile("shutdown", ["/a"], { windowsHide: true }, () => {});
       note("Shutdown cancelled from the website");
@@ -132,6 +142,7 @@ const pcPower = {
   },
 };
 const jarvis = require("./jarvis");
+const pcDesk = require("./pcdesk");
 const codeTool = require("./code");
 const chatStore = require("./chats");
 const jobStore = require("./jobs");

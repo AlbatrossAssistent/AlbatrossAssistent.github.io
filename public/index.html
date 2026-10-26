@@ -883,6 +883,54 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
 .jvf-ask { display: flex; gap: 8px; align-items: center; padding: 6px 6px 6px 16px; border-radius: 999px; background: rgba(20,22,30,.82); border: 1px solid rgba(255,255,255,.16); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 .jvf-ask input { flex: 1; min-width: 0; font: inherit; font-size: 15px; color: #fff; background: none; border: 0; outline: none; }
 .jvf-ask input::placeholder { color: rgba(255,255,255,.55); }
+/* ---------- the Hub (hub.js): big tiles to control the PC ---------- */
+body:not(.hub-view) #hubPage:not(.hub-fs) { display: none; }
+body.hub-view .messages, body.hub-view .composer, body.hub-view #home, body.hub-view #jarvis, body.hub-view #pcPage, body.hub-view #agentPage, body.hub-view #notesPage, body.hub-view #mailPage, body.hub-view #typeBadge, body.hub-view #model { display: none !important; }
+#hubPage { flex: 1; min-height: 0; overflow-y: auto; }
+.hub-wrap { max-width: 1200px; margin: 0 auto; padding: 8px 6px 24px; display: flex; flex-direction: column; gap: 14px; }
+.hub-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hub-bar h1 { margin: 0; font-size: 28px; } .hub-sub { color: var(--muted); font-size: 14px; }
+.hub-body { display: flex; gap: 16px; align-items: flex-start; }
+.hub-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; padding: 4px; border-radius: 22px; transition: background .2s; min-height: 160px; align-content: start; }
+.hub-grid.drop-on { background: var(--accent-soft); }
+.hub-tile { position: relative; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; border-radius: 24px; border: 1px solid var(--glass-edge); cursor: pointer; color: var(--fg); font: inherit;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 26%, var(--glass-strong)), color-mix(in srgb, var(--c) 10%, var(--glass))); box-shadow: var(--glass-hi), 0 8px 24px -10px color-mix(in srgb, var(--c) 60%, transparent);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); transition: transform .3s cubic-bezier(.3,1.6,.4,1), box-shadow .2s; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+#hubPage.editing .hub-tile { touch-action: none; animation: hubWiggle .32s ease-in-out infinite alternate; cursor: grab; }
+.hub-tile:hover { transform: translateY(-2px); } .hub-tile:active { transform: scale(.94); }
+.hub-tile.hit { animation: hubHit .35s ease; }
+.hub-tile.ok { box-shadow: var(--glass-hi), 0 0 0 3px color-mix(in srgb, var(--ok) 70%, transparent); } .hub-tile.bad { box-shadow: var(--glass-hi), 0 0 0 3px color-mix(in srgb, var(--bad) 70%, transparent); }
+.hub-tile .ht-ic { width: 42%; max-width: 64px; aspect-ratio: 1; color: var(--c); display: flex; }
+.hub-tile .ht-ic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hub-tile .ht-lb { font-size: 14px; font-weight: 650; text-align: center; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-tile .ht-sub { font-size: 11.5px; color: var(--muted); text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 1em; }
+.hub-tile.k-clock .ht-lb, .hub-tile.k-stats .ht-lb { font-size: 22px; font-variant-numeric: tabular-nums; }
+.hub-tile .ht-x { position: absolute; top: -6px; right: -6px; width: 26px; height: 26px; border-radius: 50%; background: var(--bad); color: #fff; font-size: 17px; line-height: 26px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.hub-tile.drop-before { box-shadow: -7px 0 0 -2px var(--accent), var(--glass-hi); }
+.hub-grid.drop-end::after { content: ""; aspect-ratio: 1; border-radius: 24px; border: 2px dashed var(--accent); }
+.hub-tile.hub-hole { opacity: .25; }
+.hub-ghost { position: fixed; left: 0; top: 0; z-index: 500; pointer-events: none; opacity: .92; transform-origin: center; box-shadow: 0 24px 60px rgba(0,0,0,.35) !important; animation: none !important; }
+@keyframes hubWiggle { from { transform: rotate(-.8deg); } to { transform: rotate(.8deg); } }
+@keyframes hubHit { 40% { transform: scale(.9); } }
+.hub-tray { width: 300px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 22px; background-color: var(--glass); background-image: var(--sheen); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi); max-height: calc(100dvh - 160px); overflow-y: auto; position: sticky; top: 0; }
+.hub-tip { margin: 0; font-size: 12.5px; color: var(--muted); }
+.hub-grp h3 { margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.hub-grp-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.hub-src { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--c) 10%, transparent); color: var(--fg); font: inherit; font-size: 12.5px; text-align: left; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.hub-src .ht-ic { width: 20px; height: 20px; flex: none; color: var(--c); display: flex; } .hub-src .ht-ic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hub-ask { position: fixed; inset: 0; z-index: 520; background: rgba(0,0,0,.3); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.hub-ask-card { width: min(440px, 100%); max-height: 80dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 22px; background: var(--bg); color: var(--fg); border: 1px solid var(--glass-edge); box-shadow: 0 24px 70px rgba(0,0,0,.3); }
+.hub-ask-card h3 { margin: 0; } .hub-ask-body { display: flex; flex-direction: column; gap: 8px; }
+.hub-in { font: inherit; font-size: 14px; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, var(--bg)); border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent); border-radius: 12px; padding: 9px 12px; }
+.hub-apps { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--line); }
+.hub-apps button { text-align: left; padding: 8px 12px; border: 0; background: none; color: var(--fg); font: inherit; font-size: 14px; cursor: pointer; } .hub-apps button:hover { background: var(--soft); } .hub-apps button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+/* full screen: only the tiles, big, on the app's background */
+#hubPage.hub-fs { position: fixed !important; inset: 0; z-index: 340; display: block !important; overflow-y: auto; background: var(--bg); padding: calc(10px + var(--st)) calc(10px + var(--sr)) calc(10px + var(--sb)) calc(10px + var(--sl)); }
+#hubPage.hub-fs .hub-wrap { max-width: none; } #hubPage.hub-fs .hub-sub, #hubPage.hub-fs #hubEdit { display: none; }
+#hubPage.hub-fs .hub-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+#hubPage.hub-fs #hubFull { font-size: 0; padding: 0 12px; } #hubPage.hub-fs #hubFull::after { content: "Leave full screen"; font-size: 13px; }
+@media (max-width: 760px) { .hub-body { flex-direction: column-reverse; } .hub-tray { width: 100%; position: static; max-height: none; } .hub-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 9px; } #hubPage.hub-fs .hub-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { #hubPage.editing .hub-tile { animation: none; } }
 /* what's new after an update, and "a new version is ready" */
 .update-pop { position: fixed; right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); z-index: 260; width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; border-radius: 22px; color: var(--fg);
   background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 22px 60px rgba(10,15,40,.25);
@@ -1556,6 +1604,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
       <button class="side-btn" id="goJarvis"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/></svg>Jarvis</button>
       <button class="side-btn" id="goNotes"><svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>Notes</button>
       <button class="side-btn" id="goMail"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>Mail</button>
+      <button class="side-btn" id="goHub"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>Hub</button>
       <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
       <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" type="search" placeholder="Search chats" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore></div>
     </div>
@@ -1627,6 +1676,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
     <div class="bv-foot" id="bvFoot" hidden></div>
   </div>
   <div id="notesPage"></div>
+  <div id="hubPage"></div>
   <div id="mailPage"></div>
   <div id="agentPage">
     <div class="home-inner">
@@ -2084,6 +2134,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 <script src="notes.js"></script>
 <script src="mail.js"></script>
 <script src="music.js"></script>
+<script src="hub.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
 <script>
@@ -5680,10 +5731,13 @@ function setView(v, opt) {
   document.body.classList.toggle("browser-view", v === "browser");
   document.body.classList.toggle("notes-view", v === "notes");
   document.body.classList.toggle("mail-view", v === "mail");
+  document.body.classList.toggle("hub-view", v === "hub");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   $("#goNotes").classList.toggle("on", v === "notes");
   $("#goMail").classList.toggle("on", v === "mail");
+  $("#goHub").classList.toggle("on", v === "hub");
+  if (v === "hub") window.hubOpen && window.hubOpen(); else window.hubClose && window.hubClose();
   if (v === "mail") window.mailOpen && window.mailOpen(opt);
   if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
@@ -5716,6 +5770,7 @@ function renderHome() {
     ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
     ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
+    ["hub", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>', "Hub", "Big buttons to control your PC: media, programs, Jarvis"],
     ["mail", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>', "Mail", "Your accounts, with an AI that explains and answers"],
     ["notes", '<svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>', "Notes", "Lists, to-dos and thoughts"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
@@ -5742,6 +5797,7 @@ function renderHome() {
     else if (g === "agent") setView("agent");
     else if (g === "notes") setView("notes");
     else if (g === "mail") setView("mail");
+    else if (g === "hub") setView("hub");
     else if (g === "browser") setView("browser");
     else if (g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
@@ -6592,6 +6648,9 @@ $("#send").onclick = () => send();
 $("#newChat").onclick = () => openNewChat();
 $("#goHome").onclick = () => { setView("home"); $("#sidebar").classList.remove("open"); };
 $("#goJarvis").onclick = () => { setView("jarvis"); $("#sidebar").classList.remove("open"); };
+$("#goNotes").onclick = () => { setView("notes"); $("#sidebar").classList.remove("open"); };
+$("#goMail").onclick = () => { setView("mail"); $("#sidebar").classList.remove("open"); };
+$("#goHub").onclick = () => { setView("hub"); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
 $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#openSettings").onclick = () => openSettings();
@@ -6643,8 +6702,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.19";
+const APP_VERSION = "2026-10-26.20";
 const WHATS_NEW = [
+  ["2026-10-26.20", ["Hub: big buttons to control your PC from any device, like a stream deck. Drag controls into the grid (media keys, volume, programs, websites, lock, sleep, Jarvis commands, AI prompts, clock, PC load), then go full screen"]],
   ["2026-10-26.19", ["Full screen for the Browser and Jarvis stays open on iPad and iPhone"]],
   ["2026-10-26.18", ["The Browser has a full-screen button (also on iPhone); Esc or the same button leaves"]],
   ["2026-10-26.17", ["Follow-ups keep using the tool: “make it faster”, “add bread too”, “another one” no longer fall back to a plain answer"]],
