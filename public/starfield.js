@@ -33,6 +33,57 @@
       x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return c;
     }));
 
+    // ---- a nebula now and then (night sky only): a soft cloud of coloured gas somewhere on the sky sphere, so it turns with
+    // the stars; it fades in over a few seconds, stays about a minute, fades out, and the next one comes a few minutes later,
+    // each time with a new shape and colours ----
+    const NEB_COLORS = [[[170, 90, 255], [255, 110, 190], [90, 140, 255]], [[60, 160, 255], [70, 230, 210], [140, 110, 255]], [[255, 120, 60], [255, 70, 110], [255, 190, 120]]];
+    // times are on the clock draw() gets (the frame time), set from the first frame that sees them
+    let neb = null, nebNext = null;
+    function nebulaTexture() {
+      const S = 512, c = document.createElement("canvas"); c.width = c.height = S;
+      const x = c.getContext("2d"), cols = NEB_COLORS[(Math.random() * NEB_COLORS.length) | 0];
+      x.globalCompositeOperation = "lighter";
+      // big soft lobes along a wavy arm, then smaller knots: a cloud, not a circle
+      const arm = Math.random() * 6.28, bend = (Math.random() - .5) * 1.6;
+      for (let i = 0; i < 26; i++) {
+        const f = i / 25 - .5, a = arm + bend * f, d = f * S * .62;
+        const cx = S / 2 + Math.cos(a) * d + (Math.random() - .5) * 70, cy = S / 2 + Math.sin(a) * d * .7 + (Math.random() - .5) * 70;
+        const r = (60 + Math.random() * 110) * (1 - Math.abs(f) * .9), [cr, cg, cb] = cols[i % 3];
+        const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `rgba(${cr},${cg},${cb},${.18 + Math.random() * .12})`); g.addColorStop(.5, `rgba(${cr},${cg},${cb},.06)`); g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+        x.fillStyle = g; x.fillRect(0, 0, S, S);
+      }
+      // dust: many tiny darker specks over it, so it looks grainy and far away
+      x.globalCompositeOperation = "destination-out";
+      x.filter = "blur(1.5px)";                                        // a fine soft grain, not round holes
+      for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * .12})`; const r = Math.random() * 1.8 + .4; x.beginPath(); x.arc(Math.random() * S, Math.random() * S, r, 0, 6.2832); x.fill(); }
+      x.filter = "none";
+      // a soft edge so no corner of the picture ever shows
+      x.globalCompositeOperation = "destination-in";
+      const edge = x.createRadialGradient(S / 2, S / 2, S * .2, S / 2, S / 2, S * .5); edge.addColorStop(0, "#000"); edge.addColorStop(1, "rgba(0,0,0,0)");
+      x.fillStyle = edge; x.fillRect(0, 0, S, S);
+      return c;
+    }
+    function newNebula(now) {
+      const u = (Math.random() * 2 - 1) * .55, th = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u);
+      return { x: r * Math.cos(th), y: u, z: r * Math.sin(th), tex: nebulaTexture(), size: .9 + Math.random() * .7, rot: Math.random() * 6.28, born: now, life: 50000 + Math.random() * 40000 };
+    }
+    function drawNebula(now, A, rot) {
+      if (nebNext == null) nebNext = now + 25000 + Math.random() * 35000;
+      if (!neb && now > nebNext) neb = newNebula(now);
+      if (neb && neb.born == null) neb.born = now;
+      if (!neb) return;
+      // a frame's time can be a moment before the nebula was made: that counts as age 0, not as faded out
+      const age = Math.max(0, now - neb.born), fade = Math.max(0, Math.min(1, age / 7000, (neb.life - age) / 9000));
+      if (age >= neb.life) { neb = null; nebNext = now + 70000 + Math.random() * 110000; return; }
+      const [cy, sy, cp, sp, f] = rot;
+      const x1 = neb.x * cy + neb.z * sy, z1 = -neb.x * sy + neb.z * cy, y1 = neb.y * cp - z1 * sp, z2 = neb.y * sp + z1 * cp;
+      if (z2 < .15) return;                                          // behind us right now: it comes round again as the sky turns
+      const k = f / z2, px = W / 2 + x1 * k - look.x * 18 * DPR, py = H / 2 + y1 * k - look.y * 18 * DPR, s = Math.min(W, H) * neb.size;
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = fade * .75 * A * Math.min(1, (z2 - .15) / .3);
+      ctx.translate(px, py); ctx.rotate(neb.rot); ctx.drawImage(neb.tex, -s / 2, -s / 2, s, s); ctx.restore();
+    }
+
     function seed() {
       stars = [];
       for (let i = 0; i < COUNT; i++) {
@@ -68,6 +119,7 @@
       const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
       const f = Math.min(W, H) * .95, R = 150 * DPR;
       ctx.clearRect(0, 0, W, H);
+      if (name === "night" && !still) drawNebula(t, A, [cy, sy, cp, sp, f]);   // behind the stars
       const near = [];
       for (const s of stars) {
         const x1 = s.x * cy + s.z * sy, z1 = -s.x * sy + s.z * cy;
@@ -112,6 +164,8 @@
       }
       ctx.globalAlpha = 1;
     }
-    return { draw, resize, pointer, cam };
+    // nebula(): one comes now, right where the sky is looking (for trying it out)
+    const nebula = () => { neb = newNebula(null); neb.x = -Math.sin(cam.yaw); neb.z = Math.cos(cam.yaw); neb.y = .08; };
+    return { draw, resize, pointer, cam, nebula };
   };
 })();

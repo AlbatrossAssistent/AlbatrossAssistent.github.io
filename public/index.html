@@ -1147,6 +1147,7 @@ body.jarvis-view .messages, body.jarvis-view .composer, body.jarvis-view #home, 
 .jv-screen .ph { color: #9aa0aa; font-size: 14px; text-align: center; padding: 20px; }
 .jv-screen .live { position: absolute; top: 10px; left: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: 1px; color: #fff; background: rgba(217,42,31,.9); padding: 3px 9px; border-radius: 999px; }
 .jv-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.jv-head .jv-res { margin-left: auto; font-size: 12.5px; padding: 4px 8px; border-radius: 10px; }
 .jv-head h3 { margin: 0; font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .jv-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 18px; }
 .jv-offline { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; color: var(--muted); font-size: 14px; }
@@ -1588,7 +1589,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
         <div class="jv-offline" id="jvOffline" hidden><span id="jvOfflineText">Jarvis isn't running on your PC.</span><button class="btn primary" id="jvStart">Start Jarvis</button></div>
       </div>
       <div class="jv-card">
-        <div class="jv-head"><h3>Your PC's screen</h3><label class="pub-toggle"><input type="checkbox" class="switch" id="jvLive">Live</label></div>
+        <div class="jv-head"><h3>Your PC's screen</h3><select id="jvRes" class="jv-res" aria-label="Picture size" title="Picture size: 1080p is sharpest but needs a fast connection"><option value="auto">Auto</option><option value="720">720p</option><option value="1080">1080p</option></select><label class="pub-toggle"><input type="checkbox" class="switch" id="jvLive">Live</label></div>
         <div class="jv-screen" id="jvScreen"><div class="ph" id="jvScreenPh">Switch on <b>Live</b> to watch what Jarvis does on your PC.</div></div>
         <div class="jv-head"><h3>Settings</h3></div>
         <div class="jv-settings">
@@ -1935,7 +1936,9 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
       </div>
       <div id="lockStep2" hidden>
         <p style="margin:0 0 10px;line-height:1.55">Unlock your PC the way you normally sign in:</p>
-        <ul class="lock-ways"><li><b>PIN or password</b> typed on the PC</li><li><b>Fingerprint or face</b> (Windows Hello) on the PC</li><li><b>Security key</b> plugged into the PC</li></ul>
+        <ul class="lock-ways"><li><b>PIN or password</b> typed on the PC</li><li><b>Fingerprint or face</b> (Windows Hello) on the PC</li><li><b>Security key</b> plugged into the PC</li><li><b>From here, with Chrome Remote Desktop:</b> you see the PC's lock screen and type your PIN yourself</li></ul>
+        <div class="row"><a class="btn primary" id="lockRemote" href="https://remotedesktop.google.com/access" target="_blank" rel="noopener noreferrer">Unlock with Chrome Remote Desktop</a></div>
+        <p class="pc-note" style="margin:6px 0 0">Set up once on the PC: open remotedesktop.google.com/access in Chrome on the PC, choose “Set up remote access” and pick a PIN. On a phone, the Chrome Remote Desktop app opens.</p>
         <div class="note" style="margin:12px 0">For your safety Windows doesn't let any program or website type your password into the lock screen, so Albatross can't do it for you and never asks for it. As soon as the PC is unlocked this continues by itself.</div>
         <div class="lock-wait"><span class="dot wait"></span> Waiting for the PC to be unlocked…</div>
         <div class="row" style="margin-top:12px"><button class="btn" id="lockCancel2">Cancel and go back</button></div>
@@ -3854,20 +3857,22 @@ async function send(textOverride) {
   await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model));
 }
 
-// What the chat model is told it can do: when the user asks for one of these the app hands the message to that tool by itself
-// (routeTool), so the model must never answer "I can't print / send mail / see your files / run code".
+// What the chat model is told about the app: a short description and the list of its tools (the switched-on ones, and which
+// are switched off). When a message asks for one of them, the app hands it to that tool by itself (routeTool).
+const TOOL_LIST = [
+  ["agent", "Agent", "works on the user's PC: prints files, reads, writes, sorts and moves files, reads and sends mail (each mail is approved by the user), uses websites in the browser on the PC, and writes and runs programs, websites and games (saved in PC files → Code projects, shown in the Code tab)"],
+  ["notes", "Notes", "the user's notes and lists (bullets, numbered, checklists, priorities, text)"],
+  ["slides", "Slides", "presentations with speaker notes, downloadable for PowerPoint"],
+  ["graph", "Graphs", "charts from numbers or real data"],
+  ["chances", "Chances", "estimates of how likely something is, and predictions"],
+  ["image", "Pictures", "makes and changes pictures"],
+  ["challenge", "Challenge", "finds a hidden word in a puzzle file attached with the paperclip"],
+];
 function whatYouCanDo() {
-  const can = [];
-  if (toolOn("agent")) can.push("through the Agent, work on the user's own PC: print files on their printer (or save them as PDF), read, write, sort and move their files, read their email and write and send mails (the user approves each one), use websites in a real browser, and write programs, scripts, websites and games that are saved on their PC (PC files → Code projects) and run in the Code tab, where the user can play or use them");
-  if (toolOn("notes")) can.push("keep the user's notes: make and change lists (shopping, to-do, checklists, numbered, priorities) and say what is on them");
-  if (toolOn("slides")) can.push("make presentations (slides with speaker notes, downloadable for PowerPoint)");
-  if (toolOn("graph")) can.push("draw charts from numbers or real data");
-  if (toolOn("chances")) can.push("estimate chances and predictions");
-  if (toolOn("image")) can.push("make and change pictures");
-  if (toolOn("challenge")) can.push("dig a hidden word out of a puzzle file attached with the paperclip (Challenge)");
-  const off = ["agent", "slides", "graph", "chances"].filter((k) => !toolOn(k));
-  return `You are the AI of Albatross, an app that runs on the user's own PC. Besides chatting you can ${can.length ? can.join("; ") : "only chat right now"}. When the user asks for one of these, the app hands the job to the right tool automatically, so never say you can't print, send mail, see their files, run code or make slides: say you'll do it, or ask what exactly they want (for example which file to print).` +
-    (off.length ? ` Switched off by the user in Settings → Tools: ${off.join(", ")}; if they want one of those, tell them to switch it on there.` : "");
+  const on = TOOL_LIST.filter(([k]) => toolOn(k)), off = TOOL_LIST.filter(([k]) => !toolOn(k));
+  return "You are the AI of Albatross, an app that runs AI models on the user's own PC." +
+    (on.length ? "\nTools of the app (used automatically when a message asks for them):\n" + on.map(([, n, d]) => `- ${n}: ${d}`).join("\n") : "") +
+    (off.length ? "\nSwitched off in Settings → Tools: " + off.map(([, n]) => n).join(", ") + "." : "");
 }
 
 // ---------- model capabilities (thinking / tools / vision) ----------
@@ -6156,6 +6161,8 @@ $("#jvStart").onclick = async () => {
 for (const el of $$("[data-jv]")) el.onchange = async () => {
   try { const { j } = await jarvisCall("POST", "/settings", { [el.dataset.jv]: el.checked }); if (j.settings) { jv.state = j; renderJarvis(); } } catch (e) { toast("Couldn't change that: " + e.message); }
 };
+$("#jvRes").value = S.jvRes || "auto";
+$("#jvRes").onchange = (e) => { S.jvRes = e.target.value; saveSettings(); };
 // the live screen: one picture at a time, the next as soon as the last has arrived
 $("#jvLive").onchange = (e) => {
   jv.live = e.target.checked;
@@ -6168,8 +6175,11 @@ async function jarvisScreen() {
   if (!jv.live || !jv.open || jv.shotBusy) return;
   jv.shotBusy = true;
   try {
-    const w = Math.min(1600, Math.round($("#jvScreen").clientWidth * (devicePixelRatio || 1)));
-    const { status, j } = await jarvisCall("GET", `/screen?w=${w}&q=${viaHost ? 70 : 55}`);
+    // Auto: as wide as the view (up to 1600 px); 720p and 1080p ask for that many pixels across, 1080p a little sharper
+    const res = S.jvRes || "auto";
+    const w = res === "1080" ? 1920 : res === "720" ? 1280 : Math.min(1600, Math.round($("#jvScreen").clientWidth * (devicePixelRatio || 1)));
+    const q = res === "1080" ? (viaHost ? 85 : 75) : viaHost ? 70 : 55;
+    const { status, j } = await jarvisCall("GET", `/screen?w=${w}&q=${q}`);
     if (status === 200 && j.jpeg && jv.live) {
       const box = $("#jvScreen");
       let img = box.querySelector("img");
@@ -6328,8 +6338,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.6";
+const APP_VERSION = "2026-10-26.7";
 const WHATS_NEW = [
+  ["2026-10-26.7", ["Now and then a nebula drifts through the night sky (dark mode)", "Jarvis' live screen can be 1080p (the picture-size menu next to Live)", "When the PC is locked: unlock it from here with Chrome Remote Desktop", "The AI gets a plain list of the app's tools"]],
   ["2026-10-26.6", ["Mail tab: your inbox and sent mail, with an AI that explains a mail, sums it up, says what to do, translates or drafts the reply", "Several mail accounts: add more in Mail → Accounts and pick which one sends", "The Agent can use every account, and look in sent mail"]],
   ["2026-10-26.5", ["Notes: yellow sticky notes in their own tab, with bullets, numbers, checklists, a/b/c, Roman numerals, priorities or plain text", "Pinned notes show when Albatross opens", "Ask the AI: “put milk on my shopping list”, “what is on my to-do list?”"]],
   ["2026-10-26.4", ["Light mode has a moving background too: soft blue lights that move away from your pointer", "Thinking at Max turns the background red, with glowing embers, in light and dark"]],
