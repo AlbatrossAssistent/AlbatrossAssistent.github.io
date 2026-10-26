@@ -51,7 +51,7 @@
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif, "Segoe UI Symbol", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Cambria Math";
   background: var(--bg); color: var(--fg); display: flex; gap: 12px; font-size: var(--font-size);
   padding: calc(12px + var(--st)) calc(12px + var(--sr)) calc(12px + var(--sb)) calc(12px + var(--sl));
   overflow: hidden; -webkit-font-smoothing: antialiased; position: relative;
@@ -396,6 +396,9 @@ body.compact .inner { gap: 14px; }
 .fetch-line { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin: 0 0 12px; }
 .fetch-line a { color: var(--fg); }
 .tool-err { font-size: 13px; color: var(--danger); }
+.md .math { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", serif; white-space: nowrap; }
+.md .math-block { display: block; text-align: center; margin: .4em 0; font-size: 1.1em; white-space: normal; }
+.md .katex-display { margin: .5em 0; overflow-x: auto; overflow-y: hidden; }
 .md a { color: var(--fg); text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: var(--muted); }
 .md a:hover { text-decoration-color: var(--fg); }
 
@@ -3519,12 +3522,59 @@ function scrollDown(force) {
 // Markdown (safe: everything escaped first)
 // ======================================================================
 function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+// emoji the models write as :name: codes, and arrows written as -> (only between spaces, so code-like text stays)
+const SHORTCODES = { arrow_right: "➡️", arrow_left: "⬅️", arrow_up: "⬆️", arrow_down: "⬇️", arrow_forward: "▶️", arrow_backward: "◀️", right_arrow: "➡️", left_right_arrow: "↔️", point_right: "👉", point_left: "👈", point_up: "👆", point_down: "👇",
+  white_check_mark: "✅", heavy_check_mark: "✔️", check: "✔️", ballot_box_with_check: "☑️", x: "❌", cross_mark: "❌", warning: "⚠️", exclamation: "❗", question: "❓", bulb: "💡", star: "⭐", sparkles: "✨", fire: "🔥", rocket: "🚀", tada: "🎉",
+  heart: "❤️", thumbsup: "👍", "+1": "👍", thumbsdown: "👎", "-1": "👎", smile: "😄", smiley: "😃", grin: "😁", wink: "😉", thinking: "🤔", eyes: "👀", wave: "👋", clap: "👏", pray: "🙏", muscle: "💪", ok_hand: "👌",
+  memo: "📝", pencil: "✏️", pushpin: "📌", calendar: "📅", clock: "🕐", hourglass: "⏳", key: "🔑", lock: "🔒", unlock: "🔓", mag: "🔍", link: "🔗", gear: "⚙️", hammer: "🔨", wrench: "🔧", computer: "💻", phone: "📱", email: "📧", mailbox: "📫", printer: "🖨️",
+  bar_chart: "📊", chart_with_upwards_trend: "📈", chart_with_downwards_trend: "📉", moneybag: "💰", books: "📚", book: "📖", trophy: "🏆", dart: "🎯", red_circle: "🔴", green_circle: "🟢", yellow_circle: "🟡", blue_circle: "🔵", one: "1️⃣", two: "2️⃣", three: "3️⃣" };
 function inline(s) {
   return s.replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(<code>[^]*?<\/code>)|:([a-z0-9_+-]{1,32}):/g, (m, code, k) => code || SHORTCODES[k] || m)
+    .replace(/(<code>[^]*?<\/code>)|(^|\s)(-&gt;|=&gt;|&lt;-|&lt;-&gt;|&lt;=&gt;)(?=\s|$)/g, (m, code, sp, a) => code || sp + { "-&gt;": "→", "=&gt;": "⇒", "&lt;-": "←", "&lt;-&gt;": "↔", "&lt;=&gt;": "⇔" }[a]);
 }
+// ---------- maths: $...$, $$...$$, \(...\), \[...\] ----------
+// Drawn with KaTeX (loaded the first time a message has maths); until then, and when it can't load, common LaTeX becomes
+// plain symbols (\rightarrow → →, x^2 → x², \alpha → α ...).
+const TEX_SYM = { rightarrow: "→", to: "→", leftarrow: "←", gets: "←", leftrightarrow: "↔", Rightarrow: "⇒", implies: "⇒", Leftarrow: "⇐", Leftrightarrow: "⇔", iff: "⇔", uparrow: "↑", downarrow: "↓", mapsto: "↦", longrightarrow: "⟶", Longrightarrow: "⟹",
+  times: "×", cdot: "·", div: "÷", pm: "±", mp: "∓", leq: "≤", le: "≤", geq: "≥", ge: "≥", neq: "≠", ne: "≠", approx: "≈", equiv: "≡", sim: "∼", propto: "∝", infty: "∞", partial: "∂", nabla: "∇", sum: "∑", prod: "∏", int: "∫", sqrt: "√",
+  in: "∈", notin: "∉", subset: "⊂", subseteq: "⊆", cup: "∪", cap: "∩", emptyset: "∅", forall: "∀", exists: "∃", neg: "¬", land: "∧", lor: "∨", degree: "°", circ: "°", ldots: "…", cdots: "⋯", dots: "…", checkmark: "✓", star: "⋆",
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", varepsilon: "ε", zeta: "ζ", eta: "η", theta: "θ", lambda: "λ", mu: "μ", nu: "ν", xi: "ξ", pi: "π", rho: "ρ", sigma: "σ", tau: "τ", phi: "φ", varphi: "φ", chi: "χ", psi: "ψ", omega: "ω",
+  Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Pi: "Π", Sigma: "Σ", Phi: "Φ", Psi: "Ψ", Omega: "Ω", quad: "  ", qquad: "    " };
+const SUP = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹", "+": "⁺", "-": "⁻", n: "ⁿ", i: "ⁱ", "(": "⁽", ")": "⁾" };
+const SUB = { 0: "₀", 1: "₁", 2: "₂", 3: "₃", 4: "₄", 5: "₅", 6: "₆", 7: "₇", 8: "₈", 9: "₉", "+": "₊", "-": "₋", "(": "₍", ")": "₎", a: "ₐ", e: "ₑ", i: "ᵢ", j: "ⱼ", k: "ₖ", n: "ₙ", m: "ₘ", o: "ₒ", t: "ₜ", x: "ₓ" };
+function texToText(t) {
+  const scr = (s, map, mark) => [...s].every((c) => map[c]) ? [...s].map((c) => map[c]).join("") : mark + "(" + s + ")";
+  for (let i = 0; i < 3; i++) t = t.replace(/\\(?:text|mathrm|mathbf|textbf|mathit|operatorname)\{([^{}]*)\}/g, "$1").replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, (m, a, b) => (/^\w+$/.test(a) ? a : "(" + a + ")") + "/" + (/^\w+$/.test(b) ? b : "(" + b + ")")).replace(/\\sqrt\{([^{}]*)\}/g, "√($1)");
+  return t.replace(/\\(?:left|right|displaystyle)(?![A-Za-z])|\\[,;!:]/g, " ").replace(/\\([A-Za-z]+)/g, (m, k) => TEX_SYM[k] ?? k)
+    .replace(/\^\{([^{}]*)\}|\^(\w)/g, (m, a, b) => scr(a ?? b, SUP, "^")).replace(/_\{([^{}]*)\}|_(\w)/g, (m, a, b) => scr(a ?? b, SUB, "_"))
+    .replace(/[{}]/g, "").replace(/\s+/g, " ").trim();
+}
+let katexState = "";                                                   // "" not asked, "loading", "ready", "failed"
+function loadKatex() {
+  if (katexState) return; katexState = "loading";
+  const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"; document.head.appendChild(css);
+  loadScript("https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js").then(() => { katexState = "ready"; if (!controller && current) renderMessages(); }, () => { katexState = "failed"; });
+}
+function renderMath(tex, block) {
+  if (katexState === "ready" && window.katex) { try { return window.katex.renderToString(tex, { displayMode: block, throwOnError: false, output: "html" }); } catch {} }
+  else loadKatex();
+  return `<span class="math${block ? " math-block" : ""}">${esc(texToText(tex))}</span>`;
+}
+// pulls the maths out of a piece of text (never out of `code`), leaving \u0001n\u0002 marks that mathBack() fills in later
+function mathOut(s, store) {
+  return s.replace(/(`[^`\n]+`)|\$\$([^]+?)\$\$|\\\[([^]+?)\\\]|\\\(([^]+?)\\\)|\$([^\s$](?:[^$\n]*?[^\s$])?)\$/g, (m, code, d1, d2, i1, i2) => {
+    if (code) return code;
+    const tex = d1 ?? d2 ?? i1 ?? i2;
+    if (i2 != null && !/[\\^_{}=]/.test(i2)) return m;            // "$5 and $10" are prices, not maths
+    store.push(renderMath(tex.trim(), d1 != null || d2 != null));
+    return "\u0001" + (store.length - 1) + "\u0002";
+  });
+}
+const mathBack = (html, store) => html.replace(/\u0001(\d+)\u0002/g, (m, n) => store[n] ?? "");
 function md(src) {
   const parts = (src || "").split(/```/);
   let out = "";
@@ -3539,7 +3589,9 @@ function md(src) {
       out += `<div class="code"${file ? ` data-file="${esc(file)}"` : ""}><div class="code-head"><button class="cc-toggle" aria-expanded="true" title="Show or hide the code"><svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg><span>${esc(lang) || "code"}</span><span class="meta">${file ? esc(file) + " · " : ""}${lines} line${lines === 1 ? "" : "s"}</span></button><button class="open-code" title="Open in the side panel: edit, run, save" aria-label="Open in the side panel"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/></svg>Open</button>${/^(html?|js|javascript)$/i.test(lang) ? '<button class="run-code" title="Run it here, in the built-in code player" aria-label="Run the code"><svg class="i" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>Run</button>' : ""}<button class="copy-code" title="Copy the code" aria-label="Copy the code">${ICON.copy}</button></div><pre><code>${esc(code)}</code></pre></div>`;
       return;
     }
-    const lines = esc(part).split("\n");
+    const maths = [];
+    const lines = esc(mathOut(part, maths)).split("\n");
+    const start = out.length;
     let para = [], list = null;
     const flushP = () => { if (para.length) { out += "<p>" + inline(para.join("<br>")) + "</p>"; para = []; } };
     const flushL = () => { if (list) { out += `<${list.t}>` + list.items.map(x => "<li>" + inline(x) + "</li>").join("") + `</${list.t}>`; list = null; } };
@@ -3552,6 +3604,7 @@ function md(src) {
       flushL(); para.push(line);
     }
     flushP(); flushL();
+    if (maths.length) out = out.slice(0, start) + mathBack(out.slice(start), maths);
   });
   return out;
 }
