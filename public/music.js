@@ -144,11 +144,12 @@ window.runMusicTool = async function (model, text) {
   await toolAnswer(model, text, block, async ({ ask, history }) => {
     const str = { type: "string" };
     const schema = { type: "object", properties: {
-      title: str, description: str, key: str, bpm: { type: "integer" }, bars: { type: "integer" },
+      language: str, title: str, description: str, key: str, bpm: { type: "integer" }, bars: { type: "integer" },
       tracks: { type: "array", items: { type: "object", properties: { name: str, instrument: { type: "string", enum: Object.keys(INSTR) }, loop: { type: "boolean" }, notes: str }, required: ["name", "instrument", "loop", "notes"] } },
       drums: { type: "object", properties: { kick: str, snare: str, clap: str, hat: str, openhat: str }, required: ["kick", "snare", "clap", "hat", "openhat"] },
-      reply: str }, required: ["title", "description", "key", "bpm", "bars", "tracks", "drums", "reply"] };
+      reply: str }, required: ["language", "title", "description", "key", "bpm", "bars", "tracks", "drums", "reply"] };
     const sys = `You are a composer. You write a short, catchy, musically correct piece for what the user asks. Reply only with JSON.
+- "language": the language the request is written in (for example English or German). Write "title", "description" and "reply" in it.
 - "title", "description" (one sentence on mood and style), "key" (like "A minor"), "bpm", "bars" (8 to 32; 16 is a good length).
 - "tracks": 2 to 5 instruments that fit the style, from: ${Object.keys(INSTR).join(", ")}. Usually chords (piano, epiano, pad, strings, guitar or organ), a bass line and a melody (lead, flute, bells, piano, brass…). Each track: "name", "instrument", "notes" and "loop". With "loop": true the notes repeat until the end (good for a 4-bar chord or bass pattern); with false they play once, so write all bars (a melody with a beginning, a repeat with variation and an ending).
 - ${NOTATION} Stay in the key, give the melody a clear idea that comes back, let the bass play the chord roots, and make every track the right length.
