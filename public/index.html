@@ -1050,6 +1050,14 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
 .sl.an-wipe .ent:not(.in), .sl.an-wipe .bld:not(.in) { opacity: 1; clip-path: inset(0 100% 0 0); }
 .sl.an-wipe .ent.in, .sl.an-wipe .bld.in { clip-path: inset(0 0 0 0); }
 .sl.an-blur .ent:not(.in), .sl.an-blur .bld:not(.in) { filter: blur(1.4cqw); transform: scale(1.06); }
+.sl.an-pop .ent:not(.in), .sl.an-pop .bld:not(.in) { transform: scale(.3); }
+.sl.an-pop.animating .ent, .sl.an-pop.animating .bld { transition-timing-function: ease, cubic-bezier(.3,1.8,.5,1), ease, ease; }
+.sl.an-drop .ent:not(.in), .sl.an-drop .bld:not(.in) { transform: translateY(-14cqw); }
+.sl.an-drop.animating .ent, .sl.an-drop.animating .bld { transition-timing-function: ease, cubic-bezier(.34,1.45,.55,1), ease, ease; }
+.sl.an-slide .ent:not(.in), .sl.an-slide .bld:not(.in) { transform: translateX(-10cqw); }
+.sl.an-tilt .ent:not(.in), .sl.an-tilt .bld:not(.in) { transform: perspective(60cqw) rotateX(80deg); transform-origin: 50% 100%; }
+.sl.an-spin .ent:not(.in), .sl.an-spin .bld:not(.in) { transform: rotate(-20deg) scale(.5); }
+.sl.an-glow .ent:not(.in), .sl.an-glow .bld:not(.in) { filter: brightness(2.6) blur(.9cqw); transform: scale(1.03); }
 .sl.animating .bgph.ent { transition-duration: 1.6s; }
 .sl.animating .bgph.ent:not(.in) { opacity: 0; transform: scale(1.12); clip-path: none; filter: none; }
 .sl.animating .deco { transition: transform 1.2s cubic-bezier(.16,1,.3,1), opacity 1.2s ease; }
@@ -1108,6 +1116,20 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
 @keyframes tOutFlipB { to { transform: rotateY(90deg); } }
 @keyframes tInCube { from { transform: translateX(100%) rotateY(-90deg); } }
 @keyframes tInCubeB { from { transform: translateX(-100%) rotateY(90deg); } }
+.sl.tr-lift { animation: tInLift .8s cubic-bezier(.16,1,.3,1) both; } .sl.tr-lift.back { animation-name: tInDrop; }
+.sl.tr-drop { animation: tInDrop .8s cubic-bezier(.34,1.3,.55,1) both; } .sl.tr-drop.back { animation-name: tInLift; }
+.sl.tr-spin { animation: tInSpin .9s cubic-bezier(.16,1,.3,1) both; } .sl.out-spin { animation: tOutSpin .5s ease-in both; }
+.sl.tr-zoom-out { animation: tInZoomOut .8s cubic-bezier(.16,1,.3,1) both; } .sl.out-zoom-out { animation: tOutZoomOut .6s ease both; }
+.sl.tr-box { animation: tInBox .8s cubic-bezier(.65,0,.35,1) both; }
+.sl.tr-glitch { animation: tInGlitch .6s steps(1) both; }
+@keyframes tInLift { from { transform: translateY(30%); opacity: 0; } }
+@keyframes tInDrop { from { transform: translateY(-30%); opacity: 0; } }
+@keyframes tInSpin { from { transform: rotate(-120deg) scale(.2); opacity: 0; } }
+@keyframes tOutSpin { to { transform: rotate(60deg) scale(.4); opacity: 0; } }
+@keyframes tInZoomOut { from { transform: scale(1.6); opacity: 0; } }
+@keyframes tOutZoomOut { to { transform: scale(.7); opacity: 0; } }
+@keyframes tInBox { from { clip-path: inset(50% 50% 50% 50%); } to { clip-path: inset(0); } }
+@keyframes tInGlitch { 0% { opacity: 0; } 15% { opacity: 1; transform: translateX(-3%); filter: hue-rotate(90deg) saturate(3); clip-path: inset(10% 0 55% 0); } 30% { transform: translateX(2%); clip-path: inset(50% 0 10% 0); } 45% { transform: translateX(-1%); filter: hue-rotate(-60deg); clip-path: inset(0 0 70% 0); } 60% { transform: none; filter: none; clip-path: inset(0); } 75% { transform: translateX(1%); } 100% { transform: none; } }
 @keyframes tOutCube { to { transform: translateX(-100%) rotateY(90deg); } }
 @keyframes tOutCubeB { to { transform: translateX(100%) rotateY(-90deg); } }
 @media (prefers-reduced-motion: reduce) { .sl[class*="tr-"], .sl[class*="out-"], .present .sl .bgph img { animation: none !important; } }
@@ -1117,6 +1139,16 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
 .present { position: fixed; inset: 0; z-index: 300; background: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .present .stage16.big { width: min(100vw, 177.78vh); border: none; border-radius: 0; box-shadow: none; }
 .present-notes { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: min(900px, calc(100vw - 32px)); max-height: 30vh; overflow-y: auto; padding: 14px 18px; border-radius: 16px; background: rgba(10,12,20,.82); color: #f2f4f8; font-size: 17px; line-height: 1.45; white-space: pre-wrap; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.14); cursor: default; }
+.deck-design { margin-top: 8px; padding: 10px 12px; border-radius: 16px; background: var(--soft); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.deck-design[hidden] { display: none; }
+.dz-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
+.dz-th { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border-radius: 12px; border: 1px solid transparent; background: none; color: var(--fg); font: inherit; font-size: 11.5px; cursor: pointer; text-transform: capitalize; }
+.dz-th i { width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; background: linear-gradient(135deg, var(--b) 62%, var(--a) 62%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); position: relative; }
+.dz-th i::after { content: "Aa"; position: absolute; left: 8px; top: 4px; color: var(--f); font-weight: 700; font-size: 13px; }
+.dz-th:hover { background: var(--btn-glass); } .dz-th.on { border-color: var(--accent); background: var(--accent-soft); }
+.dz-row { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.dz-row label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); flex: 1 1 150px; }
+.dz-row select { font-size: 13px; }
 .deck-notes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px 12px; border-radius: 16px; background: var(--soft); border: 1px solid var(--line); }
 .deck-notes[hidden] { display: none; }
 .deck-notes small { color: var(--muted); font-size: 12px; }
@@ -3200,6 +3232,16 @@ const DECK_THEMES = {
   royal:    { about: "navy with gold, formal, history and business", bg: "1B2A4A", fg: "F6F1E7", muted: "AEB7C9", accent: "D4A64A", card: "243660", fonts: "classic", deco: "bar" },
   lavender: { about: "light lilac with indigo, friendly, school", bg: "F3F0FF", fg: "1F1640", muted: "6B6290", accent: "5B4BDB", card: "E6E0FF", fonts: "friendly", deco: "circle" },
   sand:     { about: "sand and brown, earth, travel and ancient history", bg: "EDE3D1", fg: "33291F", muted: "7A6A55", accent: "8A5A2B", card: "E2D4BC", fonts: "condensed", deco: "bar" },
+  graphite: { about: "dark graphite with amber, serious and modern, business", bg: "1C1D21", fg: "F2F2F0", muted: "A0A2A8", accent: "F5A524", card: "2A2B31", fonts: "tech", deco: "line" },
+  mint:     { about: "fresh white with mint green, health, food and wellbeing", bg: "F4FBF7", fg: "13261D", muted: "5E7A6C", accent: "12A37A", card: "DDF3E8", fonts: "rounded", deco: "circle" },
+  coral:    { about: "light peach with coral, warm, friendly and personal", bg: "FFF4EE", fg: "3A1F16", muted: "8A6556", accent: "F25C3D", card: "FFE2D5", fonts: "friendly", deco: "circle" },
+  neon:     { about: "black with neon magenta and cyan, gaming, music and nightlife", bg: "0A0612", fg: "F5F0FF", muted: "A99BC4", accent: "FF3BD4", card: "1A1030", fonts: "condensed", deco: "frame" },
+  northern: { about: "deep night teal with aurora green, space, nature at night and science", bg: "06141A", fg: "E7FBF4", muted: "8DB5AA", accent: "38E0A0", card: "0F2630", fonts: "geometric", deco: "line" },
+  chalk:    { about: "dark green chalkboard with white chalk, school and teaching", bg: "1F3A2E", fg: "F3F1E6", muted: "B9C4B6", accent: "FFE27A", card: "2A4A3B", fonts: "handwritten", deco: "frame" },
+  kraft:    { about: "brown kraft paper with black ink, craft, handmade and DIY", bg: "D8BF98", fg: "1F1A14", muted: "5C4C38", accent: "1F1A14", card: "CDB187", fonts: "slab", deco: "bar" },
+  glacier:  { about: "icy white-blue with navy, winter, clean tech and research", bg: "EEF5FB", fg: "0F2742", muted: "5A7088", accent: "2F6FD6", card: "DCE9F6", fonts: "modern", deco: "line" },
+  crimson:  { about: "dark wine red with gold, drama, history, film and literature", bg: "2A0A10", fg: "FBEFE9", muted: "C9A6A3", accent: "E8B04A", card: "3D131B", fonts: "elegant", deco: "frame" },
+  pastel:   { about: "soft butter yellow with purple, playful, kids and creative topics", bg: "FFF8DC", fg: "2D2140", muted: "7A6E8E", accent: "8B5CF6", card: "FBEFC0", fonts: "rounded", deco: "circle" },
 };
 const DECK_FONTS = {
   modern:    { about: "clean sans serif", web: ["Inter", "Inter"], ppt: ["Segoe UI Semibold", "Segoe UI"] },
@@ -3212,6 +3254,9 @@ const DECK_FONTS = {
   mono:      { about: "monospace, like code", web: ["IBM Plex Mono", "IBM Plex Sans"], ppt: ["Consolas", "Segoe UI"], mono: 1 },
   classic:   { about: "book serif, classic", web: ["Lora", "Source Sans 3"], ppt: ["Cambria", "Calibri"], serif: 1 },
   condensed: { about: "tall condensed headlines", web: ["Bebas Neue", "Inter"], ppt: ["Impact", "Arial"], heavy: 1 },
+  handwritten: { about: "handwriting, like chalk or a notebook", web: ["Caveat", "Nunito"], ppt: ["Segoe Print", "Calibri"] },
+  rounded:   { about: "soft rounded sans", web: ["Quicksand", "Nunito"], ppt: ["Century Gothic", "Calibri"] },
+  slab:      { about: "sturdy slab serif, like a poster", web: ["Roboto Slab", "Roboto"], ppt: ["Rockwell", "Calibri"], serif: 1 },
 };
 const DECK_LAYOUTS = {
   bullets:       { use: "a title and 3-5 points", fill: '"bullets": 3 to 5 short points (at most 12 words each)', need: ["bullets"] },
@@ -3226,8 +3271,8 @@ const DECK_LAYOUTS = {
   statement:     { use: "one big key message on its own", fill: '"statement": one strong sentence (at most 15 words)', need: ["statement"] },
   section:       { use: "a divider that starts a new part of a long presentation", fill: '"sub": one short line about what this part covers', need: ["sub"] },
 };
-const DECK_TRANSITIONS = ["none", "fade", "dissolve", "push", "wipe", "zoom", "cover", "uncover", "split", "circle", "flip", "cube"];
-const DECK_STYLES = ["fade", "rise", "fly", "zoom", "wipe", "blur"];
+const DECK_TRANSITIONS = ["none", "fade", "dissolve", "push", "wipe", "zoom", "cover", "uncover", "split", "circle", "flip", "cube", "lift", "drop", "spin", "zoom-out", "box", "glitch"];
+const DECK_STYLES = ["fade", "rise", "fly", "zoom", "wipe", "blur", "pop", "drop", "slide", "tilt", "spin", "glow"];
 
 const deckFontsLoaded = new Set();
 function deckLook(d) {
@@ -3309,7 +3354,8 @@ function renderDeck(b) {
   }
   if (b.error && !(d.slides || []).some(x => x.ready !== false && (x.bullets?.length || x.stats || x.cards || x.steps || x.columns || x.quote || x.statement))) { wrap.innerHTML = '<div class="tool-err"></div>'; wrap.firstChild.textContent = "Couldn't build the slides: " + b.error; return wrap; }
   b.idx = Math.min(b.idx || 0, total - 1);
-  wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span>${b.steps ? '<button class="btn small" data-a="side">Steps</button>' : ""}<button class="btn small" data-a="notes" aria-pressed="false">Speaker notes</button><button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>
+  wrap.innerHTML = `<div class="stage16"></div><div class="deck-bar"><button class="btn small" data-a="prev" aria-label="Previous slide">‹</button><span class="cnt"></span><button class="btn small" data-a="next" aria-label="Next slide">›</button><span style="flex:1"></span>${b.steps ? '<button class="btn small" data-a="side">Steps</button>' : ""}<button class="btn small" data-a="design" aria-pressed="false">Design</button><button class="btn small" data-a="notes" aria-pressed="false">Speaker notes</button><button class="btn small" data-a="present">Present</button><button class="btn small primary" data-a="pptx">Download (PowerPoint / Keynote)</button></div>
+    <div class="deck-design" hidden></div>
     <div class="deck-notes" hidden><small>Speaker notes for this slide: what to say. You can change them; they go into the PowerPoint file too.</small><textarea rows="3" placeholder="Nothing yet: write what you want to say on this slide."></textarea></div>`;
   const stage = wrap.querySelector(".stage16"), cnt = wrap.querySelector(".cnt");
   // speaker notes: the title slide's are the deck's own (d.notes), every other slide has its own
@@ -3317,6 +3363,21 @@ function renderDeck(b) {
   const noteOwner = () => (b.idx === 0 ? d : d.slides[b.idx - 1]);
   const paintNotes = () => { notesBox.hidden = !S.deckNotes; notesBtn.classList.toggle("on", !!S.deckNotes); notesBtn.setAttribute("aria-pressed", String(!!S.deckNotes)); notesTa.value = noteOwner()?.notes || ""; };
   notesBtn.onclick = () => { S.deckNotes = !S.deckNotes; saveSettings(); paintNotes(); };
+  // Design: choose the look yourself (design, fonts, slide transition, animation); it changes at once and stays with the chat
+  const dz = wrap.querySelector(".deck-design"), dzBtn = wrap.querySelector('[data-a="design"]');
+  const opt = (list, cur, name) => list.map((k) => `<option value="${k}"${k === cur ? " selected" : ""}>${(name ? name(k) : k).replace(/^./, (c) => c.toUpperCase())}</option>`).join("");
+  const paintDesign = () => {
+    const cur = deckAnim(d);
+    dz.innerHTML = `<div class="dz-themes">${Object.entries(DECK_THEMES).map(([k, t]) => `<button type="button" class="dz-th${k === d.theme ? " on" : ""}" data-th="${k}" title="${esc(t.about)}" style="--b:#${t.bg};--f:#${t.fg};--a:#${t.accent}"><i></i><span>${k}</span></button>`).join("")}</div>
+      <div class="dz-row"><label>Fonts<select data-k="fonts">${opt(Object.keys(DECK_FONTS), d.fonts || DECK_THEMES[d.theme]?.fonts, (k) => k + " · " + DECK_FONTS[k].about)}</select></label>
+      <label>Transition<select data-k="transition">${opt(DECK_TRANSITIONS, d.transition || "fade")}</select></label>
+      <label>Animation<select data-k="animation">${opt(["entrance", "build", "none"], cur.mode, (k) => ({ entrance: "everything comes in by itself", build: "points one per click", none: "no animation" })[k])}</select></label>
+      <label>Style<select data-k="animStyle">${opt(DECK_STYLES, cur.style)}</select></label></div>`;
+    dz.querySelectorAll("[data-th]").forEach((b) => (b.onclick = () => { d.theme = b.dataset.th; d.fonts = DECK_THEMES[d.theme].fonts; changed(); }));
+    dz.querySelectorAll("select").forEach((s) => (s.onchange = () => { d[s.dataset.k] = s.value; if (s.dataset.k === "transition") for (const x of d.slides) delete x.transition; changed(); }));
+  };
+  const changed = () => { saveChats(); paintDesign(); swapSlide(stage, d, b.idx, 1, { animate: true, preview: true }); };
+  dzBtn.onclick = () => { dz.hidden = !dz.hidden; dzBtn.classList.toggle("on", !dz.hidden); dzBtn.setAttribute("aria-pressed", String(!dz.hidden)); if (!dz.hidden) paintDesign(); };
   notesTa.oninput = () => { const o = noteOwner(); if (o) o.notes = notesTa.value; };
   notesTa.onchange = () => saveChats();
   const show = (dir) => { swapSlide(stage, d, b.idx, dir, { animate: !!dir, preview: true }); cnt.textContent = `${b.idx + 1} / ${total}`; paintNotes(); };
@@ -3428,6 +3489,14 @@ function presentDeck(d, start = 0) {
   document.addEventListener("fullscreenchange", function f() { if (!document.fullscreenElement) { document.removeEventListener("fullscreenchange", f); if (ov.isConnected) end(); } });
 }
 
+// a picture for a slide, made by the image model on the PC (base64 back, like a chat picture)
+async function slidePicture(model, prompt, [w, h]) {
+  const res = await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, prompt: prompt + ", high quality, detailed, beautiful light, no text, no letters, no watermark", stream: true, width: w, height: h }), signal: controller.signal });
+  let img = "";
+  await readNdjson(res, (j) => { if (j.error) throw new Error(j.error); img = j.image || j.images?.[0] || img; });
+  if (!img) throw new Error("no picture");
+  return { thumb: (/^\/9j\//.test(img) ? "data:image/jpeg;base64," : "data:image/png;base64,") + img, title: "Made by the AI", creator: "AI picture", license: model };
+}
 // photos: small JPEGs for the AI to look at, cropped ones for the PowerPoint file
 async function photoBitmap(url) {
   const r = await fetch(url);
@@ -3578,7 +3647,8 @@ async function makePptx(d) {
   const buf = await pptx.write({ outputType: "arraybuffer" });
   const { mode, style } = deckAnim(d);
   const TRX = { fade: "<p:fade/>", dissolve: "<p:dissolve/>", push: '<p:push dir="l"/>', wipe: '<p:wipe dir="r"/>', zoom: "<p:zoom/>", cover: '<p:cover dir="l"/>',
-    uncover: '<p:pull dir="l"/>', split: '<p:split orient="vert" dir="out"/>', circle: "<p:circle/>", flip: '<p:push dir="l"/>', cube: '<p:push dir="l"/>' };
+    uncover: '<p:pull dir="l"/>', split: '<p:split orient="vert" dir="out"/>', circle: "<p:circle/>", flip: '<p:push dir="l"/>', cube: '<p:push dir="l"/>',
+    lift: '<p:push dir="u"/>', drop: '<p:push dir="d"/>', spin: '<p:wheel spokes="1"/>', "zoom-out": '<p:zoom dir="out"/>', box: '<p:zoom dir="in"/>', glitch: '<p:randomBar dir="horz"/>' };
   if (!window.JSZip) await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js");
   const zip = await JSZip.loadAsync(buf);
   for (let n = 0; n < anims.length; n++) {
@@ -3610,7 +3680,10 @@ async function makePptx(d) {
         if (sty === "fly") return [2, 4, setVis(tgt) + mv(tgt, "ppt_x", "#ppt_x", "#ppt_x", 600) + mv(tgt, "ppt_y", "1+#ppt_h/2", "#ppt_y", 600)];
         if (sty === "wipe") return [22, 8, setVis(tgt) + fx(tgt, "wipe(left)", 600)];
         if (sty === "rise") return [10, 0, setVis(tgt) + fx(tgt, "fade", 600) + mv(tgt, "ppt_y", "#ppt_y+0.05", "#ppt_y", 700)];
-        if (sty === "zoom" || sty === "blur") { const k = sty === "zoom" ? "0.7" : "0.92"; return [10, 0, setVis(tgt) + fx(tgt, "fade", 600) + mv(tgt, "ppt_w", `#ppt_w*${k}`, "#ppt_w", 700) + mv(tgt, "ppt_h", `#ppt_h*${k}`, "#ppt_h", 700)]; }
+        if (sty === "drop") return [10, 0, setVis(tgt) + fx(tgt, "fade", 500) + mv(tgt, "ppt_y", "#ppt_y-0.12", "#ppt_y", 700)];
+        if (sty === "slide") return [10, 0, setVis(tgt) + fx(tgt, "fade", 500) + mv(tgt, "ppt_x", "#ppt_x-0.08", "#ppt_x", 700)];
+        if (sty === "tilt") return [10, 0, setVis(tgt) + fx(tgt, "fade", 500) + mv(tgt, "ppt_h", "#ppt_h*0.1", "#ppt_h", 700)];
+        if (sty === "zoom" || sty === "blur" || sty === "pop" || sty === "spin" || sty === "glow") { const k = sty === "zoom" ? "0.7" : sty === "pop" ? "0.3" : sty === "spin" ? "0.5" : "0.92"; return [10, 0, setVis(tgt) + fx(tgt, "fade", 600) + mv(tgt, "ppt_w", `#ppt_w*${k}`, "#ppt_w", 700) + mv(tgt, "ppt_h", `#ppt_h*${k}`, "#ppt_h", 700)]; }
         return [10, 0, setVis(tgt) + fx(tgt, "fade", 600)];
       };
       // click groups: a new one at each click; the slide's opening animations start by themselves
@@ -4891,16 +4964,17 @@ async function buildSlides(model, text) {
       theme: { type: "string", enum: Object.keys(DECK_THEMES) }, fonts: { type: "string", enum: Object.keys(DECK_FONTS) },
       transition: { type: "string", enum: DECK_TRANSITIONS }, animation: { type: "string", enum: ["entrance", "build", "none"] },
       anim_style: { type: "string", enum: DECK_STYLES },
-      cover: { type: "string" }, title_notes: { type: "string" },
+      cover: { type: "string" }, title_notes: { type: "string" }, pictures: { type: "string", enum: ["photos", "ai", "mine"] },
       slides: { type: "array", items: { type: "object", properties: {
         title: { type: "string" }, about: { type: "string" }, layout: { type: "string", enum: Object.keys(DECK_LAYOUTS) },
         image: { type: "string" }, transition: { type: "string", enum: ["default", ...DECK_TRANSITIONS] }, keep: { type: "integer" } }, required: ["title", "about", "layout", "image", "transition"] } } },
-      required: ["language", "title", "subtitle", "theme", "fonts", "transition", "animation", "anim_style", "cover", "title_notes", "slides"] };
+      required: ["language", "title", "subtitle", "theme", "fonts", "transition", "animation", "anim_style", "cover", "title_notes", "pictures", "slides"] };
     const plan = await run(sPlan, async () => {
       const sys = `You plan and design presentations. Reply only with JSON.
 - "language": the language the user's request is written in (for example English or German). Write all titles in that language.
-- Design, chosen to fit the topic and mood: "theme" is one of: ${themeList}. "fonts" is one of: ${fontList}. Motion: the presentation should feel alive and polished. "transition" is the main slide transition: fade or dissolve (calm), push, wipe, cover or uncover (clean), zoom, split or circle (energetic), flip or cube (playful, use sparingly). Each slide also has its own "transition": usually "default", but give section starts, the key message and the last slide a bolder one. "animation": "entrance" makes each slide's title, photo and points animate in by themselves, "build" brings the title in by itself and then each point on a click (great for talks and teaching), "none" only if the user asks for no animations. "anim_style": fade (calm), rise (smooth and modern), fly (energetic), zoom (punchy), wipe (graphic and clean) or blur (soft, cinematic).
+- Design, chosen to fit the topic and mood: "theme" is one of: ${themeList}. "fonts" is one of: ${fontList}. Motion: the presentation should feel alive and polished. "transition" is the main slide transition: fade or dissolve (calm), push, wipe, cover, uncover, lift or box (clean), zoom, zoom-out, drop, split or circle (energetic), flip, cube or spin (playful, use sparingly), glitch (techy, games and hacking only). Each slide also has its own "transition": usually "default", but give section starts, the key message and the last slide a bolder one. "animation": "entrance" makes each slide's title, photo and points animate in by themselves, "build" brings the title in by itself and then each point on a click (great for talks and teaching), "none" only if the user asks for no animations. "anim_style": fade (calm), rise (smooth and modern), slide (clean, from the left), fly (energetic), drop (from above, lively), zoom (punchy), pop (bouncy and playful), spin (fun), tilt (3D, flips up), wipe (graphic and clean), blur (soft, cinematic) or glow (bright and dreamy).
 - "cover": an English photo search query for a striking title-slide photo of something concrete (like "erupting volcano at night"), or "" if the topic is abstract.
+- "pictures": where the slides' pictures come from: "photos" (real photos from the web, the default), "ai" (pictures made by the AI: when the user asks for AI pictures, drawings or illustrations, or the topic is invented, a story or a fantasy world), or "mine" (the user attached pictures for the slides).
 - "title_notes": speaker notes for the title slide, in the presentation's language: 2 or 3 sentences the speaker says to open the talk (a greeting, what it is about and why it matters).
 - Plan 5 to 10 content slides (the title slide is added automatically, don't include it). Each slide has a short "title", "about" (one sentence: what it says) and a "layout":
 ${layoutList}
@@ -4956,12 +5030,20 @@ ${layoutList}
       return k >= 1 && k <= cands.length ? cands[k - 1] : null;
     };
     const tryPhoto = async (query, what) => { try { return await pickPhoto(query, what); } catch (e) { if (e.name === "AbortError") throw e; return null; } };
+    // where pictures come from: the user's own (attached to this message) first, then web photos, or pictures the image model makes
+    // ("ai", and for photo slides where no photo fits). Those are made at the end, after all the writing: only one model fits on
+    // the graphics card at a time, so the text model and the image model don't keep swapping.
+    const imgModel = pickImageModel(), wantAi = plan.pictures === "ai" && !!imgModel;
+    const ownPics = (current.messages.filter((m) => m.role === "user").at(-1)?.images || []).map((b64, k) => ({ thumb: (/^iVBOR/.test(b64) ? "data:image/png;base64," : "data:image/jpeg;base64,") + b64, title: "Your picture " + (k + 1), creator: "", license: "" }));
+    const aiLater = [];
 
     await run(sTitle, async () => {
       const same = prev && norm(prev.title) === norm(deck.title) && prev.coverPhoto;
       if (same) deck.coverPhoto = prev.coverPhoto;
+      else if (plan.pictures === "mine" && ownPics.length) deck.coverPhoto = ownPics.shift();
+      else if (plan.cover && wantAi) aiLater.push({ deck: true, prompt: String(plan.cover) });
       else if (plan.cover && imageSearchAvailable) { sTitle.sub = "Checking cover photos…"; redraw(); deck.coverPhoto = await tryPhoto(String(plan.cover), `the title slide of "${deck.title}"`); }
-      sTitle.sub = deck.coverPhoto ? "with a cover photo" : "";
+      sTitle.sub = deck.coverPhoto ? "with a cover photo" : aiLater.length ? "cover picture comes at the end" : "";
     });
 
     const outline = deck.slides.map((x, i) => `${i + 1}. ${x.title} (${x.layout || "bullets"})`).join("\n");
@@ -4970,8 +5052,12 @@ ${layoutList}
       await run(w.st, async () => {
         const sl = w.sl;
         if (DECK_LAYOUTS[sl.layout].photo) {
-          if (sl.image && imageSearchAvailable) { w.st.sub = "Checking photos…"; redraw(); sl.photo = await tryPhoto(sl.image, `"${sl.title}": ${sl.about}`); }
-          if (!sl.photo) sl.layout = "bullets";
+          if (ownPics.length) sl.photo = ownPics.shift();
+          else if (wantAi && sl.image) sl.aiPic = sl.image;
+          else if (sl.image && imageSearchAvailable) { w.st.sub = "Checking photos…"; redraw(); sl.photo = await tryPhoto(sl.image, `"${sl.title}": ${sl.about}`); }
+          if (!sl.photo && !sl.aiPic && sl.image && imgModel && S.deckAiPictures !== false) sl.aiPic = sl.image;   // no fitting photo: the image model makes one
+          if (!sl.photo && !sl.aiPic) sl.layout = "bullets";
+          if (sl.aiPic) aiLater.push({ sl, prompt: sl.aiPic });
         }
         const L = DECK_LAYOUTS[sl.layout];
         w.st.sub = "Writing…"; redraw();
@@ -4980,13 +5066,29 @@ ${layoutList}
         Object.assign(sl, cleanSlide(count(await askJSON(model, caps, [{ role: "system", content: sys }, { role: "user", content: user }], deckSlideSchema(sl.layout)))));
         if (sl.layout === "quote" && !(sl.quote && sl.by)) { delete sl.quote; delete sl.by; sl.layout = "statement"; }   // not sure of a real quote
         const shown = layoutOf(sl);
-        if (shown !== sl.layout) sl.layout = shown;
+        if (shown !== sl.layout && !sl.aiPic) sl.layout = shown;                        // a picture still to be made keeps its layout
         w.st.label = `${deck.slides.indexOf(sl) + 1}. ${sl.title}`;
-        w.st.sub = LAYOUT_NAMES[sl.layout] + (sl.photo ? " · photo checked" : DECK_LAYOUTS[w.planned]?.photo ? " · no fitting photo" : "");
+        w.st.sub = LAYOUT_NAMES[sl.layout] + (sl.photo ? (sl.photo.title.startsWith("Your picture") ? " · your picture" : " · photo checked") : sl.aiPic ? " · picture comes at the end" : DECK_LAYOUTS[w.planned]?.photo ? " · no fitting photo" : "");
         sl.ready = true;
       });
     }
-    await run(sFinish, async () => { for (const sl of deck.slides) delete sl.about; });
+    if (aiLater.length) {
+      const sPics = step(`Make ${aiLater.length} picture${aiLater.length === 1 ? "" : "s"} with ${imgModel}`);
+      block.steps.splice(block.steps.indexOf(sFinish), 0, block.steps.splice(block.steps.indexOf(sPics), 1)[0]);   // before "Put it together"
+      await run(sPics, async () => {
+        let n = 0;
+        for (const job of aiLater) {
+          sPics.sub = `${++n} of ${aiLater.length}…`; redraw();
+          const full = job.deck || job.sl.layout === "image-full";
+          const pic = await slidePicture(imgModel, job.prompt, full ? [1344, 768] : [896, 1024]).catch((e) => { if (e.name === "AbortError") throw e; return null; });
+          if (job.deck) { if (pic) deck.coverPhoto = pic; }
+          else { delete job.sl.aiPic; if (pic) job.sl.photo = pic; else job.sl.layout = "bullets"; }
+          redraw();
+        }
+        sPics.sub = `${aiLater.length} made on your PC`;
+      });
+    }
+    await run(sFinish, async () => { for (const sl of deck.slides) { delete sl.about; delete sl.aiPic; } });
     sFinish.sub = "Ready to present or download";
     sideSel = -1;
     finished = true;
@@ -6408,8 +6510,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.9";
+const APP_VERSION = "2026-10-26.10";
 const WHATS_NEW = [
+  ["2026-10-26.10", ["Slides: 10 new designs and 3 new font styles, and a Design button to restyle any presentation yourself", "Slides: 6 new animations (pop, drop, slide, tilt, spin, glow) and 6 new transitions (lift, drop, spin, zoom-out, box, glitch)", "Slides: pictures from your own photos (attach them), from the web, or made by your image model"]],
   ["2026-10-26.9", ["Two new themes in Settings → Appearance: Aurora (northern lights that bend toward your pointer) and Lagoon (water you can draw ripples into; click for a big wave)"]],
   ["2026-10-26.8", ["Save several connections (PCs, codes, their power settings) in Settings → Connection and switch with one click; signed in, they come with your account (codes only inside your encrypted vault)"]],
   ["2026-10-26.7", ["Now and then a nebula drifts through the night sky (dark mode)", "Jarvis' live screen can be 1080p (the picture-size menu next to Live)", "When the PC is locked: unlock it from here with Chrome Remote Desktop", "The AI gets a plain list of the app's tools"]],
