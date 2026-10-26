@@ -56,6 +56,9 @@ body {
   padding: calc(12px + var(--st)) calc(12px + var(--sr)) calc(12px + var(--sb)) calc(12px + var(--sl));
   overflow: hidden; -webkit-font-smoothing: antialiased; position: relative;
 }
+/* Aurora and Lagoon: the dark and the light look with their own scene behind the glass (scenes.js) */
+html[data-scene="aurora"]:not(.effort-max) { --bg: #030912; --blob-a: rgba(60,230,170,.22); --blob-b: rgba(120,90,255,.2); --blob-c: rgba(40,200,255,.08); --blob-d: rgba(60,230,170,.12); --accent: #2FD39B; --accent-soft: rgba(47,211,155,.16); --link: #5FE3B4; --bubble: #1FB985; }
+html[data-scene="lagoon"]:not(.effort-max) { --bg: #D9F3F6; --blob-a: rgba(0,170,200,.24); --blob-b: rgba(0,120,190,.16); --blob-c: rgba(255,255,255,.9); --blob-d: rgba(0,200,190,.18); --accent: #008FB3; --accent-soft: rgba(0,143,179,.12); --link: #00789A; --bubble: #0896B8; }
 /* Max thinking: the background turns red, light or dark (the moving background shows red embers then, see skyFrame) */
 html.effort-max:not([data-theme="dark"]) { --bg: #FFE4E1; --blob-a: rgba(255,59,48,.34); --blob-b: rgba(255,120,70,.24); --blob-c: rgba(255,255,255,.9); --blob-d: rgba(255,45,85,.2); }
 html.effort-max[data-theme="dark"] { --bg: #150205; --blob-a: rgba(255,40,40,.36); --blob-b: rgba(255,100,40,.22); --blob-c: rgba(255,60,60,.1); --blob-d: rgba(210,20,45,.26); }
@@ -1799,7 +1802,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 
         <!-- Appearance -->
         <section class="pane" data-pane="appearance">
-          <div class="field"><label for="theme">Theme</label><select id="theme"><option value="light">White</option><option value="dark">Navy</option><option value="system">Match system</option></select></div>
+          <div class="field"><label for="theme">Theme</label><select id="theme"><option value="light">White</option><option value="dark">Navy</option><option value="aurora">Aurora (dark, northern lights)</option><option value="lagoon">Lagoon (light, water)</option><option value="system">Match system</option></select></div>
           <div class="field"><label>Text size</label><div class="range-row"><input type="range" id="fontSize" min="13" max="20" step="1"><output></output></div></div>
           <label class="check"><span>Liquid glass<small>Panels bend what is behind their edge like glass (from liqui.design). Needs a Chromium browser like Chrome, Edge or Opera for the bending; others get frosted glass.</small></span><input type="checkbox" class="switch" id="glassOn"></label>
           <label class="check"><span>Moving background<small>Slowly turning lights behind the app that move away from your pointer: stars at night (dark), soft blue lights by day (light), red embers while the AI thinks at Max.</small></span><input type="checkbox" class="switch" id="starsOn"></label>
@@ -1981,6 +1984,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 
 <script src="orb.js"></script>
 <script src="starfield.js"></script>
+<script src="scenes.js"></script>
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
 <script src="notes.js"></script>
@@ -5249,8 +5253,11 @@ function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.h
 function slug(s) { return (s || "chat").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "chat"; }
 
 function applyAppearance() {
-  const theme = S.theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : S.theme;
+  // Aurora and Lagoon are the dark and the light look with their own moving scene (scenes.js) and a few colours of their own
+  const scene = S.theme === "aurora" || S.theme === "lagoon" ? S.theme : "";
+  const theme = S.theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : S.theme === "aurora" ? "dark" : S.theme === "lagoon" ? "light" : S.theme;
   document.documentElement.dataset.theme = theme;
+  if (scene) document.documentElement.dataset.scene = scene; else delete document.documentElement.dataset.scene;
   document.documentElement.style.setProperty("--font-size", S.fontSize + "px");
   document.body.classList.toggle("compact", S.compact);
   $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
@@ -5417,17 +5424,20 @@ $$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d 
 // the night sky behind the app (a canvas of stars, see starfield.js)
 const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), { count: Math.round(Math.min(900, Math.max(350, innerWidth * innerHeight / 2400))) }) : null;
 let skyOn = false;
+const appScenes = {};                                 // the Aurora and Lagoon scenes, made when first shown
 function skyFrame(t) {
   if (!appSky || S.stars === false || document.hidden) { skyOn = false; if (appSky && S.stars === false) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); } return; }
   // dark: the night sky; light: daytime lights; Max thinking: red embers rising slowly, in both themes
-  const root = document.documentElement, dark = root.dataset.theme === "dark", max = root.classList.contains("effort-max");
-  appSky.draw(t, max ? { palette: "ember", alpha: dark ? .95 : .8, flow: .025 } : dark ? { palette: "night", alpha: .9 } : { palette: "day", alpha: 1 });
+  const root = document.documentElement, dark = root.dataset.theme === "dark", max = root.classList.contains("effort-max"), scene = !max && root.dataset.scene;
+  if (scene && window.createScene) { (appScenes[scene] = appScenes[scene] || createScene($("#sky"), scene)).draw(t, { alpha: 1 }); }
+  else appSky.draw(t, max ? { palette: "ember", alpha: dark ? .95 : .8, flow: .025 } : dark ? { palette: "night", alpha: .9 } : { palette: "day", alpha: 1 });
   requestAnimationFrame(skyFrame);
 }
 function startSky() { if (appSky && S.stars !== false && !skyOn) { skyOn = true; requestAnimationFrame(skyFrame); } }
-addEventListener("resize", () => appSky && appSky.resize());
-addEventListener("pointermove", (e) => appSky && appSky.pointer(e.clientX, e.clientY), { passive: true });
-document.documentElement.addEventListener("pointerleave", () => appSky && appSky.pointer(null));
+addEventListener("resize", () => { appSky && appSky.resize(); for (const s of Object.values(appScenes)) s.resize(); });
+addEventListener("pointermove", (e) => { appSky && appSky.pointer(e.clientX, e.clientY); for (const s of Object.values(appScenes)) s.pointer(e.clientX, e.clientY); }, { passive: true });
+addEventListener("pointerdown", (e) => { const s = appScenes[document.documentElement.dataset.scene]; if (s) s.click(e.clientX, e.clientY); }, { passive: true });
+document.documentElement.addEventListener("pointerleave", () => { appSky && appSky.pointer(null); for (const s of Object.values(appScenes)) s.pointer(null); });
 document.addEventListener("visibilitychange", startSky);
 $("#starsOn").onchange = (e) => { S.stars = e.target.checked; saveSettings(); startSky(); };
 $("#glassOn").onchange = (e) => { S.glass = e.target.checked; saveSettings(); window.LiquidGlass && LiquidGlass.setEnabled(S.glass); };
@@ -6398,8 +6408,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.8";
+const APP_VERSION = "2026-10-26.9";
 const WHATS_NEW = [
+  ["2026-10-26.9", ["Two new themes in Settings → Appearance: Aurora (northern lights that bend toward your pointer) and Lagoon (water you can draw ripples into; click for a big wave)"]],
   ["2026-10-26.8", ["Save several connections (PCs, codes, their power settings) in Settings → Connection and switch with one click; signed in, they come with your account (codes only inside your encrypted vault)"]],
   ["2026-10-26.7", ["Now and then a nebula drifts through the night sky (dark mode)", "Jarvis' live screen can be 1080p (the picture-size menu next to Live)", "When the PC is locked: unlock it from here with Chrome Remote Desktop", "The AI gets a plain list of the app's tools"]],
   ["2026-10-26.6", ["Mail tab: your inbox and sent mail, with an AI that explains a mail, sums it up, says what to do, translates or drafts the reply", "Several mail accounts: add more in Mail → Accounts and pick which one sends", "The Agent can use every account, and look in sent mail"]],
