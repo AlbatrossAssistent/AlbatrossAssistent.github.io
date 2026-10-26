@@ -776,6 +776,57 @@ body.notes-view .messages, body.notes-view .composer, body.notes-view #home, bod
 .np-list { display: flex; flex-direction: column; gap: 10px; }
 .toast.has-act { pointer-events: auto; }
 .toast-act { margin-left: 10px; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 650; cursor: pointer; padding: 0; }
+/* ---------- the Mail tab (mail.js) ---------- */
+body:not(.mail-view) #mailPage { display: none; }
+body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.mail-view #jarvis, body.mail-view #pcPage, body.mail-view #agentPage, body.mail-view #notesPage, body.mail-view #typeBadge, body.mail-view #model { display: none !important; }
+#mailPage { flex: 1; min-height: 0; display: flex; position: relative; }
+.mail-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 4px 4px 0; }
+.mail-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mail-bar select { max-width: 260px; }
+.mail-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 12px; }
+.mail-list, .mail-read { min-height: 0; overflow-y: auto; border-radius: 22px; background-color: var(--glass); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi); }
+.mail-list { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.ml-item { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; text-align: left; padding: 9px 12px; border-radius: 14px; border: 1px solid transparent; background: none; color: var(--fg); font: inherit; cursor: pointer; }
+.ml-item:hover { background-color: var(--btn-glass); }
+.ml-item.on { background-color: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.ml-item .who { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-item .when { font-size: 12px; color: var(--muted); }
+.ml-item .subj { grid-column: 1 / -1; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-item.unread .who { font-weight: 700; } .ml-item.unread .subj { color: var(--fg); }
+.ml-item.unread .who::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 7px; vertical-align: 1px; }
+.ml-more { margin: 8px auto; }
+.mail-read { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.ml-back { display: none; align-self: flex-start; }
+.ml-head h2, .mail-read > h2 { margin: 0 0 6px; font-size: 20px; line-height: 1.25; }
+.ml-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+.ml-meta .from { color: var(--fg); font-weight: 600; }
+.ml-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.55; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--fg) 4%, transparent); max-height: 46vh; overflow-y: auto; }
+.ml-ai { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 18px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+.ml-ai-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ml-ask { display: flex; gap: 6px; }
+.ml-ask input, .mc-ai input, .mc-row input, .mc-row select, .ml-compose textarea, .ml-form input { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, var(--bg)); border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent); border-radius: 12px; padding: 8px 11px; }
+.ml-ai-out:empty { display: none; }
+.ml-ai-out { font-size: 14.5px; }
+.ml-wait { color: var(--muted); }
+.ml-accts { display: flex; flex-direction: column; gap: 6px; }
+.ml-acct { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 14px; background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.ml-acct .ad { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ml-form { display: grid; grid-template-columns: 1fr 110px; gap: 8px 10px; }
+.ml-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.ml-form label:nth-child(1), .ml-form label:nth-child(2) { grid-column: 1 / -1; }
+.mail-read h3 { margin: 6px 0 0; font-size: 15px; }
+.ml-compose { position: absolute; right: 8px; bottom: 8px; z-index: 30; width: min(560px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 24px;
+  background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 24px 70px rgba(10,15,40,.25); }
+.mc-head { display: flex; align-items: center; } .mc-head b { font-size: 16px; }
+.mc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); } .mc-row span { width: 58px; flex: none; }
+.ml-compose textarea { resize: vertical; min-height: 160px; line-height: 1.5; }
+.mc-ai { display: flex; gap: 6px; }
+.mc-foot { display: flex; align-items: center; gap: 8px; } .mc-status { font-size: 13px; color: var(--muted); }
+@media (max-width: 820px) {
+  .mail-panes { grid-template-columns: 1fr; }
+  #mailPage:not(.reading) .mail-read, #mailPage.reading .mail-list { display: none; }
+  .ml-back { display: inline-flex; }
+}
 /* what's new after an update, and "a new version is ready" */
 .update-pop { position: fixed; right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); z-index: 260; width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; border-radius: 22px; color: var(--fg);
   background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 22px 60px rgba(10,15,40,.25);
@@ -1414,6 +1465,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
       <button class="side-btn" id="goHome"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Home</button>
       <button class="side-btn" id="goJarvis"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/></svg>Jarvis</button>
       <button class="side-btn" id="goNotes"><svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>Notes</button>
+      <button class="side-btn" id="goMail"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>Mail</button>
       <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
       <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" type="search" placeholder="Search chats" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore></div>
     </div>
@@ -1484,6 +1536,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
     <div class="bv-foot" id="bvFoot" hidden></div>
   </div>
   <div id="notesPage"></div>
+  <div id="mailPage"></div>
   <div id="agentPage">
     <div class="home-inner">
       <div class="home-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><h1>Agent</h1><p>Give it a goal. It makes a plan, then works on your PC.</p></div>
@@ -1918,6 +1971,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
 <script src="notes.js"></script>
+<script src="mail.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
 <script>
@@ -5354,9 +5408,12 @@ function setView(v, opt) {
   document.body.classList.toggle("agent-view", v === "agent");
   document.body.classList.toggle("browser-view", v === "browser");
   document.body.classList.toggle("notes-view", v === "notes");
+  document.body.classList.toggle("mail-view", v === "mail");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   $("#goNotes").classList.toggle("on", v === "notes");
+  $("#goMail").classList.toggle("on", v === "mail");
+  if (v === "mail") window.mailOpen && window.mailOpen(opt);
   if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
   if (v === "pc") pcOpen(opt && opt.tab); else pcClose();
@@ -5388,6 +5445,7 @@ function renderHome() {
     ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
     ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
+    ["mail", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>', "Mail", "Your accounts, with an AI that explains and answers"],
     ["notes", '<svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>', "Notes", "Lists, to-dos and thoughts"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
   ];
@@ -5412,6 +5470,7 @@ function renderHome() {
     else if (g === "jarvis") setView("jarvis");
     else if (g === "agent") setView("agent");
     else if (g === "notes") setView("notes");
+    else if (g === "mail") setView("mail");
     else if (g === "browser") setView("browser");
     else if (g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
@@ -6269,8 +6328,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.5";
+const APP_VERSION = "2026-10-26.6";
 const WHATS_NEW = [
+  ["2026-10-26.6", ["Mail tab: your inbox and sent mail, with an AI that explains a mail, sums it up, says what to do, translates or drafts the reply", "Several mail accounts: add more in Mail → Accounts and pick which one sends", "The Agent can use every account, and look in sent mail"]],
   ["2026-10-26.5", ["Notes: yellow sticky notes in their own tab, with bullets, numbers, checklists, a/b/c, Roman numerals, priorities or plain text", "Pinned notes show when Albatross opens", "Ask the AI: “put milk on my shopping list”, “what is on my to-do list?”"]],
   ["2026-10-26.4", ["Light mode has a moving background too: soft blue lights that move away from your pointer", "Thinking at Max turns the background red, with glowing embers, in light and dark"]],
   ["2026-10-26.3", ["Pop-ups like this one when Albatross was updated, and when a newer version is ready while it's open"]],

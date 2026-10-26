@@ -23,7 +23,21 @@ async function protect(pw) {
 async function unprotect(enc) {
   return ps("$s = ConvertTo-SecureString $env:AP_ENC; [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))", { AP_ENC: enc });
 }
-function loadCfg() { try { return JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { return null; } }
+// mail.json holds { accounts: [account, ...] }; the first is used when a request doesn't name one. (Before there could be
+// several, the file was one account by itself: that is read as a list of one.)
+function loadAll() {
+  let j = null; try { j = JSON.parse(fs.readFileSync(FILE, "utf8")); } catch {}
+  if (!j) return [];
+  if (Array.isArray(j.accounts)) return j.accounts;
+  return j.user ? [j] : [];
+}
+function saveAll(list) { fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.writeFileSync(FILE, JSON.stringify({ accounts: list }, null, 2)); }
+const sameUser = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+function pick(list, account) {
+  if (!list.length) return null;
+  if (!account) return list[0];
+  return list.find((c) => sameUser(c.user, account)) || null;
+}
 async function secret(cfg) { return cfg.pw ? cfg.pw : unprotect(cfg.enc); }       // cfg.pw only ever exists inside tests
 
 // ---------- text helpers ----------
@@ -102,46 +116,80 @@ async function imapOpen(cfg) {
       else text += l + "\n";
     }
   };
-  return { run, close: () => { try { L.write(`A${++n} LOGOUT\r\n`); s.end(); } catch {} } };
+  // APPEND sends the message as a literal after the server's "+ go ahead"
+  const append = async (box, msg) => {
+    const tag = "A" + ++n, data = Buffer.from(msg, "utf8").toString("latin1");
+    L.write(`${tag} APPEND ${q(box)} (\\Seen) {${Buffer.byteLength(msg, "utf8")}}\r\n`);
+    for (;;) { const l = await L.line(); if (l.startsWith("+")) break; if (l.startsWith(tag + " ")) throw new Error(l.slice(tag.length + 1, 200)); }
+    L.write(data + "\r\n");
+    for (;;) { const l = await L.line(); if (l.startsWith(tag + " ")) { if (!/^\S+ OK/i.test(l)) throw new Error(l.slice(tag.length + 1, 200)); return; } }
+  };
+  return { run, append, close: () => { try { L.write(`A${++n} LOGOUT\r\n`); s.end(); } catch {} } };
 }
-async function imapSession(cfg, fn) {
+// the folder sent mail goes to: the one the server marks \Sent, else one of the usual names
+const SENT_NAMES = ["Sent", "Sent Items", "Sent Messages", "Sent Mail", "[Gmail]/Sent Mail", "[Google Mail]/Gesendet", "INBOX.Sent", "INBOX/Sent", "Gesendet", "Gesendete Objekte", "Gesendete Elemente", "Gesendete Nachrichten", "Envoyés", "Enviados", "Inviata"];
+async function sentBox(c) {
+  const r = await c.run('LIST "" "*"');
+  const boxes = [...r.text.matchAll(/^\* LIST \(([^)]*)\) (?:"[^"]*"|NIL) (?:"((?:[^"\\]|\\.)*)"|(\S+))$/gm)].map((m) => ({ flags: m[1], name: (m[2] ?? m[3]).replace(/\\(.)/g, "$1") }));
+  const marked = boxes.find((b) => /\\Sent\b/i.test(b.flags));
+  if (marked) return marked.name;
+  for (const n of SENT_NAMES) { const b = boxes.find((x) => x.name.toLowerCase() === n.toLowerCase()); if (b) return b.name; }
+  return "";
+}
+async function imapSession(cfg, fn, folder) {
   const pw = await secret(cfg), c = await imapOpen(cfg);
-  try { await c.run(`LOGIN ${q(cfg.user)} ${q(pw)}`, true); await c.run("SELECT INBOX"); return await fn(c); } finally { c.close(); }
+  try {
+    await c.run(`LOGIN ${q(cfg.user)} ${q(pw)}`, true);
+    let sel = null;
+    if (folder === "sent") { const box = await sentBox(c); if (!box) throw new Error("This mail account has no Sent folder."); sel = await c.run(`SELECT ${q(box)}`); }
+    else if (folder !== "none") sel = await c.run("SELECT INBOX");
+    if (sel) c.exists = Number((/\* (\d+) EXISTS/.exec(sel.text) || [])[1] || 0);
+    return await fn(c);
+  } finally { c.close(); }
 }
 const lit = (r, text, nth) => { const m = [...text.matchAll(/\u0000(\d+)\u0000/g)][nth || 0]; return m ? r.lits[Number(m[1])] : ""; };
 
-async function list(cfg, { unread = false, count = 10 } = {}) {
-  count = Math.max(1, Math.min(30, Number(count) || 10));
+// folder: "inbox" or "sent"; page 0 = the newest `count` messages, page 1 the ones before them, ...
+async function list(cfg, { unread = false, count = 10, folder = "inbox", page = 0 } = {}) {
+  count = Math.max(1, Math.min(50, Number(count) || 10)); page = Math.max(0, Number(page) || 0);
+  folder = folder === "sent" ? "sent" : "inbox";
   return imapSession(cfg, async (c) => {
-    let set;
-    if (unread) { const r = await c.run("UID SEARCH UNSEEN"); const ids = ((/SEARCH ([\d ]*)/.exec(r.text) || [])[1] || "").trim().split(/\s+/).filter(Boolean); if (!ids.length) return { messages: [], total: 0 }; set = ids.slice(-count).join(","); }
-    else { const ex = await c.run("NOOP"); const n = Number((/\* (\d+) EXISTS/.exec(ex.text) || [])[1] || 0); const st = await c.run("STATUS INBOX (MESSAGES)"); const total = Number((/MESSAGES (\d+)/.exec(st.text) || [])[1] || n); if (!total) return { messages: [], total: 0 }; const r = await c.run(`FETCH ${Math.max(1, total - count + 1)}:${total} (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])`); return parseList(r, total); }
-    const r = await c.run(`UID FETCH ${set} (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])`);
-    return parseList(r, null);
-  });
+    const FIELDS = "(UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE)])";
+    if (unread) {
+      const r = await c.run("UID SEARCH UNSEEN"); const ids = ((/SEARCH ([\d ]*)/.exec(r.text) || [])[1] || "").trim().split(/\s+/).filter(Boolean);
+      if (!ids.length) return { messages: [], total: 0 };
+      return parseList(await c.run(`UID FETCH ${ids.slice(-count).join(",")} ${FIELDS}`), ids.length);
+    }
+    const total = c.exists || 0, hi = total - page * count;
+    if (hi < 1) return { messages: [], total };
+    return parseList(await c.run(`FETCH ${Math.max(1, hi - count + 1)}:${hi} ${FIELDS}`), total);
+  }, folder);
 }
 function parseList(r, total) {
   const msgs = [];
   for (const blk of r.text.split(/^\* \d+ FETCH /m).slice(1)) {
     const uid = (/UID (\d+)/.exec(blk) || [])[1], flags = (/FLAGS \(([^)]*)\)/.exec(blk) || [])[1] || "";
     const h = headerMap(Buffer.from(lit(r, blk, 0), "latin1").toString("latin1"));
-    msgs.push({ id: uid, from: words(h.from), subject: words(h.subject), date: h.date || "", unread: !/\\Seen/i.test(flags) });
+    msgs.push({ id: uid, from: words(h.from), to: words(h.to), subject: words(h.subject), date: h.date || "", unread: !/\\Seen/i.test(flags) });
   }
   return { messages: msgs.reverse(), total: total == null ? msgs.length : total };
 }
-async function readOne(cfg, id) {
+async function readOne(cfg, id, { folder = "inbox", seen = false } = {}) {
   if (!/^\d+$/.test(String(id))) throw new Error("Bad message id");
   return imapSession(cfg, async (c) => {
     const r = await c.run(`UID FETCH ${id} (BODY.PEEK[HEADER] BODY.PEEK[TEXT]<0.60000>)`);
     const head = lit(r, r.text, 0), body = lit(r, r.text, 1);
     if (!head) throw new Error("No such message");
+    if (seen) await c.run(`UID STORE ${id} +FLAGS.SILENT (\\Seen)`).catch(() => {});   // opened in the Mail tab: it counts as read
     const h = headerMap(head);
-    return { id: String(id), from: words(h.from), to: words(h.to), subject: words(h.subject), date: h.date || "", text: bodyText(head, body).slice(0, 12000) };
-  });
+    return { id: String(id), from: words(h.from), to: words(h.to), cc: words(h.cc || ""), subject: words(h.subject), date: h.date || "", messageId: h["message-id"] || "", text: bodyText(head, body).slice(0, 12000) };
+  }, folder === "sent" ? "sent" : "inbox");
 }
 
 // ---------- SMTP ----------
-async function smtpSend(cfg, { to, subject, text }) {
+// Gmail and Outlook keep a copy of what goes out through SMTP by themselves; elsewhere it is put into the Sent folder here
+const SAVES_SENT_ITSELF = /(^|\.)(gmail\.com|googlemail\.com|office365\.com|outlook\.com|hotmail\.com|live\.com)$/i;
+async function smtpSend(cfg, { to, subject, text, inReplyTo }) {
   const rcpt = String(to || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean);
   if (!rcpt.length || rcpt.length > 10 || rcpt.some((a) => !/^[^\s<>@,;"]+@[^\s<>@,;"]+\.[^\s<>@,;"]+$/.test(a))) throw new Error("Check the recipient address.");
   const pw = await secret(cfg), mode = cfg.smtpMode || (Number(cfg.smtpPort) === 587 ? "starttls" : "tls");
@@ -162,19 +210,28 @@ async function smtpSend(cfg, { to, subject, text }) {
   for (const a of rcpt) await cmd(`RCPT TO:<${a}>`, "250|251");
   await cmd("DATA", "354");
   const enc = (t) => (/^[\x20-\x7e]*$/.test(t) ? t : "=?utf-8?B?" + Buffer.from(t, "utf8").toString("base64") + "?=");
-  const msg = [`From: ${from}`, `To: ${rcpt.join(", ")}`, `Subject: ${enc(String(subject || "").replace(/[\r\n]+/g, " ").slice(0, 200))}`, `Date: ${new Date().toUTCString()}`, `Message-ID: <${crypto.randomBytes(12).toString("hex")}@albatross.local>`, "MIME-Version: 1.0", "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", Buffer.from(String(text || ""), "utf8").toString("base64").replace(/.{1,76}/g, "$&\r\n")].join("\r\n");
+  const ref = /^<[^<>\s]+>$/.test(String(inReplyTo || "").trim()) ? String(inReplyTo).trim() : "";   // a reply stays in its thread
+  const msg = [`From: ${from}`, `To: ${rcpt.join(", ")}`, `Subject: ${enc(String(subject || "").replace(/[\r\n]+/g, " ").slice(0, 200))}`, `Date: ${new Date().toUTCString()}`, `Message-ID: <${crypto.randomBytes(12).toString("hex")}@albatross.local>`, ...(ref ? [`In-Reply-To: ${ref}`, `References: ${ref}`] : []), "MIME-Version: 1.0", "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", Buffer.from(String(text || ""), "utf8").toString("base64").replace(/.{1,76}/g, "$&\r\n")].join("\r\n");
   L.write(msg.replace(/\r\n\./g, "\r\n..") + "\r\n.\r\n");
   const done = await reply(); if (done.code !== "250") throw new Error("The mail server didn't accept the message: " + done.text.trim().slice(0, 160));
   try { L.write("QUIT\r\n"); s.end(); } catch {}
-  return { sent: true, to: rcpt };
+  let savedToSent = SAVES_SENT_ITSELF.test(cfg.smtpHost || "");
+  if (!savedToSent) { try { await imapSession(cfg, async (c) => { const box = await sentBox(c); if (box) { await c.append(box, msg); savedToSent = true; } }, "none"); } catch {} }
+  return { sent: true, to: rcpt, savedToSent };
 }
 
 async function handle(method, p, body, note) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   try {
-    const cfg = loadCfg();
-    if (p === "/agent/mail/status") return [200, { configured: !!cfg, user: cfg ? cfg.user : "", imapHost: cfg ? cfg.imapHost : "", smtpHost: cfg ? cfg.smtpHost : "" }];
-    if (p === "/agent/mail/forget") { try { fs.unlinkSync(FILE); } catch {} note("Mail: account removed"); return [200, { ok: true }]; }
+    // several accounts: requests name one with "account" (its address); without it, the first one is used
+    const all = loadAll(), cfg = pick(all, j.account);
+    if (p === "/agent/mail/status") return [200, { configured: all.length > 0, user: all[0] ? all[0].user : "", imapHost: all[0] ? all[0].imapHost : "", smtpHost: all[0] ? all[0].smtpHost : "", accounts: all.map((c, i) => ({ user: c.user, imapHost: c.imapHost, smtpHost: c.smtpHost, canSend: !!c.smtpHost, main: i === 0 })) }];
+    if (p === "/agent/mail/forget") {
+      const keep = j.account ? all.filter((c) => !sameUser(c.user, j.account)) : [];
+      if (keep.length) saveAll(keep); else { try { fs.unlinkSync(FILE); } catch {} }
+      note(`Mail: ${j.account ? "account " + j.account : "accounts"} removed`); return [200, { ok: true }];
+    }
+    if (p === "/agent/mail/main") { const i = all.findIndex((c) => sameUser(c.user, j.account)); if (i < 0) return [404, { error: "No such account" }]; all.unshift(all.splice(i, 1)[0]); saveAll(all); return [200, { ok: true }]; }
     if (p === "/agent/mail/setup") {
       const c = { imapHost: String(j.imapHost || "").trim(), imapPort: Number(j.imapPort) || 993, smtpHost: String(j.smtpHost || "").trim(), smtpPort: Number(j.smtpPort) || 465, user: String(j.user || "").trim(), from: String(j.from || j.user || "").trim() };
       if (j.imapMode) c.imapMode = j.imapMode; if (j.smtpMode) c.smtpMode = j.smtpMode;
@@ -182,14 +239,16 @@ async function handle(method, p, body, note) {
       if (!/^[\w.-]+$/.test(c.imapHost) || (c.smtpHost && !/^[\w.-]+$/.test(c.smtpHost))) return [400, { error: "That doesn't look like a server name." }];
       await imapSession({ ...c, pw: String(j.password) }, async () => 1);            // does it sign in?
       c.enc = await protect(String(j.password));
-      fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(c, null, 2));
+      const i = all.findIndex((x) => sameUser(x.user, c.user));                  // the same address again: its settings are replaced
+      if (i >= 0) all[i] = c; else all.push(c);
+      saveAll(all);
       note(`Mail: account ${c.user} set up`);
-      return [200, { ok: true, user: c.user }];
+      return [200, { ok: true, user: c.user, accounts: all.length }];
     }
-    if (!cfg) return [409, { error: "Mail isn't set up yet. Open the Agent tab → Mail to add your account." }];
-    if (p === "/agent/mail/list") return [200, await list(cfg, j)];
-    if (p === "/agent/mail/read") return [200, await readOne(cfg, j.id)];
-    if (p === "/agent/mail/send") { if (!cfg.smtpHost) return [409, { error: "No outgoing mail server is set up." }]; const r = await smtpSend(cfg, j); note(`Mail: sent a message to ${r.to.join(", ")}`); return [200, r]; }
+    if (!cfg) return [409, { error: all.length ? `There is no mail account ${j.account} on this PC.` : "Mail isn't set up yet. Open the Mail tab to add your account." }];
+    if (p === "/agent/mail/list") return [200, { account: cfg.user, ...(await list(cfg, j)) }];
+    if (p === "/agent/mail/read") return [200, { account: cfg.user, ...(await readOne(cfg, j.id, { folder: j.folder, seen: !!j.seen })) }];
+    if (p === "/agent/mail/send") { if (!cfg.smtpHost) return [409, { error: "No outgoing mail server is set up for " + cfg.user + "." }]; const r = await smtpSend(cfg, j); note(`Mail: sent a message from ${cfg.user} to ${r.to.join(", ")}`); return [200, { account: cfg.user, ...r }]; }
   } catch (e) { return [400, { error: e.message }]; }
   return [404, { error: "Unknown mail request" }];
 }
