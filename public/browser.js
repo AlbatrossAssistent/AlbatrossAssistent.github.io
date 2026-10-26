@@ -430,6 +430,22 @@ $("#cpSrc").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); cpRun(); }
 });
 cpTabs();
+// full screen: the browser page covers everything; where the browser allows it, it also really goes full screen (no tabs, no bars)
+function bvFullSet(on) {
+  const page = $("#browserPage"), d = document;
+  // while full screen the page sits directly in <body>: a parent with glass (backdrop-filter) would hold a fixed element inside itself
+  if (on && page.parentNode !== d.body) { bvFullSet.home = [page.parentNode, page.nextSibling]; d.body.appendChild(page); }
+  if (!on && bvFullSet.home) { const [p, n] = bvFullSet.home; bvFullSet.home = null; if (p && p.isConnected) p.insertBefore(page, n && n.parentNode === p ? n : null); }
+  page.classList.toggle("bv-fs", on); $("#bvFull").classList.toggle("on", on); $("#bvFull").setAttribute("aria-pressed", String(on));
+  $("#bvFull").title = on ? "Leave full screen (Esc)" : "Full screen";
+  if (on) { const req = page.requestFullscreen || page.webkitRequestFullscreen; if (req) try { const p = req.call(page); if (p && p.catch) p.catch(() => {}); } catch {} }
+  else if ((d.fullscreenElement || d.webkitFullscreenElement) === page) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+}
+// in the side panel the glass around it would hold it in: the Browser page opens first
+$("#bvFull").onclick = () => { const on = !$("#browserPage").classList.contains("bv-fs"); if (on && inSide()) setView("browser"); bvFullSet(on); };
+const bvFsLeft = () => { const d = document; if (!(d.fullscreenElement || d.webkitFullscreenElement) && $("#browserPage").classList.contains("bv-fs") && bvFullSet.real) bvFullSet(false); bvFullSet.real = !!(d.fullscreenElement || d.webkitFullscreenElement); };
+document.addEventListener("fullscreenchange", bvFsLeft); document.addEventListener("webkitfullscreenchange", bvFsLeft);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#browserPage").classList.contains("bv-fs") && document.activeElement !== $("#bvScreen")) bvFullSet(false); });
 $("#spClose").onclick = () => window.sideClose();
 $("#spFull").onclick = () => { const tab = $("#sidePanel").dataset.tab; setView(tab === "agent" ? "agent" : "browser"); };
 $("#sideBtn").onclick = () => ($("#sidePanel").hidden ? window.sideOpen() : window.sideClose());

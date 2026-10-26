@@ -860,6 +860,9 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
 .nf-grid { columns: 300px; column-gap: 18px; }
 .notes-full .note.paper-yellow { --np: #FFFBE6; --np2: #FFF6C9; }
 .notes-full .note { box-shadow: 0 1px 1px rgba(0,0,0,.05), 0 14px 30px -10px rgba(110,85,0,.45); }
+/* the Browser full screen: over everything (also where the browser can't go full screen itself, like Safari on iPhone) */
+#browserPage.bv-fs { position: fixed !important; inset: 0; z-index: 340; margin: 0; border-radius: 0; background: var(--bg); padding: calc(6px + var(--st)) calc(6px + var(--sr)) calc(6px + var(--sb)) calc(6px + var(--sl)); display: flex !important; flex-direction: column; }
+#bvFull.on { color: var(--accent); }
 /* Jarvis full screen */
 .jv-full { position: fixed; inset: 0; z-index: 350; background: #000; display: flex; align-items: center; justify-content: center; }
 .jv-full[hidden] { display: none; }
@@ -1610,6 +1613,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
       <form id="bvForm" class="bv-addr" autocomplete="off"><input id="bvUrl" type="text" inputmode="url" autocomplete="off" name="albatross-address" placeholder="Search or type a web address" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go"></form>
       <button class="icon-btn" id="bvPriv" type="button" title="Private: nothing is saved (no history, cookies or logins)" aria-label="Private browsing" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M3 11h18M6 11l1.5-5h9L18 11"/><circle cx="7.5" cy="15.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/><path d="M10 15.5h4"/></svg></button>
       <button class="bv-count" id="bvTabsBtn" type="button" title="Tabs" aria-label="Tabs">1</button>
+      <button class="icon-btn" id="bvFull" type="button" title="Full screen" aria-label="Full screen" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
       <button class="icon-btn" id="bvKbd" type="button" title="Keyboard" aria-label="Show the keyboard"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
     </div>
     <div class="bv-tabs" id="bvTabs" hidden></div>
@@ -6626,8 +6630,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.17";
+const APP_VERSION = "2026-10-26.18";
 const WHATS_NEW = [
+  ["2026-10-26.18", ["The Browser has a full-screen button (also on iPhone); Esc or the same button leaves"]],
   ["2026-10-26.17", ["Follow-ups keep using the tool: “make it faster”, “add bread too”, “another one” no longer fall back to a plain answer"]],
   ["2026-10-26.16", ["Jarvis: watch the live view full screen, with a small red Stop button and the chat at the bottom"]],
   ["2026-10-26.15", ["Choose the look of new presentations yourself: Settings → Tools → Slides (design, fonts, transition, animation), or “Use this look for new presentations” in a deck's Design panel"]],
