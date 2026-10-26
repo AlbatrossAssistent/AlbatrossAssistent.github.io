@@ -860,6 +860,26 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
 .nf-grid { columns: 300px; column-gap: 18px; }
 .notes-full .note.paper-yellow { --np: #FFFBE6; --np2: #FFF6C9; }
 .notes-full .note { box-shadow: 0 1px 1px rgba(0,0,0,.05), 0 14px 30px -10px rgba(110,85,0,.45); }
+/* Jarvis full screen */
+.jv-full { position: fixed; inset: 0; z-index: 350; background: #000; display: flex; align-items: center; justify-content: center; }
+.jv-full[hidden] { display: none; }
+.jv-full > img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.jvf-ph { position: absolute; color: #9aa0aa; font-size: 15px; }
+.jvf-top { position: absolute; top: calc(12px + var(--st)); left: 14px; right: 14px; display: flex; align-items: center; gap: 10px; pointer-events: none; }
+.jvf-top > * { pointer-events: auto; }
+.jvf-top .live { font-size: 11.5px; font-weight: 700; letter-spacing: 1px; color: #fff; background: rgba(217,42,31,.9); padding: 3px 9px; border-radius: 999px; }
+.jvf-state { font-size: 13px; color: #fff; background: rgba(0,0,0,.55); padding: 4px 10px; border-radius: 999px; }
+.jvf-stop { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 13px; font-weight: 700; padding: 6px 12px 6px 9px; border-radius: 999px; border: 0; background: #E5261B; color: #fff; cursor: pointer; box-shadow: 0 4px 14px rgba(229,38,27,.45); }
+.jvf-stop svg { width: 14px; height: 14px; } .jvf-stop:hover { background: #ff3a2e; } .jvf-stop:disabled { opacity: .6; }
+.jvf-x { width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 15px; cursor: pointer; }
+.jvf-bottom { position: absolute; left: 50%; bottom: calc(14px + var(--sb)); transform: translateX(-50%); width: min(760px, calc(100% - 24px)); display: flex; flex-direction: column; gap: 8px; }
+.jvf-log { display: flex; flex-direction: column; gap: 5px; max-height: 28vh; overflow-y: auto; }
+.jvf-log .jv-msg { background: rgba(20,22,30,.78); color: #f2f4f8; border: 1px solid rgba(255,255,255,.12); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.jvf-log .jv-msg.you { background: var(--accent); color: #fff; border: 0; }
+.jvf-log .jv-msg.action, .jvf-log .jv-msg.system { color: #c9ced8; }
+.jvf-ask { display: flex; gap: 8px; align-items: center; padding: 6px 6px 6px 16px; border-radius: 999px; background: rgba(20,22,30,.82); border: 1px solid rgba(255,255,255,.16); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.jvf-ask input { flex: 1; min-width: 0; font: inherit; font-size: 15px; color: #fff; background: none; border: 0; outline: none; }
+.jvf-ask input::placeholder { color: rgba(255,255,255,.55); }
 /* what's new after an update, and "a new version is ready" */
 .update-pop { position: fixed; right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); z-index: 260; width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; border-radius: 22px; color: var(--fg);
   background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 22px 60px rgba(10,15,40,.25);
@@ -1655,7 +1675,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
         <div class="jv-offline" id="jvOffline" hidden><span id="jvOfflineText">Jarvis isn't running on your PC.</span><button class="btn primary" id="jvStart">Start Jarvis</button></div>
       </div>
       <div class="jv-card">
-        <div class="jv-head"><h3>Your PC's screen</h3><select id="jvRes" class="jv-res" aria-label="Picture size" title="Picture size: 1080p is sharpest but needs a fast connection"><option value="auto">Auto</option><option value="720">720p</option><option value="1080">1080p</option></select><label class="pub-toggle"><input type="checkbox" class="switch" id="jvLive">Live</label></div>
+        <div class="jv-head"><h3>Your PC's screen</h3><select id="jvRes" class="jv-res" aria-label="Picture size" title="Picture size: 1080p is sharpest but needs a fast connection"><option value="auto">Auto</option><option value="720">720p</option><option value="1080">1080p</option></select><label class="pub-toggle"><input type="checkbox" class="switch" id="jvLive">Live</label><button class="btn small" id="jvFullBtn" type="button" title="Watch Jarvis full screen, with a stop button and the chat at the bottom">Full screen</button></div>
         <div class="jv-screen" id="jvScreen"><div class="ph" id="jvScreenPh">Switch on <b>Live</b> to watch what Jarvis does on your PC.</div></div>
         <div class="jv-head"><h3>Settings</h3></div>
         <div class="jv-settings">
@@ -2044,6 +2064,15 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 <div class="toast" id="toast"></div>
 
 <script src="orb.js"></script>
+<div class="jv-full" id="jvFull" hidden role="dialog" aria-label="Jarvis, full screen">
+  <img id="jvFullImg" alt="Your PC's screen">
+  <div class="jvf-ph" id="jvFullPh">Connecting to the screen…</div>
+  <div class="jvf-top"><span class="live">LIVE</span><span class="jvf-state" id="jvFullState"></span><span style="flex:1"></span>
+    <button class="jvf-stop" id="jvFullStop" type="button" title="Stop Jarvis at once"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>Stop</button>
+    <button class="jvf-x" id="jvFullX" type="button" aria-label="Leave full screen" title="Leave full screen (Esc)">✕</button></div>
+  <div class="jvf-bottom"><div class="jvf-log" id="jvFullLog"></div>
+    <form class="jvf-ask" id="jvFullAsk"><input id="jvFullInput" placeholder="Tell Jarvis what to do…" autocomplete="off"><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form></div>
+</div>
 <script src="starfield.js"></script>
 <script src="scenes.js"></script>
 <script src="liquid-glass.js"></script>
@@ -6355,6 +6384,7 @@ function renderJarvis() {
   $("#jvOffline").hidden = true;
   $("#jvStatus").innerHTML = `<b>${esc(JV_STATE[st.state] || st.state)}</b>${st.settings.control ? " · can control the PC" : ""}`;
   $("#jvConfirm").hidden = !st.pending;
+  $("#jvFullState").textContent = (JV_STATE[st.state] || st.state) + (st.pending ? " · waiting for your OK on the Jarvis page" : "");
   $("#jvConfirmText").textContent = st.pending || "";
   for (const el of $$("[data-jv]")) if (document.activeElement !== el) el.checked = !!st.settings[el.dataset.jv];
   const log = $("#jvLog"), last = st.log.length ? st.log[st.log.length - 1].id : 0;
@@ -6364,12 +6394,35 @@ function renderJarvis() {
     if (!st.log.length) log.innerHTML = '<div class="jv-msg system">Say something to Jarvis. It answers on the PC and here.</div>';
     for (const m of st.log) { const d = document.createElement("div"); d.className = "jv-msg " + m.role; d.textContent = m.text; log.appendChild(d); }
     log.scrollTop = log.scrollHeight;
+    const fl = $("#jvFullLog"); fl.innerHTML = "";                       // full screen: the last few messages
+    for (const m of st.log.slice(-4)) { const d = document.createElement("div"); d.className = "jv-msg " + m.role; d.textContent = m.text; fl.appendChild(d); }
   }
 }
 $("#jvAsk").addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = $("#jvInput").value.trim(); if (!text) return;
   $("#jvInput").value = "";
+  try { const { status, j } = await jarvisCall("POST", "/ask", { text }); if (status !== 200) toast(j.error || "Jarvis didn't take that"); } catch (err) { toast("Couldn't reach Jarvis: " + err.message); }
+  jarvisPoll();
+});
+// full screen: the live picture over everything, a small red Stop, the chat at the bottom
+function jvFullOpen() {
+  $("#jvFull").hidden = false; $("#jvFullPh").hidden = !!$("#jvFullImg").getAttribute("src");
+  if (!$("#jvLive").checked) { $("#jvLive").checked = true; $("#jvLive").onchange({ target: $("#jvLive") }); }
+  $("#jvFull").requestFullscreen?.().catch(() => {});
+  setTimeout(() => $("#jvFullInput").focus(), 100);
+}
+function jvFullClose() { $("#jvFull").hidden = true; if (document.fullscreenElement === $("#jvFull")) document.exitFullscreen?.().catch(() => {}); }
+$("#jvFullBtn").onclick = jvFullOpen;
+$("#jvFullX").onclick = jvFullClose;
+// leaving the browser's full screen (Esc) also leaves this view
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && !$("#jvFull").hidden) jvFullClose(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#jvFull").hidden) jvFullClose(); });
+$("#jvFullStop").onclick = async () => { $("#jvFullStop").disabled = true; try { await jarvisCall("POST", "/stop"); toast("Jarvis stopped"); } catch (e) { toast("Couldn't reach Jarvis: " + e.message); } $("#jvFullStop").disabled = false; jarvisPoll(); };
+$("#jvFullAsk").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("#jvFullInput").value.trim(); if (!text) return;
+  $("#jvFullInput").value = "";
   try { const { status, j } = await jarvisCall("POST", "/ask", { text }); if (status !== 200) toast(j.error || "Jarvis didn't take that"); } catch (err) { toast("Couldn't reach Jarvis: " + err.message); }
   jarvisPoll();
 });
@@ -6404,7 +6457,8 @@ async function jarvisScreen() {
   try {
     // Auto: as wide as the view (up to 1600 px); 720p and 1080p ask for that many pixels across, 1080p a little sharper
     const res = S.jvRes || "auto";
-    const w = res === "1080" ? 1920 : res === "720" ? 1280 : Math.min(1600, Math.round($("#jvScreen").clientWidth * (devicePixelRatio || 1)));
+    const full = !$("#jvFull").hidden;
+    const w = res === "1080" ? 1920 : res === "720" ? 1280 : Math.min(full ? 1920 : 1600, Math.round((full ? innerWidth : $("#jvScreen").clientWidth) * (devicePixelRatio || 1)));
     const q = res === "1080" ? (viaHost ? 85 : 75) : viaHost ? 70 : 55;
     const { status, j } = await jarvisCall("GET", `/screen?w=${w}&q=${q}`);
     if (status === 200 && j.jpeg && jv.live) {
@@ -6412,6 +6466,7 @@ async function jarvisScreen() {
       let img = box.querySelector("img");
       if (!img) { box.innerHTML = '<span class="live">LIVE</span>'; img = document.createElement("img"); img.alt = "Your PC's screen"; box.appendChild(img); }
       img.src = "data:image/jpeg;base64," + j.jpeg;
+      if (!$("#jvFull").hidden) { $("#jvFullImg").src = img.src; $("#jvFullPh").hidden = true; }
     }
   } catch {}
   jv.shotBusy = false;
@@ -6565,8 +6620,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.15";
+const APP_VERSION = "2026-10-26.16";
 const WHATS_NEW = [
+  ["2026-10-26.16", ["Jarvis: watch the live view full screen, with a small red Stop button and the chat at the bottom"]],
   ["2026-10-26.15", ["Choose the look of new presentations yourself: Settings → Tools → Slides (design, fonts, transition, animation), or “Use this look for new presentations” in a deck's Design panel"]],
   ["2026-10-26.14", ["Your notes open full screen on yellow when Albatross starts (pinned ones, or all of them); write in them right there, then Continue"]],
   ["2026-10-26.13", ["Fast music sounds fast now: quick notes, driving bass and busy drums", "Answers stay in the language you write in", "Chats only on this device: for one chat (its settings) or for all new ones (Settings → Chat)"]],
