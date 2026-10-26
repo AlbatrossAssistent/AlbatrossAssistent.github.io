@@ -397,6 +397,7 @@ function zipBlob(files) {
   return new Blob([...parts, ...central, end], { type: "application/zip" });
 }
 $("#cpRun").onclick = cpRun;
+$("#cpBig").onclick = () => { const on = $("#spCode").classList.toggle("cp-big"); $("#cpBig").textContent = on ? "Show code" : "Bigger"; $("#cpBig").setAttribute("aria-pressed", String(on)); if (on && $("#cpFrame").hidden) cpRun(); };
 $("#cpLang").onchange = () => { const f = cpCur(); f.lang = $("#cpLang").value; f.orig = ""; cpNote(); };
 $("#cpName").oninput = () => {
   const f = cpCur(); f.name = $("#cpName").value;

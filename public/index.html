@@ -823,6 +823,8 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 #cpSrc { flex: 1 1 45%; min-height: 160px; font: 13px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent); border-radius: 12px; padding: 10px 12px; resize: vertical; tab-size: 2; white-space: pre; overflow: auto; }
 #cpFrame { flex: 1 1 40%; min-height: 180px; width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 #cpFrame[hidden] { display: none; }
+#spCode.cp-big #cpSrc, #spCode.cp-big .cp-files, #spCode.cp-big #cpNote { display: none; }
+#spCode.cp-big #cpFrame { flex: 1 1 auto; min-height: 320px; }
 #cpLog { margin: 0; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--fg) 6%, transparent); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; flex: none; }
 #cpLog:empty, #cpNote:empty { display: none; }
 .md .code-head .open-code { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--fg); cursor: pointer; margin-left: auto; }
@@ -1503,6 +1505,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
       <select id="cpLang" aria-label="Language"><option value="html">HTML</option><option value="css">CSS</option><option value="js">JavaScript</option><option value="python">Python</option><option value="text">Other</option></select>
       <input id="cpName" placeholder="file name" spellcheck="false" autocomplete="off">
       <button class="btn small primary" id="cpRun" type="button">Run</button>
+      <button class="btn small" id="cpBig" type="button" title="Hide the code and give the result the whole panel" aria-pressed="false">Bigger</button>
       <button class="btn small" id="cpCopy" type="button">Copy</button>
       <button class="btn small" id="cpSave" type="button" title="Save into PC files → Code projects (one file: snippets, several: a folder of their own)">Save to PC</button>
       <button class="btn small" id="cpDl" type="button" title="Download the file (several files: one .zip)">Download</button>
