@@ -717,6 +717,20 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .art-run .a-play { animation-name: aPlay; animation-duration: 1.2s; }
 @keyframes aPlay { 50% { transform: scale(1.25); } }
 @media (prefers-reduced-motion: reduce) { .art * { animation: none !important; } }
+/* what's new after an update, and "a new version is ready" */
+.update-pop { position: fixed; right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); z-index: 260; width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; border-radius: 22px; color: var(--fg);
+  background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 22px 60px rgba(10,15,40,.25);
+  transform: translateY(24px) scale(.96); opacity: 0; transition: transform .5s cubic-bezier(.3,1.5,.4,1), opacity .3s; }
+.update-pop.in { transform: none; opacity: 1; }
+.update-pop .up-head { display: flex; align-items: center; gap: 10px; }
+.update-pop .up-ic { width: 32px; height: 32px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--accent); }
+.update-pop .up-ic svg { width: 20px; height: 20px; fill: #fff; }
+.update-pop b { flex: 1; font-size: 15px; }
+.update-pop .up-x { width: 30px; height: 30px; }
+.update-pop ul { margin: 10px 0 4px; padding-left: 20px; font-size: 13.5px; line-height: 1.45; color: var(--fg); }
+.update-pop li + li { margin-top: 4px; }
+.update-pop .up-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+@media (max-width: 600px) { .update-pop { left: 16px; right: 16px; width: auto; } }
 /* the pop-up while something prints */
 .print-pop { position: fixed; top: calc(14px + var(--st)); left: 50%; z-index: 250; display: flex; align-items: center; gap: 12px; min-width: 260px; max-width: min(460px, calc(100vw - 24px)); padding: 10px 18px 10px 10px; border-radius: 22px;
   background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 18px 50px rgba(10,15,40,.22);
@@ -6174,6 +6188,47 @@ document.addEventListener("keydown", e => {
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppearance);
 
+// ---------- updates: what's new after an update, and a newer version published while the app is open ----------
+// APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
+const APP_VERSION = "2026-10-26.3";
+const WHATS_NEW = [
+  ["2026-10-26.3", ["Pop-ups like this one when Albatross was updated, and when a newer version is ready while it's open"]],
+  ["2026-10-26.2", ["Arrows, maths and emoji in answers show properly (→, x², π, ✅)", "Arrows and maths written by the AI are drawn like in a textbook"]],
+  ["2026-10-26.1", ["Games and pages in the Code tab no longer stay white", "A Bigger button gives a game the whole Code tab"]],
+];
+// "2026-10-26.10" is newer than "2026-10-26.3": compared part by part as numbers
+const newerVersion = (a, b) => { const x = String(a).split(/\D+/).map(Number), y = String(b).split(/\D+/).map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+function updatePop(title, items, actions) {
+  document.querySelector(".update-pop")?.remove();
+  const p = document.createElement("div"); p.className = "update-pop"; p.setAttribute("role", "dialog"); p.setAttribute("aria-label", title);
+  p.innerHTML = `<div class="up-head"><span class="up-ic">${LOGO}</span><b></b><button class="icon-btn up-x" type="button" aria-label="Close">✕</button></div><ul></ul><div class="up-acts"></div>`;
+  p.querySelector("b").textContent = title;
+  for (const t of items) { const li = document.createElement("li"); li.textContent = t; p.querySelector("ul").appendChild(li); }
+  p.querySelector("ul").hidden = !items.length;
+  const close = () => { p.classList.remove("in"); setTimeout(() => p.remove(), 400); };
+  for (const [label, fn, primary] of actions) { const b = document.createElement("button"); b.type = "button"; b.className = "btn small" + (primary ? " primary" : ""); b.textContent = label; b.onclick = () => { close(); fn && fn(); }; p.querySelector(".up-acts").appendChild(b); }
+  p.querySelector(".up-x").onclick = close;
+  document.body.appendChild(p); requestAnimationFrame(() => requestAnimationFrame(() => p.classList.add("in")));
+}
+function showWhatsNew() {
+  const seen = store.get("seenVersion", "");
+  store.set("seenVersion", APP_VERSION);
+  if (!seen || seen === APP_VERSION) return;                         // the very first visit has nothing "new" to show
+  const items = WHATS_NEW.filter(([v]) => newerVersion(v, seen)).flatMap(([, l]) => l).slice(0, 8);
+  if (items.length) setTimeout(() => updatePop("Albatross was updated", items, [["Nice", null, true]]), S.intro ? 3600 : 900);
+}
+let updateOffered = false;
+async function checkForUpdate() {
+  if (updateOffered || document.hidden || !/^https?:/.test(location.protocol)) return;
+  try {
+    const html = await (await fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" })).text();
+    const v = (/const APP_VERSION = "([^"]+)"/.exec(html) || [])[1];
+    if (v && newerVersion(v, APP_VERSION)) { updateOffered = true; updatePop("A new version of Albatross is ready", [], [["Later", null, false], ["Reload now", () => location.reload(), true]]); }
+  } catch {}
+}
+setInterval(checkForUpdate, 10 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
+
 // ---------- start ----------
 // Links look like …/#code=K7QM-4XPT-9F2C-HW3D: the part after # is never sent to any server, so the key stays private.
 const urlCode = new URLSearchParams(location.hash.slice(1)).get("code") || new URLSearchParams(location.search).get("code");
@@ -6193,6 +6248,7 @@ if (window.LiquidGlass) {
 }
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
+showWhatsNew();
 // the terms have to be accepted once (again when they change: bump TERMS_VERSION)
 const TERMS_VERSION = "2026-10-09";
 if (store.get("termsAccepted", "") !== TERMS_VERSION) {
