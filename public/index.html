@@ -1173,6 +1173,7 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
 .dz-row { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .dz-row label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); flex: 1 1 150px; }
 .dz-row select { font-size: 13px; }
+.deck-preset { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 10px; } .deck-preset > small { color: var(--muted); font-size: 12.5px; }
 .deck-notes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px 12px; border-radius: 16px; background: var(--soft); border: 1px solid var(--line); }
 .deck-notes[hidden] { display: none; }
 .deck-notes small { color: var(--muted); font-size: 12px; }
@@ -1828,6 +1829,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <label class="check"><span>Web search<small id="webNote">The AI can look things up online.</small></span><input type="checkbox" class="switch" id="webSearch"></label>
           <label class="check"><span>Pictures<small>Draws a picture when you ask for one, and edits a photo you attach.</small></span><input type="checkbox" class="switch" data-tool="image"></label>
           <label class="check"><span>Slides<small>Builds a presentation slide by slide when you ask for one.</small></span><input type="checkbox" class="switch" data-tool="slides"></label>
+          <div class="deck-preset" id="deckPreset"></div>
           <label class="check"><span>Graphs<small>Draws a chart from your numbers or real data.</small></span><input type="checkbox" class="switch" data-tool="graph"></label>
           <label class="check"><span>Chances &amp; predictions<small>Estimates how likely something is and how it may develop.</small></span><input type="checkbox" class="switch" data-tool="chances"></label>
           <label class="check"><span>Music<small>Composes a piece when you ask (“make a calm lo-fi beat”): play it here, or download it as MIDI for GarageBand or as a WAV.</small></span><input type="checkbox" class="switch" data-tool="music"></label>
@@ -3404,7 +3406,9 @@ function renderDeck(b) {
       <div class="dz-row"><label>Fonts<select data-k="fonts">${opt(Object.keys(DECK_FONTS), d.fonts || DECK_THEMES[d.theme]?.fonts, (k) => k + " · " + DECK_FONTS[k].about)}</select></label>
       <label>Transition<select data-k="transition">${opt(DECK_TRANSITIONS, d.transition || "fade")}</select></label>
       <label>Animation<select data-k="animation">${opt(["entrance", "build", "none"], cur.mode, (k) => ({ entrance: "everything comes in by itself", build: "points one per click", none: "no animation" })[k])}</select></label>
-      <label>Style<select data-k="animStyle">${opt(DECK_STYLES, cur.style)}</select></label></div>`;
+      <label>Style<select data-k="animStyle">${opt(DECK_STYLES, cur.style)}</select></label></div>
+      <div class="dz-row"><button type="button" class="btn small" data-a="preset">Use this look for new presentations</button></div>`;
+    dz.querySelector('[data-a="preset"]').onclick = () => { S.deckPreset = { theme: d.theme, fonts: d.fonts || DECK_THEMES[d.theme].fonts, transition: d.transition || "fade", animStyle: deckAnim(d).style, animation: deckAnim(d).mode }; saveSettings(); toast("New presentations will look like this (change it in Settings → Tools)"); };
     dz.querySelectorAll("[data-th]").forEach((b) => (b.onclick = () => { d.theme = b.dataset.th; d.fonts = DECK_THEMES[d.theme].fonts; changed(); }));
     dz.querySelectorAll("select").forEach((s) => (s.onchange = () => { d[s.dataset.k] = s.value; if (s.dataset.k === "transition") for (const x of d.slides) delete x.transition; changed(); }));
   };
@@ -5030,6 +5034,12 @@ ${layoutList}
     const noMotion = /\b(no|without|keine|ohne) (animations?|animationen)\b/i.test(text);
     deck.animation = noMotion ? "none" : plan.animation === "build" ? "build" : "entrance";
     deck.animStyle = DECK_STYLES.includes(plan.anim_style) ? plan.anim_style : "rise";
+    // your preset (Settings → Tools → Slides, or "Use for new presentations" in the Design panel) wins over the AI's choice
+    const pre = S.deckPreset || {};
+    if (DECK_THEMES[pre.theme]) { deck.theme = pre.theme; deck.fonts = DECK_FONTS[pre.fonts] ? pre.fonts : DECK_THEMES[pre.theme].fonts; }
+    if (DECK_TRANSITIONS.includes(pre.transition)) deck.transition = pre.transition;
+    if (DECK_STYLES.includes(pre.animStyle)) deck.animStyle = pre.animStyle;
+    if (["entrance", "build", "none"].includes(pre.animation)) deck.animation = pre.animation;
     sPlan.sub = `${plan.slides.length + 1} slides · ${deck.theme} design · ${deck.transition === "none" ? "no" : deck.transition} transitions · ${deck.animation === "none" ? "no animations" : deck.animStyle + (deck.animation === "build" ? " animations, points one by one" : " animations")}`;
     const sTitle = step("Title slide", { slide: 0 });
     // a "kept" slide must really be the old one (same title), and a change request has to change something
@@ -5040,7 +5050,7 @@ ${layoutList}
     const work = plan.slides.slice(0, 14).map((x, i) => {
       const kept = !allKept && keepOf(x);
       const sl = kept ? { ...kept, ready: true } : { title: String(x.title || ""), layout: DECK_LAYOUTS[x.layout] ? x.layout : "bullets", image: String(x.image || ""), notes: "", about: String(x.about || "") };
-      if (DECK_TRANSITIONS.includes(x.transition)) sl.transition = x.transition; else if (!kept) delete sl.transition;
+      if (DECK_TRANSITIONS.includes(x.transition) && !DECK_TRANSITIONS.includes((S.deckPreset || {}).transition)) sl.transition = x.transition; else if (!kept) delete sl.transition;
       deck.slides.push(sl);
       return { sl, kept, planned: sl.layout, st: step(`${i + 1}. ${sl.title}`, { slide: i + 1, state: kept ? "done" : "", sub: kept ? "kept as it was" : LAYOUT_NAMES[sl.layout] }) };
     });
@@ -5582,7 +5592,14 @@ $("#starsOn").onchange = (e) => { S.stars = e.target.checked; saveSettings(); st
 $("#glassOn").onchange = (e) => { S.glass = e.target.checked; saveSettings(); window.LiquidGlass && LiquidGlass.setEnabled(S.glass); };
 
 // Settings → Tools
-function fillToolSwitches() { $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
+// the look of new presentations: each choice is "the AI chooses" or a fixed one
+function paintDeckPreset() {
+  const box = $("#deckPreset"); if (!box) return;
+  const p = S.deckPreset || {}, sel = (k, list, name) => `<label>${name}<select data-p="${k}"><option value="">The AI chooses</option>${list.map((v) => `<option value="${v}"${p[k] === v ? " selected" : ""}>${v.replace(/^./, (c) => c.toUpperCase())}${k === "theme" ? " · " + DECK_THEMES[v].about : ""}</option>`).join("")}</select></label>`;
+  box.innerHTML = `<small>Look of new presentations</small><div class="dz-row">${sel("theme", Object.keys(DECK_THEMES), "Design")}${sel("fonts", Object.keys(DECK_FONTS), "Fonts")}${sel("transition", DECK_TRANSITIONS, "Transition")}${sel("animStyle", DECK_STYLES, "Animation style")}${sel("animation", ["entrance", "build", "none"], "Animation")}</div>`;
+  box.querySelectorAll("select").forEach((s) => (s.onchange = () => { S.deckPreset = { ...(S.deckPreset || {}), [s.dataset.p]: s.value }; if (!s.value) delete S.deckPreset[s.dataset.p]; saveSettings(); }));
+}
+function fillToolSwitches() { paintDeckPreset(); $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
 for (const el of $$("[data-tool]")) el.onchange = () => { S.tools = { ...(S.tools || {}), [el.dataset.tool]: el.checked }; saveSettings(); };
 const _openSettings = openSettings;
 openSettings = function (tab) { fillToolSwitches(); return _openSettings(tab); };
@@ -6548,8 +6565,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.14";
+const APP_VERSION = "2026-10-26.15";
 const WHATS_NEW = [
+  ["2026-10-26.15", ["Choose the look of new presentations yourself: Settings → Tools → Slides (design, fonts, transition, animation), or “Use this look for new presentations” in a deck's Design panel"]],
   ["2026-10-26.14", ["Your notes open full screen on yellow when Albatross starts (pinned ones, or all of them); write in them right there, then Continue"]],
   ["2026-10-26.13", ["Fast music sounds fast now: quick notes, driving bass and busy drums", "Answers stay in the language you write in", "Chats only on this device: for one chat (its settings) or for all new ones (Settings → Chat)"]],
   ["2026-10-26.12", ["Music answers in the language you asked in"]],
