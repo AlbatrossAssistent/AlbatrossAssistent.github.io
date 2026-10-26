@@ -4,7 +4,7 @@
 importScripts("xfer.js");
 
 const CACHE = "albatross-shell-v1";
-const SHELL = ["./", "index.html", "network.js", "orb.js", "xfer.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
+const SHELL = ["./", "index.html", "network.js", "notes.js", "orb.js", "xfer.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => Promise.all(SHELL.map((u) => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));

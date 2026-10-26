@@ -721,6 +721,61 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .art-run .a-play { animation-name: aPlay; animation-duration: 1.2s; }
 @keyframes aPlay { 50% { transform: scale(1.25); } }
 @media (prefers-reduced-motion: reduce) { .art * { animation: none !important; } }
+/* ---------- Notes (notes.js): sticky notes on paper; yellow by default, whatever the theme ---------- */
+body:not(.notes-view) #notesPage { display: none; }
+body.notes-view .messages, body.notes-view .composer, body.notes-view #home, body.notes-view #jarvis, body.notes-view #pcPage, body.notes-view #agentPage, body.notes-view #typeBadge, body.notes-view #model { display: none !important; }
+#notesPage { flex: 1; overflow-y: auto; }
+.notes-inner { max-width: 1100px; }
+.notes-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
+.notes-open { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); }
+.notes-grid { columns: 280px; column-gap: 16px; }
+.notes-grid > .empty-note { column-span: all; }
+.note { --np: #FFF1A8; --np2: #FFE16B; --ink: #3b3210; --mute: #7a6a2c; break-inside: avoid; position: relative; margin: 0 0 16px; padding: 14px 14px 12px; border-radius: 4px 4px 18px 4px; color: var(--ink);
+  background: linear-gradient(170deg, var(--np) 0%, var(--np2) 100%); box-shadow: 0 1px 1px rgba(0,0,0,.06), 0 10px 24px -8px rgba(90,70,0,.35); transform: rotate(-.6deg); transition: transform .3s cubic-bezier(.3,1.6,.4,1), box-shadow .3s; }
+.note:nth-child(3n+2) { transform: rotate(.5deg); } .note:nth-child(3n) { transform: rotate(-.2deg); }
+.note:hover, .note:focus-within { transform: rotate(0) translateY(-2px); box-shadow: 0 2px 2px rgba(0,0,0,.06), 0 18px 34px -10px rgba(90,70,0,.4); }
+.note.paper-orange { --np: #FFDDB8; --np2: #FFC48A; --ink: #43260b; --mute: #86552a; }
+.note.paper-pink { --np: #FFD6E5; --np2: #FFB8D1; --ink: #47152a; --mute: #8a4562; }
+.note.paper-green { --np: #D9F5C8; --np2: #BFEBA6; --ink: #1d3a10; --mute: #4f7a3c; }
+.note.paper-blue { --np: #D3E8FF; --np2: #B5D7FF; --ink: #10284a; --mute: #44628a; }
+.note::before { content: ""; position: absolute; top: -7px; left: 50%; width: 64px; height: 16px; transform: translateX(-50%) rotate(-2deg); background: rgba(255,255,255,.45); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.note-head { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.note-title { flex: 1; min-width: 0; font: inherit; font-size: 16.5px; font-weight: 700; color: var(--ink); background: none; border: 0; outline: none; padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-title::placeholder, .note input::placeholder, .note textarea::placeholder { color: var(--mute); opacity: .7; }
+.note-kind { font: inherit; font-size: 12px; color: var(--ink); background: rgba(255,255,255,.35); border: 1px solid rgba(0,0,0,.08); border-radius: 8px; padding: 3px 4px; max-width: 108px; }
+.note-btn { width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: none; color: var(--mute); cursor: pointer; }
+.note-btn:hover { background: rgba(255,255,255,.4); color: var(--ink); }
+.note-btn.on { color: #c2410c; }
+.note-btn svg, .note-pinmark { width: 16px; height: 16px; }
+.note-pinmark { color: #c2410c; flex: none; }
+.note-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.note-items li { display: flex; align-items: baseline; gap: 8px; min-height: 26px; }
+.note-items .mk { flex: none; min-width: 18px; color: var(--mute); font-weight: 600; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+.note-items button.mk { border: 0; background: none; padding: 0; cursor: pointer; font-size: 17px; line-height: 1; color: var(--ink); text-align: center; }
+.note-items.kind-priority li.prio-high .mk { color: #dc2626; } .note-items.kind-priority li.prio-medium .mk { color: #d97706; } .note-items.kind-priority li.prio-low .mk { color: #16a34a; }
+.note-items input, .note-items .tx { flex: 1; min-width: 0; font: inherit; font-size: 14.5px; color: var(--ink); background: none; border: 0; outline: none; padding: 2px 0; border-bottom: 1px dashed transparent; }
+.note-items input:focus { border-bottom-color: rgba(0,0,0,.18); }
+.note-items li.done input, .note-items li.done .tx { text-decoration: line-through; opacity: .55; }
+.note-items li.empty { color: var(--mute); font-size: 13px; }
+.note-text { width: 100%; font: inherit; font-size: 14.5px; line-height: 1.5; color: var(--ink); background: none; border: 0; outline: none; resize: none; padding: 0; margin: 0; white-space: pre-wrap; overflow: hidden; }
+.note-add { margin-top: 6px; border: 0; background: none; color: var(--mute); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 0; }
+.note-add:hover { color: var(--ink); }
+.note.mini { transform: none; margin: 0; padding: 10px 12px; box-shadow: 0 6px 16px -8px rgba(90,70,0,.35); }
+.note.mini .note-title { font-size: 14.5px; }
+.note.mini .note-items li { min-height: 22px; } .note.mini .note-items .tx { font-size: 13.5px; }
+.notes-card { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; max-width: 720px; }
+.notes-card .note { cursor: pointer; }
+/* pinned notes when Albatross opens */
+.notes-pop { position: fixed; top: calc(76px + var(--st)); right: calc(16px + var(--sr)); z-index: 240; width: min(320px, calc(100vw - 32px)); max-height: calc(100dvh - 120px); overflow-y: auto; padding: 12px; border-radius: 22px;
+  background: linear-gradient(170deg, #FFF6C4, #FFE88A); color: #3b3210; box-shadow: 0 24px 60px -12px rgba(90,70,0,.45), 0 0 0 1px rgba(255,255,255,.5) inset; transform: translateX(30px) rotate(1deg); opacity: 0; transition: transform .5s cubic-bezier(.3,1.5,.4,1), opacity .3s; }
+.notes-pop.in { transform: none; opacity: 1; }
+.np-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.np-head b { flex: 1; font-size: 15px; }
+.np-head .btn { background: rgba(255,255,255,.55); border-color: rgba(0,0,0,.06); color: #3b3210; }
+.np-head .icon-btn { color: #7a6a2c; }
+.np-list { display: flex; flex-direction: column; gap: 10px; }
+.toast.has-act { pointer-events: auto; }
+.toast-act { margin-left: 10px; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 650; cursor: pointer; padding: 0; }
 /* what's new after an update, and "a new version is ready" */
 .update-pop { position: fixed; right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); z-index: 260; width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; border-radius: 22px; color: var(--fg);
   background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 22px 60px rgba(10,15,40,.25);
@@ -1358,6 +1413,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
     <div class="nav-body">
       <button class="side-btn" id="goHome"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Home</button>
       <button class="side-btn" id="goJarvis"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/></svg>Jarvis</button>
+      <button class="side-btn" id="goNotes"><svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>Notes</button>
       <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
       <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" type="search" placeholder="Search chats" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore></div>
     </div>
@@ -1427,6 +1483,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
     </div>
     <div class="bv-foot" id="bvFoot" hidden></div>
   </div>
+  <div id="notesPage"></div>
   <div id="agentPage">
     <div class="home-inner">
       <div class="home-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><h1>Agent</h1><p>Give it a goal. It makes a plan, then works on your PC.</p></div>
@@ -1650,6 +1707,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
           <label class="check"><span>Slides<small>Builds a presentation slide by slide when you ask for one.</small></span><input type="checkbox" class="switch" data-tool="slides"></label>
           <label class="check"><span>Graphs<small>Draws a chart from your numbers or real data.</small></span><input type="checkbox" class="switch" data-tool="graph"></label>
           <label class="check"><span>Chances &amp; predictions<small>Estimates how likely something is and how it may develop.</small></span><input type="checkbox" class="switch" data-tool="chances"></label>
+          <label class="check"><span>Notes<small>Writes into your notes when you ask (“put milk on my shopping list”, “what is on my to-do list?”).</small></span><input type="checkbox" class="switch" data-tool="notes"></label>
           <label class="check"><span>Challenge<small>Attach a puzzle file with the paperclip and the AI digs for the hidden word.</small></span><input type="checkbox" class="switch" data-tool="challenge"></label>
           <label class="check"><span>Agent<small>Handles jobs with your files, mail, web pages and printer by itself, step by step, inside the chat. Also writes programs, websites and games: it saves them in Code projects on your PC, runs them in the Code tab and fixes what doesn't work. Sending mail and printing always ask you first. Needs a model that can use tools. (Also open as the Agent tab in Home.)</small></span><input type="checkbox" class="switch" data-tool="agent"></label>
         </section>
@@ -1859,6 +1917,7 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 <script src="starfield.js"></script>
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
+<script src="notes.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
 <script>
@@ -3043,7 +3102,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
-  if (b.type === "chart" || b.type === "chances" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent") return renderToolBlock(b);
+  if (b.type === "chart" || b.type === "chances" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -3738,7 +3797,7 @@ async function send(textOverride) {
     if (r.aborted) return;
     tool = r.tool && r.tool !== "chat" ? r.tool : ""; task = r.task || "";
   }
-  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model));
 }
 
 // What the chat model is told it can do: when the user asks for one of these the app hands the message to that tool by itself
@@ -3746,6 +3805,7 @@ async function send(textOverride) {
 function whatYouCanDo() {
   const can = [];
   if (toolOn("agent")) can.push("through the Agent, work on the user's own PC: print files on their printer (or save them as PDF), read, write, sort and move their files, read their email and write and send mails (the user approves each one), use websites in a real browser, and write programs, scripts, websites and games that are saved on their PC (PC files → Code projects) and run in the Code tab, where the user can play or use them");
+  if (toolOn("notes")) can.push("keep the user's notes: make and change lists (shopping, to-do, checklists, numbered, priorities) and say what is on them");
   if (toolOn("slides")) can.push("make presentations (slides with speaker notes, downloadable for PowerPoint)");
   if (toolOn("graph")) can.push("draw charts from numbers or real data");
   if (toolOn("chances")) can.push("estimate chances and predictions");
@@ -3979,10 +4039,12 @@ const TOOLISH = {
   graph: W("graphs?|charts?|plots?|diagrams?|bar ?chart|pie ?chart|line ?chart|histogram|diagramm\\p{L}*|schaubild\\p{L}*|grafik\\p{L}*"),
   chances: W("chances?|odds|probabilit\\p{L}*|likel(?:y|ihood)|predict\\p{L}*|forecast\\p{L}*|prognose\\p{L}*|vorhersage\\p{L}*|wahrscheinlich\\p{L}*|chancen"),
 };
+TOOLISH.notes = W("notes?|notiz\\p{L}*|lists?|liste\\p{L}*|to-?dos?|todo-?liste|shopping|einkauf\\p{L}*|merk\\p{L}*|write (?:it |that )?down|aufschreiben|tick (?:it |that )?off|abhaken");
 TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|browser|webpage|web ?page|website|url|https?|html|javascript|run (?:this|the|my) code");
 // asking for a program, website or game to be made: that's the Agent's job too (it writes the files and runs them)
 TOOLISH.agentCode = new RegExp("(?<![\\p{L}\\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|schreib\\p{L}*|erstell\\p{L}*|programmier\\p{L}*|bau\\p{L}*)(?![\\p{L}\\p{N}])[^.?!]{0,60}(?<![\\p{L}\\p{N}])(?:program|script|app|application|website|web ?page|game|bot|tool|html|python|javascript|node|java|c\\+\\+|css|api|function|class|code|programm|skript|webseite|spiel)(?![\\p{L}\\p{N}])", "iu");
 const ROUTE_ABOUT = {
+  notes: "they want something written down in their notes, a note or list made or changed (a shopping list, to-do list, ideas, steps), something added to or ticked off a list, or ask what is on one of their notes or lists",
   slides: "they want a presentation, slide deck or keynote made",
   graph: "they want a chart or graph drawn from numbers or real data",
   chances: "they ask how likely something is (chances, odds, probability) or want a prediction or forecast of how something will develop",
@@ -4622,6 +4684,7 @@ function renderToolBlock(b) {
   if (b.type === "agent") return window.agentCard ? window.agentCard(b) : document.createElement("div");
   if (b.type === "code") return codeCard(b);
   if (b.type === "challenge") return challengeCard(b);
+  if (b.type === "notes") return window.notesCard ? window.notesCard(b) : document.createElement("div");
   const wrap = document.createElement("div"); wrap.className = "tool-block";
   if (b.active) {
     wrap.innerHTML = `<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>`;
@@ -5103,7 +5166,12 @@ function renderAttachments() {
 // ======================================================================
 // Helpers
 // ======================================================================
-function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), 2200); }
+// a short message at the bottom; o.action + o.onAction add a button (like "Undo"), and it stays a little longer then
+function toast(t, o) {
+  const el = $("#toast"); el.textContent = t; el.classList.add("show"); el.classList.toggle("has-act", !!(o && o.action));
+  if (o && o.action) { const b = document.createElement("button"); b.type = "button"; b.className = "toast-act"; b.textContent = o.action; b.onclick = () => { el.classList.remove("show"); o.onAction && o.onAction(); }; el.append(" ", b); }
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), o && o.action ? 6000 : 2200);
+}
 async function copy(t) { try { await navigator.clipboard.writeText(t); toast("Copied"); } catch { toast("Couldn't copy"); } }
 function speak(t) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t.replace(/[#*`]/g, "")); speechSynthesis.speak(u); }
 function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
@@ -5285,8 +5353,11 @@ function setView(v, opt) {
   document.body.classList.toggle("pc-view", v === "pc");
   document.body.classList.toggle("agent-view", v === "agent");
   document.body.classList.toggle("browser-view", v === "browser");
+  document.body.classList.toggle("notes-view", v === "notes");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
+  $("#goNotes").classList.toggle("on", v === "notes");
+  if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
   if (v === "pc") pcOpen(opt && opt.tab); else pcClose();
   if (v === "agent") { window.agentOpen && window.agentOpen(); } else { window.agentClose && window.agentClose(); }
@@ -5317,6 +5388,7 @@ function renderHome() {
     ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
     ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
+    ["notes", '<svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>', "Notes", "Lists, to-dos and thoughts"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
   ];
   if (!isAppWindow()) tiles.push(["install", I.install, "Get the app", "On your phone, tablet or PC"]);
@@ -5339,6 +5411,7 @@ function renderHome() {
     else if (g === "power") setView("pc", { tab: "power" });
     else if (g === "jarvis") setView("jarvis");
     else if (g === "agent") setView("agent");
+    else if (g === "notes") setView("notes");
     else if (g === "browser") setView("browser");
     else if (g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
@@ -6196,8 +6269,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.4";
+const APP_VERSION = "2026-10-26.5";
 const WHATS_NEW = [
+  ["2026-10-26.5", ["Notes: yellow sticky notes in their own tab, with bullets, numbers, checklists, a/b/c, Roman numerals, priorities or plain text", "Pinned notes show when Albatross opens", "Ask the AI: “put milk on my shopping list”, “what is on my to-do list?”"]],
   ["2026-10-26.4", ["Light mode has a moving background too: soft blue lights that move away from your pointer", "Thinking at Max turns the background red, with glowing embers, in light and dark"]],
   ["2026-10-26.3", ["Pop-ups like this one when Albatross was updated, and when a newer version is ready while it's open"]],
   ["2026-10-26.2", ["Arrows, maths and emoji in answers show properly (→, x², π, ✅)", "Arrows and maths written by the AI are drawn like in a textbook"]],
@@ -6256,6 +6330,7 @@ if (window.LiquidGlass) {
 current = chats[0] && !chats[0].messages.length ? chats[0] : null;
 if (!current) newChat(); else renderAll();
 showWhatsNew();
+window.notesOnStart && window.notesOnStart();
 // the terms have to be accepted once (again when they change: bump TERMS_VERSION)
 const TERMS_VERSION = "2026-10-09";
 if (store.get("termsAccepted", "") !== TERMS_VERSION) {
