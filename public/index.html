@@ -827,6 +827,12 @@ body.mail-view .messages, body.mail-view .composer, body.mail-view #home, body.m
   #mailPage:not(.reading) .mail-read, #mailPage.reading .mail-list { display: none; }
   .ml-back { display: inline-flex; }
 }
+/* saved connections (Settings → Connection) */
+.saved-conns { display: flex; flex-direction: column; gap: 6px; }
+.saved-conn { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 14px; background: color-mix(in srgb, var(--fg) 4%, transparent); border: 1px solid transparent; }
+.saved-conn.on { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); }
+.saved-conn .sc-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.saved-conn small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* what's new after an update, and "a new version is ready" */
 .update-pop { position: fixed; right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); z-index: 260; width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; border-radius: 22px; color: var(--fg);
   background-color: var(--glass-strong); background-image: var(--sheen); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 22px 60px rgba(10,15,40,.25);
@@ -1689,6 +1695,10 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
             <div class="field"><label for="relayUrl">Albatross server</label><input id="relayUrl" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
           </div>
           <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
+          <h3>Saved connections</h3>
+          <div class="note" style="margin:0">Several PCs or ways to reach them, each with its own power settings. Signed in, they travel with your account; the codes and power details only inside your passphrase vault, encrypted.</div>
+          <div class="saved-conns" id="savedConns"></div>
+          <div class="row"><input id="saveConnName" placeholder="Name, e.g. Home PC" autocomplete="off" style="flex:1 1 180px"><button class="btn" id="saveConnBtn" type="button">Save this connection</button></div>
           <h3>Turn your PC on and off</h3>
           <div class="note" style="margin:0">Wake-on-LAN: the Albatross server sends a wake-up signal to your home, and your router starts the PC. The PC's details below fill in by themselves while it's connected. One-time setup on the router: see the tip under the fields.</div>
           <div class="row">
@@ -5259,7 +5269,7 @@ function openSettings(tab) {
   const d = $("#settings");
   // connection
   setConnCards(S.conn.mode);
-  $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay;
+  $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay; renderSavedConns();
   $("#serverHint").textContent = S.conn.relay || DEFAULT_SERVER;
   $("#powerUrl").value = store.get("powerUrl", ""); $("#powerUrl").classList.add("masked"); $("#powerUrlShow").textContent = "Show";
   loadSchedule();
@@ -5300,6 +5310,56 @@ function formatCode(v) {
 $$("#settings .tabs button").forEach(b => (b.onclick = () => switchTab(b.dataset.tab)));
 $$(".mode-card[data-conn]").forEach(c => (c.onclick = () => setConnCards(c.dataset.conn)));
 $("#codeInput").addEventListener("input", e => { e.target.value = formatCode(e.target.value); });
+// ---------- saved connections: several PCs (or ways to reach one), switch with one click ----------
+// S.connections holds what isn't secret (name, mode, Ollama URL, server). The code and the power details of each are secret:
+// they stay on this device (store "connSecrets") and travel with the account only inside the passphrase vault.
+const connSecrets = () => store.get("connSecrets", {});
+function connSummary(c) { return c.mode === "remote" ? `Code ${(connSecrets()[c.id]?.code || "").slice(0, 4) || "····"}-···· · ${c.relay.replace(/^https?:\/\//, "")}` : "This device · " + c.url.replace(/^https?:\/\//, ""); }
+function isCurrentConn(c) { return c.mode === S.conn.mode && (c.mode === "remote" ? connSecrets()[c.id]?.code === S.conn.code && c.relay === S.conn.relay : c.url === S.conn.url); }
+function renderSavedConns() {
+  const box = $("#savedConns"), list = S.connections || [];
+  box.innerHTML = list.length ? "" : '<div class="empty-note" style="padding:6px 0">None saved yet. Connect, give it a name below and save it.</div>';
+  for (const c of list) {
+    const row = document.createElement("div"); row.className = "saved-conn" + (isCurrentConn(c) ? " on" : "");
+    row.innerHTML = '<span class="sc-tx"><b></b><small></small></span><button class="btn small primary" data-a="use" type="button">Use</button><button class="btn small" data-a="rm" type="button">Delete</button>';
+    row.querySelector("b").textContent = c.name; row.querySelector("small").textContent = connSummary(c);
+    if (isCurrentConn(c)) { const u = row.querySelector('[data-a="use"]'); u.textContent = "In use"; u.disabled = true; }
+    row.querySelector('[data-a="use"]').onclick = () => useConn(c);
+    row.querySelector('[data-a="rm"]').onclick = (e) => {
+      if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Really delete?"; return; }
+      S.connections = list.filter((x) => x !== c); const sec = connSecrets(); delete sec[c.id]; store.set("connSecrets", sec); saveSettings(); renderSavedConns();
+    };
+    box.appendChild(row);
+  }
+}
+let connSeq = 0;                                  // a later switch wins: an older attempt that answers late says nothing
+async function useConn(c) {
+  const seq = ++connSeq;
+  const sec = connSecrets()[c.id] || {};
+  S.conn.mode = c.mode; S.conn.url = c.url; S.conn.relay = c.relay; S.conn.code = c.mode === "remote" ? sec.code || "" : S.conn.code;
+  for (const k of ["powerUrl", "wakeHost", "wakePort", "wakeMac"]) { if (sec[k]) store.set(k, sec[k]); else store.del(k); }
+  saveSettings(); applyAppearance();
+  $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay; setConnCards(S.conn.mode);
+  for (const k of ["wakeHost", "wakePort", "wakeMac"]) if ($("#" + k)) $("#" + k).value = store.get(k, "");
+  $("#connResult").textContent = "Connecting to " + c.name + "…"; renderSavedConns();
+  const ok = await connect(true);
+  if (seq !== connSeq) return;
+  checkSearch(); checkHost(); updatePowerBox(connected);
+  $("#connResult").textContent = ok ? "✓ " + c.name + " · " + $("#statusText").textContent : "✕ Couldn't reach " + c.name;
+  if (ok && current && !current.messages.length) renderMessages();
+}
+$("#saveConnBtn").onclick = () => {
+  const name = $("#saveConnName").value.trim(); if (!name) return $("#saveConnName").focus();
+  const mode = $("#connectBtn").dataset.mode || S.conn.mode, code = formatCode($("#codeInput").value);
+  if (mode === "remote" && code.length < 19) return toast("Enter the PC's whole code first");
+  const list = (S.connections = S.connections || []);
+  const c = list.find((x) => x.name.toLowerCase() === name.toLowerCase()) || { id: "c" + Date.now().toString(36) };
+  Object.assign(c, { name, mode, url: $("#ollamaUrl").value.trim() || "http://localhost:11434", relay: $("#relayUrl").value.trim().replace(/\/+$/, "") || DEFAULT_SERVER });
+  if (!list.includes(c)) list.push(c);
+  const sec = connSecrets(); sec[c.id] = { code: mode === "remote" ? code : "", powerUrl: store.get("powerUrl", ""), wakeHost: store.get("wakeHost", ""), wakePort: store.get("wakePort", ""), wakeMac: store.get("wakeMac", "") };
+  store.set("connSecrets", sec); saveSettings();
+  $("#saveConnName").value = ""; renderSavedConns(); toast(name + " saved");
+};
 $("#connectBtn").onclick = async () => {
   S.conn.mode = $("#connectBtn").dataset.mode || "local";
   S.conn.url = $("#ollamaUrl").value.trim() || "http://localhost:11434";
@@ -6338,8 +6398,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-26.7";
+const APP_VERSION = "2026-10-26.8";
 const WHATS_NEW = [
+  ["2026-10-26.8", ["Save several connections (PCs, codes, their power settings) in Settings → Connection and switch with one click; signed in, they come with your account (codes only inside your encrypted vault)"]],
   ["2026-10-26.7", ["Now and then a nebula drifts through the night sky (dark mode)", "Jarvis' live screen can be 1080p (the picture-size menu next to Live)", "When the PC is locked: unlock it from here with Chrome Remote Desktop", "The AI gets a plain list of the app's tools"]],
   ["2026-10-26.6", ["Mail tab: your inbox and sent mail, with an AI that explains a mail, sums it up, says what to do, translates or drafts the reply", "Several mail accounts: add more in Mail → Accounts and pick which one sends", "The Agent can use every account, and look in sent mail"]],
   ["2026-10-26.5", ["Notes: yellow sticky notes in their own tab, with bullets, numbers, checklists, a/b/c, Roman numerals, priorities or plain text", "Pinned notes show when Albatross opens", "Ask the AI: “put milk on my shopping list”, “what is on my to-do list?”"]],
@@ -6452,7 +6513,7 @@ async function deriveVault(pass, salt) {
   const base = await crypto.subtle.importKey("raw", te.encode(pass), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 600000 }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
-const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl", ""), wakeHost: store.get("wakeHost", ""), wakePort: store.get("wakePort", ""), wakeMac: store.get("wakeMac", "") });
+const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl", ""), wakeHost: store.get("wakeHost", ""), wakePort: store.get("wakePort", ""), wakeMac: store.get("wakeMac", ""), connSecrets: store.get("connSecrets", {}) });
 function publicSettings() {
   const c = structuredClone(S);
   c.conn = { ...c.conn, code: "" };           // the code only travels inside the vault
@@ -6472,7 +6533,7 @@ const schedulePush = () => { clearTimeout(pushTimer); pushTimer = setTimeout(pus
 const _save = saveSettings;
 saveSettings = function () { _save(); schedulePush(); };
 const _set = store.set;
-store.set = function (k, v) { const r = _set.call(store, k, v); if (/^(powerUrl|wakeHost|wakePort|wakeMac)$/.test(k)) schedulePush(); return r; };
+store.set = function (k, v) { const r = _set.call(store, k, v); if (/^(powerUrl|wakeHost|wakePort|wakeMac|connSecrets)$/.test(k)) schedulePush(); return r; };
 
 function applyCloud(settings) {
   applying = true;
@@ -6501,6 +6562,7 @@ async function openVault(pass) {
     if (sec.code) S.conn.code = sec.code;
     if (sec.powerUrl) _set.call(store, "powerUrl", sec.powerUrl);
     for (const k of ["wakeHost", "wakePort", "wakeMac"]) if (sec[k]) _set.call(store, k, sec[k]);
+    if (sec.connSecrets && typeof sec.connSecrets === "object") _set.call(store, "connSecrets", { ...store.get("connSecrets", {}), ...sec.connSecrets });   // the saved connections' codes
     updatePowerBox(connected);
     _save(); applying = false;
     connect(true); checkSearch(); checkHost();
