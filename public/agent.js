@@ -35,10 +35,24 @@ async function pfGo(path) {
   box.innerHTML = "";
   if (!j.entries.length) box.innerHTML = '<div class="empty-note">Nothing here yet.</div>';
   for (const f of j.entries) {
-    const row = fileRow(f.name, f.dir ? "Folder" : fsize(f.size) + " · " + new Date(f.mtime).toLocaleDateString(), null, f.dir ? "dir" : "");
+    const row = fileRow(f.name, f.dir ? "Folder" : fsize(f.size) + " · " + new Date(f.mtime).toLocaleDateString(), PF.mode === "pick" ? null : pfTrashBtn(f), f.dir ? "dir" : "");
     row.onclick = () => (f.dir ? pfGo((PF.path ? PF.path + "/" : "") + f.name) : pfSelect(f));
     box.appendChild(row);
   }
+}
+// Delete: asks twice (the button turns into "Sure?"), then the PC moves it to the Recycle Bin. Only the user can do this, the Agent can't.
+function pfTrashBtn(f) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "pf-del"; b.title = "Delete (to the Recycle Bin)"; b.setAttribute("aria-label", "Delete " + f.name);
+  b.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+  let armed = 0;
+  b.onclick = async (e) => {
+    e.stopPropagation();
+    if (!armed) { armed = setTimeout(() => { armed = 0; b.classList.remove("armed"); b.textContent = ""; b.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'; }, 3500); b.classList.add("armed"); b.textContent = f.dir ? "Delete folder?" : "Sure?"; return; }
+    clearTimeout(armed); b.disabled = true;
+    try { await pcCall("/pcfiles/trash", { spec: PF.root + ":" + (PF.path ? PF.path + "/" : "") + f.name }); toast(f.name + " is in the Recycle Bin"); pfGo(); }
+    catch (err) { toast("Couldn't delete: " + err.message); b.disabled = false; }
+  };
+  return b;
 }
 async function pfSelect(f) {
   const spec = PF.root + ":" + (PF.path ? PF.path + "/" : "") + f.name;
@@ -46,6 +60,7 @@ async function pfSelect(f) {
   if (PF.mode === "pick") return pfUse();
   const prev = $("#pfPrev"); prev.hidden = false;
   prev.innerHTML = `<div class="pf-name"><b>${esc(f.name)}</b><small>${fsize(f.size)}</small></div><div class="pf-view"><div class="empty-note">Loading…</div></div><div class="row"><button class="btn small" id="pfDl">Download</button><button class="btn small primary" id="pfUse">Use in chat</button></div>`;
+  prev.querySelector(".row").appendChild(Object.assign(pfTrashBtn(f), { className: "btn small pf-del-txt" }));
   $("#pfDl").onclick = async () => { try { const j = await pcCall("/pcfiles/read", { spec, b64: true }); download(f.name, new Blob([b64ToU8(j.b64)], { type: j.mime })); } catch (e) { toast(e.message); } };
   $("#pfUse").onclick = pfUse;
   const view = prev.querySelector(".pf-view");

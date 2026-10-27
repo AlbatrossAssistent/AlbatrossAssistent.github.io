@@ -6,7 +6,8 @@
 //   code     <Downloads>\Albatross\Code        projects written by the Code tool                    read, write
 //   agent    <Downloads>\Albatross\Agent       the Agent's workspace                                read, write, move
 //   pictures <Downloads>\Albatross\Pictures    pictures made on this PC                             read
-// Nothing outside these folders is ever touched, nothing is ever deleted, and nothing here runs a program.
+// Nothing outside these folders is ever touched, the Agent can't delete anything (only the user can, in the PC files window, and it
+// goes to the Recycle Bin), and nothing here runs a program.
 
 const fs = require("fs");
 const os = require("os");
@@ -110,6 +111,17 @@ function move(from, to, copy = false) {
   else fs.renameSync(a.full, b.full);
   return { from: a.spec, to: b.spec, copied: !!copy, folder: st.isDirectory() };
 }
+// The user's own "Delete" in the PC files window, never one of the Agent's tools. The Windows Recycle Bin gets the file or folder,
+// so it can be put back from there.
+async function trash(spec) {
+  const r = resolve(spec);
+  if (!r.parts.length) throw new Error("Pick a file or folder, not a whole location.");
+  let st; try { st = fs.lstatSync(r.full); } catch { throw new Error("That doesn't exist."); }
+  if (process.platform !== "win32") throw new Error("The Recycle Bin is only set up for Windows.");
+  await ps("Add-Type -AssemblyName Microsoft.VisualBasic; $p = $env:ALB_TRASH; if (Test-Path -LiteralPath $p -PathType Container) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, 'OnlyErrorDialogs', 'SendToRecycleBin') } else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin') }", { ALB_TRASH: r.full });
+  if (fs.existsSync(r.full)) throw new Error("It couldn't be moved to the Recycle Bin.");
+  return { spec: r.spec, folder: st.isDirectory() };
+}
 function mkdir(spec) { const r = resolve(spec + "/placeholder", { write: true }); fs.mkdirSync(path.dirname(r.full), { recursive: true }); return { spec: r.spec.replace(/\/placeholder$/, "") }; }
 
 // ---------- printing ----------
@@ -185,6 +197,7 @@ async function handle(method, p, body, note) {
     if (p === "/pcfiles/roots") return [200, { roots: Object.entries(ROOTS).map(([id, r]) => ({ id, name: r.name, write: r.write, exists: fs.existsSync(r.dir) })), base: BASE }];
     if (p === "/pcfiles/list") return [200, list(j.spec)];
     if (p === "/pcfiles/read") return [200, read(j.spec, { b64: !!j.b64, max: j.max })];
+    if (p === "/pcfiles/trash") { const r = await trash(j.spec); note(`PC files: moved ${r.spec} to the Recycle Bin`); return [200, r]; }
     if (p === "/agent/list") return [200, list(j.spec)];
     if (p === "/agent/read") return [200, read(j.spec, { max: 60 * 1024 })];
     if (p === "/agent/write") { const r = write(j.spec, j.content, j.mode); note(`Agent: ${r.created ? "wrote" : "changed"} ${r.spec}`); return [200, r]; }
