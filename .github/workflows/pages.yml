@@ -1,4 +1,5 @@
-# Publishes the website (landing page + app in /public) to GitHub Pages on every push to main.
+# Publishes the website (landing page + app in /public) to GitHub Pages on every push to main, but only after the smoke
+# test (test/smoke.js: the app starts in Chrome, every page opens, the main parts work) has passed.
 name: Deploy website
 on:
   push:
@@ -12,7 +13,17 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Smoke test (the app in headless Chrome)
+        run: node test/smoke.js
   deploy:
+    needs: test
     if: github.repository == 'AlbatrossAssistent/AlbatrossAssistent.github.io'
     runs-on: ubuntu-latest
     environment:

@@ -5,9 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "host": "node host/host.js"
+    "host": "node host/host.js",
+    "test": "node test/smoke.js",
+    "install-hook": "node test/install-hook.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "ws": "^8.18.0"
   }
