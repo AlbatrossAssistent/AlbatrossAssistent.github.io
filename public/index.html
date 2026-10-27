@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-10-27.2">
+<link rel="stylesheet" href="app.css?v=2026-10-27.3">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -366,6 +366,9 @@
           <label class="check"><span>New chats only on this device<small>Every new chat stays on this device: not saved on your PC, not shown on your other devices. Change it for one chat in its settings (the sliders icon).</small></span><input type="checkbox" class="switch" id="chatsDeviceOnly"></label>
           <label class="check"><span>Also keep a copy on this device<small>Off: chats stay only on the PC and appear here while it is online.</small></span><input type="checkbox" class="switch" id="keepLocal"></label>
           <label class="check"><span>Let the AI ask me questions<small>When it needs a choice or a detail, it stops and asks with buttons you can tap, instead of guessing.</small></span><input type="checkbox" class="switch" id="askMid"></label>
+          <label class="check"><span>Memory<small>The AI offers to remember lasting things you tell it (your class, your printer, what you like); you decide with Save or No. Saved facts go with every chat. Signed in, they sync with your account.</small></span><input type="checkbox" class="switch" id="memoryOn"></label>
+          <div class="mem-list" id="memList"></div>
+          <div class="row mem-add"><input id="memNew" placeholder="Add something to remember, e.g. I'm in 10th grade" autocomplete="off" style="flex:1 1 220px"><button class="btn small" id="memAdd" type="button">Add</button></div>
           <label class="check"><span>Keep answers running on the PC<small>If the app goes to the background or the screen locks, the PC finishes the answer and the app picks it up when you come back.</small></span><input type="checkbox" class="switch" id="bgJobs"></label>
           <label class="field"><span>This device's name<small>Shown in Beam → Devices on your PC.</small></span><input type="text" id="deviceName" maxlength="40" placeholder="e.g. My phone"></label>
         </section>
@@ -572,8 +575,8 @@
 <script src="hub.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-10-27.2"></script>
-<script type="module" src="account.js?v=2026-10-27.2"></script>
+<script src="app.js?v=2026-10-27.3"></script>
+<script type="module" src="account.js?v=2026-10-27.3"></script>
 <script src="agent.js"></script>
 <script src="browser.js"></script>
 </body>

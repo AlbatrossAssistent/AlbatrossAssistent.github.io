@@ -957,10 +957,57 @@ setInterval(() => { for (const [d, m] of liveHeads) { if (!d.isConnected || !m.p
 // The AI can stop and ask: it ends its reply with [[ask: question | option 1 | option 2]]. The page shows the question with the
 // options as buttons (or the user types their own answer), and the choice goes back as the next message.
 function stripAsk(t) {
+  t = t.replace(/\s*\[\[remember:[^\]]*\]\]/gi, "");                     // memory suggestions show as a card, not as text
   const i = t.lastIndexOf("[[");
   if (i < 0) return /\[$/.test(t) ? t.slice(0, -1) : t;
   const tail = t.slice(i);
-  return "[[ask:".startsWith(tail.toLowerCase()) || /^\[\[ask:/i.test(tail) ? t.slice(0, i).trimEnd() : t;
+  return "[[ask:".startsWith(tail.toLowerCase()) || /^\[\[ask:/i.test(tail) || "[[remember:".startsWith(tail.toLowerCase()) || /^\[\[remember:/i.test(tail) ? t.slice(0, i).trimEnd() : t;
+}
+// ---------- Memory: things about the user the AI keeps for every chat; it suggests them ([[remember: ...]]), the user saves them ----------
+const memory = () => (S.memory = Array.isArray(S.memory) ? S.memory : []);
+function parseRemember(t) { return [...String(t || "").matchAll(/\[\[remember:\s*([^\]]+?)\s*\]\]/gi)].map((m) => m[1].trim().slice(0, 240)).filter(Boolean).slice(0, 3); }
+// the same fact in other words still counts as known: most of the meaning words are shared ("likes short answers" ~ "prefers short answers")
+const factWords = (t) => new Set(t.toLowerCase().replace(/^the user\s+/, "").split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 3));
+const sameFact = (a, b) => { const x = factWords(a), y = factWords(b); if (!x.size || !y.size) return a.trim().toLowerCase() === b.trim().toLowerCase(); let n = 0; for (const w of x) if (y.has(w)) n++; return n / Math.min(x.size, y.size) >= 0.6; };
+function rememberCard(m, facts) {
+  m.remembered = m.remembered || {};
+  const c = document.createElement("div"); c.className = "mem-card";
+  for (const f of facts) {
+    const known = memory().some((x) => sameFact(x.text, f)), state = m.remembered[f] || (known ? "saved" : "");
+    const row = document.createElement("div"); row.className = "mem-row" + (state ? " " + state : "");
+    row.innerHTML = `<svg class="i" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 3.4 2 4.3.6.7 1 1.4 1 2.2V17h6v-1.5c0-.8.4-1.5 1-2.2.8-.9 2-2.1 2-4.3a6 6 0 0 0-6-6zM10 20h4"/></svg><span class="mem-tx"><small></small><b></b></span>`;
+    row.querySelector("small").textContent = state === "saved" ? "Remembered" : state === "no" ? "Not remembered" : "Remember this about you?";
+    row.querySelector("b").textContent = f;
+    if (!state) {
+      const yes = document.createElement("button"); yes.type = "button"; yes.className = "btn small primary"; yes.textContent = "Save";
+      const no = document.createElement("button"); no.type = "button"; no.className = "btn small"; no.textContent = "No";
+      yes.onclick = () => { if (!memory().some((x) => sameFact(x.text, f))) memory().push({ id: "m" + Date.now().toString(36), text: f, at: Date.now() }); m.remembered[f] = "saved"; saveSettings(); saveChats(); c.replaceWith(rememberCard(m, facts)); toast("Remembered. See or change it in Settings → Chat → Memory"); };
+      no.onclick = () => { m.remembered[f] = "no"; saveChats(); c.replaceWith(rememberCard(m, facts)); };
+      row.append(yes, no);
+    }
+    c.appendChild(row);
+  }
+  return c;
+}
+// the facts, for the AI (and the instruction to suggest new ones)
+function memoryForAI() {
+  if (S.memoryOn === false) return "";
+  const list = memory();
+  return (list.length ? "What the user asked you to remember about them (use it when it helps, don't repeat it back unasked):\n" + list.map((x) => "- " + x.text).join("\n") + "\n\n" : "") +
+    "When the user tells you something lasting about themselves that would help in later chats (their name, school or job, devices, likes, people and places they mention often) and it isn't in the list above, add one line [[remember: one short sentence about the user]] at the end of your reply (before an [[ask: ...]] line if there is one). The user decides if it is saved.";
+}
+function paintMemory() {
+  const box = $("#memList"); if (!box) return;
+  $("#memoryOn").checked = S.memoryOn !== false;
+  box.innerHTML = memory().length ? "" : '<div class="empty-note" style="padding:4px 0">Nothing yet. When you tell the AI about yourself, it offers to remember it.</div>';
+  for (const x of memory()) {
+    const r = document.createElement("div"); r.className = "mem-item";
+    r.innerHTML = '<input type="text" maxlength="240"><button class="icon-btn" type="button" aria-label="Forget this" title="Forget this">✕</button>';
+    const inp = r.querySelector("input"); inp.value = x.text;
+    inp.onchange = () => { const v = inp.value.trim(); if (v) x.text = v; else S.memory = memory().filter((y) => y !== x); saveSettings(); paintMemory(); };
+    r.querySelector("button").onclick = () => { S.memory = memory().filter((y) => y !== x); saveSettings(); paintMemory(); };
+    box.appendChild(r);
+  }
 }
 function parseAsk(t) {
   const m = /\[\[ask:\s*([^\]]*?)\s*\]\]\s*$/i.exec(t || "");
@@ -1004,6 +1051,8 @@ function fillBot(d, m, idx, live) {
     const body = document.createElement("div"); body.className = "md";
     body.innerHTML = m.content ? md(stripAsk(m.content)) : "";
     c.appendChild(body);
+    const facts = !live && S.memoryOn !== false ? parseRemember(m.content) : [];
+    if (facts.length) c.appendChild(rememberCard(m, facts));
     const ask = !live && parseAsk(m.content);
     if (ask) c.appendChild(askCard(ask, idx === current.messages.map(x => !x.isEvent).lastIndexOf(true)));
   }
@@ -2058,6 +2107,7 @@ async function chat(model) {
     system += "\n\nWhen a program needs more than one file (for example a game with index.html, style.css and game.js), write every file in full in its own code block and put its file name in bold on the line right before the block, like **game.js**. Link the files to each other with relative paths (<link rel=\"stylesheet\" href=\"style.css\">, <script src=\"game.js\"><\/script>, import ... from \"./util.js\"), so they run together in the built-in player.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     if (EFFORT_HINT[effort]) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
+    { const mem = memoryForAI(); if (mem) system = (system ? system + "\n\n" : "") + mem; }
     if (S.askMid !== false) system = (system ? system + "\n\n" : "") + "If you really need something from the user before you can do the job well (a choice between options, a missing detail), ask by ending your reply with exactly one line like [[ask: Your question? | Option A | Option B | Option C]] with 2 to 4 short options, and write nothing after it. The user can also type their own answer. If a sensible assumption works, make it and don't ask.";
     { const prev = [...current.messages].reverse().find(m => m.role === "assistant" && m.model && !m.isEvent); if (prev && prev.model !== model) addEvent("model", `${model} takes over from ${prev.model}`, bubble); }
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
@@ -3393,6 +3443,7 @@ function openSettings(tab) {
   $("#chatTypeLine").hidden = true;
   $("#webSearch").checked = searchAvailable && S.webSearch;
   for (const k of ["enterSends", "showStats", "think", "autoTitle", "persist", "intro", "compact"]) $("#" + k).checked = !!S[k];
+  paintMemory();
   $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#chatsDeviceOnly").checked = !!S.chatsDeviceOnly; $("#bgJobs").checked = S.bgJobs !== false; $("#askMid").checked = S.askMid !== false; $("#deviceName").value = S.deviceName || "";
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
   if (tab) switchTab(tab);
@@ -3497,6 +3548,9 @@ $("#chatsDeviceOnly").onchange = e => { S.chatsDeviceOnly = e.target.checked; sa
 $("#chatsOnPC").onchange = e => { S.chatsOnPC = e.target.checked; saveSettings(); if (S.chatsOnPC) chatSyncSoon(200); };
 $("#keepLocal").onchange = e => { S.keepLocal = e.target.checked; saveSettings(); if (e.target.checked) { store.set("chats", chats); store.set("chatSync", sync.sig); } else if (sync.ok) { store.del("chats"); store.del("chatSync"); } else { toast("Connect to your PC first, so the chats are safe there"); e.target.checked = true; S.keepLocal = true; saveSettings(); } };
 $("#askMid").onchange = e => { S.askMid = e.target.checked; saveSettings(); };
+$("#memoryOn").onchange = e => { S.memoryOn = e.target.checked; saveSettings(); };
+$("#memAdd").onclick = () => { const v = $("#memNew").value.trim(); if (!v) return $("#memNew").focus(); memory().push({ id: "m" + Date.now().toString(36), text: v.slice(0, 240), at: Date.now() }); $("#memNew").value = ""; saveSettings(); paintMemory(); };
+$("#memNew").onkeydown = (e) => { if (e.key === "Enter") $("#memAdd").click(); };
 $("#bgJobs").onchange = e => { S.bgJobs = e.target.checked; saveSettings(); };
 $("#deviceName").onchange = e => { S.deviceName = e.target.value.trim().slice(0, 40); saveSettings(); };
 $("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del("chats"); };
@@ -4573,8 +4627,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-27.2";
+const APP_VERSION = "2026-10-27.3";
 const WHATS_NEW = [
+  ["2026-10-27.3", ["Memory: when you tell the AI something lasting about yourself, it offers to remember it (Save or No); saved facts go with every chat, see and change them in Settings → Chat → Memory"]],
   ["2026-10-27.2", ["Hub: tiles float on a grid in Edit and snap into place; resize them from the corner","Hub: volume and brightness knobs and bars, a Now playing tile with cover, and routines (several steps on one tile)"]],
   ["2026-10-27.1", ["Under the hood: the app is split into its own files, and every update is tested in Chrome before it goes live"]],
   ["2026-10-26.21", ["The left sidebar folds into a slim strip of icons: the button at its top, or Ctrl+\\"]],
