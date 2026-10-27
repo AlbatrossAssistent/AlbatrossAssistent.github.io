@@ -1213,6 +1213,27 @@ function renderBlock(b, active) {
     }
     return wrap;
   }
+  if (b.type === "docs") {
+    const wrap = document.createElement("div"); wrap.className = "search-card docs-card";
+    const n = (b.results || []).length, files = [...new Set((b.results || []).map((r) => r.file))];
+    wrap.innerHTML = `<div class="search-bar ${b.active ? "active" : ""}"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/></svg><span class="q"></span>${b.active ? '<span class="spin"></span><span class="meta">Searching your documents…</span>' : `<span class="meta">${b.error ? "failed" : n ? files.length + " file" + (files.length === 1 ? "" : "s") : "nothing found"}</span>`}</div>`;
+    wrap.querySelector(".q").textContent = b.query;
+    if (b.error) { const e = document.createElement("div"); e.className = "tool-err"; e.textContent = b.error; wrap.appendChild(e); }
+    if (n) {
+      const list = document.createElement("div"); list.className = "results";
+      b.results.forEach((r, i) => {
+        const d = document.createElement("details"); d.className = "res doc-res";
+        d.innerHTML = '<summary><span class="dom"><span class="ini"></span><span class="d"></span></span><span class="tt"></span></summary><div class="doc-pass"></div>';
+        d.querySelector(".ini").textContent = (r.file.split(".").pop() || "?").slice(0, 3).toUpperCase();
+        d.querySelector(".d").textContent = r.page ? (/\.pptx$/i.test(r.file) ? "slide " : "page ") + r.page : "passage " + (i + 1);
+        d.querySelector(".tt").textContent = r.file; d.title = r.path || r.file;
+        d.querySelector(".doc-pass").textContent = r.text;
+        list.appendChild(d);
+      });
+      wrap.appendChild(list);
+    }
+    return wrap;
+  }
   if (b.type === "images") {
     const wrap = document.createElement("div"); wrap.className = "photo-card";
     wrap.innerHTML = `<div class="search-bar ${b.active ? "active" : ""}">${MAG}<span class="q"></span>${b.active ? '<span class="spin"></span><span class="meta">Finding photos…</span>' : `<span class="meta">${b.error ? "failed" : (b.images || []).length + " photos"}</span>`}</div>`;
@@ -1971,7 +1992,7 @@ async function send(textOverride) {
     if (r.aborted) return;
     tool = r.tool && r.tool !== "chat" ? r.tool : ""; task = r.task || "";
   }
-  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "music" && window.runMusicTool ? window.runMusicTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model));
+  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "music" && window.runMusicTool ? window.runMusicTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : tool === "docs" ? chat(model, { docs: text }) : chat(model));
 }
 
 // What the chat model is told about the app: a short description and the list of its tools (the switched-on ones, and which
@@ -1984,6 +2005,7 @@ const TOOL_LIST = [
   ["graph", "Graphs", "charts from numbers or real data"],
   ["chances", "Chances", "estimates of how likely something is, and predictions"],
   ["image", "Pictures", "makes and changes pictures"],
+  ["docs", "Documents", "answers questions from the user's own documents on the PC (school notes, PDFs, Word, PowerPoint, Excel), naming the files"],
   ["challenge", "Challenge", "finds a hidden word in a puzzle file attached with the paperclip"],
 ];
 function whatYouCanDo() {
@@ -2018,6 +2040,7 @@ let searchAvailable = false;
 function toolsBase() { return (S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, ""); }
 let imageSearchAvailable = false;
 async function checkSearch() {
+  if (connected) checkDocs();                          // whether Documents can take part (folders read on the PC)
   searchAvailable = false;
   if (toolsBase()) {
     try { const st = await (await fetch(toolsBase() + "/tools/status")).json(); searchAvailable = !!st.webSearch; imageSearchAvailable = !!st.imageSearch; } catch {}
@@ -2081,7 +2104,7 @@ async function runTool(name, args, block) {
   return JSON.stringify({ title: j.title, url: args.url, content: j.content });
 }
 
-async function chat(model) {
+async function chat(model, opts = {}) {
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble);
@@ -2108,6 +2131,16 @@ async function chat(model) {
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     if (EFFORT_HINT[effort]) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
     { const mem = memoryForAI(); if (mem) system = (system ? system + "\n\n" : "") + mem; }
+    if (opts.docs) {
+      const block = { type: "docs", query: opts.docs, active: true, results: [] };
+      reply.blocks.push(block); ph(reply, "working"); reply.phaseText = "Looking through your documents…"; redraw();
+      try { block.results = (await pcCall("/agent/docs/search", { q: opts.docs, k: 6 })).results || []; }
+      catch (e) { block.error = e.message; }
+      block.active = false; block.done = true; delete reply.phaseText; redraw();
+      system = (system ? system + "\n\n" : "") + (block.results.length
+        ? "Answer from these passages of the user's own documents. Say which file the answer comes from, like (Biology notes.pdf, page 3). If they don't contain the answer, say so plainly, then answer from general knowledge if you can and mark that part as not from their documents.\n\n" + block.results.map((r, i) => `[${i + 1}] ${r.file}${r.page ? ", " + (/\.pptx$/i.test(r.file) ? "slide " : "page ") + r.page : ""}:\n${r.text}`).join("\n\n")
+        : "The user's documents were searched for this, but nothing matched" + (block.error ? " (" + block.error + ")" : "") + ". Say so briefly, then help from general knowledge and say it isn't from their documents.");
+    }
     if (S.askMid !== false) system = (system ? system + "\n\n" : "") + "If you really need something from the user before you can do the job well (a choice between options, a missing detail), ask by ending your reply with exactly one line like [[ask: Your question? | Option A | Option B | Option C]] with 2 to 4 short options, and write nothing after it. The user can also type their own answer. If a sensible assumption works, make it and don't ask.";
     { const prev = [...current.messages].reverse().find(m => m.role === "assistant" && m.model && !m.isEvent); if (prev && prev.model !== model) addEvent("model", `${model} takes over from ${prev.model}`, bubble); }
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
@@ -2210,6 +2243,10 @@ async function chat(model) {
 // ---------- tools: the AI picks them by itself (Settings → Tools switches single ones off) ----------
 let toolMode = "";   // older code paths still look at it; nothing sets it anymore
 const toolOn = (k) => S.tools?.[k] !== false;
+// Documents only takes part once the PC has some indexed (docsReady, from the PC's status); the other tools whenever they are on
+let docsReady = false;
+const routeOn = (k) => toolOn(k) && (k !== "docs" || docsReady);
+async function checkDocs() { try { const j = await pcCall("/agent/docs/status", {}); docsReady = j.files > 0; return j; } catch { docsReady = false; return null; } }
 // Quick check for words that hint at a tool, so an ordinary chat message costs nothing extra.
 const W = (alts) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, "iu");
 const TOOLISH = {
@@ -2222,7 +2259,9 @@ TOOLISH.notes = W("notes?|notiz\\p{L}*|lists?|liste\\p{L}*|to-?dos?|todo-?liste|
 TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|browser|webpage|web ?page|website|url|https?|html|javascript|run (?:this|the|my) code");
 // asking for a program, website or game to be made: that's the Agent's job too (it writes the files and runs them)
 TOOLISH.agentCode = new RegExp("(?<![\\p{L}\\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|schreib\\p{L}*|erstell\\p{L}*|programmier\\p{L}*|bau\\p{L}*)(?![\\p{L}\\p{N}])[^.?!]{0,60}(?<![\\p{L}\\p{N}])(?:program|script|app|application|website|web ?page|game|bot|tool|html|python|javascript|node|java|c\\+\\+|css|api|function|class|code|programm|skript|webseite|spiel)(?![\\p{L}\\p{N}])", "iu");
+TOOLISH.docs = W("documents?|docs?|dokument\\p{L}*|unterlagen|pdfs?|docx|pptx|xlsx|skript\\p{L}*|hefter|mitschrift\\p{L}*|arbeitsbl[aä]tt\\p{L}*|handouts?|worksheets?|my notes|meine[nm]? notizen|according to|laut|in (?:my|meinen?) \\p{L}+|what did (?:we|i) (?:learn|write|have)|was haben wir");
 const ROUTE_ABOUT = {
+  docs: "they ask something that should be answered from their own documents on the PC (school notes, worksheets, PDFs, Word or PowerPoint files, their own files about a topic), or ask what their documents say about something",
   music: "they want a piece of music made: a song, melody, beat, jingle or tune to listen to or open in GarageBand (not lyrics or a poem alone, and not questions about music)",
   notes: "they want something written down in their notes, a note or list made or changed (a shopping list, to-do list, ideas, steps), something added to or ticked off a list, or ask what is on one of their notes or lists",
   slides: "they want a presentation, slide deck or keynote made",
@@ -2234,12 +2273,12 @@ const ROUTE_ABOUT = {
 // (no thinking), with its own little bubble so the wait is never silent. Returns { tool, task } or { aborted }.
 // which tool made an answer ("" for a plain one); a follow-up to a tool's answer ("make it faster", "add bread too") has no
 // keyword of its own, so it always goes to the router, which is told what the earlier answer was
-const BLOCK_TOOL = { music: "music", notes: "notes", deck: "slides", chart: "graph", chances: "chances", agent: "agent", challenge: "challenge" };
+const BLOCK_TOOL = { docs: "docs", music: "music", notes: "notes", deck: "slides", chart: "graph", chances: "chances", agent: "agent", challenge: "challenge" };
 const toolOfMsg = (m) => ((m && m.blocks) || []).map((b) => BLOCK_TOOL[b.type]).find(Boolean) || "";
 async function routeTool(model, text) {
   const lastBot = current.messages.slice(0, -1).filter(m => m.role === "assistant" && !m.isEvent).at(-1), lastTool = toolOfMsg(lastBot);
-  const hit = Object.keys(TOOLISH).some(k => toolOn(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text)) || (!!lastTool && toolOn(lastTool));
-  const enabled = Object.keys(ROUTE_ABOUT).filter(toolOn);
+  const hit = Object.keys(TOOLISH).some(k => routeOn(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text)) || (!!lastTool && routeOn(lastTool));
+  const enabled = Object.keys(ROUTE_ABOUT).filter(routeOn);
   if (!hit || !enabled.length) return { tool: "" };
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
   const bubble = botBubble(reply, -1); $("#inner").appendChild(bubble); fillBot(bubble, reply, -1, true); scrollDown(true);
@@ -3604,7 +3643,34 @@ function paintDeckPreset() {
   box.innerHTML = `<small>Look of new presentations</small><div class="dz-row">${sel("theme", Object.keys(DECK_THEMES), "Design")}${sel("fonts", Object.keys(DECK_FONTS), "Fonts")}${sel("transition", DECK_TRANSITIONS, "Transition")}${sel("animStyle", DECK_STYLES, "Animation style")}${sel("animation", ["entrance", "build", "none"], "Animation")}</div>`;
   box.querySelectorAll("select").forEach((s) => (s.onchange = () => { S.deckPreset = { ...(S.deckPreset || {}), [s.dataset.p]: s.value }; if (!s.value) delete S.deckPreset[s.dataset.p]; saveSettings(); }));
 }
-function fillToolSwitches() { paintDeckPreset(); $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
+// Documents: the folders on the PC that are searched, indexing, and the search model
+let docsPoll = 0;
+async function paintDocs() {
+  const box = $("#docsBox"); if (!box) return;
+  const j = await checkDocs();
+  if (!j) { box.innerHTML = '<div class="note" style="margin:0">Connect to your PC (with the Albatross host running) to pick folders.</div>'; return; }
+  const status = j.running ? `Reading ${j.done} of ${j.total}${j.file ? ": " + j.file : ""}…` : j.error ? "⚠ " + j.error : j.files ? `${j.files} file${j.files === 1 ? "" : "s"} ready (${j.passages} passages)${j.failed ? `, ${j.failed} couldn't be read` : ""}` : j.folders.length ? "Not read yet: press Read now." : "No folders yet.";
+  box.innerHTML = `<div class="docs-folders"></div>
+    <div class="row"><input id="docsNew" placeholder="${j.home}\\Documents\\School" autocomplete="off" style="flex:1 1 240px"><button class="btn small" id="docsAdd" type="button">Add folder</button></div>
+    <div class="row" style="align-items:center">${j.folders.length ? `<button class="btn small primary" id="docsIndex" type="button"${j.running ? " disabled" : ""}>Read now</button>` : ""}${j.hasModel ? "" : '<button class="btn small" id="docsPull" type="button">Download the search model (0.6 GB)</button>'}<small class="docs-st"></small></div>`;
+  box.querySelector(".docs-st").textContent = status;
+  const list = box.querySelector(".docs-folders");
+  const save = async (folders) => { try { await pcCall("/agent/docs/folders", { folders }); } catch (e) { toast(e.message); } paintDocs(); };
+  for (const f of j.folders) {
+    const r = document.createElement("div"); r.className = "mem-item";
+    r.innerHTML = '<span class="docs-path"></span><button class="icon-btn" type="button" aria-label="Remove folder" title="Remove (the files stay where they are)">✕</button>';
+    r.querySelector(".docs-path").textContent = f;
+    r.querySelector("button").onclick = () => save(j.folders.filter((x) => x !== f));
+    list.appendChild(r);
+  }
+  $("#docsAdd").onclick = () => { const v = $("#docsNew").value.trim(); if (!v) return $("#docsNew").focus(); save([...j.folders, v]); };
+  $("#docsNew").onkeydown = (e) => { if (e.key === "Enter") $("#docsAdd").click(); };
+  if ($("#docsIndex")) $("#docsIndex").onclick = async () => { try { await pcCall("/agent/docs/index", {}); } catch (e) { toast(e.message); } paintDocs(); };
+  if ($("#docsPull")) $("#docsPull").onclick = async (e) => { e.target.disabled = true; e.target.textContent = "Downloading…"; try { await pcCall("/agent/docs/pull", {}); toast("Search model downloaded"); } catch (err) { toast("Download failed: " + err.message); } paintDocs(); };
+  clearTimeout(docsPoll);
+  if (j.running && $("#settings").open) docsPoll = setTimeout(paintDocs, 1500);
+}
+function fillToolSwitches() { paintDocs(); paintDeckPreset(); $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
 for (const el of $$("[data-tool]")) el.onchange = () => { S.tools = { ...(S.tools || {}), [el.dataset.tool]: el.checked }; saveSettings(); };
 const _openSettings = openSettings;
 openSettings = function (tab) { fillToolSwitches(); return _openSettings(tab); };
@@ -4627,8 +4693,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-27.3";
+const APP_VERSION = "2026-10-27.4";
 const WHATS_NEW = [
+  ["2026-10-27.4", ["Documents: pick folders on your PC in Settings → Tools → Documents and ask about them in any chat (“what do my notes say about photosynthesis?”). They are read on the PC (PDF, Word, PowerPoint, Excel, text, web pages), the answer names the file and page, and the passages it used show above it"]],
   ["2026-10-27.3", ["Memory: when you tell the AI something lasting about yourself, it offers to remember it (Save or No); saved facts go with every chat, see and change them in Settings → Chat → Memory"]],
   ["2026-10-27.2", ["Hub: tiles float on a grid in Edit and snap into place; resize them from the corner","Hub: volume and brightness knobs and bars, a Now playing tile with cover, and routines (several steps on one tile)"]],
   ["2026-10-27.1", ["Under the hood: the app is split into its own files, and every update is tested in Chrome before it goes live"]],

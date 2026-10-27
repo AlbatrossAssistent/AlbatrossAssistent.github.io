@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-10-27.3">
+<link rel="stylesheet" href="app.css?v=2026-10-27.4">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -343,6 +343,8 @@
           <label class="check"><span>Chances &amp; predictions<small>Estimates how likely something is and how it may develop.</small></span><input type="checkbox" class="switch" data-tool="chances"></label>
           <label class="check"><span>Music<small>Composes a piece when you ask (“make a calm lo-fi beat”): play it here, or download it as MIDI for GarageBand or as a WAV.</small></span><input type="checkbox" class="switch" data-tool="music"></label>
           <label class="check"><span>Notes<small>Writes into your notes when you ask (“put milk on my shopping list”, “what is on my to-do list?”).</small></span><input type="checkbox" class="switch" data-tool="notes"></label>
+          <label class="check"><span>Documents<small>Ask about your own files (“what does my biology worksheet say about enzymes?”). Pick folders on your PC; they are read there, and answers name the file. Reads PDF, Word, PowerPoint, Excel, text and web pages; never changes them.</small></span><input type="checkbox" class="switch" data-tool="docs"></label>
+          <div class="docs-box" id="docsBox"></div>
           <label class="check"><span>Challenge<small>Attach a puzzle file with the paperclip and the AI digs for the hidden word.</small></span><input type="checkbox" class="switch" data-tool="challenge"></label>
           <label class="check"><span>Agent<small>Handles jobs with your files, mail, web pages and printer by itself, step by step, inside the chat. Also writes programs, websites and games: it saves them in Code projects on your PC, runs them in the Code tab and fixes what doesn't work. Sending mail and printing always ask you first. Needs a model that can use tools. (Also open as the Agent tab in Home.)</small></span><input type="checkbox" class="switch" data-tool="agent"></label>
         </section>
@@ -575,8 +577,8 @@
 <script src="hub.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-10-27.3"></script>
-<script type="module" src="account.js?v=2026-10-27.3"></script>
+<script src="app.js?v=2026-10-27.4"></script>
+<script type="module" src="account.js?v=2026-10-27.4"></script>
 <script src="agent.js"></script>
 <script src="browser.js"></script>
 </body>

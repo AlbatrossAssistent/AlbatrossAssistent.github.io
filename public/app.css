@@ -1628,3 +1628,15 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 .mem-list { display: flex; flex-direction: column; gap: 6px; }
 .mem-item { display: flex; align-items: center; gap: 6px; } .mem-item input { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 7px 11px; }
 .mem-add input { font: inherit; font-size: 14px; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 7px 11px; }
+
+/* Documents (app.js): sources under an answer, and the folder list in Settings → Tools */
+.docs-card .search-bar > svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
+.doc-res { display: block; flex-basis: 220px; } .doc-res[open] { flex-basis: 340px; }
+.doc-res > summary { display: flex; flex-direction: column; gap: 4px; cursor: pointer; list-style: none; } .doc-res > summary::-webkit-details-marker { display: none; }
+.doc-res .ini { width: auto; min-width: 18px; padding: 0 5px; border-radius: 6px; font-size: 9.5px; letter-spacing: .03em; } .doc-res .d { white-space: nowrap; }
+.doc-pass { margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--muted); white-space: pre-wrap; max-height: 180px; overflow: auto; }
+.docs-box { display: flex; flex-direction: column; gap: 8px; margin: -4px 0 6px; }
+.docs-folders { display: flex; flex-direction: column; gap: 6px; }
+.docs-path { flex: 1; min-width: 0; font-size: 13px; padding: 7px 11px; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.docs-box input { font: inherit; font-size: 14px; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 7px 11px; }
+.docs-st { color: var(--muted); }
