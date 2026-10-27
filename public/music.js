@@ -10,6 +10,33 @@ const INSTR = {
   brass: { gm: 61, name: "Brass" }, flute: { gm: 73, name: "Flute" }, lead: { gm: 80, name: "Synth lead" }, pad: { gm: 88, name: "Synth pad" },
   pluck: { gm: 46, name: "Harp pluck" }, bells: { gm: 9, name: "Bells" },
 };
+// real recordings (FluidR3 General MIDI sound font, one file per instrument, fetched once and cached by the browser); the synth below is the fallback
+const SF = "https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@gh-pages/FluidR3_GM/";
+const SF_NAME = { piano: "acoustic_grand_piano", epiano: "electric_piano_1", organ: "drawbar_organ", guitar: "acoustic_guitar_steel", bass: "electric_bass_finger", synthbass: "synth_bass_1", strings: "string_ensemble_1", choir: "choir_aahs", brass: "brass_section", flute: "flute", lead: "lead_1_square", pad: "pad_2_warm", pluck: "orchestral_harp", bells: "glockenspiel" };
+const NN = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"], noteName = (m) => NN[m % 12] + (Math.floor(m / 12) - 1);
+const sfText = {}, sfBuf = {};
+async function sample(ctx, inst, midi) {
+  try {
+    sfText[inst] = sfText[inst] || fetch(SF + SF_NAME[inst] + "-mp3.js").then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
+    const key = inst + noteName(midi);
+    sfBuf[key] = sfBuf[key] || (async () => {
+      const m = new RegExp('"' + noteName(midi) + '"\\s*:\\s*"data:audio/mp3;base64,([^"]+)"').exec(await sfText[inst]); if (!m) return null;
+      const bin = atob(m[1]), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      return ctx.decodeAudioData(u.buffer);
+    })();
+    return await sfBuf[key];
+  } catch { delete sfText[inst]; return null; }
+}
+// every note the song uses, decoded before it plays: { instrument: midi => AudioBuffer }
+async function preload(ctx, song) {
+  const out = {};
+  await Promise.all(song.tracks.filter((t) => !t.hits && SF_NAME[t.inst]).map(async (t) => {
+    const used = [...new Set(t.notes.map((n) => n.p))], got = new Map();
+    await Promise.all(used.map(async (p) => { const b = await sample(ctx, t.inst, p); if (b) got.set(p, b); }));
+    if (got.size === used.length) out[t.inst] = (p) => got.get(p);
+  }));
+  return out;
+}
 const DRUMS = { kick: 36, snare: 38, clap: 39, hat: 42, openhat: 46 };
 const COLORS = ["#0A84FF", "#FF9F0A", "#30D158", "#BF5AF2", "#FF375F", "#64D2FF", "#FFD60A", "#AC8E68"];
 
@@ -61,7 +88,14 @@ function buildSong(r) {
 }
 
 // ---------- the synthesizer ----------
-function voice(ctx, out, inst, time, midi, dur, vel) {
+function voice(ctx, out, inst, time, midi, dur, vel, smp) {
+  const buf = smp && smp[inst] && smp[inst](midi);
+  if (buf) {
+    const src = ctx.createBufferSource(), g = ctx.createGain(), end = time + dur, rel = inst === "piano" || inst === "pluck" || inst === "bells" || inst === "epiano" ? .5 : .25;
+    src.buffer = buf; src.connect(g); g.connect(out);
+    g.gain.setValueAtTime(.85 * vel, time); g.gain.setValueAtTime(.85 * vel, Math.max(time, end)); g.gain.linearRampToValueAtTime(0, end + rel);
+    src.start(time); src.stop(end + rel + .02); return;
+  }
   const f = 440 * Math.pow(2, (midi - 69) / 12), g = ctx.createGain(), end = time + dur;
   g.connect(out);
   const osc = (type, freq, det) => { const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq; if (det) o.detune.value = det; return o; };
@@ -94,14 +128,14 @@ function drum(ctx, out, k, time, vel) {
   if (k === "snare") { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = 190; og.gain.setValueAtTime(.3 * vel, time); og.gain.exponentialRampToValueAtTime(.001, time + .1); o.connect(og); og.connect(out); o.start(time); o.stop(time + .12); }
 }
 // everything of the song on one audio context (a live one, or an offline one for the WAV)
-function schedule(ctx, song, t0) {
+function schedule(ctx, song, t0, smp) {
   const master = ctx.createGain(); master.gain.value = .55;
   const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
   const spb = 60 / song.bpm;
   for (const tr of song.tracks) {
     if (tr.mute) continue;
     if (tr.hits) for (const h of tr.hits) drum(ctx, master, h.k, t0 + h.t * spb, h.v);
-    else for (const n of tr.notes) voice(ctx, master, tr.inst, t0 + n.t * spb, n.p, Math.max(.05, n.d * spb * .95), .9);
+    else for (const n of tr.notes) voice(ctx, master, tr.inst, t0 + n.t * spb, n.p, Math.max(.05, n.d * spb * .95), .9, smp);
   }
   return song.beats * spb;
 }
@@ -133,7 +167,7 @@ function midiFile(song) {
 async function wavFile(song) {
   const sr = 44100, len = song.beats * 60 / song.bpm + 2.5;
   const ctx = new OfflineAudioContext(2, Math.ceil(sr * len), sr);
-  schedule(ctx, song, .05);
+  schedule(ctx, song, .05, await preload(ctx, song));
   const buf = await ctx.startRendering(), L = buf.getChannelData(0), R = buf.getChannelData(1), n = L.length;
   const dv = new DataView(new ArrayBuffer(44 + n * 4));
   const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
@@ -208,11 +242,14 @@ window.musicCard = function (b) {
     t.onclick = () => { tr.mute = !tr.mute; t.classList.toggle("off", tr.mute); drawRoll(roll, song); if (playing && playing.card === card) { stopPlaying(); card.querySelector('[data-a="play"]').click(); } };
     card.querySelector(".mu-tracks").appendChild(t);
   }
-  card.querySelector('[data-a="play"]').onclick = (e) => {
+  card.querySelector('[data-a="play"]').onclick = async (e) => {
     if (playing && playing.card === card) return stopPlaying();
     stopPlaying();
-    const ctx = new (window.AudioContext || window.webkitAudioContext)(), t0 = ctx.currentTime + .08, dur = schedule(ctx, song, t0);
-    playing = { ctx, card, t0, dur }; e.target.textContent = "■ Stop";
+    const ctx = new (window.AudioContext || window.webkitAudioContext)(), btn = e.target; btn.textContent = "Loading sounds…"; btn.disabled = true;
+    const smp = await preload(ctx, song); btn.disabled = false;
+    if (playing) { try { ctx.close(); } catch {} return; }       // pressed again while loading
+    const t0 = ctx.currentTime + .08, dur = schedule(ctx, song, t0, smp);
+    playing = { ctx, card, t0, dur }; btn.textContent = "■ Stop";
     const pos = card.querySelector(".mu-head .pos");
     const tick = () => { if (!playing || playing.card !== card) return; const p = (ctx.currentTime - t0) / dur; if (p >= 1) { stopPlaying(); return; } pos.style.width = Math.max(0, p * 100) + "%"; playing.raf = requestAnimationFrame(tick); };
     tick();
@@ -223,5 +260,5 @@ window.musicCard = function (b) {
   requestAnimationFrame(() => drawRoll(roll, song));
   return w;
 };
-window.musicTest = { parseNotes, buildSong, midiFile };
+window.musicTest = { parseNotes, buildSong, midiFile, wavFile, preload };
 })();

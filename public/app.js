@@ -4693,8 +4693,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-27.5";
+const APP_VERSION = "2026-10-27.6";
 const WHATS_NEW = [
+  ["2026-10-27.6", ["Music: instruments now play real recordings (a General MIDI sound font: piano, guitar, strings, flute, brass, harp, organ and more) instead of the synthesizer; the first play of an instrument loads its sounds, drums and a missing connection fall back to the synth"]],
   ["2026-10-27.5", ["PC files: a trash icon on every file and folder (click twice to confirm) moves it to the Windows Recycle Bin, so it can be put back; only you can do this, the Agent still can't delete anything"]],
   ["2026-10-27.4", ["Documents: pick folders on your PC in Settings → Tools → Documents and ask about them in any chat (“what do my notes say about photosynthesis?”). They are read on the PC (PDF, Word, PowerPoint, Excel, text, web pages), the answer names the file and page, and the passages it used show above it"]],
   ["2026-10-27.3", ["Memory: when you tell the AI something lasting about yourself, it offers to remember it (Save or No); saved facts go with every chat, see and change them in Settings → Chat → Memory"]],
