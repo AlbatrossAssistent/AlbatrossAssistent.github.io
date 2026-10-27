@@ -124,9 +124,13 @@ const pcPower = {
       return [200, await schedule.set(j)];
     }
     // the Hub: media and volume keys, the Start menu's programs, opening a website, locking (done on the desktop by desktop.js)
-    if (p === "/pc/apps" || p === "/pc/media" || p === "/pc/launch" || p === "/pc/openurl" || p === "/pc/lockpc") {
+    if (p === "/pc/apps" || p === "/pc/media" || p === "/pc/launch" || p === "/pc/openurl" || p === "/pc/lockpc" || p === "/pc/volume" || p === "/pc/bright" || p === "/pc/playing") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       if (method === "GET" && p === "/pc/apps") return [200, await pcDesk.call("apps")];
+      // knobs and bars: GET reads, POST sets ({ level: 0..100, mute }); what is playing (the cover only when it changed)
+      if (p === "/pc/volume") return [200, await pcDesk.call("volume", method === "POST" ? { level: j.level, mute: j.mute } : null)];
+      if (p === "/pc/bright") return [200, await pcDesk.call("bright", method === "POST" ? { level: j.level } : null)];
+      if (p === "/pc/playing") return [200, await pcDesk.call("playing", { coverKey: String(j.coverKey || "") })];
       if (method !== "POST") return [405, { error: "POST only" }];
       if (p === "/pc/media") return [200, await pcDesk.call("key", String(j.key || ""))];
       if (p === "/pc/launch") { const r = await pcDesk.call("launch", String(j.id || "")); note(`Hub: opened ${r.name}`); return [200, r]; }

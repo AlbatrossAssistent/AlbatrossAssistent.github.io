@@ -4573,8 +4573,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-27.1";
+const APP_VERSION = "2026-10-27.2";
 const WHATS_NEW = [
+  ["2026-10-27.2", ["Hub: tiles float on a grid in Edit and snap into place; resize them from the corner","Hub: volume and brightness knobs and bars, a Now playing tile with cover, and routines (several steps on one tile)"]],
   ["2026-10-27.1", ["Under the hood: the app is split into its own files, and every update is tested in Chrome before it goes live"]],
   ["2026-10-26.21", ["The left sidebar folds into a slim strip of icons: the button at its top, or Ctrl+\\"]],
   ["2026-10-26.20", ["Hub: big buttons to control your PC from any device, like a stream deck. Drag controls into the grid (media keys, volume, programs, websites, lock, sleep, Jarvis commands, AI prompts, clock, PC load), then go full screen"]],

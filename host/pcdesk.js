@@ -36,7 +36,16 @@ function start() {
   })().finally(() => { starting = null; });
   return starting;
 }
+// a helper from an older version (after an update) is closed and started again once, so new commands are there
+const HELPER_V = 2;
+let checked = false;
+async function fresh() {
+  if (checked) return; checked = true;
+  try { const p = await ask("ping"); if (p.v === HELPER_V) return; const i = info(); if (i && i.pid) try { process.kill(i.pid); } catch {} await sleep(500); } catch {}
+  try { fs.unlinkSync(INFO); } catch {}
+}
 async function call(cmd, arg) {
+  await fresh();
   try { return await ask(cmd, arg); }
   catch (e) { if (e.answered) throw e; await start(); return ask(cmd, arg); }
 }

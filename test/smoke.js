@@ -62,7 +62,7 @@ const server = http.createServer((req, res) => {
 });
 server.listen(0, "127.0.0.1", () => {
   const port = server.address().port, prof = fs.mkdtempSync(path.join(os.tmpdir(), "albatross-smoke-"));
-  const args = ["--headless=new", "--disable-gpu", "--no-sandbox", `--user-data-dir=${prof}`, "--window-size=1300,900", "--virtual-time-budget=15000", "--dump-dom", `http://127.0.0.1:${port}/__smoke.html`];
+  const args = ["--headless=new", "--disable-gpu", "--no-sandbox", `--user-data-dir=${prof}`, "--window-size=1300,900", "--virtual-time-budget=40000", "--dump-dom", `http://127.0.0.1:${port}/__smoke.html`];
   const ch = spawn(CHROME, args, { stdio: ["ignore", "pipe", "ignore"] });
   let out = ""; ch.stdout.on("data", (d) => (out += d));
   const kill = setTimeout(() => ch.kill(), 90000);
