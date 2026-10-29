@@ -1646,3 +1646,14 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 .fitem .pf-del:hover, .fitem .pf-del.armed { color: var(--danger, #ff5a5f); background: color-mix(in srgb, var(--danger, #ff5a5f) 12%, transparent); }
 .fitem .pf-del svg { width: 16px; height: 16px; }
 .pf-del-txt svg { width: 15px; height: 15px; } .pf-del-txt.armed { color: var(--danger, #ff5a5f); }
+
+/* Voice (voice.js): the mic buttons in the message box and the hands-free conversation */
+.mic-btn.rec { color: #fff; background: #ff453a; box-shadow: 0 0 0 calc(2px + var(--lv, 0) * 10px) color-mix(in srgb, #ff453a 35%, transparent); }
+.mic-btn.busy { opacity: .6; animation: pulse 1s ease-in-out infinite; }
+.voice-ov { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: color-mix(in srgb, var(--bg, #000) 82%, transparent); backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); padding: 24px; text-align: center; }
+.vo-orb { width: 140px; height: 140px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #7fd0ff, var(--accent) 60%, #0a3a8c); box-shadow: 0 0 calc(30px + var(--lv, 0) * 90px) color-mix(in srgb, var(--accent) 60%, transparent); transform: scale(calc(1 + var(--lv, 0) * .35)); transition: transform .08s, box-shadow .08s; }
+.voice-ov[data-s="thinking"] .vo-orb, .voice-ov[data-s="loading"] .vo-orb { animation: pulse 1.1s ease-in-out infinite; }
+.voice-ov[data-s="speaking"] .vo-orb { animation: speakPulse .7s ease-in-out infinite; }
+@keyframes speakPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+.vo-state { font-size: 20px; font-weight: 600; } .vo-heard { color: var(--muted); max-width: 560px; min-height: 1.4em; }
+@keyframes pulse { 50% { opacity: .55; transform: scale(1.06); } }

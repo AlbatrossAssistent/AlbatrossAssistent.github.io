@@ -182,7 +182,30 @@ async function uploadRefs(images) {
 }
 
 // Runs one image and reports progress like Ollama does: {completed,total} lines, then {image, done:true}.
+// ComfyUI gets slower with every picture on a 16 GB PC (its cache fills the RAM) and sometimes hangs for good while loading.
+// So: after two pictures it is restarted before the next one, and a run that goes quiet for minutes is stopped, ComfyUI restarted, and tried once more.
+let made = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function killComfy() {
+  if (process.platform === "win32") await ps(`${COMFY_PROC} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`);
+  child = null; loaded = false; made = 0;
+  for (let i = 0; i < 30 && (await up()); i++) await sleep(500);
+}
 async function generate(body, emit, signal, log) {
+  if (made >= 2 && (await up())) {
+    let busy = true; try { const q = await (await fetch(COMFY + "/queue")).json(); busy = !!(q.queue_running?.length || q.queue_pending?.length); } catch {}
+    if (!busy) { log("Restarting ComfyUI between pictures so it stays fast"); emit({ model: body.model, status: "Restarting the picture engine…", done: false }); await killComfy(); }
+  }
+  try { await generateOnce(body, emit, signal, log); if (!body.warm) made++; }
+  catch (e) {
+    if (!(e.stalled || /Lost connection to ComfyUI/.test(e.message)) || signal?.aborted) throw e;
+    log("ComfyUI hung: restarting it and trying again");
+    emit({ model: body.model, status: "The picture engine hung, restarting it…", done: false });
+    await killComfy();
+    await generateOnce(body, emit, signal, log); if (!body.warm) made = 1;
+  }
+}
+async function generateOnce(body, emit, signal, log) {
   const name = isComfy(body.model) ? body.model : MODEL;
   if (!hasPython() || !hasFiles(name)) throw new Error(`${name} isn't fully installed on this PC`);
   const t0 = Date.now();
@@ -208,7 +231,7 @@ async function generate(body, emit, signal, log) {
     const j = await r.json();
     if (!r.ok || !j.prompt_id) throw new Error(j.error?.message || JSON.stringify(j.node_errors || j).slice(0, 300));
     const id = j.prompt_id;
-    let drawing = false;
+    let drawing = false, last = Date.now(), dog;
     const beat = setInterval(() => { if (!drawing) status(`Loading ${name.split(":")[0]} from disk… ${Math.round((Date.now() - t0) / 1000)} s`); }, 3000);
     const onAbort = () => {
       fetch(COMFY + "/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: [id] }) }).catch(() => {});
@@ -218,7 +241,9 @@ async function generate(body, emit, signal, log) {
     try {
       await new Promise((ok, fail) => {
         let lastPreview = 0;
+        dog = setInterval(() => { if (Date.now() - last > (drawing ? 150000 : 420000)) { fetch(COMFY + "/interrupt", { method: "POST" }).catch(() => {}); fail(Object.assign(new Error("ComfyUI stopped responding"), { stalled: true })); } }, 5000);
         ws.on("message", (raw, isBinary) => {
+          last = Date.now();
           if (isBinary) {      // a live preview of the picture being drawn: 4 bytes type (1), 4 bytes format (1 = JPEG, 2 = PNG), then the image
             const b = Buffer.isBuffer(raw) ? raw : Buffer.concat([].concat(raw));
             if (b.length > 8 && b.readUInt32BE(0) === 1 && Date.now() - lastPreview > 350) {
@@ -239,7 +264,7 @@ async function generate(body, emit, signal, log) {
         ws.on("close", () => fail(new Error("Lost connection to ComfyUI")));
         signal?.addEventListener("abort", () => fail(Object.assign(new Error("Stopped"), { name: "AbortError" })));
       });
-    } finally { signal?.removeEventListener("abort", onAbort); clearInterval(beat); }
+    } finally { signal?.removeEventListener("abort", onAbort); clearInterval(beat); clearInterval(dog); }
     // ComfyUI says "finished" a moment before it files the result in its history: ask again for a few seconds
     let img = null;
     for (let i = 0; i < 40 && !img; i++) {
@@ -303,7 +328,7 @@ let warmingUp = null;
 function warm(model, log) {
   if (warmingUp || (loaded && lastModel === model)) return;
   log(`Getting ${model} ready`);
-  warmingUp = generate({ model, prompt: "a plain grey background", width: 256, height: 256, steps: 1 }, () => {}, null, log)
+  warmingUp = generate({ model, prompt: "a plain grey background", width: 256, height: 256, steps: 1, warm: true }, () => {}, null, log)
     .then(() => log(`${model} is ready`), (e) => log(`Couldn't get ${model} ready: ${e.message}`))
     .finally(() => { warmingUp = null; });
 }

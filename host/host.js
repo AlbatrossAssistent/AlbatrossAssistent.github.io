@@ -155,7 +155,8 @@ const browserTool = require("./browser");
 const agentTools = require("./agent");
 const mailTools = require("./mail");
 const docsTool = require("./docs");
-const agentHandle = (method, p, body) => (p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : p.startsWith("/agent/docs/") ? docsTool.handle(method, p, body, note, { ollama: OLLAMA }) : agentTools.handle(method, p, body, note));
+const voiceTool = require("./voice");
+const agentHandle = (method, p, body) => (p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : p.startsWith("/agent/voice/") ? voiceTool.handle(method, p, body, note) : p.startsWith("/agent/docs/") ? docsTool.handle(method, p, body, note, { ollama: OLLAMA }) : agentTools.handle(method, p, body, note));
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }

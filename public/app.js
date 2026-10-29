@@ -3434,7 +3434,7 @@ function toast(t, o) {
   clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), o && o.action ? 6000 : 2200);
 }
 async function copy(t) { try { await navigator.clipboard.writeText(t); toast("Copied"); } catch { toast("Couldn't copy"); } }
-function speak(t) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t.replace(/[#*`]/g, "")); speechSynthesis.speak(u); }
+function speak(t) { if (window.voiceSpeak) return window.voiceSpeak(t); speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t.replace(/[#*`]/g, "")); speechSynthesis.speak(u); }
 function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 function b64ToBlob(b64, type) { const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type }); }
 function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, 220) + "px"; }
@@ -4693,8 +4693,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-27.6";
+const APP_VERSION = "2026-10-29.1";
 const WHATS_NEW = [
+  ["2026-10-29.1", ["Voice: a mic button in the message box types what you say; the wave button starts a hands-free conversation (it listens, answers, speaks, listens again; Esc or End conversation stops it); answers are read aloud with a natural voice. Listening (Whisper, on the graphics card) and speaking (Piper) run on your PC, the first use downloads the models (about 2 GB). Pictures: the picture engine restarts itself after every two pictures and when it hangs, then tries again"]],
   ["2026-10-27.6", ["Music: instruments now play real recordings (a General MIDI sound font: piano, guitar, strings, flute, brass, harp, organ and more) instead of the synthesizer; the first play of an instrument loads its sounds, drums and a missing connection fall back to the synth"]],
   ["2026-10-27.5", ["PC files: a trash icon on every file and folder (click twice to confirm) moves it to the Windows Recycle Bin, so it can be put back; only you can do this, the Agent still can't delete anything"]],
   ["2026-10-27.4", ["Documents: pick folders on your PC in Settings → Tools → Documents and ask about them in any chat (“what do my notes say about photosynthesis?”). They are read on the PC (PDF, Word, PowerPoint, Excel, text, web pages), the answer names the file and page, and the passages it used show above it"]],
