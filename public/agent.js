@@ -501,7 +501,7 @@ async function agentLoop(model, goal, signal) {
   const tools = enabledTools();
   for (let round = 0; round < 30; round++) {
     const effort = effortNow();
-    const body = { model, messages: msgs, stream: true, tools, options: buildOptions() };
+    const body = { model, messages: msgs, stream: true, tools, options: buildOptions(model) };
     if (caps.includes("thinking")) body.think = effort !== "low" ? (/gpt-oss/i.test(model) ? (effort === "max" ? "high" : effort) : true) : (/gpt-oss/i.test(model) ? "low" : false);
     const waiting = step("run", round ? "Thinking about the next step…" : "Making a plan…", "");
     let text = "", calls = [];

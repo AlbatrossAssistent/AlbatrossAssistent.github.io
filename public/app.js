@@ -2026,7 +2026,7 @@ async function getCaps(model) {
     for (let i = 0; i < 2; i++) {
       try {
         const j = await (await api("/api/show", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) })).json();
-        if (Array.isArray(j.capabilities)) return (capsCache[key] = j.capabilities);
+        if (Array.isArray(j.capabilities)) { const c = /(?:^|\n)num_ctx\s+(\d+)/.exec(j.parameters || ""); if (c) modelCtx[model] = Number(c[1]); return (capsCache[key] = j.capabilities); }
       } catch {}
       await new Promise((r) => setTimeout(r, 800));
     }
@@ -2169,7 +2169,7 @@ async function chat(model, opts = {}) {
     if (system) msgs.unshift({ role: "system", content: system });
 
     for (let round = 0; round < 6; round++) {
-      const body = { model, messages: msgs, stream: true, options: buildOptions() };
+      const body = { model, messages: msgs, stream: true, options: buildOptions(model) };
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
       if (canThink) body.think = useThink ? (gptoss ? (effort === "max" ? "high" : effort) : true) : (gptoss ? "low" : false);
       const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : [])];
@@ -2744,7 +2744,7 @@ const byteLen = (s) => new TextEncoder().encode(s).length;
 
 // One streamed answer as plain text (the JSON helper is askJSON).
 async function askText(model, caps, messages, onText, options = {}) {
-  const body = { model, messages, stream: true, options: { ...buildOptions(), temperature: 0.4, ...options } };
+  const body = { model, messages, stream: true, options: { ...buildOptions(model), temperature: 0.4, ...options } };
   if (caps.includes("thinking")) body.think = false;
   if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
   const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
@@ -2958,7 +2958,7 @@ function drawDeckSide() {
 
 async function askJSON(model, caps, messages, schema) {
   // streamed, so the connection never sits silent (a slow model used to hit the 5-minute timeout of a single answer)
-  const body = { model, messages, stream: true, format: schema, options: { ...buildOptions(), temperature: 0.6 } };
+  const body = { model, messages, stream: true, format: schema, options: { ...buildOptions(model), temperature: 0.6 } };
   if (caps.includes("thinking")) body.think = false;
   if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
   const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
@@ -3351,12 +3351,15 @@ async function readNdjson(res, onObj) {
   }
   if (buf.trim()) onObj(JSON.parse(buf));
 }
-function buildOptions() {
+// a model's own context size (num_ctx in its Modelfile, read from /api/show by getCaps): a big model set up to fit the graphics card
+// with a smaller context (qwen3.8-27b-ultra at 8k) must not be pushed partly off it by the 16k default (that makes it ~15x slower)
+const modelCtx = {};
+function buildOptions(model) {
   const o = {};
   for (const [k, v] of Object.entries(S.params)) if (v !== "" && v !== null && v !== undefined && !Number.isNaN(Number(v))) o[k] = Number(v);
   // Ollama's own default can be huge (its app was set to 128k): the memory for that pushes a 12B model partly
   // off the 12 GB graphics card and makes it ~7x slower. 16k is plenty for chats, slides and graphs.
-  if (o.num_ctx == null) o.num_ctx = 16384;
+  if (o.num_ctx == null) o.num_ctx = Math.min(16384, modelCtx[model] || 16384);
   // Ollama 0.40 also loads gemma4's small "draft" model for speculative decoding and crashes (HTTP 500) when the big model
   // has already filled the graphics card. Off, unless the user sets it.
   if (o.draft_num_predict == null) o.draft_num_predict = 0;
@@ -4693,8 +4696,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-29.1";
+const APP_VERSION = "2026-10-29.2";
 const WHATS_NEW = [
+  ["2026-10-29.2", ["New model qwen3.8-27b-ultra (27B, chat, thinking and tools): set up to fit the graphics card fully, so it answers fast; the app now keeps a model's own smaller context size instead of always asking for 16k"]],
   ["2026-10-29.1", ["Voice: a mic button in the message box types what you say; the wave button starts a hands-free conversation (it listens, answers, speaks, listens again; Esc or End conversation stops it); answers are read aloud with a natural voice. Listening (Whisper, on the graphics card) and speaking (Piper) run on your PC, the first use downloads the models (about 2 GB). Pictures: the picture engine restarts itself after every two pictures and when it hangs, then tries again"]],
   ["2026-10-27.6", ["Music: instruments now play real recordings (a General MIDI sound font: piano, guitar, strings, flute, brass, harp, organ and more) instead of the synthesizer; the first play of an instrument loads its sounds, drums and a missing connection fall back to the synth"]],
   ["2026-10-27.5", ["PC files: a trash icon on every file and folder (click twice to confirm) moves it to the Windows Recycle Bin, so it can be put back; only you can do this, the Agent still can't delete anything"]],

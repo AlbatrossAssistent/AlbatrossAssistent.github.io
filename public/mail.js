@@ -110,7 +110,7 @@ async function stream(messages, onText) {
   const model = textModel(); if (!model) throw new Error("Pick a model first");
   if (M.ctrl) M.ctrl.abort();
   M.ctrl = new AbortController();
-  const res = await chatApi({ model, messages, stream: true, think: false, options: buildOptions() }, M.ctrl.signal, "");
+  const res = await chatApi({ model, messages, stream: true, think: false, options: buildOptions(model) }, M.ctrl.signal, "");
   let text = "";
   await readNdjson(res, (o) => { if (o.error) throw new Error(o.error); const c = o.message && o.message.content; if (c) { text += c; onText(text); } });
   M.ctrl = null; return text;
