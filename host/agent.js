@@ -191,9 +191,50 @@ async function browse(url) {
   return { url: res.url, title: title.replace(/\s+/g, " ").trim().slice(0, 200), text: text.slice(0, 14000), truncated: text.length > 14000, links };
 }
 
+// ---------- the PC files code ----------
+// The PC files window (and everything else that reads files through /pcfiles/) needs a code the user picks. It is kept here as a
+// salted hash (<LocalAppData>\Albatross\pcfiles-code.json); the right code gets a key that works for 12 hours. 5 wrong codes in a
+// row lock it for 5 minutes. Forgot it: delete that file on the PC and pick a new one.
+const crypto = require("crypto");
+const CODE_FILE = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "pcfiles-code.json");
+const keys = new Map();                                   // key -> valid until
+let wrong = 0, lockedUntil = 0;
+const codeSet = () => fs.existsSync(CODE_FILE);
+const hashOf = (code, salt) => crypto.scryptSync(String(code), salt, 32).toString("hex");
+function checkCode(code) {
+  if (Date.now() < lockedUntil) throw new Error(`Too many wrong codes. Try again in ${Math.ceil((lockedUntil - Date.now()) / 60000)} min.`);
+  const { salt, hash } = JSON.parse(fs.readFileSync(CODE_FILE, "utf8"));
+  if (!crypto.timingSafeEqual(Buffer.from(hashOf(code, salt), "hex"), Buffer.from(hash, "hex"))) {
+    if (++wrong >= 5) { wrong = 0; lockedUntil = Date.now() + 5 * 60000; }
+    throw new Error("Wrong code");
+  }
+  wrong = 0;
+}
+function newKey() { const k = crypto.randomBytes(24).toString("hex"); keys.set(k, Date.now() + 12 * 3600000); return k; }
+function saveCode(code) {
+  if (!/^\d{4,12}$/.test(String(code || ""))) throw new Error("The code must be 4 to 12 digits.");
+  const salt = crypto.randomBytes(16).toString("hex");
+  fs.mkdirSync(path.dirname(CODE_FILE), { recursive: true });
+  fs.writeFileSync(CODE_FILE, JSON.stringify({ salt, hash: hashOf(code, salt) }));
+  keys.clear();
+}
+function codeRequest(p, j) {
+  if (p === "/pcfiles/code/status") return { set: codeSet(), unlocked: keys.get(j.key) > Date.now() };
+  if (p === "/pcfiles/code/set") {
+    if (codeSet()) checkCode(j.old);
+    saveCode(j.code);
+    return { key: newKey() };
+  }
+  if (p === "/pcfiles/code/unlock") { if (!codeSet()) throw new Error("No code yet"); checkCode(j.code); return { key: newKey() }; }
+  if (p === "/pcfiles/code/lock") { keys.delete(j.key); return { ok: true }; }
+  return null;
+}
+
 async function handle(method, p, body, note) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   try {
+    if (p.startsWith("/pcfiles/code/")) { const r = codeRequest(p, j); return r ? [200, r] : [404, { error: "Unknown request" }]; }
+    if (p.startsWith("/pcfiles/") && !(keys.get(j.key) > Date.now())) return [401, { error: codeSet() ? "PC files are locked" : "PC files need a code" }];
     if (p === "/pcfiles/roots") return [200, { roots: Object.entries(ROOTS).map(([id, r]) => ({ id, name: r.name, write: r.write, exists: fs.existsSync(r.dir) })), base: BASE }];
     if (p === "/pcfiles/list") return [200, list(j.spec)];
     if (p === "/pcfiles/read") return [200, read(j.spec, { b64: !!j.b64, max: j.max })];

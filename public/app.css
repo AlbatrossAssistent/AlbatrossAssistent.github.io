@@ -1657,3 +1657,10 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 @keyframes speakPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
 .vo-state { font-size: 20px; font-weight: 600; } .vo-heard { color: var(--muted); max-width: 560px; min-height: 1.4em; }
 @keyframes pulse { 50% { opacity: .55; transform: scale(1.06); } }
+
+/* PC files code (agent.js) */
+.pf-code { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 8px auto; text-align: center; }
+.pf-code small { color: var(--muted); }
+.pf-code input { font: inherit; font-size: 20px; letter-spacing: .3em; text-align: center; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.pf-code input::placeholder { letter-spacing: normal; font-size: 15px; }
+.pf-code .btn { justify-content: center; }

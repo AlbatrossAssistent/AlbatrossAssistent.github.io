@@ -31,6 +31,12 @@ const MODELS = {
     files: { unet: ["unet", "qwen-image-2.1-Ultra.gguf"], clip: ["text_encoders", "qwen3vl_8b_int8_convrot.safetensors"], vae: ["vae", "qwen_image_2.1_vae_bf16.safetensors"] },
     details: { family: "qwen-image", parameter_size: "7B", format: "comfyui", edit: true },
   },
+  // FLUX.2 [klein] 4B (Black Forest Labs, Apache 2.0): distilled, a picture in 4 steps; edits from reference pictures too.
+  // The 7.75 GB file is loaded at 8 bit (fits the 12 GB card); its text encoder is the same Qwen3-4B that Z-Image uses.
+  "flux2-klein:comfyui": {
+    files: { unet: ["diffusion_models", "flux-2-klein-4b.safetensors"], clip: ["text_encoders", "qwen_3_4b_fp8_mixed.safetensors"], vae: ["vae", "flux2-vae.safetensors"] },
+    details: { family: "flux2", parameter_size: "4B", format: "comfyui", edit: true },
+  },
   "omnigen2:comfyui": {
     files: { unet: ["unet", "omnigen2-fp32-q8_0.gguf"], clip: ["text_encoders", "qwen_2.5_vl_fp16.safetensors"], vae: ["vae", "ae.safetensors"] },
     details: { family: "omnigen2", parameter_size: "4B", format: "comfyui", edit: true },   // edit: takes reference pictures
@@ -146,6 +152,36 @@ function omnigenWorkflow({ prompt, width = 1024, height = 1024, steps = 20, seed
   return w;
 }
 
+// FLUX.2 [klein], as in ComfyUI's own template: 4 steps, no CFG (BasicGuider), FLUX.2's own schedule for the picture size.
+// Edits: every reference picture is scaled to about 1 megapixel and attached to the prompt with ReferenceLatent.
+function fluxWorkflow({ prompt, width = 1024, height = 1024, steps = 4, seed, refs = [] }) {
+  const F = MODELS["flux2-klein:comfyui"].files;
+  const w = {
+    1: { class_type: "UNETLoader", inputs: { unet_name: F.unet[1], weight_dtype: "fp8_e4m3fn" } },
+    2: { class_type: "CLIPLoader", inputs: { clip_name: F.clip[1], type: "flux2", device: "default" } },
+    3: { class_type: "VAELoader", inputs: { vae_name: F.vae[1] } },
+    4: { class_type: "CLIPTextEncode", inputs: { text: prompt, clip: ["2", 0] } },
+    5: { class_type: "EmptyFlux2LatentImage", inputs: { width, height, batch_size: 1 } },
+  };
+  let pos = ["4", 0], id = 20;
+  for (const name of refs) {
+    const load = String(id++), scale = String(id++), enc = String(id++), ref = String(id++);
+    w[load] = { class_type: "LoadImage", inputs: { image: name } };
+    w[scale] = { class_type: "ImageScaleToTotalPixels", inputs: { image: [load, 0], upscale_method: "lanczos", megapixels: 1, resolution_steps: 16 } };
+    w[enc] = { class_type: "VAEEncode", inputs: { pixels: [scale, 0], vae: ["3", 0] } };
+    w[ref] = { class_type: "ReferenceLatent", inputs: { conditioning: pos, latent: [enc, 0] } };
+    pos = [ref, 0];
+  }
+  w[10] = { class_type: "BasicGuider", inputs: { model: ["1", 0], conditioning: pos } };
+  w[11] = { class_type: "RandomNoise", inputs: { noise_seed: Number.isFinite(seed) ? seed : crypto.randomInt(2 ** 47) } };
+  w[12] = { class_type: "KSamplerSelect", inputs: { sampler_name: "euler" } };
+  w[13] = { class_type: "Flux2Scheduler", inputs: { steps, width, height } };
+  w[14] = { class_type: "SamplerCustomAdvanced", inputs: { noise: ["11", 0], guider: ["10", 0], sampler: ["12", 0], sigmas: ["13", 0], latent_image: ["5", 0] } };
+  w[8] = { class_type: "VAEDecode", inputs: { samples: ["14", 0], vae: ["3", 0] } };
+  w[9] = { class_type: "PreviewImage", inputs: { images: ["8", 0] } };
+  return w;
+}
+
 // Qwen-Image 2.1, as in ComfyUI's own template: its text encoder (Qwen3-VL-8B) also reads the reference pictures,
 // and hands out the conditioning and, for edits, a latent the size of the first reference. 25 steps, CFG 1.
 function qwenWorkflow({ prompt, width = 1024, height = 1024, steps = 25, seed, refs = [] }) {
@@ -216,7 +252,7 @@ async function generateOnce(body, emit, signal, log) {
     prompt: String(body.prompt || ""),
     width: clamp(body.width, 256, 2048, 1024) & ~15,
     height: clamp(body.height, 256, 2048, 1024) & ~15,
-    steps: clamp(body.steps, 1, 50, name.startsWith("qwen-image") ? 25 : name.startsWith("omnigen2") ? 20 : 8),
+    steps: clamp(body.steps, 1, 50, name.startsWith("qwen-image") ? 25 : name.startsWith("omnigen2") ? 20 : name.startsWith("flux2") ? 4 : 8),
     seed: body.seed === undefined ? undefined : Number(body.seed),
   };
   const clientId = crypto.randomUUID();
@@ -226,7 +262,7 @@ async function generateOnce(body, emit, signal, log) {
     loaded = true; lastModel = name;
     const refs = MODELS[name].details.edit ? await uploadRefs(body.images) : [];
     if (refs.length) log(`${name.split(":")[0]}: editing with ${refs.length} reference picture${refs.length > 1 ? "s" : ""}`);
-    const wf = name.startsWith("qwen-image") ? qwenWorkflow({ ...opts, refs }) : name.startsWith("omnigen2") ? omnigenWorkflow({ ...opts, refs }) : zimageWorkflow(opts);
+    const wf = name.startsWith("qwen-image") ? qwenWorkflow({ ...opts, refs }) : name.startsWith("flux2") ? fluxWorkflow({ ...opts, refs }) : name.startsWith("omnigen2") ? omnigenWorkflow({ ...opts, refs }) : zimageWorkflow(opts);
     const r = await fetch(COMFY + "/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: wf, client_id: clientId }) });
     const j = await r.json();
     if (!r.ok || !j.prompt_id) throw new Error(j.error?.message || JSON.stringify(j.node_errors || j).slice(0, 300));

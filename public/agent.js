@@ -12,12 +12,54 @@
 // ====================================================================== PC files ======================================================================
 const PF = { root: "all", path: "", mode: "browse", roots: [], sel: null };
 const IMG = /^image\/(png|jpe?g|gif|webp|bmp)$/;
+// The PC asks for a code before it shows or changes any file (host/agent.js). The key it hands out for the right code is kept
+// for this tab (12 hours at most); every /pcfiles/ request carries it, and a locked answer brings up the code form first.
+const pfKey = () => { try { return sessionStorage.getItem("albatross.pfKey") || ""; } catch { return ""; } };
+const pfSetKey = (k) => { try { k ? sessionStorage.setItem("albatross.pfKey", k) : sessionStorage.removeItem("albatross.pfKey"); } catch {} };
+async function pfCall(path, body) {
+  for (let i = 0; ; i++) {
+    try { return await pcCall(path, { ...body, key: pfKey() }); }
+    catch (e) { if (i || !/^PC files (are locked|need a code)/.test(e.message)) throw e; pfSetKey(""); await pfAsk(/need a code/.test(e.message)); }
+  }
+}
+// the code form, inside the PC files window (opened for it if needed); resolves once unlocked, rejects if the window is closed
+let pfAsking = null;
+function pfAsk(create) {
+  if (pfAsking) return pfAsking;
+  const dlg = $("#pcFilesDlg"), wasOpen = dlg.open;
+  if (!wasOpen) { $("#pfTitle").textContent = "PC files"; $("#pfRoots").innerHTML = ""; $("#pfCrumb").innerHTML = ""; $("#pfPrev").hidden = true; dlg.showModal(); }
+  const box = $("#pfList"), keep = box.innerHTML;
+  pfAsking = new Promise((resolve, reject) => {
+    box.innerHTML = `<form class="pf-code">${create
+      ? '<b>Pick a code for your PC files</b><small>4 to 12 digits. This website asks for it before anyone can see, download or delete files on your PC.</small><input type="password" inputmode="numeric" autocomplete="new-password" maxlength="12" placeholder="New code" data-f="a"><input type="password" inputmode="numeric" autocomplete="new-password" maxlength="12" placeholder="Same code again" data-f="b"><button class="btn primary" type="submit">Save code</button>'
+      : '<b>Enter the code for your PC files</b><input type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" placeholder="Code" data-f="a"><button class="btn primary" type="submit">Unlock</button><small>Forgot it? On the PC, delete the file pcfiles-code.json in %LOCALAPPDATA%\\Albatross and pick a new code here.</small>'}<div class="tool-err" hidden></div></form>`;
+    const form = box.querySelector("form"), err = form.querySelector(".tool-err"), a = form.querySelector('[data-f="a"]'), b = form.querySelector('[data-f="b"]');
+    const fail = (m) => { err.hidden = false; err.textContent = m; a.select(); };
+    const onClose = () => { pfAsking = null; reject(new Error("PC files stay locked")); };
+    dlg.addEventListener("close", onClose, { once: true });
+    a.focus();
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      if (create && a.value !== b.value) return fail("The two codes aren't the same.");
+      try {
+        const r = await pcCall(create ? "/pcfiles/code/set" : "/pcfiles/code/unlock", { code: a.value });
+        pfSetKey(r.key); dlg.removeEventListener("close", onClose); pfAsking = null; box.innerHTML = keep;
+        if (!wasOpen) dlg.close();
+        if (create) toast("Code saved. You'll need it to open your PC files.");
+        resolve();
+      } catch (x) { fail(x.message); }
+    };
+  });
+  return pfAsking;
+}
+window.pfCall = pfCall;
 async function pfOpen(mode) {
   PF.mode = mode || "browse"; PF.sel = null;
   $("#pfTitle").textContent = PF.mode === "pick" ? "Pick a file from your PC" : "PC files";
   $("#pfPrev").hidden = true;
   $("#pcFilesDlg").showModal();
-  try { PF.roots = (await pcCall("/pcfiles/roots", {})).roots; } catch (e) { PF.roots = []; $("#pfList").innerHTML = `<div class="empty-note">Couldn't reach your PC: ${esc(e.message)}. If it runs an older Albatross host, restart it.</div>`; $("#pfRoots").innerHTML = ""; return; }
+  $("#pfList").innerHTML = "";
+  try { PF.roots = (await pfCall("/pcfiles/roots", {})).roots; } catch (e) { PF.roots = []; $("#pfList").innerHTML = `<div class="empty-note">Couldn't reach your PC: ${esc(e.message)}. If it runs an older Albatross host, restart it.</div>`; $("#pfRoots").innerHTML = ""; return; }
   $("#pfRoots").innerHTML = PF.roots.map((r) => `<button data-r="${r.id}" class="${r.id === PF.root ? "on" : ""}">${esc(r.name)}</button>`).join("");
   $$("#pfRoots button").forEach((b) => (b.onclick = () => { PF.root = b.dataset.r; PF.path = ""; $$("#pfRoots button").forEach((x) => x.classList.toggle("on", x === b)); pfGo(); }));
   pfGo();
@@ -31,7 +73,7 @@ async function pfGo(path) {
   $("#pfCrumb").innerHTML = crumbs.join('<span>›</span>');
   $$("#pfCrumb button").forEach((b) => (b.onclick = () => pfGo(b.dataset.p)));
   const box = $("#pfList"); box.innerHTML = '<div class="empty-note">Loading…</div>';
-  let j; try { j = await pcCall("/pcfiles/list", { spec }); } catch (e) { box.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
+  let j; try { j = await pfCall("/pcfiles/list", { spec }); } catch (e) { box.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; return; }
   box.innerHTML = "";
   if (!j.entries.length) box.innerHTML = '<div class="empty-note">Nothing here yet.</div>';
   for (const f of j.entries) {
@@ -49,7 +91,7 @@ function pfTrashBtn(f) {
     e.stopPropagation();
     if (!armed) { armed = setTimeout(() => { armed = 0; b.classList.remove("armed"); b.textContent = ""; b.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'; }, 3500); b.classList.add("armed"); b.textContent = f.dir ? "Delete folder?" : "Sure?"; return; }
     clearTimeout(armed); b.disabled = true;
-    try { await pcCall("/pcfiles/trash", { spec: PF.root + ":" + (PF.path ? PF.path + "/" : "") + f.name }); toast(f.name + " is in the Recycle Bin"); pfGo(); }
+    try { await pfCall("/pcfiles/trash", { spec: PF.root + ":" + (PF.path ? PF.path + "/" : "") + f.name }); toast(f.name + " is in the Recycle Bin"); pfGo(); }
     catch (err) { toast("Couldn't delete: " + err.message); b.disabled = false; }
   };
   return b;
@@ -61,12 +103,12 @@ async function pfSelect(f) {
   const prev = $("#pfPrev"); prev.hidden = false;
   prev.innerHTML = `<div class="pf-name"><b>${esc(f.name)}</b><small>${fsize(f.size)}</small></div><div class="pf-view"><div class="empty-note">Loading…</div></div><div class="row"><button class="btn small" id="pfDl">Download</button><button class="btn small primary" id="pfUse">Use in chat</button></div>`;
   prev.querySelector(".row").appendChild(Object.assign(pfTrashBtn(f), { className: "btn small pf-del-txt" }));
-  $("#pfDl").onclick = async () => { try { const j = await pcCall("/pcfiles/read", { spec, b64: true }); download(f.name, new Blob([b64ToU8(j.b64)], { type: j.mime })); } catch (e) { toast(e.message); } };
+  $("#pfDl").onclick = async () => { try { const j = await pfCall("/pcfiles/read", { spec, b64: true }); download(f.name, new Blob([b64ToU8(j.b64)], { type: j.mime })); } catch (e) { toast(e.message); } };
   $("#pfUse").onclick = pfUse;
   const view = prev.querySelector(".pf-view");
   try {
-    if (IMG.test(f.mime)) { const j = await pcCall("/pcfiles/read", { spec, b64: true }); view.innerHTML = ""; const im = document.createElement("img"); im.src = `data:${j.mime};base64,${j.b64}`; im.alt = f.name; view.appendChild(im); }
-    else { const j = await pcCall("/pcfiles/read", { spec, max: 20000 }); view.innerHTML = ""; const pre = document.createElement("pre"); pre.textContent = j.binary ? "(not a text file: download it, or use it in a chat)" : j.text + (j.truncated ? "\n…" : ""); view.appendChild(pre); }
+    if (IMG.test(f.mime)) { const j = await pfCall("/pcfiles/read", { spec, b64: true }); view.innerHTML = ""; const im = document.createElement("img"); im.src = `data:${j.mime};base64,${j.b64}`; im.alt = f.name; view.appendChild(im); }
+    else { const j = await pfCall("/pcfiles/read", { spec, max: 20000 }); view.innerHTML = ""; const pre = document.createElement("pre"); pre.textContent = j.binary ? "(not a text file: download it, or use it in a chat)" : j.text + (j.truncated ? "\n…" : ""); view.appendChild(pre); }
   } catch (e) { view.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; }
 }
 // put the selected PC file into the message box: pictures as attachments, text as a quoted block, anything else for the Challenge tool
@@ -74,11 +116,11 @@ async function pfUse() {
   if (!PF.sel) return;
   const { spec, f } = PF.sel;
   try {
-    if (IMG.test(f.mime)) { const j = await pcCall("/pcfiles/read", { spec, b64: true }); attachments.push(j.b64); renderAttachments(); }
+    if (IMG.test(f.mime)) { const j = await pfCall("/pcfiles/read", { spec, b64: true }); attachments.push(j.b64); renderAttachments(); }
     else {
-      const j = await pcCall("/pcfiles/read", { spec, max: 60 * 1024 });
+      const j = await pfCall("/pcfiles/read", { spec, max: 60 * 1024 });
       if (!j.binary) { const p = $("#prompt"); p.value += (p.value ? "\n\n" : "") + `File ${f.name}:\n\`\`\`\n${j.text}${j.truncated ? "\n…(cut off)" : ""}\n\`\`\`\n`; autosize(); }
-      else if (toolOn("challenge")) { const r = await pcCall("/pcfiles/read", { spec, b64: true }); challengeFile = { name: f.name, size: f.size, bytes: b64ToU8(r.b64) }; renderAttachments(); }
+      else if (toolOn("challenge")) { const r = await pfCall("/pcfiles/read", { spec, b64: true }); challengeFile = { name: f.name, size: f.size, bytes: b64ToU8(r.b64) }; renderAttachments(); }
       else return toast("That kind of file can't be read by the AI.");
     }
     $("#pcFilesDlg").close();
@@ -391,7 +433,7 @@ async function loadProject(spec) {
       const p = (rel ? rel + "/" : "") + e.name;
       if (e.dir) { if (depth < 4 && !SKIP_DIR.test(e.name)) await walk(p, depth + 1); continue; }
       if (files.length >= 40 || e.size > 400 * 1024) continue;
-      const r = await pcCall("/pcfiles/read", { spec: "code:" + root + "/" + p, max: 400 * 1024 });
+      const r = await pfCall("/pcfiles/read", { spec: "code:" + root + "/" + p, max: 400 * 1024 });
       if (!r.binary) files.push({ name: p, code: r.text });
     }
   };
