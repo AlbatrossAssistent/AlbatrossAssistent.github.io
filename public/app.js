@@ -427,6 +427,7 @@ function fillModelSelect() {
   sel.innerHTML = "";
   const imageMode = curMode() === "image";
   const list = models.filter(m => m.kind !== "embed" && (imageMode ? m.kind === "image" : m.kind !== "image"));
+  const pics = imageMode ? [] : models.filter(m => m.kind === "image");
   if (!connected) { sel.innerHTML = "<option value=''>Not connected</option>"; return; }
   if (!list.length) {
     sel.innerHTML = imageMode ? "<option value=''>No image models</option>" : "<option value=''>No models installed</option>";
@@ -438,8 +439,12 @@ function fillModelSelect() {
     o.textContent = (m.running ? "● " : "") + m.name + (m.kind === "vision" ? " (vision)" : "") + (m.cloud ? " (cloud)" : "");
     parent.appendChild(o);
   };
-  list.forEach(m => opt(m, sel));
-  const want = imageMode ? S.imageModel : S.model;
+  if (pics.length) {
+    const g1 = document.createElement("optgroup"), g2 = document.createElement("optgroup");
+    g1.label = "Chat models"; g2.label = "Picture models (every message makes a picture)";
+    list.forEach(m => opt(m, g1)); pics.forEach(m => opt(m, g2)); sel.append(g1, g2);
+  } else list.forEach(m => opt(m, sel));
+  const want = imageMode ? S.imageModel : (S.pickedImage && pics.some(m => m.name === S.pickedImage) ? S.pickedImage : S.model);
   if ([...sel.options].some(o => o.value === want)) sel.value = want;
   fillCtxModels();
 }
@@ -694,7 +699,6 @@ $("#ncStart").onclick = () => {
   $("#sidebar").classList.remove("open");
 };
 function newChat(type, context, reuse) {
-  if (controller) controller.abort();
   type = type === "image" || type === "chat" ? type : S.mode;
   S.mode = type; saveSettings();
   if (current && !current.messages.length && (reuse || !arguments.length)) {
@@ -702,10 +706,11 @@ function newChat(type, context, reuse) {
   }
   current = { id: uid(), title: "New chat", ...(S.chatsDeviceOnly ? { deviceOnly: true } : {}), type, context: context || "", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
   chats.unshift(current);
+  noteVisit(current);
   saveChats(); renderAll();
   $("#prompt").focus();
 }
-function openChat(c) { if (controller) controller.abort(); current = c; stick = true; setView("chat"); renderAll(); $("#sidebar").classList.remove("open"); }
+function openChat(c) { noteVisit(c); current = c; stick = true; setView("chat"); renderAll(); setTimeout(nextQueued, 0); $("#sidebar").classList.remove("open"); }
 function deleteChat(c) {
   if (!confirmInline(c)) return;
   chats = chats.filter(x => x !== c);
@@ -759,11 +764,27 @@ function renderSidebar() {
   }
   if (!filtered.length && q) { const d = document.createElement("div"); d.className = "group-label"; d.textContent = "No matches"; list.appendChild(d); }
 }
+// ---------- an answer that keeps going while you look at another chat ----------
+// run: the chat the answer belongs to, and every other chat opened meanwhile with how many messages it had then. Whatever the answer
+// adds to those (it writes into the open chat) is moved back to its own chat when it ends. live: its bubble, put back when you return.
+let run = null, live = null;
+function noteVisit(c) { if (run && c && c !== run.chat && !run.visited.has(c)) run.visited.set(c, c.messages.length); }
+function finishRun() {
+  const r = run; run = null; live = null; document.body.classList.remove("run-elsewhere");
+  if (!r) return;
+  let moved = false;
+  for (const [c, len] of r.visited) if (c !== r.chat && c.messages.length > len) { r.chat.messages.push(...c.messages.splice(len)); moved = true; }
+  if (moved) { r.chat.updated = Date.now(); saveChats(); renderMessages(); renderSidebar(); }
+  setTimeout(nextQueued, 0);
+}
 function renderMessages() {
   const inner = $("#inner"), box = $("#messages"), top = box.scrollTop, was = stick;
+  document.body.classList.toggle("run-elsewhere", !!run && current !== run.chat);
   inner.innerHTML = "";
+  paintQueue();
   if (!current.messages.length) return renderEmpty();
   current.messages.forEach((m, i) => inner.appendChild(m.isEvent ? eventEl(m) : m.role === "user" ? userBubble(m, i) : m.isError ? errorEl(m, i) : botBubble(m, i)));
+  if (run && live && current === run.chat && !run.chat.messages.includes(live.m)) inner.appendChild(live.el);
   if (was) scrollDown(true); else box.scrollTop = top;          // someone reading further up stays where they are
 }
 // Notes the chat writes about itself: when it started, a pause, which model took over, a stopped answer.
@@ -878,6 +899,7 @@ function userBubble(m, idx) {
 function botBubble(m, idx) {
   const d = document.createElement("div");
   d.className = "msg bot";
+  if (idx === -1) { d.dataset.live = "1"; if (run) live = { el: d, m }; }
   d.innerHTML = `<div class="pdot" data-s="idle" aria-hidden="true"><i></i><i></i><i></i></div><div class="bot-body"><div class="mhead"><b class="mname"></b><span class="mstat" role="status"></span></div><div class="mbar" hidden><div></div></div><div class="content"></div><div class="actions"></div></div>`;
   fillBot(d, m, idx);
   return d;
@@ -1941,42 +1963,78 @@ function wantsImage(text) {
   if (last && last.genImage !== undefined && t.length < 90 && /^(now|then|again|but|make it|make him|make her|add|remove|change|same|more|less|jetzt|nun|und|mach|füge|entferne|ändere|nochmal|gleich|mehr|weniger)\b/.test(t)) return true;
   return false;
 }
+// The picture button: the next message makes a picture, whatever it says (the AI also notices a picture request by itself)
 let forceImage = false;
-function setForceImage() {}   // there is no picture button anymore: the AI notices when you ask for a picture
+function setForceImage(on) {
+  forceImage = !!on;
+  const b = $("#imgBtn"); if (b) { b.classList.toggle("on", forceImage); b.setAttribute("aria-pressed", String(forceImage)); }
+}
+// Messages written while an answer is still coming wait here, each for the chat it was written in, and go one after another
+const queue = [];
+function paintQueue() {
+  const box = $("#queueBox"); if (!box) return;
+  const mine = queue.filter((q) => q.chat === current);
+  box.hidden = !mine.length; box.innerHTML = "";
+  mine.forEach((q) => {
+    const row = document.createElement("div"); row.className = "q-item";
+    row.innerHTML = '<span class="q-ic"></span><span class="q-tx"></span><button class="icon-btn" type="button" aria-label="Remove from the queue" title="Don\'t send this">✕</button>';
+    row.querySelector(".q-ic").textContent = q.image ? "🖼" : "⏳";
+    row.querySelector(".q-tx").textContent = q.text || (q.images.length ? "(picture)" : "");
+    row.querySelector("button").onclick = () => { queue.splice(queue.indexOf(q), 1); paintQueue(); };
+    box.appendChild(row);
+  });
+}
+function nextQueued() {
+  if (run || controller) return;
+  const i = queue.findIndex((q) => q.chat === current); if (i < 0) return;
+  const [q] = queue.splice(i, 1); paintQueue();
+  send(q.text, { images: q.images, image: q.image });
+}
 
 // "draw a new …" / "another picture of …" starts fresh instead of editing the last picture
 function wantsNewPicture(text) { return /\b(new|another|different|neues?|neuen|anderes?|weiteres?)\b/i.test(text) || /^(draw|paint|sketch|zeichne|male|generate|create|erstelle|generiere)\b/i.test(text.trim()); }
-async function send(textOverride) {
-  if (controller) { controller.abort(); return; }
+async function send(textOverride, opts = {}) {
   const p = $("#prompt");
+  if (controller || run) {
+    // an answer is still coming: new text waits its turn; the button with nothing typed stops the answer
+    const t = (textOverride ?? p.value).trim();
+    if (!t && !attachments.length) { if (controller) controller.abort(); return; }
+    queue.push({ chat: current, text: t, images: textOverride === undefined ? attachments.slice() : [], image: forceImage });
+    if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; renderAttachments(); }
+    setForceImage(false); paintQueue(); toast("Queued: it goes as soon as the answer is done");
+    return;
+  }
+  const atts = opts.images || attachments, wantImage = opts.image || forceImage;
   let text = (textOverride ?? p.value).trim();
   const fileTool = !!challengeFile && toolOn("challenge");       // a file from the paperclip that isn't a picture
   if (!text && fileTool) text = "Find the hidden word, message or flag in this file.";
-  if (!text && !attachments.length) return;
+  if (!text && !atts.length) return;
   if (!connected) { await connect(); if (!connected) return; }
   // Pictures: a new one goes to the chosen image model. Changing a picture (an attached photo, or a follow-up
   // like "make it night" right after one) goes to a model that can edit, such as OmniGen2, with the picture attached.
-  const chosen = models.find(m => m.name === $("#model").value && m.kind === "image" && m.details?.edit);
-  const editModel = chosen?.name || models.find(m => m.kind === "image" && m.details?.edit)?.name || "";
+  const canEdit = (n) => models.find(m => m.name === n && m.kind === "image" && m.details?.edit)?.name;
+  const editModel = canEdit($("#model").value) || canEdit(S.imageModel) || models.find(m => m.kind === "image" && m.details?.edit)?.name || "";
   const lastPic = [...current.messages].reverse().find(m => m.role === "assistant")?.genImage || "";
   const editVerb = /^(please |bitte )?(make|turn|change|add|remove|put|give|replace|edit|colou?r|mach|mache|füge|entferne|ändere|verwandle|ersetze|färbe)\b/i.test(text);
   let refs = [];
   const pickedImg = models.find(m => m.name === $("#model").value && m.kind === "image");
   const picturesOn = toolOn("image");
-  let asImage = !!text && !fileTool && (!!pickedImg || (picturesOn && wantsImage(text)) || (picturesOn && !!attachments.length && !!editModel && editVerb));
-  if (asImage && attachments.length) {
-    if (editModel) refs = attachments.slice(0, 3);
+  let asImage = (!!text || (wantImage && atts.length)) && !fileTool && (wantImage || !!pickedImg || (picturesOn && wantsImage(text)) || (picturesOn && !!atts.length && !!editModel && editVerb));
+  if (asImage && atts.length) {
+    if (editModel) refs = atts.slice(0, 3);
     else asImage = false;                               // a vision model will look at the photo instead
-  } else if (asImage && editModel && lastPic && !wantsNewPicture(text)) refs = [lastPic];
+  } else if (asImage && editModel && lastPic && !wantsNewPicture(text) && (editVerb || /^(now|then|again|but|same|more|less|jetzt|nun|und|nochmal|gleich|mehr|weniger)\b/i.test(text))) refs = [lastPic];
   const imgModel = refs.length ? editModel : (pickedImg ? pickedImg.name : pickImageModel());
   if (asImage && !imgModel) asImage = false;
   const model = asImage ? imgModel : (pickedImg ? S.model || models.find(m => m.kind !== "image" && m.kind !== "embed")?.name : $("#model").value);
   if (!model) { toast("Pick a model first"); return; }
 
   const fileForTool = fileTool ? challengeFile : null;
-  const userMsg = { role: "user", content: text, images: attachments.length ? attachments.slice() : undefined, file: fileForTool ? { name: fileForTool.name, size: fileForTool.size } : undefined };
+  const userMsg = { role: "user", content: text, images: atts.length ? atts.slice() : undefined, file: fileForTool ? { name: fileForTool.name, size: fileForTool.size } : undefined };
   if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; if (fileTool) challengeFile = null; renderAttachments(); }
+  setForceImage(false);
   const firstMessage = !current.messages.some(m => !m.isEvent);
+  run = { chat: current, visited: new Map() };
   if (firstMessage) $("#inner").innerHTML = "";
   awareTime();
   current.messages.push(userMsg);
@@ -1990,10 +2048,11 @@ async function send(textOverride) {
   let tool = fileForTool ? "challenge" : "", task = "";
   if (!asImage && !tool) {
     const r = await routeTool(model, text);
-    if (r.aborted) return;
+    if (r.aborted) return finishRun();
     tool = r.tool && r.tool !== "chat" ? r.tool : ""; task = r.task || "";
   }
-  await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "music" && window.runMusicTool ? window.runMusicTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : tool === "docs" ? chat(model, { docs: text }) : chat(model));
+  try { await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "music" && window.runMusicTool ? window.runMusicTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : tool === "docs" ? chat(model, { docs: text }) : chat(model)); }
+  finally { finishRun(); }
 }
 
 // What the chat model is told about the app: a short description and the list of its tools (the switched-on ones, and which
@@ -2106,6 +2165,7 @@ async function runTool(name, args, block) {
 }
 
 async function chat(model, opts = {}) {
+  const conv = current;
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble);
@@ -2125,7 +2185,7 @@ async function chat(model, opts = {}) {
     const useTools = wantSearch && toolsOk;
     if (wantSearch && !useTools) toast(`${model} can't use tools, so it can't search. Try qwen3, llama3.1 or gpt-oss.`);
 
-    let system = current.system || S.defaultSystem;
+    let system = conv.system || S.defaultSystem;
     if (toolsOk && imageSearchAvailable) system = (system ? system + "\n\n" : "") + "You can show the user real photos from the web with image_search.";
     system = (system ? system + "\n\n" : "") + whatYouCanDo();
     system += "\n\nWhen a program needs more than one file (for example a game with index.html, style.css and game.js), write every file in full in its own code block and put its file name in bold on the line right before the block, like **game.js**. Link the files to each other with relative paths (<link rel=\"stylesheet\" href=\"style.css\">, <script src=\"game.js\"><\/script>, import ... from \"./util.js\"), so they run together in the built-in player.";
@@ -2143,7 +2203,7 @@ async function chat(model, opts = {}) {
         : "The user's documents were searched for this, but nothing matched" + (block.error ? " (" + block.error + ")" : "") + ". Say so briefly, then help from general knowledge and say it isn't from their documents.");
     }
     if (S.askMid !== false) system = (system ? system + "\n\n" : "") + "If you really need something from the user before you can do the job well (a choice between options, a missing detail), ask by ending your reply with exactly one line like [[ask: Your question? | Option A | Option B | Option C]] with 2 to 4 short options, and write nothing after it. The user can also type their own answer. If a sensible assumption works, make it and don't ask.";
-    { const prev = [...current.messages].reverse().find(m => m.role === "assistant" && m.model && !m.isEvent); if (prev && prev.model !== model) addEvent("model", `${model} takes over from ${prev.model}`, bubble); }
+    { const prev = [...conv.messages].reverse().find(m => m.role === "assistant" && m.model && !m.isEvent); if (prev && prev.model !== model) addEvent("model", `${model} takes over from ${prev.model}`, bubble); }
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
     // Say so in the bubble and pop a notification once it's ready.
     let loadStart = 0;
@@ -2164,7 +2224,7 @@ async function chat(model, opts = {}) {
       refreshLoaded();
     };
 
-    const msgs = current.messages.filter(m => !m.isError && !m.isEvent).map(m => m.genImage !== undefined
+    const msgs = conv.messages.filter(m => !m.isError && !m.isEvent).map(m => m.genImage !== undefined
       ? { role: "assistant", content: `(I made a picture for that: ${m.prompt || m.asked || ""})` }
       : { role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) });
     if (system) msgs.unshift({ role: "system", content: system });
@@ -2231,8 +2291,8 @@ async function chat(model, opts = {}) {
       if (!reply.blocks.length) delete reply.blocks;
       reply.stats = totalTokens && totalNs ? `${model} · ${(totalTokens / (totalNs / 1e9)).toFixed(1)} tok/s · ${totalTokens} tokens` : model;
       if (!finished) reply.stats += " · stopped";
-      current.messages.push(reply);
-      current.updated = Date.now();
+      conv.messages.push(reply);
+      conv.updated = Date.now();
     }
     if (stopped && !finished) addEvent("stop", "Response stopped" + (reply.content ? "" : reply.blocks && reply.blocks.length ? " while it was thinking" : " before anything was written"));
     saveChats();
@@ -2309,7 +2369,7 @@ When unsure, choose "chat".`;
     if (loadStartedAt) recordLoad(model, (performance.now() - loadStartedAt) / 1000);
     out = { tool: enabled.includes(r.tool) ? r.tool : "chat", task: String(r.task || "").trim() };
   } catch (e) { out = e.name === "AbortError" ? { aborted: true } : { tool: "" }; }
-  finally { controller = null; setBusy(false); liveHeads.delete(bubble); bubble.remove(); }
+  finally { controller = null; setBusy(false); liveHeads.delete(bubble); bubble.remove(); if (live && live.el === bubble) live = null; }
   return out;
 }
 
@@ -3709,7 +3769,7 @@ $("#imgSteps").onchange = e => { S.img.steps = e.target.value; saveSettings(); }
 $("#imgSeed").onchange = e => { S.img.seed = e.target.value; saveSettings(); };
 $("#imgStyle").onchange = e => { S.img.style = e.target.value; saveSettings(); };
 $("#imgHistory").onchange = e => { S.img.history = e.target.checked; saveSettings(); };
-$("#imgModel").onchange = e => { S.imageModel = e.target.value; saveSettings(); };
+$("#imgModel").onchange = e => { S.imageModel = e.target.value; saveSettings(); fillModelSelect(); toast("Pictures are now made with " + e.target.value); };
 $("#imgCtxModel").onchange = e => { S.img.ctxModel = e.target.value; saveSettings(); };
 loadImgFields();
 
@@ -4667,6 +4727,7 @@ $("#webBtn").onclick = () => {
   if (!searchAvailable) return toast("Web search needs the Albatross server with its search key (see the README)");
   S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on: the AI can look things up" : "Web search off");
 };
+$("#imgBtn").onclick = () => { if (!imageModels().length) return toast("There's no picture model on the connected PC"); setForceImage(!forceImage); if (forceImage) { toast("The next message makes a picture with " + pickImageModel()); $("#prompt").focus(); } };
 $("#attachBtn").onclick = (ev) => {
   if (!connected || !window.pcFilesOpen) return $("#fileInput").click();
   ev.stopPropagation();
@@ -4697,8 +4758,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-29.4";
+const APP_VERSION = "2026-10-29.5";
 const WHATS_NEW = [
+  ["2026-10-29.5", ["Answers keep going when you open another chat or page, and land in their own chat","Write while an answer is coming: your messages wait in a queue above the message box and go one after another (✕ removes one); the stop button stops the answer when nothing is typed","Picture button in the message box: the next message makes a picture","Picture models: they're in the model list of every chat now, the one you choose (there or in Settings) is used, also for edits when it can edit, and a new picture request after a picture is a new picture instead of an edit"]],
   ["2026-10-29.4", ["New picture model: FLUX.2 klein (flux2-klein) makes a picture in about 10 seconds once loaded and can change a photo you attach. Switching picture models restarts the picture engine so the old one doesn't fill the memory, and if it runs out of memory it restarts and tries again"]],
   ["2026-10-29.3", ["PC files need a code: the first time, you pick one (4 to 12 digits); after that the PC files window, files from your PC in the paperclip and the Code tab ask for it once per tab (good for 12 hours). The PC checks it, 5 wrong tries lock it for 5 minutes"]],
   ["2026-10-29.2", ["New model qwen3.8-27b-ultra (27B, chat, thinking and tools): set up to fit the graphics card fully, so it answers fast; the app now keeps a model's own smaller context size instead of always asking for 16k"]],

@@ -1664,3 +1664,10 @@ body.pc-locked [data-needs-pc] { opacity: .42; filter: grayscale(1); }
 .pf-code input { font: inherit; font-size: 20px; letter-spacing: .3em; text-align: center; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
 .pf-code input::placeholder { letter-spacing: normal; font-size: 15px; }
 .pf-code .btn { justify-content: center; }
+
+/* an answer running in another chat stays out of sight here; the queue; the picture button (app.js) */
+body.run-elsewhere #inner .msg[data-live] { display: none; }
+.queue-box { display: flex; flex-direction: column; gap: 4px; margin: 0 6px 6px; }
+.q-item { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 14px; background: color-mix(in srgb, var(--fg) 6%, transparent); border: 1px dashed var(--line); font-size: 13.5px; }
+.q-item .q-tx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.img-btn.on { color: var(--accent-fg, #fff); background: var(--accent); }
