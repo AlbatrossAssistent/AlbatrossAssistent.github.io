@@ -4697,8 +4697,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-29.3";
+const APP_VERSION = "2026-10-29.4";
 const WHATS_NEW = [
+  ["2026-10-29.4", ["New picture model: FLUX.2 klein (flux2-klein) makes a picture in about 10 seconds once loaded and can change a photo you attach. Switching picture models restarts the picture engine so the old one doesn't fill the memory, and if it runs out of memory it restarts and tries again"]],
   ["2026-10-29.3", ["PC files need a code: the first time, you pick one (4 to 12 digits); after that the PC files window, files from your PC in the paperclip and the Code tab ask for it once per tab (good for 12 hours). The PC checks it, 5 wrong tries lock it for 5 minutes"]],
   ["2026-10-29.2", ["New model qwen3.8-27b-ultra (27B, chat, thinking and tools): set up to fit the graphics card fully, so it answers fast; the app now keeps a model's own smaller context size instead of always asking for 16k"]],
   ["2026-10-29.1", ["Voice: a mic button in the message box types what you say; the wave button starts a hands-free conversation (it listens, answers, speaks, listens again; Esc or End conversation stops it); answers are read aloud with a natural voice. Listening (Whisper, on the graphics card) and speaking (Piper) run on your PC, the first use downloads the models (about 2 GB). Pictures: the picture engine restarts itself after every two pictures and when it hangs, then tries again"]],

@@ -32,9 +32,10 @@ const MODELS = {
     details: { family: "qwen-image", parameter_size: "7B", format: "comfyui", edit: true },
   },
   // FLUX.2 [klein] 4B (Black Forest Labs, Apache 2.0): distilled, a picture in 4 steps; edits from reference pictures too.
-  // The 7.75 GB file is loaded at 8 bit (fits the 12 GB card); its text encoder is the same Qwen3-4B that Z-Image uses.
+  // Stored at 8 bit (flux-2-klein-4b-fp8.safetensors, 3.9 GB, made from the official 7.75 GB file): loading the big one ran a 16 GB PC
+  // out of memory ("paging file is too small"). Its text encoder is the same Qwen3-4B that Z-Image uses.
   "flux2-klein:comfyui": {
-    files: { unet: ["diffusion_models", "flux-2-klein-4b.safetensors"], clip: ["text_encoders", "qwen_3_4b_fp8_mixed.safetensors"], vae: ["vae", "flux2-vae.safetensors"] },
+    files: { unet: ["diffusion_models", "flux-2-klein-4b-fp8.safetensors"], clip: ["text_encoders", "qwen_3_4b_fp8_mixed.safetensors"], vae: ["vae", "flux2-vae.safetensors"] },
     details: { family: "flux2", parameter_size: "4B", format: "comfyui", edit: true },
   },
   "omnigen2:comfyui": {
@@ -157,7 +158,7 @@ function omnigenWorkflow({ prompt, width = 1024, height = 1024, steps = 20, seed
 function fluxWorkflow({ prompt, width = 1024, height = 1024, steps = 4, seed, refs = [] }) {
   const F = MODELS["flux2-klein:comfyui"].files;
   const w = {
-    1: { class_type: "UNETLoader", inputs: { unet_name: F.unet[1], weight_dtype: "fp8_e4m3fn" } },
+    1: { class_type: "UNETLoader", inputs: { unet_name: F.unet[1], weight_dtype: "default" } },
     2: { class_type: "CLIPLoader", inputs: { clip_name: F.clip[1], type: "flux2", device: "default" } },
     3: { class_type: "VAELoader", inputs: { vae_name: F.vae[1] } },
     4: { class_type: "CLIPTextEncode", inputs: { text: prompt, clip: ["2", 0] } },
@@ -228,15 +229,20 @@ async function killComfy() {
   for (let i = 0; i < 30 && (await up()); i++) await sleep(500);
 }
 async function generate(body, emit, signal, log) {
-  if (made >= 2 && (await up())) {
+  // another picture model than last time: it has to come from disk anyway, and the old one would stay in the RAM next to it
+  const name = isComfy(body.model) ? body.model : MODEL;
+  if (lastModel && lastModel !== name) made = 2;
+  // the heavy ones (Qwen-Image, OmniGen2) fill the RAM after two pictures; the light ones (FLUX.2 klein, Z-Image) don't
+  if (made >= 2 && (lastModel !== name || /^(qwen-image|omnigen2)/.test(name)) && (await up())) {
     let busy = true; try { const q = await (await fetch(COMFY + "/queue")).json(); busy = !!(q.queue_running?.length || q.queue_pending?.length); } catch {}
     if (!busy) { log("Restarting ComfyUI between pictures so it stays fast"); emit({ model: body.model, status: "Restarting the picture engine…", done: false }); await killComfy(); }
   }
   try { await generateOnce(body, emit, signal, log); if (!body.warm) made++; }
   catch (e) {
-    if (!(e.stalled || /Lost connection to ComfyUI/.test(e.message)) || signal?.aborted) throw e;
-    log("ComfyUI hung: restarting it and trying again");
-    emit({ model: body.model, status: "The picture engine hung, restarting it…", done: false });
+    const noMemory = /paging file|os error 1455|out of memory|allocate/i.test(e.message);
+    if (!(e.stalled || noMemory || /Lost connection to ComfyUI/.test(e.message)) || signal?.aborted) throw e;
+    log(noMemory ? "ComfyUI ran out of memory: restarting it and trying again" : "ComfyUI hung: restarting it and trying again");
+    emit({ model: body.model, status: noMemory ? "Making room in memory, restarting the picture engine…" : "The picture engine hung, restarting it…", done: false });
     await killComfy();
     await generateOnce(body, emit, signal, log); if (!body.warm) made = 1;
   }
