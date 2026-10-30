@@ -1,6 +1,6 @@
 // Lists: several requests in a row, run on this PC one after the other, e.g. "picture: a red fox, 3 times", then
 // "text: write a short story about it". They keep running when the website is closed or the phone sleeps. Every result goes
-// into one chat on this PC (chats.js), so it shows up in the chat list on every device, like a chat you typed yourself.
+// into a chat on this PC (chats.js): the one that was open on the website (chatId), or a new one, so it shows up on every device.
 // A step's prompt can use {previous}: the last text answer (so a text step can write the prompt for a picture step).
 // Text steps see the conversation so far; a text model that can look at pictures also gets the pictures of the step before.
 // Only one list runs at a time; more wait their turn.
@@ -63,6 +63,7 @@ function save(L, add, ctx) {
   let chat = null;
   try { const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: L.chatId }), () => {}); if (st === 200) chat = r.chat; } catch {}
   if (!chat) chat = { id: L.chatId, title: L.title, type: L.steps[0].kind === "image" ? "image" : "chat", context: "", system: L.text.system || "", created: L.created, updated: Date.now(), pinned: false, messages: [] };
+  if (!chat.messages.length && (!chat.title || chat.title === "New chat")) chat.title = L.title;   // an empty chat gets the list's name
   chat.messages.push(...add);
   chat.updated = Date.now();
   const [st, r] = chatStore.handle("POST", "/chats/put", JSON.stringify({ chat, force: true }), ctx.note);

@@ -1,16 +1,30 @@
 "use strict";
 // The List in the sidebar: several requests written at once, run on the PC one after the other (host/list.js), e.g.
-// "picture: a red fox" 3 times, then "text: write a story about the fox". It keeps going when this page is closed; the results
-// land in one chat on the PC, which then shows up in the chat list. Typing "image 3x: a fox" or "text: …" sets the kind and the
-// count by itself, and pasting several such lines makes several steps. {previous} in a prompt is the last text answer.
-// Uses the main page's helpers: $, $$, S, saveSettings, toast, pcCall, connected, models, chats, pickImageModel, buildOptions,
-// effortNow, syncChats, openChat, saveChats, renderSidebar, applyRail.
+// "picture: a red fox" 3 times, then "text: write a story about the fox". It keeps going when this page is closed. The results go
+// into the chat that is open (or a new one, if picked), on the PC, and show up here as they come. Typing "image 3x: a fox" or
+// "text: …" sets the kind and the count by itself, and pasting several such lines makes several steps. {previous} in a prompt is
+// the last text answer. While a list writes into a chat, that chat only takes the PC's copy (window.listBusy, see syncChats).
+// Uses the main page's helpers: $, $$, S, saveSettings, toast, pcCall, connected, models, chats, current, pickImageModel,
+// buildOptions, effortNow, syncChats, syncOn, pushChat, openChat, saveChats, renderSidebar, applyRail.
 (() => {
-let runs = [], pollT = 0, lastSaved = {};
+let runs = [], pollT = 0, lastSaved = {}, targetT = 0;
+window.listBusy = new Set();     // chats a list on the PC is writing into right now
 const draft = () => { if (!Array.isArray(S.listDraft) || !S.listDraft.length) S.listDraft = [{ kind: "image", prompt: "", times: 1, model: "" }]; return S.listDraft; };
 const textModels = () => models.filter((m) => (m.kind === "text" || m.kind === "vision") && !m.cloud);
 const picModels = () => models.filter((m) => m.kind === "image");
 function textModel() { const l = textModels(); return (l.find((m) => m.name === S.model) || l[0])?.name || ""; }
+// where the results go: the open chat, unless "a new chat" is picked (or the open one can't be on the PC)
+function target() {
+  if (S.listInto === "new" || !current) return null;
+  if (current.deviceOnly || (typeof syncOn === "function" && !syncOn())) return null;
+  return current;
+}
+function showTarget() {
+  const el = $("#lpTarget"); if (!el) return;
+  const t = target();
+  el.textContent = S.listInto === "new" ? "Starts a new chat" : t ? "“" + (t.messages.length ? t.title : "New chat") + "”"
+    : current && current.deviceOnly ? "This chat is only on this device: a new chat on the PC" : !current ? "No chat open: a new chat" : "Chats aren't kept on the PC: a new chat";
+}
 
 // "image 3x: a fox", "picture ×2 - …", "text: …", "3x image: …" -> { kind, times, prompt }
 const PREFIX = /^\s*(?:(\d{1,2})\s*[x×]\s*)?(image|picture|pic|img|bild|draw|text|chat|ask|frage)\b\s*(?:(?:[x×]\s*(\d{1,2})|(\d{1,2})\s*[x×]|(\d{1,2})\s*times?))?\s*[:\-–]\s*([\s\S]*)$/i;
@@ -27,13 +41,15 @@ function open(on) {
   if (on === undefined) on = p.hidden;
   if (on && S.sideRail) { S.sideRail = false; saveSettings(); applyRail(); }
   p.hidden = !on; $("#goList").classList.toggle("on", on);
-  if (on) { draw(); poll(); const t = p.querySelector("textarea"); if (t && !t.value) t.focus(); }
+  clearInterval(targetT);
+  if (on) { draw(); poll(); targetT = setInterval(showTarget, 1000); const t = p.querySelector("textarea"); if (t && !t.value) t.focus(); }
 }
 
 function draw() {
   const p = panel(); if (!p || p.hidden) return;
   const steps = draft();
   p.innerHTML = `<div class="lp-head"><b>List</b><small>Runs on your PC, one after another</small><button class="icon-btn lp-close" type="button" aria-label="Close the list" title="Close">×</button></div>
+    <div class="lp-into"><span>Into</span><select id="lpInto" aria-label="Where the results go"><option value="current">the open chat</option><option value="new">a new chat</option></select><small id="lpTarget"></small></div>
     <div class="lp-steps"></div>
     <div class="lp-add"><button class="btn small" type="button" data-add="image">+ Picture</button><button class="btn small" type="button" data-add="text">+ Text</button></div>
     <div class="lp-run"><button class="btn small primary" type="button" id="lpRun">Run on PC</button><button class="btn small" type="button" id="lpClear">Clear</button></div>
@@ -44,6 +60,9 @@ function draw() {
   p.querySelector(".lp-close").onclick = () => open(false);
   for (const b of p.querySelectorAll("[data-add]")) b.onclick = () => { draft().push({ kind: b.dataset.add, prompt: "", times: 1, model: "" }); saveSettings(); draw(); const t = [...p.querySelectorAll("textarea")].pop(); if (t) t.focus(); };
   $("#lpRun").onclick = run;
+  $("#lpInto").value = S.listInto === "new" ? "new" : "current";
+  $("#lpInto").onchange = (e) => { S.listInto = e.target.value; saveSettings(); showTarget(); };
+  showTarget();
   $("#lpClear").onclick = () => { S.listDraft = []; saveSettings(); draw(); };
   drawRuns();
 }
@@ -98,11 +117,17 @@ async function run() {
     image: { width: w, height: h, steps: S.img.steps ? Number(S.img.steps) : 0, seed: S.img.seed === "" ? "" : Number(S.img.seed), keepMinutes: S.img.keep || 10, style: S.img.style || "" },
     text: { think: typeof effortNow === "function" ? effortNow() !== "low" : S.think !== false, options: opt, system: S.defaultSystem || "", keepAlive: S.keepAlive === "" ? undefined : /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive },
   };
+  const into = target();
+  if (into && window.listBusy.has(into.id)) return toast("A list is already writing into this chat: wait for it or stop it");
   $("#lpRun").disabled = true;
   try {
-    await pcCall("/pc/list", body);
+    // the PC must have this chat as it is now, so the results are added to it (and nothing written here gets lost)
+    if (into) { body.chatId = into.id; body.title = into.messages.length ? into.title : ""; await pushChat(into); }
+    const r = await pcCall("/pc/list", body);
+    if (into) window.listBusy.add(into.id);
     const n = steps.reduce((t, s) => t + s.times, 0);
-    toast(`The list runs on your PC: ${n} request${n > 1 ? "s" : ""}. You can close this page; the results go into a new chat.`);
+    toast(`The list runs on your PC: ${n} request${n > 1 ? "s" : ""}, into ${into ? "this chat" : "a new chat"}. You can close this page; it keeps going.`);
+    if (!into && r.chatId) lastSaved[r.id] = 0;
     poll();
   } catch (e) { toast("Couldn't start the list: " + e.message); }
   finally { const b = $("#lpRun"); if (b) b.disabled = false; }
@@ -115,6 +140,9 @@ async function poll() {
   try { runs = (await pcCall("/pc/list", null, "GET")).lists || []; } catch { runs = []; }
   let fresh = false;
   for (const r of runs) { if (r.saved && lastSaved[r.id] !== r.saved) { if (lastSaved[r.id] !== undefined) fresh = true; lastSaved[r.id] = r.saved; } }
+  const was = window.listBusy;
+  window.listBusy = new Set(runs.filter((r) => !r.finished).map((r) => r.chatId));
+  if ([...was].some((id) => !window.listBusy.has(id))) fresh = true;      // one just finished: take its last results
   if (fresh && typeof syncChats === "function") syncChats();             // a new picture or answer in the list's chat
   drawRuns();
   const busy = runs.some((r) => !r.finished);

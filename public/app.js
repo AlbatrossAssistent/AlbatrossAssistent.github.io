@@ -101,6 +101,12 @@ async function syncChats() {
     if (off.length) { await pcCall("/chats/delete", { ids: off }); for (const id of off) { delete sync.sig[id]; remote.delete(id); } }
     for (const c of [...chats]) {
       if (c.deviceOnly) continue;                                 // "only on this device": never leaves it
+      // a list on the PC is writing into this chat (list.js): the PC's copy is the right one, never send this one over it
+      if (window.listBusy && window.listBusy.has(c.id) && remote.has(c.id)) {
+        const r = remote.get(c.id);
+        if (r.updated !== c.updated || r.n !== c.messages.length) { const g = (await pcCall("/chats/get", { id: c.id })).chat; adopt(c, g); changed = true; }
+        continue;
+      }
       if (!c.messages.length && !remote.has(c.id)) continue;      // a chat nobody has written in yet stays on this device
       const r = remote.get(c.id);
       if (!r) {
@@ -2004,6 +2010,7 @@ async function send(textOverride, opts = {}) {
     setForceImage(false); paintQueue(); toast("Queued: it goes as soon as the answer is done");
     return;
   }
+  if (current && window.listBusy && window.listBusy.has(current.id)) { toast("A list on your PC is writing into this chat. Wait for it (or stop it in List), or write in another chat."); return; }
   const atts = opts.images || attachments, wantImage = opts.image || forceImage;
   let text = (textOverride ?? p.value).trim();
   const fileTool = !!challengeFile && toolOn("challenge");       // a file from the paperclip that isn't a picture

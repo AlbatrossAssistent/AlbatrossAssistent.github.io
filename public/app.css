@@ -1731,6 +1731,9 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .lp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .lp-head b { font-size: 15px; } .lp-head small { color: var(--muted); font-size: 12px; flex: 1; }
 .lp-head .lp-close { width: 28px; height: 28px; font-size: 18px; margin: -4px -4px 0 0; align-self: flex-start; }
+.lp-into { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.lp-into span { color: var(--muted); } .lp-into select { min-height: 28px; font-size: 12.5px; border-radius: 999px; padding: 0 8px; }
+.lp-into small { flex-basis: 100%; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lp-steps { display: flex; flex-direction: column; gap: 8px; }
 .lp-step { border-radius: 16px; padding: 8px; background: var(--glass-strong); border: 1px solid var(--line); border-left: 3px solid #0A84FF; display: flex; flex-direction: column; gap: 6px; }
 .lp-step.k-text { border-left-color: #BF5AF2; }
