@@ -227,7 +227,9 @@ function putBack() { const bp = $("#browserPage"); if (inSide() && home.parent) 
 function sideTab(tab) {
   const sp = $("#sidePanel"); sp.dataset.tab = tab;
   $$("#spTabs button").forEach((b) => b.classList.toggle("on", b.dataset.sp === tab));
-  $("#spBrowser").hidden = tab !== "browser"; $("#spAgent").hidden = tab !== "agent"; $("#spCode").hidden = tab !== "code";
+  $("#spBrowser").hidden = tab !== "browser"; $("#spAgent").hidden = tab !== "agent"; $("#spCode").hidden = tab !== "code"; $("#spList").hidden = tab !== "list";
+  $("#spFull").hidden = tab === "list";          // the List has no full-size page
+  if (window.listShow) window.listShow(tab === "list");
   if (tab === "browser") {
     const bp = $("#browserPage");
     if (!inSide()) { home.parent = bp.parentNode; home.next = bp.nextSibling; $("#spBrowser").appendChild(bp); }
@@ -243,6 +245,7 @@ window.sideOpen = (tab) => {
 window.sideClose = () => {
   const sp = $("#sidePanel"); if (sp.hidden) return;
   sp.hidden = true; $("#sideBtn").classList.remove("on");
+  if (window.listShow) window.listShow(false);
   putBack();
   if (!document.body.classList.contains("browser-view")) window.browserClose();
 };

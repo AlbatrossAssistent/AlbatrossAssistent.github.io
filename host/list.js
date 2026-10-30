@@ -3,7 +3,8 @@
 // into a chat on this PC (chats.js): the one that was open on the website (chatId), or a new one, so it shows up on every device.
 // A step's prompt can use {previous}: the last text answer (so a text step can write the prompt for a picture step).
 // Text steps see the conversation so far; a text model that can look at pictures also gets the pictures of the step before.
-// Only one list runs at a time; more wait their turn.
+// Only one list runs at a time; more wait their turn. Lists belong to the account that started them (ctx.uid, see account.js):
+// only that account sees them, and their chats are that account's.
 
 const crypto = require("crypto");
 const chatStore = require("./chats");
@@ -32,7 +33,7 @@ function start(j, ctx) {
     id: crypto.randomBytes(8).toString("base64url"),
     title: clean(j.title, 120).trim() || "List: " + steps[0].prompt.slice(0, 60),
     chatId: ID.test(String(j.chatId || "")) ? j.chatId : "list" + Date.now().toString(36) + crypto.randomBytes(3).toString("hex"),
-    steps, status: "waiting", created: Date.now(), started: 0, finished: 0, step: 0, rep: 0, progress: "", pct: null, error: "",
+    uid: ctx.uid || "", steps, status: "waiting", created: Date.now(), started: 0, finished: 0, step: 0, rep: 0, progress: "", pct: null, error: "",
     image: {
       width: Math.min(2048, Math.max(256, Number(img.width) || 1024)), height: Math.min(2048, Math.max(256, Number(img.height) || 1024)),
       steps: Number(img.steps) || 0, seed: img.seed === "" || img.seed == null ? null : Number(img.seed), keepMinutes: Number(img.keepMinutes) || 10, style: clean(img.style, 2000).trim(),
@@ -61,22 +62,22 @@ function kick(ctx) {
 // The chat on this PC: read the newest copy before every change (a device may have renamed it or written in it), then add.
 function save(L, add, ctx) {
   let chat = null;
-  try { const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: L.chatId }), () => {}); if (st === 200) chat = r.chat; } catch {}
+  try { const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: L.chatId }), () => {}, L.uid); if (st === 200) chat = r.chat; } catch {}
   if (!chat) chat = { id: L.chatId, title: L.title, type: L.steps[0].kind === "image" ? "image" : "chat", context: "", system: L.text.system || "", created: L.created, updated: Date.now(), pinned: false, messages: [] };
   if (!chat.messages.length && (!chat.title || chat.title === "New chat")) chat.title = L.title;   // an empty chat gets the list's name
   chat.messages.push(...add);
   chat.updated = Date.now();
-  const [st, r] = chatStore.handle("POST", "/chats/put", JSON.stringify({ chat, force: true }), ctx.note);
+  const [st, r] = chatStore.handle("POST", "/chats/put", JSON.stringify({ chat, force: true }), ctx.note, L.uid);
   if (st === 413) {      // too many pictures for one chat: carry on in a new one
     L.chatId = "list" + Date.now().toString(36) + crypto.randomBytes(3).toString("hex");
     L.part = (L.part || 1) + 1;
     const fresh = { ...chat, id: L.chatId, title: `${L.title} (part ${L.part})`, created: Date.now(), messages: add };
-    chatStore.handle("POST", "/chats/put", JSON.stringify({ chat: fresh, force: true }), ctx.note);
+    chatStore.handle("POST", "/chats/put", JSON.stringify({ chat: fresh, force: true }), ctx.note, L.uid);
   } else if (st !== 200) throw new Error(r.error || "Couldn't save the chat");
   L.saved = Date.now();
 }
 function chatNow(L) {
-  try { const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: L.chatId }), () => {}); if (st === 200) return r.chat.messages; } catch {}
+  try { const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: L.chatId }), () => {}, L.uid); if (st === 200) return r.chat.messages; } catch {}
   return [];
 }
 
@@ -199,12 +200,14 @@ const view = (L) => ({
   steps: L.steps.map((s) => ({ kind: s.kind, prompt: s.prompt, times: s.times, model: s.model, done: s.done, error: s.error })),
 });
 
-// GET /pc/list: every list (newest first). POST /pc/list { action: "start" | "stop" | "remove", ... }
+// GET /pc/list or POST { action: "list" }: the account's lists (newest first). POST /pc/list { action: "start" | "stop" | "remove", ... }
 function handle(method, body, ctx) {
-  if (method === "GET") return [200, { lists: lists.map(view), running: running ? running.id : "" }];
+  const uid = ctx.uid || "", mine = () => lists.filter((l) => l.uid === uid);
+  const all = () => [200, { lists: mine().map(view), running: running && running.uid === uid ? running.id : "" }];
+  if (method === "GET") return all();
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   if (j.action === "start") return start(j, ctx);
-  const L = lists.find((l) => l.id === j.id);
+  const L = mine().find((l) => l.id === j.id);
   if (j.action === "stop") {
     if (!L) return [404, { error: "No such list" }];
     if (L.status === "waiting") { L.status = "stopped"; L.finished = Date.now(); }
@@ -216,7 +219,7 @@ function handle(method, body, ctx) {
     if (!L.finished) return [409, { error: "Stop it first" }];
     lists.splice(lists.indexOf(L), 1); return [200, { ok: true }];
   }
-  if (j.action === "list" || !j.action) return [200, { lists: lists.map(view), running: running ? running.id : "" }];
+  if (j.action === "list" || !j.action) return all();
   return [400, { error: "Unknown list request" }];
 }
 const busy = () => !!running;

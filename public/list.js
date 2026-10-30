@@ -1,13 +1,15 @@
 "use strict";
-// The List in the sidebar: several requests written at once, run on the PC one after the other (host/list.js), e.g.
+// The List, a tab of the side panel on the right (next to Browser, Agent and Code): several requests written at once, run on the PC one after the other (host/list.js), e.g.
 // "picture: a red fox" 3 times, then "text: write a story about the fox". It keeps going when this page is closed. The results go
 // into the chat that is open (or a new one, if picked), on the PC, and show up here as they come. Typing "image 3x: a fox" or
 // "text: …" sets the kind and the count by itself, and pasting several such lines makes several steps. {previous} in a prompt is
 // the last text answer. While a list writes into a chat, that chat only takes the PC's copy (window.listBusy, see syncChats).
 // Uses the main page's helpers: $, $$, S, saveSettings, toast, pcCall, connected, models, chats, current, pickImageModel,
-// buildOptions, effortNow, syncChats, syncOn, pushChat, openChat, saveChats, renderSidebar, applyRail.
+// buildOptions, effortNow, syncChats, syncOn, pushChat, openChat, saveChats, renderSidebar; sideOpen / sideClose (browser.js).
+// The lists on the PC are the signed-in account's own (pcCall sends the account, see host/account.js).
 (() => {
-let runs = [], pollT = 0, lastSaved = {}, targetT = 0;
+let runs = [], pollT = 0, lastSaved = {}, targetT = 0, saveT = 0;
+const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(saveSettings, 500); };     // typing: save after a pause, not per key
 window.listBusy = new Set();     // chats a list on the PC is writing into right now
 const draft = () => { if (!Array.isArray(S.listDraft) || !S.listDraft.length) S.listDraft = [{ kind: "image", prompt: "", times: 1, model: "" }]; return S.listDraft; };
 const textModels = () => models.filter((m) => (m.kind === "text" || m.kind === "vision") && !m.cloud);
@@ -35,29 +37,37 @@ function parse(line) {
   return { kind, times: Math.min(20, Math.max(1, times)), prompt: m[6].trim() };
 }
 
-function panel() { return $("#listPanel"); }
+function panel() { return $("#spList"); }
+const shown = () => { const sp = $("#sidePanel"); return !!sp && !sp.hidden && sp.dataset.tab === "list"; };
+// the sidebar's List button: opens (or closes) the List tab of the side panel on the right
 function open(on) {
-  const p = panel(); if (!p) return;
-  if (on === undefined) on = p.hidden;
-  if (on && S.sideRail) { S.sideRail = false; saveSettings(); applyRail(); }
-  p.hidden = !on; $("#goList").classList.toggle("on", on);
-  clearInterval(targetT);
-  if (on) { draw(); poll(); targetT = setInterval(showTarget, 1000); const t = p.querySelector("textarea"); if (t && !t.value) t.focus(); }
+  if (on === undefined) on = !shown();
+  if (on) window.sideOpen("list"); else window.sideClose();
 }
+// the side panel calls this when the List tab shows (true) or hides (false)
+window.listShow = (on) => {
+  $("#goList").classList.toggle("on", !!on);
+  clearInterval(targetT);
+  if (!on) return;
+  draw(); poll(); targetT = setInterval(showTarget, 1000);
+  const t = panel().querySelector("textarea"); if (t && !t.value && innerWidth > 820) t.focus();
+};
 
 function draw() {
-  const p = panel(); if (!p || p.hidden) return;
+  const p = panel(); if (!p || !shown()) return;
   const steps = draft();
-  p.innerHTML = `<div class="lp-head"><b>List</b><small>Runs on your PC, one after another</small><button class="icon-btn lp-close" type="button" aria-label="Close the list" title="Close">×</button></div>
-    <div class="lp-into"><span>Into</span><select id="lpInto" aria-label="Where the results go"><option value="current">the open chat</option><option value="new">a new chat</option></select><small id="lpTarget"></small></div>
-    <div class="lp-steps"></div>
-    <div class="lp-add"><button class="btn small" type="button" data-add="image">+ Picture</button><button class="btn small" type="button" data-add="text">+ Text</button></div>
-    <div class="lp-run"><button class="btn small primary" type="button" id="lpRun">Run on PC</button><button class="btn small" type="button" id="lpClear">Clear</button></div>
-    <small class="lp-hint">Tip: type “image 3x: a red fox” or “text: …”. {previous} puts in the last text answer.</small>
-    <div class="lp-runs"></div>`;
+  const keep = p.querySelector(".lp-body") ? p.querySelector(".lp-body").scrollTop : 0;
+  p.innerHTML = `<div class="lp-into"><span>Into</span><select id="lpInto" aria-label="Where the results go"><option value="current">the open chat</option><option value="new">a new chat</option></select><small id="lpTarget"></small></div>
+    <div class="lp-body">
+      <div class="lp-steps"></div>
+      <div class="lp-add"><button class="btn small" type="button" data-add="image">+ Picture</button><button class="btn small" type="button" data-add="text">+ Text</button></div>
+      <small class="lp-hint">Runs on your PC, one after another, and keeps going when this page is closed. Tip: type “image 3x: a red fox” or “text: …”; {previous} puts in the last text answer.</small>
+      <div class="lp-runs"></div>
+    </div>
+    <div class="lp-run"><button class="btn primary" type="button" id="lpRun">Run on PC</button><button class="btn" type="button" id="lpClear">Clear</button></div>`;
   const box = p.querySelector(".lp-steps");
   steps.forEach((s, i) => box.appendChild(stepEl(s, i)));
-  p.querySelector(".lp-close").onclick = () => open(false);
+  p.querySelector(".lp-body").scrollTop = keep;
   for (const b of p.querySelectorAll("[data-add]")) b.onclick = () => { draft().push({ kind: b.dataset.add, prompt: "", times: 1, model: "" }); saveSettings(); draw(); const t = [...p.querySelectorAll("textarea")].pop(); if (t) t.focus(); };
   $("#lpRun").onclick = run;
   $("#lpInto").value = S.listInto === "new" ? "new" : "current";
@@ -85,7 +95,7 @@ function stepEl(s, i) {
   const tm = d.querySelector(".lp-times input"); tm.value = s.times;
   tm.onchange = () => { s.times = Math.min(20, Math.max(1, Math.round(Number(tm.value) || 1))); tm.value = s.times; saveSettings(); };
   const ta = d.querySelector("textarea"); ta.value = s.prompt;
-  ta.oninput = () => { s.prompt = ta.value; saveSettings(); };
+  ta.oninput = () => { s.prompt = ta.value; saveSoon(); };
   // "image 3x: …" sets the kind and count; several such lines pasted at once become several steps
   ta.onblur = () => {
     const lines = ta.value.split(/\n+/).map((l) => l.trim()).filter(Boolean);
@@ -146,13 +156,13 @@ async function poll() {
   if (fresh && typeof syncChats === "function") syncChats();             // a new picture or answer in the list's chat
   drawRuns();
   const busy = runs.some((r) => !r.finished);
-  const p = panel();
-  if (busy || (p && !p.hidden)) pollT = setTimeout(poll, busy ? 2500 : 10000);
+  if (busy || shown()) pollT = setTimeout(poll, busy ? 2500 : 10000);
 }
 const STATUS = { waiting: "Waiting", running: "Running", done: "Done", stopped: "Stopped", failed: "Failed", "finished with errors": "Done, with errors" };
 function drawRuns() {
-  const p = panel(); const box = p && p.querySelector(".lp-runs"); if (!box) return;
+  const p = panel(); const box = p && shown() && p.querySelector(".lp-runs");
   $("#goList").classList.toggle("busy", runs.some((r) => !r.finished));
+  if (!box) return;
   box.innerHTML = runs.length ? "<h4>On the PC</h4>" : "";
   for (const r of runs.slice(0, 8)) {
     const d = document.createElement("div"); d.className = "lp-runc " + (r.finished ? "fin" : "live");

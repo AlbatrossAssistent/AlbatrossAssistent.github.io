@@ -50,7 +50,7 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
       req.on("data", (c) => { body += c; if (body.length > max) req.destroy(); });
       req.on("end", async () => {
         let status = 500, out = {};
-        try { [status, out] = await jarvis(req.method, jx[1], body); } catch (e) { out = { error: e.message }; }
+        try { [status, out] = await jarvis(req.method, jx[1], body); } catch (e) { status = e.status || 500; out = { error: e.message }; }
         res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify(out));
       });
@@ -88,9 +88,9 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
       }
       let body = "";
       req.on("data", (c) => { body += c; if (body.length > 64e6) req.destroy(); });
-      req.on("end", () => {
+      req.on("end", async () => {
         let status = 500, out = {};
-        try { [status, out] = chats(req.method, hx[1], body); } catch (e) { out = { error: e.message }; }
+        try { [status, out] = await chats(req.method, hx[1], body); } catch (e) { status = e.status || 500; out = { error: e.message }; }
         res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify(out));
       });
@@ -162,7 +162,7 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
           return res.end();
         }
         let status = 500, out = {};
-        try { [status, out] = await jobs(req.method, kx[1], body); } catch (e) { out = { error: e.message }; }
+        try { [status, out] = await jobs(req.method, kx[1], body); } catch (e) { status = e.status || 500; out = { error: e.message }; }
         res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify(out));
       });

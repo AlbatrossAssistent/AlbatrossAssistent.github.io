@@ -141,7 +141,7 @@ The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDA
 
 ## List: several requests in a row
 
-**List** in the sidebar takes several requests at once and runs them **on the PC**, one after the other, for example a picture 3 times, then a text model writing about them. It keeps going when the website is closed or the phone sleeps. The results go into **the chat that is open** (they appear there as they come), or into a new chat if you pick *Into: a new chat*. While a list writes into a chat, that chat waits for it before you can write in it yourself. A chat kept only on this device gets a new chat on the PC instead.
+**List** (a tab of the side panel on the right, next to Browser, Agent and Code; the List button in the sidebar opens it) takes several requests at once and runs them **on the PC**, one after the other, for example a picture 3 times, then a text model writing about them. It keeps going when the website is closed or the phone sleeps. The results go into **the chat that is open** (they appear there as they come), or into a new chat if you pick *Into: a new chat*. While a list writes into a chat, that chat waits for it before you can write in it yourself. A chat kept only on this device gets a new chat on the PC instead.
 
 - Each step is a **Picture** or **Text** step, with how many times (up to 20) and optionally its own model (otherwise the picture model from Settings → Image and the current chat model).
 - Typing `image 3x: a red fox` or `text: write a story about it` sets the kind and the count by itself; pasting several such lines makes several steps.
@@ -149,3 +149,11 @@ The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDA
 - Text steps see the conversation so far (including what was in the chat before); a text model that can look at pictures also gets the pictures of the step before.
 - Picture steps use your size, steps and style from Settings → Image; with a fixed seed every repeat gets the next seed, so they differ.
 - The list shows progress, **Stop**, **Open chat** and **Edit again**. Only one list runs at a time; more wait their turn.
+
+## Accounts: your chats and lists stay yours
+
+Chats live on the PC. While you're signed in (Settings → Account), your chats and lists are kept **per account**: in `%LOCALAPPDATA%\Albatross\Chats\accounts\<account>` on the PC, and under that account on each device. Signing in with the same account on another device shows the same chats; other accounts, and devices that aren't signed in, don't see them. Devices that aren't signed in share the chats directly in `Chats\`, as before.
+
+- The website sends the account's sign-in token with chat and list requests, inside the end-to-end encryption. The PC checks it against Google's keys (signature, project, expiry) before it uses the account's folder; a token that doesn't check out is refused.
+- The first time you sign in on a device that has chats from before, Albatross offers to **move the shared chats into your account**. The button is also in Settings → Account. They are only removed from the shared space once they are safely in your account.
+- Signing out shows the shared chats again; your account's chats stay with your account.

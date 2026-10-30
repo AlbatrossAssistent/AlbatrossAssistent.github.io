@@ -26,6 +26,7 @@ const files = require("./files");
 const schedule = require("./schedule");
 const monitor = require("./monitor");
 const listRunner = require("./list");
+const account = require("./account");
 const PANEL_PORT = Number(process.env.BURROW_PANEL_PORT) || 4747;
 // ---------- how busy the PC is (the PC page on the website) ----------
 const cpuSnap = () => { let idle = 0, total = 0; for (const c of os.cpus()) { const t = c.times; idle += t.idle; total += t.user + t.nice + t.sys + t.idle + t.irq; } return { idle, total }; };
@@ -125,7 +126,7 @@ const pcPower = {
     // the Monitor: a picture or video full screen on this PC's screen (see monitor.js)
     if (p === "/pc/monitor") return monitor.handle(method, body, PANEL_PORT);
     // lists of requests that run here one after the other (see list.js)
-    if (p === "/pc/list") return listRunner.handle(method, body, { upstream, note, changed, activity: schedule.activity });
+    if (p === "/pc/list") { const [uid, b] = await account.fromBody(body); return listRunner.handle(method, b, { upstream, note, changed, activity: schedule.activity, uid }); }
     if (method === "POST" && p === "/pc/schedule") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       return [200, await schedule.set(j)];
@@ -467,7 +468,7 @@ function connect() {
     // Files to and from this PC (see files.js), answered here instead of by Ollama.
     if (typeof p === "string" && p.startsWith("/pc/")) {
       let status = 500, out;
-      try { [status, out] = await pcPower.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+      try { [status, out] = await pcPower.handle(method, p, body, note); } catch (e) { status = e.status || 500; out = { error: e.message }; }
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
@@ -512,14 +513,14 @@ function connect() {
     }
     if (typeof p === "string" && p.startsWith("/jobs/")) {
       let status = 500, out;
-      try { [status, out] = await jobStore.handle(method, p, body, { upstream, note }); } catch (e) { out = { error: e.message }; }
+      try { const [uid, b] = await account.fromBody(body); [status, out] = await jobStore.handle(method, p, b, { upstream, note, uid }); } catch (e) { status = e.status || 500; out = { error: e.message }; }
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       if (p === "/jobs/start") schedule.activity();
       return send({ type: "end", id });
     }
     if (typeof p === "string" && p.startsWith("/chats/")) {
       let status = 500, out;
-      try { [status, out] = chatStore.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+      try { const [uid, b] = await account.fromBody(body); [status, out] = chatStore.handle(method, p, b, note, uid); } catch (e) { status = e.status || 500; out = { error: e.message }; }
       reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
       return send({ type: "end", id });
     }
@@ -716,11 +717,11 @@ panel = startPanel({
   getState: () => ({ ...stats, files: files.state(), now: Date.now() }),
   files,
   code: (method, p, body) => codeTool.handle(method, p, body, note),
-  chats: (method, p, body) => chatStore.handle(method, p, body, note),
+  chats: async (method, p, body) => { const [uid, b] = await account.fromBody(body); return chatStore.handle(method, p, b, note, uid); },
   agent: (method, p, body) => agentHandle(method, p, body),
   browser: (method, p, body) => browserTool.handle(method, p, body, note),
   browserStream: (body, write, signal, busy) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return browserTool.stream(j, write, signal, busy); },
-  jobs: (method, p, body) => jobStore.handle(method, p, body, { upstream, note }),
+  jobs: async (method, p, body) => { const [uid, b] = await account.fromBody(body); return jobStore.handle(method, p, b, { upstream, note, uid }); },
   jobsStream: (body, write, signal) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return jobStore.stream(j, write, signal); },
   // the website on this PC talks to Ollama directly, so it asks here to watch a model load
   load: (model) => { if (model && !isCloud(model)) watchLoad(model); return loadProgress(); },

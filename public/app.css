@@ -1725,12 +1725,14 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .mon-seg button { padding: 0 12px; min-height: 32px; font-size: 13.5px; }
 .mon-opts .mon-row input { min-height: 36px; }
 
-/* ---------- the List in the sidebar (list.js): several requests, run on the PC one after another ---------- */
-.list-panel { display: flex; flex-direction: column; gap: 8px; max-height: 58%; overflow-y: auto; flex: none; padding: 10px; margin: 0 -2px; border-radius: 22px; border: 1px solid var(--line); background: var(--soft); }
-.list-panel[hidden] { display: none; }
-.lp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.lp-head b { font-size: 15px; } .lp-head small { color: var(--muted); font-size: 12px; flex: 1; }
-.lp-head .lp-close { width: 28px; height: 28px; font-size: 18px; margin: -4px -4px 0 0; align-self: flex-start; }
+/* ---------- the List, a tab of the side panel (list.js): several requests, run on the PC one after another ---------- */
+/* only the middle scrolls; "Into" stays on top and "Run on PC" at the bottom. No glass blur inside: every blurred button
+   would be painted again on each scrolled frame, which is what made scrolling lag. */
+#spList { gap: 8px; overflow: hidden; }
+#spList .btn, #spList select, #spList .seg, #spList .icon-btn, #spList textarea, #spList input { -webkit-backdrop-filter: none; backdrop-filter: none; background-image: none; }
+.lp-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 8px; }
+.lp-step, .lp-runc { contain: layout paint; }
+.lp-run { flex: none; display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .lp-into { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
 .lp-into span { color: var(--muted); } .lp-into select { min-height: 28px; font-size: 12.5px; border-radius: 999px; padding: 0 8px; }
 .lp-into small { flex-basis: 100%; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1748,7 +1750,7 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .lp-step textarea { width: 100%; min-height: 48px; resize: vertical; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); color: var(--fg); font: inherit; font-size: 13.5px; padding: 6px 8px; }
 .lp-step textarea:focus { outline: none; border-color: color-mix(in srgb, var(--fg) 30%, transparent); }
 .lp-model { min-height: 28px; font-size: 12px; border-radius: 999px; padding: 0 8px; max-width: 100%; }
-.lp-add, .lp-run { display: flex; gap: 6px; flex-wrap: wrap; }
+.lp-add { display: flex; gap: 6px; flex-wrap: wrap; }
 .lp-run .primary { flex: 1; justify-content: center; }
 .lp-hint { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
 .lp-runs h4 { margin: 6px 0 4px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
@@ -1761,4 +1763,3 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .lp-rb { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; } .lp-rb .btn.small { min-height: 28px; padding: 0 10px; font-size: 12px; }
 .lp-rb .icon-btn { width: 28px; height: 28px; margin-left: auto; }
 #goList .live { display: none; } #goList.busy .live { display: block; }
-@media (min-width: 821px) { aside.rail .list-panel { display: none !important; } }

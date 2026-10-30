@@ -10,11 +10,11 @@ const jobs = new Map();       // id -> job
 const KEEP_MS = 30 * 60e3;    // how long a finished answer waits to be picked up
 const MAX_CHARS = 24e6;       // per job; a longer answer is cut, never the whole PC's memory
 
-function start({ body, chatId, upstream, note }) {
+function start({ body, chatId, upstream, note, uid }) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   const id = crypto.randomBytes(9).toString("base64url");
   const ctrl = new AbortController();
-  const job = { id, chatId: /^[A-Za-z0-9_-]{1,64}$/.test(String(chatId || "")) ? chatId : "", model: j.model || "", ctrl, lines: [], chars: 0, done: false, error: "", started: Date.now(), polled: Date.now(), content: "", thinking: "", stats: "", waiters: [] };
+  const job = { id, uid: uid || "", chatId: /^[A-Za-z0-9_-]{1,64}$/.test(String(chatId || "")) ? chatId : "", model: j.model || "", ctrl, lines: [], chars: 0, done: false, error: "", started: Date.now(), polled: Date.now(), content: "", thinking: "", stats: "", waiters: [] };
   jobs.set(id, job);
   const wake = () => { for (const w of job.waiters.splice(0)) w(); };
   const push = (line) => { job.lines.push(line); job.chars += line.length; wake(); };
@@ -58,12 +58,12 @@ function saveOrphan(job, note) {
   if (Date.now() - job.polled < 60e3 && !job.taken) return;      // someone is still reading it
   if (job.taken) return;                                          // the device that asked got the whole answer
   try {
-    const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: job.chatId }), () => {});
+    const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: job.chatId }), () => {}, job.uid);
     if (st !== 200) return;
     const chat = r.chat;
     chat.messages.push({ role: "assistant", content: job.content, model: job.model, stats: job.stats + " · finished on the PC while you were away" });
     chat.updated = Date.now();
-    chatStore.handle("POST", "/chats/put", JSON.stringify({ chat, force: true }), () => {});
+    chatStore.handle("POST", "/chats/put", JSON.stringify({ chat, force: true }), () => {}, job.uid);
     job.saved = true;
     note && note("Chats: saved an answer that finished while the app was closed");
   } catch {}
@@ -109,17 +109,17 @@ async function stream({ id, from }, write, signal) {
     });
   }
 }
-// What is running now (the page shows "still working on the PC" after a reopen)
-function list() {
-  return [200, { jobs: [...jobs.values()].map((j) => ({ id: j.id, chatId: j.chatId, model: j.model, done: j.done, started: j.started, chars: j.content.length })) }];
+// What is running now (the page shows "still working on the PC" after a reopen), for the account that asks
+function list(uid) {
+  return [200, { jobs: [...jobs.values()].filter((j) => j.uid === (uid || "")).map((j) => ({ id: j.id, chatId: j.chatId, model: j.model, done: j.done, started: j.started, chars: j.content.length })) }];
 }
 
 async function handle(method, p, body, ctx) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
-  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note });
+  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note, uid: ctx.uid });
   if (p === "/jobs/poll") return poll(j);
   if (p === "/jobs/cancel") return cancel(j);
-  if (p === "/jobs/list") return list();
+  if (p === "/jobs/list") return list(ctx.uid);
   return [404, { error: "Unknown jobs request" }];
 }
 const active = () => [...jobs.values()].filter((j) => !j.done).length;

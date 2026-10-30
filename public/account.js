@@ -15,6 +15,8 @@ const app = initializeApp({
 });
 const auth = getAuth(app), db = getFirestore(app);
 let user = null, cloud = null, vaultKey = null, pushTimer = 0, applying = false;
+// for the main page: the signed-in account's ID token (Firebase renews it every hour), so the PC keeps chats and lists per account
+window.albAcct = { token: () => (user ? user.getIdToken() : Promise.resolve("")) };
 
 const msg = (t, bad) => { const m = $("#accMsg"); m.hidden = !t; m.textContent = t || ""; m.style.color = bad ? "var(--danger)" : ""; };
 const nice = (e) => ({
@@ -98,6 +100,7 @@ function renderVault() {
 
 onAuthStateChanged(auth, async (u) => {
   user = u; vaultKey = null; cloud = null;
+  if (window.onAccountChange) window.onAccountChange(u ? u.uid : "");     // this account's chats and lists
   $("#accOut").hidden = !!u; $("#accIn").hidden = !u;
   if (!u) { msg(""); return; }
   $("#accWho").textContent = u.displayName ? `${u.displayName} · ${u.email}` : u.email;
@@ -111,12 +114,13 @@ onAuthStateChanged(auth, async (u) => {
   renderVault();
 });
 
+$("#accMove").onclick = () => window.moveSharedChats();
 $("#accGoogle").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(e => msg(nice(e), true));
 const creds = () => [$("#accEmail").value.trim(), $("#accPass").value];
 $("#accSignIn").onclick = () => signInWithEmailAndPassword(auth, ...creds()).catch(e => msg(nice(e), true));
 $("#accSignUp").onclick = () => createUserWithEmailAndPassword(auth, ...creds()).then(() => toast("Account created")).catch(e => msg(nice(e), true));
 $("#accReset").onclick = () => { const [email] = creds(); if (!email) return msg("Enter your email first.", true); sendPasswordResetEmail(auth, email).then(() => msg("Check your inbox for a reset link.")).catch(e => msg(nice(e), true)); };
-$("#accSignOut").onclick = () => signOut(auth).then(() => toast("Signed out. Your settings stay on this device."));
+$("#accSignOut").onclick = () => signOut(auth).then(() => toast("Signed out. Your settings stay on this device; your account's chats stay with your account."));
 $("#vaultBtn").onclick = async () => {
   const pass = $("#vaultPass").value;
   if (pass.length < 8) return msg("Use at least 8 characters for the passphrase.", true);

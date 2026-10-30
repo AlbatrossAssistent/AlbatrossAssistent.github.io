@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-10-30.1">
+<link rel="stylesheet" href="app.css?v=2026-10-30.2">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -46,7 +46,6 @@
       <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" type="search" placeholder="Search chats" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore></div>
     </div>
   </div>
-  <div class="list-panel" id="listPanel" hidden></div>
   <div class="chat-list" id="chatList"></div>
   <div class="conn-card">
     <div class="conn-line"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
@@ -64,7 +63,7 @@
     <button class="badge loaded" id="loadedPill" title="Model currently loaded in memory (click to manage)"><span class="ld"></span><span id="loadedText">Nothing loaded</span></button>
     <div class="spacer"></div>
     <button class="icon-btn" id="topFold" aria-label="Fold the top bar" title="Fold the top bar"><svg class="i" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
-    <button class="icon-btn" id="sideBtn" type="button" aria-label="Side panel: browser and agent" title="Side panel: browser and agent"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/></svg></button>
+    <button class="icon-btn" id="sideBtn" type="button" aria-label="Side panel: browser and agent" title="Side panel: browser, agent, code and list"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/></svg></button>
     <button class="icon-btn" id="fullBtn" aria-label="Full screen" title="Full screen (F11)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
     
   </div>
@@ -205,9 +204,9 @@
     </div>
   </div>
 </main>
-<section class="deck-side side-panel" id="sidePanel" hidden aria-label="Browser and Agent" data-tab="browser">
+<section class="deck-side side-panel" id="sidePanel" hidden aria-label="Side panel: browser, agent, code and list" data-tab="browser">
   <div class="sp-head">
-    <div class="seg" id="spTabs" role="tablist"><button data-sp="browser" class="on" type="button">Browser</button><button data-sp="agent" type="button">Agent</button><button data-sp="code" type="button">Code</button></div>
+    <div class="seg" id="spTabs" role="tablist"><button data-sp="browser" class="on" type="button">Browser</button><button data-sp="agent" type="button">Agent</button><button data-sp="code" type="button">Code</button><button data-sp="list" type="button">List</button></div>
     <span style="flex:1"></span>
     <button class="icon-btn" id="spFull" type="button" title="Open full size" aria-label="Open full size"><svg class="i" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
     <button class="icon-btn" id="spClose" type="button" title="Close the side panel" aria-label="Close the side panel"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -229,6 +228,7 @@
     <iframe id="cpFrame" sandbox="allow-scripts allow-modals allow-forms" title="Result" hidden></iframe>
     <pre id="cpLog"></pre>
   </div>
+  <div class="sp-pane" id="spList" hidden></div>
   <div class="sp-pane" id="spAgent" hidden><div class="empty-note">When the AI works on a job (files, mail, web, code, print), its plan and every step show up here while you keep chatting.</div></div>
 </section>
 <section class="deck-side" id="deckSide" hidden aria-label="Presentation">
@@ -410,6 +410,9 @@
             <h3>Passphrase for your code and turn-on link</h3>
             <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.55" id="vaultText"></p>
             <div class="row"><div class="field" style="flex:1"><label for="vaultPass" class="sr">Passphrase</label><input id="vaultPass" type="password" autocomplete="new-password" placeholder="Passphrase"></div><button class="btn primary" id="vaultBtn" style="align-self:flex-end">Unlock</button></div>
+            <h3>Chats and lists</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.55">While you're signed in, your chats and lists are kept on your PC for this account only. Other accounts, and devices that aren't signed in, don't see them.</p>
+            <div class="row"><button class="btn" id="accMove" type="button">Move the shared chats into my account</button></div>
             <div class="row"><button class="btn danger" id="accDelete">Delete my cloud data</button></div>
           </div>
           <div class="note" id="accMsg" hidden></div>
@@ -585,8 +588,8 @@
 <script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-10-30.1"></script>
-<script type="module" src="account.js?v=2026-10-30.1"></script>
+<script src="app.js?v=2026-10-30.2"></script>
+<script type="module" src="account.js?v=2026-10-30.2"></script>
 <script src="agent.js"></script>
 <script src="voice.js"></script>
 <script src="browser.js"></script>

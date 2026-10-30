@@ -4,6 +4,8 @@
 //
 // One file per chat in <LOCALAPPDATA>\Albatross\Chats\<id>.json (written to a temp file first, so a power cut never leaves half a chat),
 // plus deleted.json so a chat deleted on one device is also removed on the others instead of coming back.
+// Chats of a signed-in Albatross account are kept apart, in Chats\accounts\<account id>\ (see account.js): only devices signed
+// into that account see them. Devices without an account share the chats directly in Chats\.
 
 const fs = require("fs");
 const os = require("os");
@@ -12,34 +14,37 @@ const path = require("path");
 const ROOT = process.env.ALBATROSS_CHATS || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "Chats");
 const MAX_CHAT = 60 * 1024 * 1024;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-const TOMBS = path.join(ROOT, "deleted.json");
 
 const cache = new Map();   // file -> { mtime, summary }: listing doesn't have to read every chat again
-const file = (id) => path.join(ROOT, id + ".json");
+const UID = /^[A-Za-z0-9_-]{1,128}$/;
+const dirOf = (uid) => (uid && UID.test(uid) ? path.join(ROOT, "accounts", uid) : ROOT);
 function atomic(target, text) { const tmp = target + ".part"; fs.writeFileSync(tmp, text); fs.renameSync(tmp, target); }
-function tombs() { try { return JSON.parse(fs.readFileSync(TOMBS, "utf8")); } catch { return {}; } }
 function summary(c) {
   const msgs = Array.isArray(c.messages) ? c.messages : [];
   return { id: c.id, title: String(c.title || "").slice(0, 120), updated: Number(c.updated) || 0, created: Number(c.created) || 0, pinned: !!c.pinned, type: c.type || "chat", n: msgs.length };
 }
 
-function handle(method, p, body, note) {
+// uid: the account the request comes from ("" = no account)
+function handle(method, p, body, note, uid = "") {
   let j = {};
   try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
-  fs.mkdirSync(ROOT, { recursive: true });
+  const DIR = dirOf(uid), TOMBS = path.join(DIR, "deleted.json");
+  const file = (id) => path.join(DIR, id + ".json");
+  const tombs = () => { try { return JSON.parse(fs.readFileSync(TOMBS, "utf8")); } catch { return {}; } };
+  fs.mkdirSync(DIR, { recursive: true });
 
   if (p === "/chats/list") {
     const list = [];
-    for (const f of fs.readdirSync(ROOT)) {
+    for (const f of fs.readdirSync(DIR)) {
       if (!f.endsWith(".json") || f === "deleted.json") continue;
       try {
-        const fp = path.join(ROOT, f), mt = fs.statSync(fp).mtimeMs, hit = cache.get(f);
+        const fp = path.join(DIR, f), mt = fs.statSync(fp).mtimeMs, hit = cache.get(fp);
         if (hit && hit.mt === mt) { list.push(hit.s); continue; }
         const s = summary(JSON.parse(fs.readFileSync(fp, "utf8")));
-        cache.set(f, { mt, s }); list.push(s);
+        cache.set(fp, { mt, s }); list.push(s);
       } catch {}
     }
-    return [200, { folder: ROOT, chats: list, deleted: tombs() }];
+    return [200, { folder: DIR, account: !!uid, chats: list, deleted: tombs() }];
   }
   if (p === "/chats/get") {
     if (!ID.test(String(j.id))) return [400, { error: "Bad chat id" }];

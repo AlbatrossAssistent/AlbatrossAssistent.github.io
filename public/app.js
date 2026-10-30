@@ -35,7 +35,12 @@ let S = deepMerge(structuredClone(DEFAULTS), store.get("settings", {}));
 // Switch every saved setup to the Render server once; changes made after that are kept.
 if (store.get("settings", {}).serverVersion !== 2) { S.conn.relay = DEFAULT_SERVER; S.serverVersion = 2; store.set("settings", S); }
 if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER;
-let chats = S.persist ? store.get("chats", []) : [];
+// Chats belong to an account: signed in, this device keeps that account's chats under their own key (and the PC keeps them in
+// the account's own folder, host/chats.js); signed out, the shared ones. acctUid is the account that was signed in last time, so
+// the right chats show at once, before the sign-in has finished loading (account.js then confirms it or switches).
+let acctUid = store.get("acctUid", "");
+const chatKey = (k) => (acctUid ? `${k}.${acctUid}` : k);
+let chats = S.persist ? store.get(chatKey("chats"), []) : [];
 // ---------- who this device is (shown to the PC, under Beam -> Devices) ----------
 function deviceInfo() {
   let id = store.get("deviceId", ""); if (!id) { id = crypto.randomUUID(); store.set("deviceId", id); }
@@ -58,11 +63,11 @@ function saveChats() {
   if (!S.persist) return;
   chatSyncSoon();
   // the PC has the others; this device keeps only its device-only chats then
-  if (S.keepLocal === false && sync.ok) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set("chats", own); else store.del("chats"); return; }
-  if (!store.set("chats", chats)) {
+  if (S.keepLocal === false && sync.ok) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set(chatKey("chats"), own); else store.del(chatKey("chats")); return; }
+  if (!store.set(chatKey("chats"), chats)) {
     // storage full (usually generated images) — keep text, drop old images
     const slim = chats.map(c => ({ ...c, messages: c.messages.map(m => ({ ...m, images: undefined, genImage: m.genImage ? "" : undefined })) }));
-    if (store.set("chats", slim)) toast("Browser storage full — older images won't be kept");
+    if (store.set(chatKey("chats"), slim)) toast("Browser storage full — older images won't be kept");
   }
 }
 
@@ -71,7 +76,7 @@ function saveChats() {
 // ======================================================================
 // The PC keeps the master copy of every chat (host/chats.js). This device keeps a cache (unless switched off) and, whenever it
 // is connected, swaps what changed: newer there -> take it, newer here -> send it, deleted on one side -> deleted on the other.
-const sync = { sig: S.keepLocal === false ? {} : store.get("chatSync", {}), timer: 0, busy: false, ok: false, again: false, fail: 0 };
+const sync = { sig: S.keepLocal === false ? {} : store.get(chatKey("chatSync"), {}), timer: 0, busy: false, ok: false, again: false, fail: 0 };
 const chatSig = (c) => [c.updated, c.messages.length, c.title, c.pinned ? 1 : 0, (c.system || "").length, (c.context || "").length, c.type || ""].join("|");
 const syncOn = () => S.persist && S.chatsOnPC !== false;
 function chatSyncSoon(ms = 1500) { if (!syncOn()) return; clearTimeout(sync.timer); sync.timer = setTimeout(syncChats, ms); }
@@ -86,12 +91,17 @@ async function pushChat(c) {
 function adopt(old, nw) { const i = chats.indexOf(old); if (i >= 0) chats[i] = nw; else chats.push(nw); if (current === old) current = nw; sync.sig[nw.id] = chatSig(nw); }
 async function syncChats() {
   if (!syncOn() || !connected) return;
+  const forUid = acctUid;
   if (sync.busy) { sync.again = true; return; }
   if (controller) { chatSyncSoon(4000); return; }      // an answer is being written: don't swap chats under it
   sync.busy = true;
   let changed = false;
   try {
     const l = await pcCall("/chats/list", {});
+    if (forUid !== acctUid) return;                 // signed in or out meanwhile: the next sync is for the other account
+    // an older Albatross on the PC doesn't keep chats per account: don't mix this account's chats with the shared ones
+    if (acctUid && l.account !== true) { if (!sync.oldHost) toast("Restart Albatross on your PC (restart-albatross.bat) so it keeps your chats per account. Until then they aren't synced."); sync.oldHost = true; return; }
+    sync.oldHost = false;
     const remote = new Map((l.chats || []).map(c => [c.id, c])), tomb = l.deleted || {};
     // deleted on this device since the last time -> delete on the PC
     const have = new Set(chats.map(c => c.id));
@@ -126,8 +136,8 @@ async function syncChats() {
       const g = (await pcCall("/chats/get", { id: r.id })).chat; chats.push(g); sync.sig[g.id] = chatSig(g); changed = true;
     }
     sync.ok = true; sync.fail = 0;
-    if (S.keepLocal === false) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set("chats", own); else store.del("chats"); store.del("chatSync"); }
-    else { store.set("chats", chats); store.set("chatSync", sync.sig); }
+    if (S.keepLocal === false) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set(chatKey("chats"), own); else store.del(chatKey("chats")); store.del(chatKey("chatSync")); }
+    else { store.set(chatKey("chats"), chats); store.set(chatKey("chatSync"), sync.sig); }
     if (changed) { if (!current || !chats.includes(current)) current = chats.find(c => c.messages.length) || current; renderSidebar(); if (isHome()) renderHome(); else if (current) renderMessages(); }
   } catch (e) {
     sync.ok = false; sync.fail++;
@@ -596,7 +606,68 @@ $("#powerBtn").onclick = async () => {
 };
 // shut down: click once to arm, again within 4 s to confirm; then it can be cancelled for a minute
 let offArmed = 0, offPending = 0;
-async function pcCall(path, body, method = "POST") {
+// Chats, lists and requests that keep running on the PC belong to the signed-in account: they carry its sign-in token (inside
+// the end-to-end encryption), which the PC checks (host/account.js).
+const ACCT_PATHS = /^\/(chats|jobs)\/|^\/pc\/list$/;
+let acctReadyOk = false;
+const acctReady = new Promise((res) => { window.acctResolve = () => { acctReadyOk = true; res(true); }; });
+async function acctToken() {
+  if (!acctReadyOk) {
+    // account.js hasn't said who is signed in yet: wait a little; if an account was signed in last time, never go on without it
+    await Promise.race([acctReady, new Promise((r) => setTimeout(r, acctUid ? 15000 : 4000))]);
+    if (!acctReadyOk && acctUid) throw new Error("Your account is still signing in. Try again in a moment.");
+  }
+  return window.albAcct && acctUid ? await window.albAcct.token() : "";
+}
+// account.js: who is signed in now ("" = nobody). Another account: this device switches to that account's chats.
+window.onAccountChange = (uid) => {
+  uid = uid || "";
+  // an account used on this device for the first time, while this device has shared chats: offer to move them in
+  const offer = uid && uid !== acctUid && store.get(`chats.${uid}`, null) === null && store.get("chats", []).some((c) => c.messages.length);
+  if (offer) setTimeout(() => toast("Chats are now kept per account. Move the shared chats into your account?", { action: "Move them", onAction: () => window.moveSharedChats() }), 1500);
+  if (uid !== acctUid) {
+    if (S.persist) saveChats();                     // the old account's chats stay saved under its own key
+    acctUid = uid;
+    if (uid) store.set("acctUid", uid); else store.del("acctUid");
+    chats = S.persist ? store.get(chatKey("chats"), []) : [];
+    sync.sig = S.keepLocal === false ? {} : store.get(chatKey("chatSync"), {}); sync.ok = false;
+    current = chats.find(c => c.messages.length) || null;
+    if (!current) newChat(); else renderAll();
+    if (isHome()) renderHome();
+    if (window.listRefresh) window.listRefresh();
+  }
+  window.acctResolve();
+  chatSyncSoon(200);
+};
+// Moves the shared chats (on the PC and on this device) into the signed-in account; they then leave the shared space.
+window.moveSharedChats = async () => {
+  if (!acctUid) return toast("Sign in first");
+  if (!connected) return toast("Connect to your PC first");
+  try {
+    toast("Moving the shared chats into your account…");
+    const have = new Set(chats.map((c) => c.id)), moved = [];
+    const l = await pcCall("/chats/list", {}, "POST", true);
+    for (const r of l.chats || []) if (!have.has(r.id)) { const g = (await pcCall("/chats/get", { id: r.id }, "POST", true)).chat; chats.push(g); have.add(g.id); moved.push(g.id); }
+    for (const c of store.get("chats", [])) if (!have.has(c.id) && c.messages.length) { chats.push(c); have.add(c.id); moved.push(c.id); }
+    if (!moved.length) { toast("There are no shared chats to move"); return; }
+    chats.sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    saveChats(); renderSidebar();
+    await syncChats();
+    // only once they are all in the account's folder on the PC: out of the shared space
+    const mine = new Set(((await pcCall("/chats/list", {})).chats || []).map((c) => c.id));
+    const safe = moved.filter((id) => mine.has(id) || (chats.find((c) => c.id === id) || {}).deviceOnly);
+    if (safe.length < moved.length) throw new Error(`${moved.length - safe.length} chat(s) didn't reach your account yet; nothing was removed. Try again.`);
+    await pcCall("/chats/delete", { ids: safe }, "POST", true);
+    store.del("chats"); store.del("chatSync");
+    toast(`Moved ${safe.length} chat${safe.length === 1 ? "" : "s"} into your account`);
+  } catch (e) { toast("Couldn't move them: " + e.message); }
+};
+// shared: without the account (only for moving the shared chats into it)
+async function pcCall(path, body, method = "POST", shared = false) {
+  if (ACCT_PATHS.test(path) && !shared) {
+    const t = await acctToken();
+    if (t) { method = "POST"; body = { ...(body || {}), _acct: t }; }
+  }
   const opts = method === "GET" ? { method } : { method, body: JSON.stringify(body || {}) };
   const r = remotePC() ? await e2eFetch(path, { ...opts, base: hostBase() }) : await fetch("http://127.0.0.1:4747" + path, { ...opts, headers: { "Content-Type": "application/json" } });
   const j = await r.json().catch(() => ({}));
@@ -3656,14 +3727,14 @@ $("#defaultSystem").onchange = e => { S.defaultSystem = e.target.value; saveSett
 for (const k of ["enterSends", "showStats", "think", "autoTitle", "intro", "compact"]) $("#" + k).onchange = e => { S[k] = e.target.checked; saveSettings(); applyAppearance(); if (k === "showStats") renderMessages(); };
 $("#chatsDeviceOnly").onchange = e => { S.chatsDeviceOnly = e.target.checked; saveSettings(); };
 $("#chatsOnPC").onchange = e => { S.chatsOnPC = e.target.checked; saveSettings(); if (S.chatsOnPC) chatSyncSoon(200); };
-$("#keepLocal").onchange = e => { S.keepLocal = e.target.checked; saveSettings(); if (e.target.checked) { store.set("chats", chats); store.set("chatSync", sync.sig); } else if (sync.ok) { store.del("chats"); store.del("chatSync"); } else { toast("Connect to your PC first, so the chats are safe there"); e.target.checked = true; S.keepLocal = true; saveSettings(); } };
+$("#keepLocal").onchange = e => { S.keepLocal = e.target.checked; saveSettings(); if (e.target.checked) { store.set(chatKey("chats"), chats); store.set(chatKey("chatSync"), sync.sig); } else if (sync.ok) { store.del(chatKey("chats")); store.del(chatKey("chatSync")); } else { toast("Connect to your PC first, so the chats are safe there"); e.target.checked = true; S.keepLocal = true; saveSettings(); } };
 $("#askMid").onchange = e => { S.askMid = e.target.checked; saveSettings(); };
 $("#memoryOn").onchange = e => { S.memoryOn = e.target.checked; saveSettings(); };
 $("#memAdd").onclick = () => { const v = $("#memNew").value.trim(); if (!v) return $("#memNew").focus(); memory().push({ id: "m" + Date.now().toString(36), text: v.slice(0, 240), at: Date.now() }); $("#memNew").value = ""; saveSettings(); paintMemory(); };
 $("#memNew").onkeydown = (e) => { if (e.key === "Enter") $("#memAdd").click(); };
 $("#bgJobs").onchange = e => { S.bgJobs = e.target.checked; saveSettings(); };
 $("#deviceName").onchange = e => { S.deviceName = e.target.value.trim().slice(0, 40); saveSettings(); };
-$("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del("chats"); };
+$("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del(chatKey("chats")); };
 $("#theme").onchange = e => { S.theme = e.target.value; saveSettings(); applyAppearance(); };
 $("#fontSize").addEventListener("input", e => { S.fontSize = Number(e.target.value); e.target.nextElementSibling.textContent = S.fontSize + "px"; saveSettings(); applyAppearance(); });
 $("#replayIntro").onclick = () => { $("#settings").close(); playIntro(); };
@@ -4772,8 +4843,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-30.1";
+const APP_VERSION = "2026-10-30.2";
 const WHATS_NEW = [
+  ["2026-10-30.2", ["The List is now a tab of the side panel on the right, and scrolls smoothly","Chats and lists are kept per account on your PC: only you see them when you're signed in"]],
   ["2026-10-30.1", ["Monitor: show a picture, a video or YouTube full screen on your PC's screen, with layout, options and its display data","List: write several requests in the sidebar (e.g. a picture 3 times, then a text step); they run on your PC one after another","Picture models stay loaded for a time frame (Settings → Image → Keep loaded) and are only unloaded completely after it"]],
   ["2026-10-29.5", ["Answers keep going when you open another chat or page, and land in their own chat","Write while an answer is coming: your messages wait in a queue above the message box and go one after another (✕ removes one); the stop button stops the answer when nothing is typed","Picture button in the message box: the next message makes a picture","Picture models: they're in the model list of every chat now, the one you choose (there or in Settings) is used, also for edits when it can edit, and a new picture request after a picture is a new picture instead of an edit"]],
   ["2026-10-29.4", ["New picture model: FLUX.2 klein (flux2-klein) makes a picture in about 10 seconds once loaded and can change a photo you attach. Switching picture models restarts the picture engine so the old one doesn't fill the memory, and if it runs out of memory it restarts and tries again"]],
