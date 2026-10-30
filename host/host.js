@@ -24,6 +24,9 @@ const { startPanel } = require("./panel");
 const comfy = require("./comfy");
 const files = require("./files");
 const schedule = require("./schedule");
+const monitor = require("./monitor");
+const listRunner = require("./list");
+const PANEL_PORT = Number(process.env.BURROW_PANEL_PORT) || 4747;
 // ---------- how busy the PC is (the PC page on the website) ----------
 const cpuSnap = () => { let idle = 0, total = 0; for (const c of os.cpus()) { const t = c.times; idle += t.idle; total += t.user + t.nice + t.sys + t.idle + t.irq; } return { idle, total }; };
 let cpuPrev = cpuSnap(), cpuLast = null;
@@ -119,6 +122,10 @@ const pcPower = {
       return [200, { ok: true }];
     }
     if (method === "GET" && p === "/pc/schedule") return [200, schedule.get()];
+    // the Monitor: a picture or video full screen on this PC's screen (see monitor.js)
+    if (p === "/pc/monitor") return monitor.handle(method, body, PANEL_PORT);
+    // lists of requests that run here one after the other (see list.js)
+    if (p === "/pc/list") return listRunner.handle(method, body, { upstream, note, changed, activity: schedule.activity });
     if (method === "POST" && p === "/pc/schedule") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       return [200, await schedule.set(j)];
@@ -278,7 +285,8 @@ async function onlyThisModel(model) {
   try { loaded = ((await (await fetch(OLLAMA + "/api/ps", { signal: AbortSignal.timeout(3000) })).json()).models || []).map((m) => m.name); } catch {}
   const others = loaded.filter((n) => n !== model);
   await Promise.all(others.map((m) => fetch(OLLAMA + "/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: m, keep_alive: 0 }) }).catch(() => {})));
-  if (!comfy.isComfy(model) && (await comfy.free())) others.push("ComfyUI");
+  // the image model only steps off the graphics card (it stays in ComfyUI's memory until its time frame runs out, see comfy.js)
+  if (!comfy.isComfy(model) && (await comfy.release())) others.push("the image model (kept in memory)");
   if (others.length) { note(`Unloaded ${others.join(", ")} to make room for ${model}`); await new Promise((r) => setTimeout(r, 1200)); }
 }
 
@@ -339,7 +347,7 @@ function markLoaded(model) { if (loading && loading.model === model && !loading.
 const loadProgress = () => (!loading ? { state: "idle" } : { model: loading.model, pct: loading.pct, state: loading.done ? "loaded" : "loading" });
 
 // Jarvis talks to Ollama directly, so make room on the graphics card before it thinks.
-async function freeImageModels() { if (await comfy.free()) note("Unloaded ComfyUI to make room for Jarvis"); }
+async function freeImageModels() { if (await comfy.release()) note("Moved the image model off the graphics card to make room for Jarvis"); }
 
 const isCloud = (name) => typeof name === "string" && /-cloud$|:cloud$|-cloud:/.test(name);
 
@@ -355,7 +363,7 @@ async function upstream(method, p, body, signal) {
   if (comfy.isComfy(j?.model)) {
     if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
     if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models().find((m) => m.name === j.model)?.details || {} });
-    if (p === "/api/generate" && j.warm) { comfy.warm(j.model, (t) => note(t)); return Response.json({ model: j.model, done: true, done_reason: "warming" }); }
+    if (p === "/api/generate" && j.warm) { if (j.keepMinutes) comfy.setKeep(j.keepMinutes); comfy.warm(j.model, (t) => note(t)); return Response.json({ model: j.model, done: true, done_reason: "warming" }); }
     if (p === "/api/generate") {
       const enc = new TextEncoder();
       return new Response(new ReadableStream({
@@ -703,7 +711,8 @@ function openWindow(url) {
 
 console.log(`Burrow host — sharing Ollama at ${OLLAMA} via ${SERVER}`);
 panel = startPanel({
-  port: Number(process.env.BURROW_PANEL_PORT) || 4747,
+  port: PANEL_PORT,
+  monitor,
   getState: () => ({ ...stats, files: files.state(), now: Date.now() }),
   files,
   code: (method, p, body) => codeTool.handle(method, p, body, note),
@@ -731,6 +740,7 @@ panel = startPanel({
     if (!args.includes("--no-panel")) openWindow(url);
     keepAwake();
     schedule.start(note);
+    monitor.setNote(note);
     comfy.retireOutdated(note);
     pollOllama();
     setInterval(pollOllama, 3000);

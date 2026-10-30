@@ -123,4 +123,29 @@ set OLLAMA_API_KEY=your_key && npm start   # Windows (cmd)
 3. That GGUF file is tagged with the architecture "pig", which ComfyUI-GGUF doesn't recognise as OmniGen2 yet. On this PC `custom_nodes\ComfyUI-GGUF\tools\convert.py` has a small added `ModelOmniGen2` entry (and `loader.py` lists "omnigen2"). Updating the add-on removes that change, so add it again after an update.
 4. Restart the host. **omnigen2:comfyui** appears next to Z-Image.
 
-Only one model is kept in GPU memory at a time: before a chat or image, the host unloads every other model (Ollama and ComfyUI). The host starts ComfyUI (only reachable from this PC) on the first image request. The first image after that takes a while to load; after that a 1024×1024 image takes about 15 seconds on an RTX 5070. **Free GPU memory** also unloads ComfyUI. ComfyUI's log is in `host/comfyui.log`.
+Only one model is kept in GPU memory at a time: before a chat or image, the host unloads every other Ollama model. The host starts ComfyUI (only reachable from this PC) on the first image request. The first image after that takes a while to load; after that a 1024×1024 image takes about 15 seconds on an RTX 5070. ComfyUI's log is in `host/comfyui.log`.
+
+**Keep loaded (Settings → Image).** The image model stays loaded for a time frame after the last picture (10 minutes by default; 2 minutes to 12 hours). Pictures inside it start drawing right away, with no restart in between. A chat model in between only moves the image model off the graphics card; it stays in ComfyUI's memory and is back on the card in seconds. Once nothing was drawn for longer than the time frame, the host shuts ComfyUI down completely (graphics memory and RAM are free again), and the next picture loads it fresh. Switching to another picture model, running out of memory, or a hang also restart it. **Free GPU memory** unloads ComfyUI's models right away.
+
+## Monitor: pictures and videos on the PC's screen
+
+**Monitor** in the sidebar shows a picture or a video full screen on the PC's own screen, from any device with the code:
+
+- **What:** a picture or video on the PC (Albatross pictures, received files, your Pictures, Videos and Downloads folders), the **newest generated picture** (it follows new ones, also from a List), a **YouTube** link (videos, Shorts, live; `&t=90` starts there), a picture or video address on the web, or a file **from this device** (saved in `Downloads\Albatross\Monitor`).
+- **Layout:** fit, fill, stretch or original size; black, blurred, gray or white background; turn 0/90/180/270°; mirror; zoom.
+- **Options:** sound and volume, loop, speed, a clock in a corner, a caption, and an info corner (name, size, display, time).
+- **Videos:** play/pause, back/forward 10 s, from the start, and a position bar that follows the video.
+- **Monitor data:** the PC's displays with resolution, refresh rate, colour depth, scaling, position, monitor and graphics card. Tap a display to show it there.
+
+The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDATA%\Albatross\monitor-window`), started on the signed-in desktop by the desktop helper, so someone has to be signed in. **Close window** in the website closes it; on the PC, Alt+F4 does too. Videos play with sound by themselves. MP4 and WebM files work best; some YouTube videos don't allow being shown outside YouTube, and the Monitor then says so.
+
+## List: several requests in a row
+
+**List** in the sidebar takes several requests at once and runs them **on the PC**, one after the other, for example a picture 3 times, then a text model writing about them. It keeps going when the website is closed or the phone sleeps. Every result goes into one chat that shows up in the chat list on all devices.
+
+- Each step is a **Picture** or **Text** step, with how many times (up to 20) and optionally its own model (otherwise the picture model from Settings → Image and the current chat model).
+- Typing `image 3x: a red fox` or `text: write a story about it` sets the kind and the count by itself; pasting several such lines makes several steps.
+- `{previous}` in a prompt is the last text answer, so a text step can write the prompt for a picture step.
+- Text steps see the conversation so far; a text model that can look at pictures also gets the pictures of the step before.
+- Picture steps use your size, steps and style from Settings → Image; with a fixed seed every repeat gets the next seed, so they differ.
+- The list shows progress, **Stop**, **Open chat** and **Edit again**. Only one list runs at a time; more wait their turn.

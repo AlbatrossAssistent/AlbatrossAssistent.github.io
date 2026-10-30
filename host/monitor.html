@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Albatross Monitor</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff; font: 16px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; cursor: none; user-select: none; }
+#bg { position: fixed; inset: -60px; background-size: cover; background-position: center; filter: blur(48px) brightness(.55) saturate(1.2); transform: scale(1.1); opacity: 0; transition: opacity .5s; }
+body.bg-blur #bg.on { opacity: 1; }
+body.bg-white { background: #fff; } body.bg-gray { background: #3a3a3c; }
+#stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#box { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transition: transform .35s ease; }
+#box.turned { width: 100vh; height: 100vw; flex: none; }
+#box > img, #box > video { display: block; width: 100%; height: 100%; object-fit: contain; }
+#box > iframe { width: 100%; height: 100%; border: 0; display: block; }
+body.fit-cover #box > img, body.fit-cover #box > video { object-fit: cover; }
+body.fit-fill #box > img, body.fit-fill #box > video { object-fit: fill; }
+body.fit-none #box > img, body.fit-none #box > video { object-fit: none; }
+#box > .fade-in { animation: fadein .45s ease; }
+@keyframes fadein { from { opacity: 0; } }
+.empty { display: flex; flex-direction: column; align-items: center; gap: 14px; color: rgba(255,255,255,.55); font-size: 20px; text-align: center; }
+.empty svg { width: 64px; height: 64px; fill: rgba(255,255,255,.6); }
+.over { position: fixed; z-index: 5; padding: 8px 16px; border-radius: 14px; background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+#clock { font-size: clamp(22px, 3.2vw, 54px); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+#clock small { display: block; font-size: .38em; font-weight: 500; opacity: .8; letter-spacing: 0; }
+#clock.tl { top: 24px; left: 24px; } #clock.tr { top: 24px; right: 24px; text-align: right; } #clock.bl { bottom: 24px; left: 24px; } #clock.br { bottom: 24px; right: 24px; text-align: right; }
+#caption { left: 50%; transform: translateX(-50%); max-width: 86vw; font-size: clamp(18px, 2.4vw, 40px); font-weight: 600; text-align: center; }
+#caption.bottom { bottom: 36px; } #caption.top { top: 36px; }
+#info { left: 24px; bottom: 24px; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.85); max-width: 46vw; }
+#info b { color: #fff; }
+#msg { left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 18px; display: none; text-align: center; max-width: 70vw; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body class="fit-contain bg-black">
+<div id="bg"></div>
+<div id="stage"><div id="box"></div></div>
+<div class="over" id="clock" hidden></div>
+<div class="over" id="caption" hidden></div>
+<div class="over" id="info" hidden></div>
+<div class="over" id="msg"></div>
+<script>
+// The Monitor's window on the PC's screen (see host/monitor.js): follows the state from /monitor/events and reports how far a video is.
+const $ = (s) => document.querySelector(s);
+let S = null, srcV = -1, el = null, kind = "none", lastCmd = 0, yt = { time: 0, duration: 0, playing: false, state: -1, error: "" };
+const box = $("#box");
+
+function empty(text) {
+  box.innerHTML = `<div class="empty"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/></svg><span></span></div>`;
+  box.querySelector("span").textContent = text;
+  el = null;
+}
+function message(text) { const m = $("#msg"); m.textContent = text; m.style.display = text ? "block" : "none"; }
+
+// a new picture or video: build the element once; layout and options are applied on top without reloading it
+function load(src) {
+  kind = src.kind; message(""); yt = { time: 0, duration: 0, playing: false, state: -1, error: "" };
+  $("#bg").classList.remove("on");
+  if (src.kind === "image") {
+    el = new Image(); el.className = "fade-in"; el.alt = src.name || "";
+    el.onload = () => { $("#bg").style.backgroundImage = `url("${src.url}")`; $("#bg").classList.add("on"); report(); };
+    el.onerror = () => message("Couldn't load this picture.");
+    el.src = src.url; box.replaceChildren(el);
+  } else if (src.kind === "video") {
+    el = document.createElement("video"); el.className = "fade-in"; el.autoplay = true; el.playsInline = true; el.preload = "auto";
+    el.onerror = () => message("Couldn't play this video (the format may not be supported by the browser: MP4 and WebM work best).");
+    el.onloadeddata = report; el.onplay = report; el.onpause = report;
+    el.src = src.url; box.replaceChildren(el);
+    el.play().catch(() => {});
+  } else if (src.kind === "youtube") {
+    el = document.createElement("iframe");
+    const o = S.opts, q = new URLSearchParams({ autoplay: "1", mute: o.mute ? "1" : "0", controls: "0", rel: "0", playsinline: "1", enablejsapi: "1", iv_load_policy: "3", modestbranding: "1", origin: location.origin, start: String(src.start || 0) });
+    if (o.loop) { q.set("loop", "1"); q.set("playlist", src.id); }
+    el.allow = "autoplay; encrypted-media; picture-in-picture"; el.referrerPolicy = "strict-origin-when-cross-origin";
+    el.src = `https://www.youtube.com/embed/${src.id}?${q}`;
+    el.onload = () => { ytSend("listening"); setTimeout(applyMedia, 600); };
+    box.replaceChildren(el);
+  } else empty("Nothing to show yet. Pick a picture or video in Albatross → Monitor.");
+}
+// YouTube's player is controlled with messages (its IFrame API, without loading its script)
+function ytSend(func, args = []) {
+  if (!el || kind !== "youtube" || !el.contentWindow) return;
+  el.contentWindow.postMessage(JSON.stringify(func === "listening" ? { event: "listening", id: 1, channel: "widget" } : { event: "command", func, args, id: 1, channel: "widget" }), "*");
+}
+addEventListener("message", (e) => {
+  if (!/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
+  let d; try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch { return; }
+  if (d.event === "onReady") applyMedia();
+  if (d.event === "onError") { yt.error = { 2: "Bad video link", 5: "This video can't play here", 100: "Video not found or private", 101: "The owner doesn't allow this video outside YouTube", 150: "The owner doesn't allow this video outside YouTube", 153: "YouTube refused to play it here" }[d.info] || "YouTube error " + d.info; message(yt.error); }
+  const i = d.info || {};
+  if (typeof i.currentTime === "number") yt.time = i.currentTime;
+  if (typeof i.duration === "number" && i.duration) yt.duration = i.duration;
+  if (typeof i.playerState === "number") { yt.state = i.playerState; yt.playing = i.playerState === 1; if (i.playerState === 0 && S?.opts.loop) ytSend("playVideo"); }
+});
+
+// sound, loop and speed for the video that is showing
+function applyMedia() {
+  if (!S) return;
+  const o = S.opts;
+  if (kind === "video" && el) { el.muted = o.mute; el.volume = o.volume / 100; el.loop = o.loop; el.playbackRate = o.speed; }
+  if (kind === "youtube") { ytSend(o.mute ? "mute" : "unMute"); ytSend("setVolume", [o.volume]); ytSend("setPlaybackRate", [o.speed]); }
+}
+function applyLayout() {
+  const L = S.layout;
+  document.body.className = `fit-${L.fit} bg-${L.bg}`;
+  const turned = L.rotate === 90 || L.rotate === 270;
+  box.classList.toggle("turned", turned);
+  box.style.transform = `rotate(${L.rotate}deg) scale(${(L.mirror ? -1 : 1) * L.zoom / 100}, ${L.zoom / 100})`;
+}
+function applyOverlays() {
+  const o = S.opts;
+  $("#clock").hidden = o.clock === "off"; $("#clock").className = "over " + o.clock; tick();
+  $("#caption").hidden = !o.caption; $("#caption").textContent = o.caption; $("#caption").className = "over " + o.captionPos;
+  $("#info").hidden = !o.info; info();
+}
+function tick() {
+  if (!S || S.opts.clock === "off") return;
+  const d = new Date();
+  $("#clock").innerHTML = `${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}<small>${d.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}</small>`;
+}
+const mmss = (s) => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+function info() {
+  if (!S || !S.opts.info) return;
+  const sc = S.screen, p = playback();
+  const lines = [`<b></b>`];
+  if (sc) lines.push(`Display ${sc.i + 1}${sc.primary ? " (main)" : ""} · ${sc.pw || sc.w}×${sc.ph || sc.h}${sc.hz ? " · " + sc.hz + " Hz" : ""}`);
+  if (p.w) lines.push(`${p.w}×${p.h} pixels`);
+  if (p.duration) lines.push(`${mmss(p.time)} / ${mmss(p.duration)}${p.playing ? "" : " · paused"}`);
+  $("#info").innerHTML = lines.join("<br>");
+  $("#info b").textContent = S.src.name || "";
+}
+function run(cmd) {
+  if (!cmd || cmd.seq === lastCmd) return;
+  lastCmd = cmd.seq;
+  if (Date.now() - cmd.at > 8000) return;          // an old command, from before this window connected
+  if (kind === "video" && el) {
+    if (cmd.name === "play") el.play().catch(() => {});
+    if (cmd.name === "pause") el.pause();
+    if (cmd.name === "toggle") el.paused ? el.play().catch(() => {}) : el.pause();
+    if (cmd.name === "restart") { el.currentTime = 0; el.play().catch(() => {}); }
+    if (cmd.name === "seek") el.currentTime = Math.max(0, cmd.arg);
+    if (cmd.name === "skip") el.currentTime = Math.max(0, el.currentTime + cmd.arg);
+  }
+  if (kind === "youtube") {
+    if (cmd.name === "play") ytSend("playVideo");
+    if (cmd.name === "pause") ytSend("pauseVideo");
+    if (cmd.name === "toggle") ytSend(yt.playing ? "pauseVideo" : "playVideo");
+    if (cmd.name === "restart") { ytSend("seekTo", [0, true]); ytSend("playVideo"); }
+    if (cmd.name === "seek") ytSend("seekTo", [Math.max(0, cmd.arg), true]);
+    if (cmd.name === "skip") ytSend("seekTo", [Math.max(0, yt.time + cmd.arg), true]);
+  }
+  setTimeout(report, 300);
+}
+function playback() {
+  if (kind === "video" && el) return { playing: !el.paused && !el.ended, time: el.currentTime, duration: isFinite(el.duration) ? el.duration : 0, w: el.videoWidth, h: el.videoHeight };
+  if (kind === "image" && el) return { playing: false, time: 0, duration: 0, w: el.naturalWidth, h: el.naturalHeight };
+  if (kind === "youtube") return { playing: yt.playing, time: yt.time, duration: yt.duration, w: 0, h: 0, error: yt.error };
+  return { playing: false, time: 0, duration: 0, w: 0, h: 0 };
+}
+function report() {
+  if (!S) return;
+  fetch("/monitor/report", { method: "POST", headers: { "X-Burrow": "1", "Content-Type": "application/json" }, body: JSON.stringify({ ...playback(), v: srcV }) }).catch(() => {});
+}
+setInterval(() => { tick(); info(); if (kind === "video" || kind === "youtube") report(); }, 1000);
+
+function connect() {
+  const es = new EventSource("/monitor/events");
+  es.onmessage = (m) => {
+    const next = JSON.parse(m.data);
+    const prevLoop = S?.opts.loop;
+    S = next;
+    if (S.srcV !== srcV || (kind === "youtube" && S.src.kind === "youtube" && prevLoop !== S.opts.loop)) { srcV = S.srcV; load(S.src); }
+    applyLayout(); applyMedia(); applyOverlays(); run(S.cmd);
+    if (kind === "image" || kind === "none") report();
+  };
+  es.onerror = () => { message("Lost contact with Albatross on this PC… reconnecting"); setTimeout(() => { if (es.readyState !== 2) message(""); }, 4000); };
+  es.onopen = () => message("");
+}
+empty("Connecting…");
+connect();
+// keep the screen from going dark while something is showing
+if (navigator.wakeLock) { const lock = () => navigator.wakeLock.request("screen").catch(() => {}); lock(); document.addEventListener("visibilitychange", () => { if (!document.hidden) lock(); }); }
+</script>
+</body>
+</html>

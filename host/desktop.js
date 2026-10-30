@@ -4,6 +4,7 @@
 //   key     a media or volume key         volume   read or set the volume (0..100, mute)    bright  read or set the brightness
 //   playing what is playing now (title, artist, cover)      apps / launch  the Start menu's programs, open one
 //   url     open a web address in the default browser       lock    lock the PC
+//   screens the PC's displays (resolution, refresh rate, ...)    monopen / monclose / monstate  the Monitor's full-screen window
 const http = require("http"), fs = require("fs"), path = require("path"), os = require("os"), crypto = require("crypto");
 const { spawn, execFile } = require("child_process");
 
@@ -29,6 +30,23 @@ public class AlbAudio {
   public static bool Muted() { bool m; Marshal.ThrowExceptionForHR(V().GetMute(out m)); return m; }
   public static void Mute(bool m) { Marshal.ThrowExceptionForHR(V().SetMute(m, Guid.Empty)); }
 }'`,
+  // the displays: Windows Forms knows where each one sits on the desktop, EnumDisplaySettings its real resolution and refresh rate
+  `Add-Type -AssemblyName System.Windows.Forms`,
+  `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices;
+public class AlbScreens {
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)] public struct DEVMODE {
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName; public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra; public int dmFields;
+    public int dmPositionX; public int dmPositionY; public int dmDisplayOrientation; public int dmDisplayFixedOutput; public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName; public short dmLogPixels; public int dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight; public int dmDisplayFlags; public int dmDisplayFrequency;
+    public int dmICMMethod; public int dmICMIntent; public int dmMediaType; public int dmDitherType; public int dmReserved1; public int dmReserved2; public int dmPanningWidth; public int dmPanningHeight; }
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)] public struct DISPLAY_DEVICE { public int cb; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString; public int StateFlags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey; }
+  [DllImport("user32.dll", CharSet = CharSet.Ansi)] static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
+  [DllImport("user32.dll", CharSet = CharSet.Ansi)] static extern bool EnumDisplayDevices(string dev, int i, ref DISPLAY_DEVICE dd, int flags);
+  public static int[] Mode(string dev) { var dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE)); if (!EnumDisplaySettings(dev, -1, ref dm)) return new int[] { 0, 0, 0, 0, 0 }; return new int[] { dm.dmPelsWidth, dm.dmPelsHeight, dm.dmDisplayFrequency, dm.dmBitsPerPel, dm.dmDisplayOrientation }; }
+  public static string Monitor(string dev) { var dd = new DISPLAY_DEVICE(); dd.cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE)); return EnumDisplayDevices(dev, 0, ref dd, 0) ? dd.DeviceString : ""; }
+  public static string Adapter(string dev) { var dd = new DISPLAY_DEVICE(); dd.cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE)); for (int i = 0; EnumDisplayDevices(null, i, ref dd, 0); i++) { if (dd.DeviceName == dev) return dd.DeviceString; dd.cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE)); } return ""; }
+}'`,
+  `function Screens { $i = 0; @([System.Windows.Forms.Screen]::AllScreens | ForEach-Object { $b = $_.Bounds; $m = [AlbScreens]::Mode($_.DeviceName); @{ i = $i++; dev = $_.DeviceName; primary = $_.Primary; x = $b.X; y = $b.Y; w = $b.Width; h = $b.Height; pw = $m[0]; ph = $m[1]; hz = $m[2]; bits = $m[3]; rot = $m[4]; name = [AlbScreens]::Monitor($_.DeviceName); gpu = [AlbScreens]::Adapter($_.DeviceName) } }) }`,
   // waiting for Windows' async calls (what is playing)
   `Add-Type -AssemblyName System.Runtime.WindowsRuntime; $global:AsTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq "AsTask" -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } | Select-Object -First 1`,
   `function Await($op, [Type]$t) { $task = $global:AsTask.MakeGenericMethod($t).Invoke($null, @($op)); [void]$task.Wait(5000); $task.Result }`,
@@ -75,6 +93,36 @@ function apps() {
   }));
 }
 
+// ---------- the Monitor's window: Chrome or Edge in kiosk mode (full screen, no bars) on one display, with its own profile ----------
+// The profile folder's name marks the window's processes, so they can be found and closed again; its own profile also lets
+// videos start with sound by themselves (--autoplay-policy) without touching the browser you use.
+const MON_PROFILE = path.join(DIR, "monitor-window");
+function browserExe() {
+  const dirs = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA].filter(Boolean);
+  return [["Google", "Chrome", "Application", "chrome.exe"], ["Microsoft", "Edge", "Application", "msedge.exe"]]
+    .flatMap((p) => dirs.map((d) => path.join(d, ...p))).find((f) => fs.existsSync(f)) || "";
+}
+async function monPids() {
+  const r = await psRun(`@(Get-CimInstance Win32_Process -Filter "name='chrome.exe' or name='msedge.exe'" | Where-Object { $_.CommandLine -like '*\\monitor-window*' } | ForEach-Object { $_.ProcessId })`).catch(() => []);
+  return (Array.isArray(r) ? r : r == null ? [] : [r]).map(Number).filter(Boolean);
+}
+async function monKill() {
+  const pids = await monPids();
+  if (pids.length) await psRun(`Stop-Process -Id ${pids.join(",")} -Force -ErrorAction SilentlyContinue; $null`).catch(() => {});
+  for (let k = 0; k < 20 && (await monPids()).length; k++) await new Promise((r) => setTimeout(r, 250));
+}
+async function monOpen({ url, x = 0, y = 0, w = 1280, h = 720 }) {
+  if (!/^http:\/\/127\.0\.0\.1:\d+\/monitor$/.test(String(url || ""))) throw new Error("Bad monitor address");
+  const exe = browserExe(); if (!exe) throw new Error("The Monitor needs Google Chrome or Microsoft Edge on the PC.");
+  await monKill();                                                    // a new display (or a hung window): start over
+  const n = (v) => Math.round(Number(v) || 0);
+  const c = spawn(exe, [`--user-data-dir=${MON_PROFILE}`, `--app=${url}`, `--window-position=${n(x) + 40},${n(y) + 40}`, `--window-size=${Math.max(640, n(w) - 80)},${Math.max(480, n(h) - 80)}`,
+    "--kiosk", "--autoplay-policy=no-user-gesture-required", "--no-first-run", "--no-default-browser-check", "--disable-session-crashed-bubble", "--hide-crash-restore-bubble",
+    "--disable-features=Translate,MediaRouter", "--disable-pinch", "--overscroll-history-navigation=0"], { detached: true, stdio: "ignore", windowsHide: false });
+  c.on("error", () => {}); c.unref();
+  return { ok: true, browser: path.basename(exe, ".exe") };
+}
+
 async function run(cmd, arg) {
   if (cmd === "key") { if (!KEYS[arg]) throw new Error("Unknown key"); await press(KEYS[arg]); return { ok: true }; }
   if (cmd === "volume") {
@@ -101,8 +149,12 @@ async function run(cmd, arg) {
     const u = String(arg || ""); if (!/^https?:\/\/[^\s"'<>]+$/i.test(u) || u.length > 2000) throw new Error("Only web addresses (http/https) can be opened.");
     execFile("rundll32.exe", ["url.dll,FileProtocolHandler", u], { windowsHide: true }, () => {}); return { ok: true };
   }
+  if (cmd === "screens") { const r = await psRun(`Screens`); return { screens: (Array.isArray(r) ? r : r ? [r] : []).sort((a, b) => a.i - b.i) }; }
+  if (cmd === "monopen") return monOpen(arg || {});
+  if (cmd === "monclose") { await monKill(); return { ok: true }; }
+  if (cmd === "monstate") return { open: (await monPids()).length > 0 };
   if (cmd === "lock") { execFile("rundll32.exe", ["user32.dll,LockWorkStation"], { windowsHide: true }, () => {}); return { ok: true }; }
-  if (cmd === "ping") return { ok: true, pid: process.pid, v: 2 };
+  if (cmd === "ping") return { ok: true, pid: process.pid, v: 3 };
   throw new Error("Unknown command");
 }
 
@@ -115,6 +167,6 @@ const server = http.createServer((req, res) => {
 server.on("error", () => process.exit(0));                     // another helper already runs
 server.listen(PORT, "127.0.0.1", () => {
   fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(INFO, JSON.stringify({ port: PORT, token: TOKEN, pid: process.pid, v: 2 }));
+  fs.writeFileSync(INFO, JSON.stringify({ port: PORT, token: TOKEN, pid: process.pid, v: 3 }));
   shell();
 });

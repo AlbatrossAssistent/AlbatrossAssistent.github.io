@@ -11,7 +11,7 @@ const HTML = path.join(__dirname, "control.html");
 // Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
 const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.github\.io|burrow-uu7e\.onrender\.com)$|^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, monitor, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -23,6 +23,8 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       return fs.createReadStream(HTML).pipe(res);
     }
+    // The Monitor's full-screen window on this PC (see monitor.js)
+    if (monitor && /^\/monitor(\/|\?|$)/.test(req.url) && monitor.serve(req, res)) return;
     if (req.method === "GET" && req.url === "/events") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
       res.write(`data: ${JSON.stringify(getState())}\n\n`);
@@ -43,7 +45,9 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
         return res.end();
       }
       let body = "";
-      req.on("data", (c) => { body += c; if (body.length > 1e5) req.destroy(); });
+      // the Monitor takes pictures and videos from the device in pieces of a few MB
+      const max = jx[1] === "/pc/monitor" ? 12e6 : 1e5;
+      req.on("data", (c) => { body += c; if (body.length > max) req.destroy(); });
       req.on("end", async () => {
         let status = 500, out = {};
         try { [status, out] = await jarvis(req.method, jx[1], body); } catch (e) { out = { error: e.message }; }

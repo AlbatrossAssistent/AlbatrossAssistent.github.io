@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-10-29.5">
+<link rel="stylesheet" href="app.css?v=2026-10-30.1">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -40,10 +40,13 @@
       <button class="side-btn" id="goNotes"><svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>Notes</button>
       <button class="side-btn" id="goMail"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>Mail</button>
       <button class="side-btn" id="goHub"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>Hub</button>
+      <button class="side-btn" id="goMonitor"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/></svg>Monitor</button>
+      <button class="side-btn" id="goList"><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 5.5l1 1 2-2M4 11.5l1 1 2-2M4 17.5l1 1 2-2"/></svg>List<span class="live" aria-hidden="true"></span></button>
       <button class="side-btn" id="newChat"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New chat<span class="kbd">Ctrl+Shift+O</span></button>
       <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><label for="search" class="sr">Search chats</label><input id="search" type="search" placeholder="Search chats" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore></div>
     </div>
   </div>
+  <div class="list-panel" id="listPanel" hidden></div>
   <div class="chat-list" id="chatList"></div>
   <div class="conn-card">
     <div class="conn-line"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
@@ -112,6 +115,7 @@
   </div>
   <div id="notesPage"></div>
   <div id="hubPage"></div>
+  <div id="monitorPage"></div>
   <div id="mailPage"></div>
   <div id="agentPage">
     <div class="home-inner">
@@ -317,11 +321,12 @@
         <!-- Image -->
         <section class="pane" data-pane="image">
           <div class="row">
-            <div class="field" style="flex:2 1 280px"><label for="imgModel">Picture model</label><select id="imgModel"></select><small>The one the AI uses when you ask for a picture, by itself, you don't pick it in the model list. It stays loaded between pictures until a chat model needs the graphics card. Z-Image Turbo is the fast one; Qwen-Image 2.1 and OmniGen2 also edit photos you attach.</small></div>
+            <div class="field" style="flex:2 1 280px"><label for="imgModel">Picture model</label><select id="imgModel"></select><small>The one the AI uses when you ask for a picture, by itself, you don't pick it in the model list. It stays loaded for the time set under Keep loaded. Z-Image Turbo is the fast one; Qwen-Image 2.1 and OmniGen2 also edit photos you attach.</small></div>
             <div class="field"><label for="imgSize">Size</label><select id="imgSize"><option value="512x512">512²</option><option value="768x768">768²</option><option value="1024x1024">1024²</option><option value="1024x768">1024×768</option><option value="768x1024">768×1024</option><option value="1280x720">1280×720</option></select></div>
             <div class="field"><label for="imgSteps">Steps</label><input id="imgSteps" type="number" min="1" max="100" placeholder="auto"></div>
             <div class="field"><label for="imgSeed">Seed</label><input id="imgSeed" type="number" placeholder="random"></div>
           </div>
+          <div class="field"><label for="imgKeep">Keep loaded</label><select id="imgKeep"><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="180">3 hours</option><option value="720">12 hours</option></select><small>Pictures within this time after the last one reuse the loaded model and start drawing right away. A chat model in between only moves it off the graphics card for a moment. After this time without pictures, ComfyUI is unloaded completely (graphics memory and RAM are free again) and the next picture loads it fresh.</small></div>
           <div class="field"><label for="imgStyle">Context for the image AI</label><textarea id="imgStyle" placeholder="e.g. Watercolor style, soft light. The main character is a small red fox called Remy."></textarea><small>Added to every image prompt in every image chat: your style, characters, setting, anything it should always keep in mind.</small></div>
           <label class="check"><span>Use this chat as context<small>Earlier requests in the same chat carry over, so "make it night" or "now with a hat" works.</small></span><input type="checkbox" class="switch" id="imgHistory"></label>
           <div class="field"><label for="imgCtxModel">Prompt writer</label><select id="imgCtxModel"></select><small>A text model that merges the chat and your context into one clear image prompt, then unloads so the image model gets the memory. "Auto" uses your smallest installed text model, except for ComfyUI image models (it would push them out of memory).</small></div>
@@ -577,12 +582,14 @@
 <script src="mail.js"></script>
 <script src="music.js"></script>
 <script src="hub.js"></script>
+<script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-10-29.5"></script>
-<script type="module" src="account.js?v=2026-10-29.5"></script>
+<script src="app.js?v=2026-10-30.1"></script>
+<script type="module" src="account.js?v=2026-10-30.1"></script>
 <script src="agent.js"></script>
 <script src="voice.js"></script>
 <script src="browser.js"></script>
+<script src="list.js"></script>
 </body>
 </html>

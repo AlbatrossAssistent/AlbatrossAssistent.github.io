@@ -19,7 +19,7 @@ const DEFAULTS = {
   defaultSystem: "", enterSends: true, showStats: true, think: true, webSearch: false, autoTitle: true, persist: true,
   theme: "light", fontSize: 16, intro: true, compact: false,
   model: "", imageModel: "", mode: "chat",
-  img: { size: "1024x1024", steps: "", seed: "", style: "", history: true, ctxModel: "" },
+  img: { size: "1024x1024", steps: "", seed: "", style: "", history: true, ctxModel: "", keep: 10 },
   files: { name: "", public: false },
   tools: {}, stars: true, glass: true,
 };
@@ -389,7 +389,7 @@ async function connect(quiet) {
     setStatus("ok", `${S.conn.mode === "remote" ? "Remotely" : "Locally"} connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"} · ${launcher}`);
     if (document.body.classList.contains("home-view")) renderHome();
     updatePowerBox(true);
-    chatSyncSoon(400); pollLock(); syncLoadTimes();
+    chatSyncSoon(400); pollLock(); syncLoadTimes(); window.listRefresh && window.listRefresh();
     return true;
   } catch (e) {
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
@@ -3342,7 +3342,7 @@ async function generateImage(model, prompt, refs = []) {
   if (refs.length) finalPrompt = [prompt, (S.img.style || "").trim()].filter(Boolean).join(". ");
   else try { imageModelForWriter = model; finalPrompt = await buildImagePrompt(prompt, bubble); } catch (e) { if (e.name === "AbortError") { controller = null; setBusy(false); renderMessages(); return; } }
   reply.prompt = finalPrompt; reply.asked = prompt;
-  const body = { model, prompt: finalPrompt, stream: true, width: w, height: h };
+  const body = { model, prompt: finalPrompt, stream: true, width: w, height: h, keepMinutes: S.img.keep || 10 };
   if (refs.length) { body.images = refs; reply.edited = true; }
   const steps = S.img.steps, seed = S.img.seed;
   if (steps) body.steps = Number(steps);
@@ -3396,7 +3396,7 @@ let warming = "";
 async function warmImage(model) {
   if (warming === model) return;
   warming = model;
-  try { await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, warm: true }) }); } catch {}
+  try { await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, warm: true, keepMinutes: S.img.keep || 10 }) }); } catch {}
   setTimeout(() => { if (warming === model) warming = ""; }, 60000);
 }
 async function readNdjson(res, onObj) {
@@ -3762,8 +3762,9 @@ $("#chatDeviceOnly").onchange = e => { if (e.target.checked) current.deviceOnly 
 // image options
 function loadImgFields() {
   $("#imgSize").value = S.img.size; $("#imgSteps").value = S.img.steps; $("#imgSeed").value = S.img.seed;
-  $("#imgStyle").value = S.img.style; $("#imgHistory").checked = !!S.img.history;
+  $("#imgStyle").value = S.img.style; $("#imgHistory").checked = !!S.img.history; $("#imgKeep").value = String(S.img.keep || 10);
 }
+$("#imgKeep").onchange = e => { S.img.keep = Number(e.target.value) || 10; saveSettings(); };
 $("#imgSize").onchange = e => { S.img.size = e.target.value; saveSettings(); };
 $("#imgSteps").onchange = e => { S.img.steps = e.target.value; saveSettings(); };
 $("#imgSeed").onchange = e => { S.img.seed = e.target.value; saveSettings(); };
@@ -3787,12 +3788,15 @@ function setView(v, opt) {
   document.body.classList.toggle("notes-view", v === "notes");
   document.body.classList.toggle("mail-view", v === "mail");
   document.body.classList.toggle("hub-view", v === "hub");
+  document.body.classList.toggle("monitor-view", v === "monitor");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   $("#goNotes").classList.toggle("on", v === "notes");
   $("#goMail").classList.toggle("on", v === "mail");
   $("#goHub").classList.toggle("on", v === "hub");
+  $("#goMonitor").classList.toggle("on", v === "monitor");
   if (v === "hub") window.hubOpen && window.hubOpen(); else window.hubClose && window.hubClose();
+  if (v === "monitor") window.monitorOpen && window.monitorOpen(); else window.monitorClose && window.monitorClose();
   if (v === "mail") window.mailOpen && window.mailOpen(opt);
   if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
@@ -3826,6 +3830,7 @@ function renderHome() {
     ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
     ["hub", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>', "Hub", "Big buttons to control your PC: media, programs, Jarvis"],
+    ["monitor", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/></svg>', "Monitor", "A picture or video full screen on your PC's screen"],
     ["mail", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>', "Mail", "Your accounts, with an AI that explains and answers"],
     ["notes", '<svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>', "Notes", "Lists, to-dos and thoughts"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
@@ -3853,6 +3858,7 @@ function renderHome() {
     else if (g === "notes") setView("notes");
     else if (g === "mail") setView("mail");
     else if (g === "hub") setView("hub");
+    else if (g === "monitor") setView("monitor");
     else if (g === "browser") setView("browser");
     else if (g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
@@ -4706,6 +4712,7 @@ $("#goJarvis").onclick = () => { setView("jarvis"); $("#sidebar").classList.remo
 $("#goNotes").onclick = () => { setView("notes"); $("#sidebar").classList.remove("open"); };
 $("#goMail").onclick = () => { setView("mail"); $("#sidebar").classList.remove("open"); };
 $("#goHub").onclick = () => { setView("hub"); $("#sidebar").classList.remove("open"); };
+$("#goMonitor").onclick = () => { setView("monitor"); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
 $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#openSettings").onclick = () => openSettings();
@@ -4758,8 +4765,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-29.5";
+const APP_VERSION = "2026-10-30.1";
 const WHATS_NEW = [
+  ["2026-10-30.1", ["Monitor: show a picture, a video or YouTube full screen on your PC's screen, with layout, options and its display data","List: write several requests in the sidebar (e.g. a picture 3 times, then a text step); they run on your PC one after another","Picture models stay loaded for a time frame (Settings → Image → Keep loaded) and are only unloaded completely after it"]],
   ["2026-10-29.5", ["Answers keep going when you open another chat or page, and land in their own chat","Write while an answer is coming: your messages wait in a queue above the message box and go one after another (✕ removes one); the stop button stops the answer when nothing is typed","Picture button in the message box: the next message makes a picture","Picture models: they're in the model list of every chat now, the one you choose (there or in Settings) is used, also for edits when it can edit, and a new picture request after a picture is a new picture instead of an edit"]],
   ["2026-10-29.4", ["New picture model: FLUX.2 klein (flux2-klein) makes a picture in about 10 seconds once loaded and can change a photo you attach. Switching picture models restarts the picture engine so the old one doesn't fill the memory, and if it runs out of memory it restarts and tries again"]],
   ["2026-10-29.3", ["PC files need a code: the first time, you pick one (4 to 12 digits); after that the PC files window, files from your PC in the paperclip and the Code tab ask for it once per tab (good for 12 hours). The PC checks it, 5 wrong tries lock it for 5 minutes"]],

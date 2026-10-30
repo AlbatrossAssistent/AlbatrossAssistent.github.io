@@ -219,33 +219,61 @@ async function uploadRefs(images) {
 }
 
 // Runs one image and reports progress like Ollama does: {completed,total} lines, then {image, done:true}.
-// ComfyUI gets slower with every picture on a 16 GB PC (its cache fills the RAM) and sometimes hangs for good while loading.
-// So: after two pictures it is restarted before the next one, and a run that goes quiet for minutes is stopped, ComfyUI restarted, and tried once more.
-let made = 0;
+// The image model stays loaded between pictures for a time frame (Settings → Image → Keep loaded, 10 min by default): pictures
+// inside it start drawing right away. Once nothing was drawn for longer than that, ComfyUI is shut down completely (its RAM and
+// graphics memory are free again) and the next picture loads it fresh. A run that goes quiet for minutes, or runs out of memory,
+// is stopped, ComfyUI restarted, and tried once more.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const KEEP_FILE = path.join(process.env.LOCALAPPDATA || path.join(require("os").homedir(), "AppData", "Local"), "Albatross", "image-keep.json");
+let keepMs = (() => { try { const m = Number(JSON.parse(fs.readFileSync(KEEP_FILE, "utf8")).minutes); return m > 0 ? m * 60e3 : 10 * 60e3; } catch { return 10 * 60e3; } })();
+let lastUsed = 0, busy = 0;
+// minutes the image model stays loaded after the last picture (1 to 24 h); the website sends it with every picture
+function setKeep(minutes) {
+  const m = Math.min(1440, Math.max(1, Math.round(Number(minutes) || 0)));
+  if (!m || m * 60e3 === keepMs) return;
+  keepMs = m * 60e3;
+  try { fs.mkdirSync(path.dirname(KEEP_FILE), { recursive: true }); fs.writeFileSync(KEEP_FILE, JSON.stringify({ minutes: m })); } catch {}
+}
+const keepMinutes = () => Math.round(keepMs / 60e3);
+const expired = () => lastUsed && Date.now() - lastUsed > keepMs;
 async function killComfy() {
   if (process.platform === "win32") await ps(`${COMFY_PROC} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`);
-  child = null; loaded = false; made = 0;
+  else if (child) try { child.kill(); } catch {}
+  child = null; loaded = false; lastUsed = 0;
   for (let i = 0; i < 30 && (await up()); i++) await sleep(500);
 }
+async function queueBusy() { try { const q = await (await fetch(COMFY + "/queue")).json(); return !!(q.queue_running?.length || q.queue_pending?.length); } catch { return true; } }
+// out of the time frame: unload completely (checked every 20 s)
+let idleLog = () => {};
+setInterval(async () => {
+  if (busy || warmingUp || !expired() || !(await up()) || (await queueBusy())) return;
+  const mins = keepMinutes();
+  await killComfy();
+  idleLog(`Unloaded the image model completely after ${mins} min without pictures (the next picture loads it fresh)`);
+}, 20e3).unref();
 async function generate(body, emit, signal, log) {
-  // another picture model than last time: it has to come from disk anyway, and the old one would stay in the RAM next to it
+  idleLog = log;
+  if (body.keepMinutes) setKeep(body.keepMinutes);
   const name = isComfy(body.model) ? body.model : MODEL;
-  if (lastModel && lastModel !== name) made = 2;
-  // the heavy ones (Qwen-Image, OmniGen2) fill the RAM after two pictures; the light ones (FLUX.2 klein, Z-Image) don't
-  if (made >= 2 && (lastModel !== name || /^(qwen-image|omnigen2)/.test(name)) && (await up())) {
-    let busy = true; try { const q = await (await fetch(COMFY + "/queue")).json(); busy = !!(q.queue_running?.length || q.queue_pending?.length); } catch {}
-    if (!busy) { log("Restarting ComfyUI between pictures so it stays fast"); emit({ model: body.model, status: "Restarting the picture engine…", done: false }); await killComfy(); }
-  }
-  try { await generateOnce(body, emit, signal, log); if (!body.warm) made++; }
-  catch (e) {
-    const noMemory = /paging file|os error 1455|out of memory|allocate/i.test(e.message);
-    if (!(e.stalled || noMemory || /Lost connection to ComfyUI/.test(e.message)) || signal?.aborted) throw e;
-    log(noMemory ? "ComfyUI ran out of memory: restarting it and trying again" : "ComfyUI hung: restarting it and trying again");
-    emit({ model: body.model, status: noMemory ? "Making room in memory, restarting the picture engine…" : "The picture engine hung, restarting it…", done: false });
-    await killComfy();
-    await generateOnce(body, emit, signal, log); if (!body.warm) made = 1;
-  }
+  busy++;
+  try {
+    // out of the time frame, or another picture model than last time (it has to come from disk anyway, and the old one would
+    // stay in the RAM next to it): start from a fresh ComfyUI
+    if ((expired() || (lastModel && lastModel !== name && loaded)) && (await up()) && !(await queueBusy())) {
+      log(expired() ? `More than ${keepMinutes()} min since the last picture: loading ${name.split(":")[0]} fresh` : `Switching to ${name.split(":")[0]}: restarting ComfyUI so the old model leaves the memory`);
+      emit({ model: body.model, status: "Restarting the picture engine…", done: false });
+      await killComfy();
+    }
+    try { await generateOnce(body, emit, signal, log); }
+    catch (e) {
+      const noMemory = /paging file|os error 1455|out of memory|allocate/i.test(e.message);
+      if (!(e.stalled || noMemory || /Lost connection to ComfyUI/.test(e.message)) || signal?.aborted) throw e;
+      log(noMemory ? "ComfyUI ran out of memory: restarting it and trying again" : "ComfyUI hung: restarting it and trying again");
+      emit({ model: body.model, status: noMemory ? "Making room in memory, restarting the picture engine…" : "The picture engine hung, restarting it…", done: false });
+      await killComfy();
+      await generateOnce(body, emit, signal, log);
+    }
+  } finally { busy--; lastUsed = Date.now(); }
 }
 async function generateOnce(body, emit, signal, log) {
   const name = isComfy(body.model) ? body.model : MODEL;
@@ -375,16 +403,25 @@ function warm(model, log) {
     .finally(() => { warmingUp = null; });
 }
 
-// Frees ComfyUI's GPU memory (used by the "Free GPU memory" buttons). Does nothing if it isn't running.
+// Frees ComfyUI's GPU memory completely (the "Free GPU memory" buttons): the models leave the graphics card and the RAM,
+// so the next picture loads from disk. Does nothing if it isn't running.
 // Returns true if it had made an image since the last free (so there's something worth reporting).
 let loaded = false, lastModel = "";
 async function free() {
   if (!(await up())) return false;
   await fetch(COMFY + "/free", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unload_models: true, free_memory: true }) }).catch(() => {});
   const was = loaded;
-  loaded = false;
+  loaded = false; lastUsed = 0;
   return was;
 }
+// Makes room on the graphics card for a text model without losing the time frame: the image model only moves off the card
+// (it stays in ComfyUI's memory), so the next picture inside the time frame is back on the card in seconds, not loaded from disk.
+async function release() {
+  if (!loaded || !(await up()) || busy) return false;
+  await fetch(COMFY + "/free", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unload_models: true }) }).catch(() => {});
+  return true;
+}
+const state = () => ({ loaded, model: lastModel, keepMinutes: keepMinutes(), idleFor: lastUsed ? Date.now() - lastUsed : 0, busy: busy > 0 });
 
 // Size of the model files ComfyUI loads, for the loading percentage.
 function bytes(model) {
@@ -394,4 +431,4 @@ function bytes(model) {
   return t;
 }
 
-module.exports = { MODEL, isComfy, models, generate, free, installed, bytes, warm, retireOutdated };
+module.exports = { MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };
