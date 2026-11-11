@@ -3720,6 +3720,7 @@ function applyAppearance() {
   const theme = S.theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : S.theme === "aurora" ? "dark" : S.theme === "lagoon" ? "light" : S.theme;
   document.documentElement.dataset.theme = theme;
   if (scene) document.documentElement.dataset.scene = scene; else delete document.documentElement.dataset.scene;
+  polygonField && polygonField.setEnabled(theme === "light");
   startSky();
   document.documentElement.style.setProperty("--font-size", S.fontSize + "px");
   document.body.classList.toggle("compact", S.compact);
@@ -3901,7 +3902,7 @@ $$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d 
 
 // the night sky behind the app (a canvas of stars, see starfield.js)
 const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), { count: Math.round(Math.min(560, Math.max(220, innerWidth * innerHeight / 3800))), nebula: false }) : null;
-if (window.createPolygonField && $("#orbs")) createPolygonField($("#orbs"));
+const polygonField = window.createPolygonField && $("#orbs") ? createPolygonField($("#orbs")) : null;
 let skyOn = false;
 function skyFrame(t) {
   if (!appSky || S.stars === false || document.hidden || document.documentElement.dataset.theme !== "dark") {
@@ -5299,9 +5300,10 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-11.7";
+const APP_VERSION = "2026-11-11.8";
 const WHATS_NEW = [
-  ["2026-11-11.7", ["Pure black and white backgrounds; in light mode, geometric tiles grow under the pointer", "Jarvis now matches the selected background theme"]],
+  ["2026-11-11.8", ["Appearance themes are clearly named White and Black", "In light mode, geometric shapes fall, settle, and can be picked up and moved with the mouse"]],
+  ["2026-11-11.7", ["Pure black and white backgrounds; Jarvis matches the selected background theme"]],
   ["2026-11-11.1", ["A clearer Home screen brings AI chat, Beam, mail, notes and printing together","WhatsApp handoff: ask the AI for a draft, then review and send it yourself in WhatsApp"]],
   ["2026-10-30.2", ["The List is now a tab of the side panel on the right, and scrolls smoothly","Chats and lists are kept per account on your PC: only you see them when you're signed in"]],
   ["2026-10-30.1", ["Monitor: show a picture, a video or YouTube full screen on your PC's screen, with layout, options and its display data","List: write several requests in the sidebar (e.g. a picture 3 times, then a text step); they run on your PC one after another","Picture models stay loaded for a time frame (Settings → Image → Keep loaded) and are only unloaded completely after it"]],

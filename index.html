@@ -23,12 +23,13 @@ html, body { overflow-x: hidden; overflow-x: clip; max-width: 100%; }
 a { color: inherit; }
 
 #sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; opacity: .72; pointer-events: none; }
-#orbs { position: fixed; inset: 0; z-index: 0; display: none; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(4, 1fr); gap: clamp(8px, 2vw, 24px); padding: clamp(8px, 2vw, 24px); overflow: hidden; pointer-events: none; }
-@media (prefers-color-scheme: light) { #sky { display: none; } #orbs { display: grid; } }
-#orbs i { display: block; place-self: center; width: min(94%, 150px); aspect-ratio: 1; background: rgba(0,0,0,.035); clip-path: polygon(50% 0, 100% 100%, 0 100%); transform: scale(.88); transition: transform .28s cubic-bezier(.2,.8,.2,1), background-color .28s; }
+#orbs { position: fixed; inset: 0; z-index: 0; display: none; overflow: hidden; pointer-events: none; }
+@media (prefers-color-scheme: light) { #sky { display: none; } #orbs { display: block; } }
+#orbs i { position: absolute; display: block; aspect-ratio: 1; pointer-events: auto; touch-action: none; cursor: grab; background: rgba(0,0,0,.065); clip-path: polygon(50% 0, 100% 100%, 0 100%); transform: rotate(var(--angle, 0rad)); transition: background-color .2s, filter .2s; }
 #orbs i:nth-child(3n + 1) { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
 #orbs i:nth-child(3n + 2) { clip-path: polygon(0 0, 100% 0, 50% 100%); }
-#orbs i.hover { transform: scale(1.24); background: rgba(0,0,0,.095); }
+#orbs i.hover { background: rgba(0,0,0,.13); filter: drop-shadow(0 8px 8px rgba(0,0,0,.09)); }
+#orbs i.dragging { z-index: 1; cursor: grabbing; background: rgba(0,0,0,.2); filter: drop-shadow(0 14px 14px rgba(0,0,0,.16)); }
 @media (prefers-reduced-motion: reduce) { #orbs i { transition: none; } }
 
 /* top bar */
@@ -318,7 +319,10 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 // ---------- night sky: a 360° starfield (public/starfield.js) that turns with the scroll and reacts to the pointer ----------
 const sky = $("#sky");
 const skyfield = createStarfield(sky, { count: Math.round(Math.min(720, Math.max(320, innerWidth * innerHeight / 3100))), nebula: false });
-createPolygonField($("#orbs"));
+const polygonField = createPolygonField($("#orbs"));
+const lightPreference = matchMedia("(prefers-color-scheme: light)");
+polygonField && polygonField.setEnabled(lightPreference.matches);
+lightPreference.addEventListener("change", (e) => polygonField && polygonField.setEnabled(e.matches));
 addEventListener("resize", () => skyfield.resize());
 addEventListener("pointermove", (e) => { skyfield.pointer(e.clientX, e.clientY); }, { passive: true });
 document.documentElement.addEventListener("pointerleave", () => skyfield.pointer(null));

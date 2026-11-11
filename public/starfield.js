@@ -172,25 +172,137 @@
   window.createPolygonField = function (container) {
     if (!container) return null;
     const cols = 6, rows = 4;
-    const tiles = Array.from({ length: cols * rows }, () => document.createElement("i"));
+    const tiles = Array.from({ length: cols * rows }, (_, i) => {
+      const tile = document.createElement("i");
+      tile.dataset.index = String(i);
+      return tile;
+    });
     container.replaceChildren(...tiles);
-    let active = -1;
-    const clear = () => {
-      if (active >= 0) tiles[active].classList.remove("hover");
-      active = -1;
+    const shapes = tiles.map((el) => ({ el, x: 0, y: 0, vx: 0, vy: 0, angle: Math.random() * 6.28, spin: (Math.random() - .5) * 2, size: 0, grabbed: false }));
+    let enabled = false, raf = 0, last = 0, drag = null, hover = null;
+    const floorGap = 8;
+    const place = (s) => {
+      s.el.style.left = `${s.x}px`;
+      s.el.style.top = `${s.y}px`;
+      s.el.style.setProperty("--angle", `${s.angle}rad`);
     };
+    const seed = () => {
+      const W = Math.max(1, container.clientWidth), H = Math.max(1, container.clientHeight);
+      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      for (const [i, s] of shapes.entries()) {
+        s.size = Math.min(126, Math.max(54, W / 10)) * (.62 + Math.random() * .38);
+        s.x = Math.random() * Math.max(1, W - s.size);
+        s.y = reduced ? H - s.size - floorGap : -s.size - Math.random() * (H + s.size);
+        s.vx = reduced ? 0 : (Math.random() - .5) * 100;
+        s.vy = 0;
+        s.grabbed = false;
+        s.angle = Math.random() * 6.28;
+        s.spin = (Math.random() - .5) * 2.4;
+        s.el.style.width = `${s.size}px`;
+        s.el.classList.remove("hover", "dragging");
+        s.el.dataset.index = String(i);
+        place(s);
+      }
+    };
+    const finish = () => { if (!drag) return; drag.shape.grabbed = false; drag.shape.el.classList.remove("dragging"); drag = null; schedule(); };
     const move = (e) => {
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      const col = Math.min(cols - 1, Math.max(0, Math.floor(e.clientX / innerWidth * cols)));
-      const row = Math.min(rows - 1, Math.max(0, Math.floor(e.clientY / innerHeight * rows)));
-      const next = row * cols + col;
-      if (next === active) return;
-      clear();
-      active = next;
-      tiles[active].classList.add("hover");
+      if (!enabled) return;
+      if (drag) {
+        const now = performance.now(), s = drag.shape, dt = Math.max(.008, Math.min(.08, (now - drag.time) / 1000));
+        const x = e.clientX - drag.dx, y = e.clientY - drag.dy;
+        s.vx = (x - s.x) / dt;
+        s.vy = (y - s.y) / dt;
+        s.x = x; s.y = y; drag.time = now;
+        place(s); schedule();
+        return;
+      }
+      const b = container.getBoundingClientRect();
+      const nearby = shapes.find((s) => e.clientX >= b.left + s.x - 12 && e.clientX <= b.left + s.x + s.size + 12
+        && e.clientY >= b.top + s.y - 12 && e.clientY <= b.top + s.y + s.size + 12);
+      if (hover !== nearby) {
+        if (hover) hover.el.classList.remove("hover");
+        hover = nearby;
+        if (hover) hover.el.classList.add("hover");
+      }
     };
-    addEventListener("pointermove", move, { passive: true });
-    addEventListener("pointerleave", clear);
-    return { clear };
+    const down = (e) => {
+      if (!enabled || e.button !== 0) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target && target.closest("button, a, input, textarea, select, label, summary, [contenteditable='true'], [role], [data-go], [data-action], dialog[open]")) return;
+      const b = container.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
+      const tile = target && target.closest("#orbs i");
+      const s = (tile && shapes[Number(tile.dataset.index)]) || [...shapes].reverse().find((shape) => x >= shape.x && x <= shape.x + shape.size && y >= shape.y && y <= shape.y + shape.size);
+      if (!s) return;
+      e.preventDefault();
+      if (hover) hover.el.classList.remove("hover");
+      hover = null;
+      s.grabbed = true;
+      s.el.classList.add("dragging");
+      drag = { shape: s, dx: x - s.x, dy: y - s.y, time: performance.now() };
+      schedule();
+    };
+    function tick(now) {
+      raf = 0;
+      if (!enabled || document.hidden) { last = 0; return; }
+      const W = Math.max(1, container.clientWidth), H = Math.max(1, container.clientHeight), dt = Math.min(.032, last ? (now - last) / 1000 : .016);
+      last = now;
+      for (const s of shapes) {
+        if (s.grabbed) continue;
+        s.vy += 1500 * dt;
+        s.x += s.vx * dt; s.y += s.vy * dt; s.angle += s.spin * dt;
+        const maxX = Math.max(0, W - s.size), floor = H - s.size - floorGap;
+        if (s.x < 0) { s.x = 0; s.vx = Math.abs(s.vx) * .28; }
+        if (s.x > maxX) { s.x = maxX; s.vx = -Math.abs(s.vx) * .28; }
+        if (s.y > floor) {
+          s.y = floor;
+          if (s.vy > 90) s.vy = -s.vy * .18; else s.vy = 0;
+          s.vx *= .84;
+          if (Math.abs(s.vx) < 7) s.vx = 0;
+          s.spin *= .82;
+          if (Math.abs(s.spin) < .08) s.spin = 0;
+        }
+      }
+      for (let i = 0; i < shapes.length; i++) for (let j = i + 1; j < shapes.length; j++) {
+        const a = shapes[i], b = shapes[j];
+        if (a.grabbed || b.grabbed) continue;
+        const ax = a.x + a.size / 2, ay = a.y + a.size / 2, bx = b.x + b.size / 2, by = b.y + b.size / 2;
+        const dx = bx - ax, dy = by - ay, min = (a.size + b.size) * .39, d2 = dx * dx + dy * dy;
+        if (d2 >= min * min) continue;
+        const d = Math.sqrt(d2) || .001, nx = dx / d, ny = dy / d, push = (min - d) / 2;
+        a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+        const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (rel < 0) { a.vx += nx * rel * .42; a.vy += ny * rel * .42; b.vx -= nx * rel * .42; b.vy -= ny * rel * .42; }
+      }
+      let moving = !!drag;
+      for (const s of shapes) {
+        const floor = H - s.size - floorGap;
+        if (s.y >= floor - .5 && Math.abs(s.vy) < 3 && Math.abs(s.vx) < 3) { s.y = floor; s.vx = s.vy = 0; }
+        else moving = true;
+        place(s);
+      }
+      if (moving) schedule(); else last = 0;
+    }
+    function schedule() { if (enabled && !raf) raf = requestAnimationFrame(tick); }
+    const setEnabled = (on) => {
+      if (enabled === on) return;
+      enabled = on;
+      container.classList.toggle("active", enabled);
+      if (!enabled) {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0; drag = null; last = 0;
+        if (hover) hover.el.classList.remove("hover");
+        hover = null;
+      } else {
+        seed();
+        schedule();
+      }
+    };
+    addEventListener("pointerdown", down);
+    addEventListener("pointermove", move, { passive: false });
+    addEventListener("pointerup", finish);
+    addEventListener("pointercancel", finish);
+    addEventListener("resize", () => { if (enabled) { seed(); schedule(); } });
+    document.addEventListener("visibilitychange", () => { if (enabled && !document.hidden) { last = 0; schedule(); } });
+    return { setEnabled };
   };
 })();

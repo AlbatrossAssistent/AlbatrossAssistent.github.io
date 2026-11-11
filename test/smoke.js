@@ -51,12 +51,27 @@ f.onload = () => setTimeout(async () => {
       && w.getComputedStyle(d.querySelector("#sky")).opacity === "0.62"
       && w.getComputedStyle(d.querySelector("#orbs")).display === "none";
   });
-  await tryIt("light background has hover-enlarging polygons", () => {
-    d.documentElement.dataset.theme = "light";
-    w.dispatchEvent(new w.MouseEvent("pointermove", { clientX: 1000, clientY: 200 }));
-    return w.getComputedStyle(d.body).backgroundColor === "rgb(255, 255, 255)"
-      && w.getComputedStyle(d.querySelector("#orbs")).display === "grid"
-      && !!d.querySelector("#orbs i.hover");
+  await tryIt("appearance names black and white themes", () => {
+    const options = [...d.querySelectorAll("#theme option")].map((o) => o.textContent);
+    return options.includes("White (light mode)") && options.includes("Black (dark mode)");
+  });
+  await tryIt("light background shapes fall and can be dragged", async () => {
+    Object.defineProperty(d, "hidden", { configurable: true, get: () => false });
+    ev('S.theme = "light"; applyAppearance()');
+    const tiles = [...d.querySelectorAll("#orbs i")], starts = tiles.map((tile) => parseFloat(tile.style.top));
+    await sleep(180);
+    const fallen = tiles.some((tile, i) => parseFloat(tile.style.top) > starts[i] + 10);
+    const tile = tiles[0], startX = parseFloat(tile.style.left), startY = parseFloat(tile.style.top);
+    const r = tile.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    tile.dispatchEvent(new w.MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+    w.dispatchEvent(new w.MouseEvent("pointermove", { bubbles: true, clientX: x + 80, clientY: y - 40 }));
+    const dragged = parseFloat(tile.style.left) > startX + 30 && tile.classList.contains("dragging");
+    w.dispatchEvent(new w.MouseEvent("pointerup", { bubbles: true }));
+    const ok = w.getComputedStyle(d.body).backgroundColor === "rgb(255, 255, 255)"
+      && w.getComputedStyle(d.querySelector("#orbs")).display === "block"
+      && fallen && dragged;
+    if (!ok) throw new Error(JSON.stringify({ fallen, dragged, startX, startY, x: tile.style.left, y: tile.style.top, cls: tile.className, display: w.getComputedStyle(d.querySelector("#orbs")).display }));
+    return true;
   });
   await tryIt("WhatsApp handoff opens an editable draft", () => {
     d.querySelector("#waPhone").value = "+1 555 123 4567";
