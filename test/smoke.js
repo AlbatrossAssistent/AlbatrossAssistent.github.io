@@ -39,7 +39,15 @@ f.onload = () => setTimeout(async () => {
       && !!d.querySelector(".home-action[data-go=beam]") && !!d.querySelector(".home-action[data-go=mail]")
       && !!d.querySelector(".home-action[data-go=print]") && !!d.querySelector("#waForm")
       && !!d.querySelector(".home-hero h1") && !!d.querySelector("#homeManual")
+      && !!d.querySelector(".home-hero [data-scroll=homeManual]")
+      && !!(d.querySelector("#homeManual").compareDocumentPosition(d.querySelector(".home-feature")) & w.Node.DOCUMENT_POSITION_FOLLOWING)
+      && d.querySelector("#homeManual .home-action").getBoundingClientRect().top < w.innerHeight
+      && new Set([...d.querySelectorAll("#homeManual .home-action")].map((e) => e.getBoundingClientRect().top)).size === 1
       && d.querySelector(".home-more").open && !!d.querySelector(".home-action[data-go=jarvis]");
+  });
+  await tryIt("background glow follows the pointer", () => {
+    w.dispatchEvent(new w.MouseEvent("pointermove", { clientX: 120, clientY: 240 }));
+    return d.documentElement.style.getPropertyValue("--pointer-x") === "9.375%" && d.documentElement.style.getPropertyValue("--pointer-y") === "30%";
   });
   await tryIt("WhatsApp handoff opens an editable draft", () => {
     d.querySelector("#waPhone").value = "+1 555 123 4567";

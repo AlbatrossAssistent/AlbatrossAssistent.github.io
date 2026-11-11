@@ -3912,7 +3912,7 @@ function skyFrame(t) {
 }
 function startSky() { if (appSky && S.stars !== false && !skyOn) { skyOn = true; requestAnimationFrame(skyFrame); } }
 addEventListener("resize", () => { appSky && appSky.resize(); for (const s of Object.values(appScenes)) s.resize(); });
-addEventListener("pointermove", (e) => { appSky && appSky.pointer(e.clientX, e.clientY); for (const s of Object.values(appScenes)) s.pointer(e.clientX, e.clientY); }, { passive: true });
+addEventListener("pointermove", (e) => { appSky && appSky.pointer(e.clientX, e.clientY); for (const s of Object.values(appScenes)) s.pointer(e.clientX, e.clientY); document.documentElement.style.setProperty("--pointer-x", (e.clientX / innerWidth * 100) + "%"); document.documentElement.style.setProperty("--pointer-y", (e.clientY / innerHeight * 100) + "%"); }, { passive: true });
 addEventListener("pointerdown", (e) => { const s = appScenes[document.documentElement.dataset.scene]; if (s) s.click(e.clientX, e.clientY); }, { passive: true });
 document.documentElement.addEventListener("pointerleave", () => { appSky && appSky.pointer(null); for (const s of Object.values(appScenes)) s.pointer(null); });
 document.addEventListener("visibilitychange", startSky);
@@ -4070,18 +4070,18 @@ function renderHome() {
   const moreTiles = tiles.filter(([k]) => !quickKeys.includes(k));
   const guestNotice = guestMode ? `<div class="guest-banner" style="margin:0 0 18px;border-radius:14px"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span><b>Guest mode</b> · Private &amp; PC items are off. After each chat, the AI writes a recap for the PC's owner including every file made by the PC (never files you attach). <b>Generated pictures are saved on the host PC and can be seen by its owner.</b></span></div>` : "";
   home.innerHTML = `<div class="home-world">
-    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button>${guestMode ? "" : `<button class="home-cta secondary" data-go="agent"><span class="home-sparkle">${allTiles.find(([k]) => k === "agent")[1]}</span><span>Open AI Agent</span><b aria-hidden="true">→</b></button>`}</div></div>
+    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button>${guestMode ? "" : `<button class="home-cta secondary" data-go="agent"><span class="home-sparkle">${allTiles.find(([k]) => k === "agent")[1]}</span><span>Open AI Agent</span><b aria-hidden="true">→</b></button>`}<button class="home-cta manual-jump" type="button" data-scroll="homeManual"><span>Manual tools</span><b aria-hidden="true">↓</b></button></div></div>
     ${guestNotice}
+    <section class="home-section manual-section" id="homeManual">
+      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Do it yourself."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Pick a tool and take every step manually."}</p></div>
+      <div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>
+    </section>
     <section class="home-feature" aria-label="AI modes">
       <div class="home-feature-copy"><span class="home-kicker">YOUR PRIVATE AI SPACE</span><h2>Dream it.<br>Make it real.</h2><p>Chat, create, or ask the Agent to help on your PC. You choose when AI acts and approve anything that matters.</p></div>
       <div class="home-feature-actions">
         <button class="home-feature-btn primary" data-go="chat"><span class="hi">${TYPE_ICON.chat}</span><span><strong>Open AI chat</strong><small>Ask, write, plan, code or create</small></span><b aria-hidden="true">→</b></button>
         ${guestMode ? "" : `<button class="home-feature-btn" data-go="agent"><span class="hi"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><span><strong>Open AI Agent</strong><small>Get help with files, mail and printing</small></span><b aria-hidden="true">→</b></button>`}
       </div>
-    </section>
-    <section class="home-section" id="homeManual">
-      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Get things done.<br>Your way."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Write mail, print, send files, and take every step yourself."}</p></div>
-      <div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>
     </section>
     ${guestMode ? "" : `<section class="home-whatsapp home-card" aria-labelledby="homeWhatsappTitle">
       <div class="home-whatsapp-copy"><span class="home-kicker">A LITTLE HELP WITH THE WORDS</span><h2 id="homeWhatsappTitle">Write it here.<br>Send it yourself.</h2><p>Draft a WhatsApp message with AI, or write your own. We'll open WhatsApp for you to review and send. Your inbox stays yours.</p></div>
@@ -4102,6 +4102,7 @@ function renderHome() {
   </div>`;
   home.querySelector(".home-hero h1").innerHTML = "Your ideas.<br><span>Your universe.</span>";
   home.querySelector(".home-hero .home-kicker").textContent = greeting() + name + " · YOUR OWN AI";
+  home.querySelector("[data-scroll='homeManual']").onclick = () => $("#homeManual").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   const jvTile = home.querySelector('[data-go="jarvis"]'); if (jvTile) jvTile.dataset.needsPc = "1";
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
     const g = b.dataset.go;
@@ -5282,9 +5283,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-11.3";
+const APP_VERSION = "2026-11-11.5";
 const WHATS_NEW = [
-  ["2026-11-11.3", ["Refreshed the app and intro backgrounds with more visible color and contrast"]],
+  ["2026-11-11.5", ["Manual tools are up front on Home; the whole background shifts with your pointer in an animated aurora"]],
   ["2026-11-11.1", ["A clearer Home screen brings AI chat, Beam, mail, notes and printing together","WhatsApp handoff: ask the AI for a draft, then review and send it yourself in WhatsApp"]],
   ["2026-10-30.2", ["The List is now a tab of the side panel on the right, and scrolls smoothly","Chats and lists are kept per account on your PC: only you see them when you're signed in"]],
   ["2026-10-30.1", ["Monitor: show a picture, a video or YouTube full screen on your PC's screen, with layout, options and its display data","List: write several requests in the sidebar (e.g. a picture 3 times, then a text step); they run on your PC one after another","Picture models stay loaded for a time frame (Settings → Image → Keep loaded) and are only unloaded completely after it"]],
