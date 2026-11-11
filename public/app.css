@@ -1,14 +1,14 @@
 /* Albatross: the app's styles (was inline in index.html) */
 :root {
-  /* Light: white frosted glass on a soft grey backdrop */
-  --bg: #F2F2F7; --fg: #0A0A0A; --muted: #6B6B6B; --line: rgba(0,0,0,.09); --soft: rgba(0,0,0,.045);
-  --glass: rgba(255,255,255,.30); --glass-strong: rgba(255,255,255,.55); --glass-edge: rgba(255,255,255,.85);
+  /* Light: cool, layered surfaces over a soft blue-grey scene */
+  --bg: #EEF1F6; --bg-deep: #E5EAF2; --wash: rgba(75,125,190,.11); --fg: #0A0A0A; --muted: #626A76; --line: rgba(0,0,0,.09); --soft: rgba(0,0,0,.045);
+  --glass: rgba(255,255,255,.48); --glass-strong: rgba(255,255,255,.72); --glass-edge: rgba(255,255,255,.82);
   --glass-hi: inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -1.5px 1px rgba(255,255,255,.55), inset 0 0 0 1px rgba(255,255,255,.35), inset 0 10px 22px -12px rgba(255,255,255,.9), inset 0 -12px 22px -14px rgba(255,255,255,.6);
   --sheen: linear-gradient(135deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.14) 34%, rgba(255,255,255,0) 58%, rgba(255,255,255,.22) 100%);
   --btn-glass: rgba(255,255,255,.38); --art-glow: rgba(255,255,255,.6);
   --accent-sheen: linear-gradient(180deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.04) 48%, rgba(255,255,255,0) 52%);
-  --shadow: 0 10px 40px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
-  --blob-a: rgba(40,120,255,.30); --blob-b: rgba(120,92,255,.20); --blob-c: rgba(255,255,255,.95); --blob-d: rgba(0,186,255,.18);
+  --shadow: 0 18px 48px rgba(26,42,72,.10), 0 2px 6px rgba(26,42,72,.05);
+  --blob-a: rgba(55,125,220,.20); --blob-b: rgba(115,100,210,.13); --blob-c: rgba(255,255,255,.62); --blob-d: rgba(0,155,205,.12);
   --bubble: #007AFF; --bubble-fg: #FFFFFF;
   /* blue for what you act on and what is on: send, primary buttons, switches, progress, your messages, links */
   --accent: #007AFF; --accent-fg: #FFFFFF; --accent-soft: rgba(0,122,255,.12); --link: #0066D6; --danger: #C0251B; --danger-bg: rgba(192,37,27,.08);
@@ -19,15 +19,15 @@
   color-scheme: light;
 }
 [data-theme="dark"] {
-  /* Dark: smoky glass on pure black */
-  --bg: #000000; --fg: #F5F5F5; --muted: #8E8E8E; --line: rgba(255,255,255,.10); --soft: rgba(255,255,255,.06);
-  --glass: rgba(40,40,46,.30); --glass-strong: rgba(48,48,56,.62); --glass-edge: rgba(255,255,255,.22);
+  /* Dark: smoky glass over a deep blue-black scene */
+  --bg: #080B12; --bg-deep: #05070C; --wash: rgba(55,90,155,.17); --fg: #F5F5F5; --muted: #A0A6B2; --line: rgba(255,255,255,.10); --soft: rgba(255,255,255,.06);
+  --glass: rgba(28,34,46,.50); --glass-strong: rgba(34,40,53,.72); --glass-edge: rgba(255,255,255,.17);
   --glass-hi: inset 0 1.5px 0 rgba(255,255,255,.32), inset 0 -1.5px 1px rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,255,255,.07), inset 0 10px 22px -12px rgba(255,255,255,.22), inset 0 -12px 22px -14px rgba(255,255,255,.12);
   --sheen: linear-gradient(135deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 34%, rgba(255,255,255,0) 58%, rgba(255,255,255,.06) 100%);
   --btn-glass: rgba(255,255,255,.07); --art-glow: rgba(255,255,255,.09);
   --accent-sheen: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 52%);
-  --shadow: 0 12px 48px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4);
-  --blob-a: rgba(10,100,255,.34); --blob-b: rgba(110,70,255,.22); --blob-c: rgba(0,150,255,.10); --blob-d: rgba(30,120,255,.20);
+  --shadow: 0 20px 56px rgba(0,0,0,.34), 0 2px 8px rgba(0,0,0,.20);
+  --blob-a: rgba(24,105,205,.24); --blob-b: rgba(100,75,195,.17); --blob-c: rgba(0,150,255,.08); --blob-d: rgba(30,145,195,.13);
   --bubble: #0A84FF; --bubble-fg: #FFFFFF;
   --accent: #0A84FF; --accent-fg: #FFFFFF; --accent-soft: rgba(10,132,255,.18); --link: #4DA3FF; --danger: #FF8A80; --danger-bg: rgba(255,138,128,.10);
   --ok: #3DDC84; --warn: #F2C14E; --bad: #FF6B5E;
@@ -43,23 +43,21 @@ body {
   overflow: hidden; -webkit-font-smoothing: antialiased; position: relative;
 }
 /* Aurora and Lagoon: the dark and the light look with their own scene behind the glass (scenes.js) */
-html[data-scene="aurora"]:not(.effort-max) { --bg: #030912; --blob-a: rgba(60,230,170,.22); --blob-b: rgba(120,90,255,.2); --blob-c: rgba(40,200,255,.08); --blob-d: rgba(60,230,170,.12); --accent: #2FD39B; --accent-soft: rgba(47,211,155,.16); --link: #5FE3B4; --bubble: #1FB985; }
-html[data-scene="lagoon"]:not(.effort-max) { --bg: #D9F3F6; --blob-a: rgba(0,170,200,.24); --blob-b: rgba(0,120,190,.16); --blob-c: rgba(255,255,255,.9); --blob-d: rgba(0,200,190,.18); --accent: #008FB3; --accent-soft: rgba(0,143,179,.12); --link: #00789A; --bubble: #0896B8; }
+html[data-scene="aurora"]:not(.effort-max) { --bg: #06100F; --bg-deep: #05090D; --wash: rgba(34,145,113,.12); --blob-a: rgba(44,190,135,.19); --blob-b: rgba(100,75,195,.15); --blob-c: rgba(40,200,255,.06); --blob-d: rgba(60,230,170,.10); --accent: #2FD39B; --accent-soft: rgba(47,211,155,.16); --link: #5FE3B4; --bubble: #1FB985; }
+html[data-scene="lagoon"]:not(.effort-max) { --bg: #E6F3F5; --bg-deep: #DDEBF0; --wash: rgba(20,155,180,.10); --blob-a: rgba(0,150,180,.17); --blob-b: rgba(0,110,175,.12); --blob-c: rgba(255,255,255,.64); --blob-d: rgba(0,170,165,.12); --accent: #008FB3; --accent-soft: rgba(0,143,179,.12); --link: #00789A; --bubble: #0896B8; }
 /* Max thinking: the background turns red, light or dark (the moving background shows red embers then, see skyFrame) */
-html.effort-max:not([data-theme="dark"]) { --bg: #FFE4E1; --blob-a: rgba(255,59,48,.34); --blob-b: rgba(255,120,70,.24); --blob-c: rgba(255,255,255,.9); --blob-d: rgba(255,45,85,.2); }
-html.effort-max[data-theme="dark"] { --bg: #150205; --blob-a: rgba(255,40,40,.36); --blob-b: rgba(255,100,40,.22); --blob-c: rgba(255,60,60,.1); --blob-d: rgba(210,20,45,.26); }
-body { transition: background-color .8s ease; }
-/* The "liquid" behind the glass: slow-drifting grey blobs */
-body::before, body::after { content: ""; position: fixed; z-index: -1; border-radius: 50%; filter: blur(80px); pointer-events: none; }
-body::before { width: 60vmax; height: 60vmax; left: -15vmax; top: -20vmax; background: radial-gradient(circle, var(--blob-a), transparent 65%); animation: drift 28s ease-in-out infinite alternate; }
-body::after { width: 55vmax; height: 55vmax; right: -18vmax; bottom: -22vmax; background: radial-gradient(circle, var(--blob-b), transparent 65%), radial-gradient(circle at 30% 30%, var(--blob-c), transparent 55%); animation: drift 34s ease-in-out infinite alternate-reverse; }
+html.effort-max:not([data-theme="dark"]) { --bg: #F8E9E8; --bg-deep: #F1DEDB; --wash: rgba(205,73,65,.10); --blob-a: rgba(220,75,64,.21); --blob-b: rgba(210,120,70,.15); --blob-c: rgba(255,255,255,.65); --blob-d: rgba(205,45,85,.12); }
+html.effort-max[data-theme="dark"] { --bg: #14090D; --bg-deep: #0A070B; --wash: rgba(165,36,49,.14); --blob-a: rgba(190,40,44,.24); --blob-b: rgba(165,80,40,.15); --blob-c: rgba(255,60,60,.06); --blob-d: rgba(180,20,45,.17); }
+body { background: radial-gradient(ellipse 78% 68% at 50% -20%, var(--wash), transparent 76%), linear-gradient(155deg, var(--bg), var(--bg-deep)); transition: background-color .8s ease; }
+/* Ambient color is concentrated in the sky layer instead of oversized blurred blobs. */
+body::before, body::after { display: none; }
 @keyframes drift { to { transform: translate(8vmax, 6vmax) scale(1.12); } }
 #sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; display: block; }
 #orbs { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
-#orbs i { position: absolute; border-radius: 50%; filter: blur(60px); }
-#orbs i:nth-child(1) { width: 34vmax; height: 34vmax; left: 38%; top: 30%; background: radial-gradient(circle, var(--blob-d), transparent 66%); animation: drift 22s ease-in-out infinite alternate-reverse; }
-#orbs i:nth-child(2) { width: 22vmax; height: 22vmax; left: 8%; bottom: -6%; background: radial-gradient(circle, var(--blob-a), transparent 66%); animation: drift 26s ease-in-out -8s infinite alternate; }
-#orbs i:nth-child(3) { width: 26vmax; height: 26vmax; right: 10%; top: -8%; background: radial-gradient(circle, var(--blob-c), transparent 64%); animation: drift 30s ease-in-out -4s infinite alternate-reverse; }
+#orbs i { position: absolute; border-radius: 50%; filter: blur(88px); opacity: .68; }
+#orbs i:nth-child(1) { width: 36vmax; height: 36vmax; left: 38%; top: 26%; background: radial-gradient(circle, var(--blob-d), transparent 68%); animation: drift 26s ease-in-out infinite alternate-reverse; }
+#orbs i:nth-child(2) { width: 28vmax; height: 28vmax; left: 4%; bottom: -10%; background: radial-gradient(circle, var(--blob-a), transparent 70%); animation: drift 32s ease-in-out -8s infinite alternate; }
+#orbs i:nth-child(3) { width: 30vmax; height: 30vmax; right: 2%; top: -12%; background: radial-gradient(circle, var(--blob-b), transparent 70%); animation: drift 36s ease-in-out -4s infinite alternate-reverse; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }

@@ -12,14 +12,15 @@
   if (/code=/.test(location.hash) || /code=/.test(location.search)) location.replace("public/" + location.search + location.hash);
 </script>
 <style>
-:root { --mark: #0b0b0d; --mark2: #f2f3f5; --bg: #000; --fg: #f5f5f5; --muted: rgba(245,245,245,.6); --edge: rgba(255,255,255,.16); --glass: rgba(255,255,255,.06); --hi: #fff; --hi2: rgba(255,255,255,.55); --navbg: rgba(20,20,20,.35); --btn-bg: #f5f5f5; --btn-fg: #0a0a0a; --star: #fff; --icon: #fff; color-scheme: dark; }
+:root { --mark: #0b0b0d; --mark2: #f2f3f5; --bg: #070A12; --fg: #f5f5f5; --muted: rgba(230,235,247,.66); --edge: rgba(206,220,255,.16); --glass: rgba(16,22,36,.62); --mobile-glass: rgba(13,18,30,.88); --hi: #fff; --hi2: rgba(255,255,255,.55); --navbg: rgba(12,17,29,.62); --btn-bg: #f5f5f5; --btn-fg: #0a0a0a; --star: #fff; --icon: #fff; color-scheme: dark; }
 @media (prefers-color-scheme: light) {
-  :root { --mark: #f2f3f5; --mark2: #0b0b0d; --bg: #f3f4f6; --fg: #0b0b0d; --muted: rgba(11,11,13,.58); --edge: rgba(0,0,0,.10); --glass: rgba(255,255,255,.55); --hi: #0b0b0d; --hi2: rgba(11,11,13,.55); --navbg: rgba(255,255,255,.55); --btn-bg: #0b0b0d; --btn-fg: #fff; --star: #0b0b0d; --icon: #0b0b0d; color-scheme: light; }
-  .nebula { opacity: .35; }
+  :root { --mark: #f2f3f5; --mark2: #0b0b0d; --bg: #F2F5FA; --fg: #0b0b0d; --muted: rgba(26,37,56,.66); --edge: rgba(41,58,87,.13); --glass: rgba(255,255,255,.76); --mobile-glass: rgba(255,255,255,.94); --hi: #0b0b0d; --hi2: rgba(11,11,13,.55); --navbg: rgba(255,255,255,.76); --btn-bg: #0b0b0d; --btn-fg: #fff; --star: #0b0b0d; --icon: #0b0b0d; color-scheme: light; }
+  .nebula { opacity: .7; }
   .card, .chip, .faq details { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 24px rgba(0,0,0,.06) !important; }
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+html, body { margin: 0; background: linear-gradient(155deg, var(--bg), #04060B 100%); color: var(--fg); font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+@media (prefers-color-scheme: light) { html, body { background: linear-gradient(155deg, var(--bg), #E7ECF4 100%); } }
 html.lenis, html.lenis body { height: auto; }
 /* nothing may be wider than the screen: otherwise phones zoom the whole page out */
 html, body { overflow-x: hidden; overflow-x: clip; max-width: 100%; }
@@ -29,8 +30,9 @@ a { color: inherit; }
 /* night sky */
 #sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; }
 .nebula { position: fixed; inset: -20%; z-index: 0; pointer-events: none; background:
-  radial-gradient(40% 30% at 70% 30%, rgba(120,130,170,.10), transparent 70%),
-  radial-gradient(35% 30% at 25% 70%, rgba(150,150,170,.07), transparent 70%); transform: translateY(calc(var(--p, 0) * -12vh)); }
+  radial-gradient(38% 30% at 76% 18%, rgba(94,117,190,.16), transparent 72%),
+  radial-gradient(34% 30% at 20% 62%, rgba(64,146,176,.12), transparent 74%),
+  radial-gradient(28% 24% at 54% 88%, rgba(116,84,170,.10), transparent 76%); transform: translateY(calc(var(--p, 0) * -12vh)); }
 
 /* top bar */
 .nav { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 999px; width: min(960px, calc(100vw - 24px));
@@ -99,8 +101,8 @@ a { color: inherit; }
 /* after the story */
 .after { position: relative; z-index: 3; padding: 12vh 20px 40px; background: linear-gradient(180deg, transparent 0%, var(--bg) 12%, var(--bg) 100%); }
 .grid { max-width: 640px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 18px; }
-.card { border-radius: 24px; padding: 22px; background: var(--glass); background-image: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,0) 50%); border: 1px solid var(--edge);
-  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+.card { border-radius: 24px; padding: 22px; background: var(--glass); background-image: linear-gradient(145deg, rgba(255,255,255,.11), rgba(255,255,255,.015) 46%, transparent 72%); border: 1px solid var(--edge);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 18px 44px rgba(0,0,0,.12); }
 .card h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
 .card p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
 footer { max-width: 1040px; margin: 60px auto 0; display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--edge); padding-top: 22px; }
@@ -150,7 +152,7 @@ footer a:hover { color: var(--fg); }
 @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
 
 @media (pointer: coarse), (max-width: 820px) {
-  .card, .chip, .faq details, .nav { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: rgba(8, 16, 34, .74); }
+  .card, .chip, .faq details, .nav { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: var(--mobile-glass); }
 }
 /* features: pinned while the cards slide past sideways */
 .hsec { position: relative; height: 330vh; margin: 0 0 80px; }
