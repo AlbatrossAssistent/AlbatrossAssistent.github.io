@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-10-30.2">
+<link rel="stylesheet" href="app.css?v=2026-11-11.1">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -57,6 +57,7 @@
 <main>
   <div class="topbar">
     <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open chats"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <span class="badge guest-badge" id="guestBadge" hidden title="Connected with a guest code: PC controls and private items are off">Guest</span>
     <span class="badge type-badge" id="typeBadge" title="The chat type is chosen when the chat starts">Chat</span>
     <label for="model" class="sr">Model</label>
     <select id="model" class="model-sel"><option>Loading…</option></select>
@@ -67,12 +68,15 @@
     <button class="icon-btn" id="fullBtn" aria-label="Full screen" title="Full screen (F11)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
     
   </div>
+  <div class="guest-banner" id="guestBanner" hidden role="status">
+    <span><b>Guest mode</b> &middot; PC controls and private items are off. After each chat, the AI makes a recap for the PC's owner (including files made by the PC, not files you attach). <b>Warning:</b> Pictures you generate are saved on the PC and can be seen by the owner.</span>
+  </div>
 
   <div id="home"></div>
   <div id="pcPage">
     <div class="home-inner">
-      <div class="home-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg><h1>Your PC</h1><p id="pcSub">Power and status</p>
-        <div class="seg pc-tabs" id="pcTabs" role="tablist"><button data-pt="status" class="on">Status</button><button data-pt="power">Power</button></div></div>
+      <div class="home-hero"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg><h1>Your PC</h1><p id="pcSub">Power, status and guest recaps</p>
+        <div class="seg pc-tabs" id="pcTabs" role="tablist"><button data-pt="status" class="on">Status</button><button data-pt="power">Power</button><button data-pt="guest">Guest mode</button></div></div>
       <div class="home-grid">
         <div class="home-card pc-card">
           <h3>Power</h3>
@@ -88,6 +92,38 @@
           <div class="row"><button class="btn small" id="pcSetup">Wake-on-LAN and schedule…</button></div>
         </div>
         <div class="home-card" id="pcStatusCard"><h3>Live status</h3><div id="pcStats"><div class="empty-note">Loading…</div></div></div>
+        <div class="home-card pc-guest-card" id="pcGuestCard" style="grid-column:1 / -1">
+          <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:6px">
+            <h3 style="margin:0">Guest code (main code)</h3>
+            <label class="pub-toggle" style="font-size:13.5px"><input type="checkbox" class="switch" id="pcGuestOn" checked>Allow guests</label>
+          </div>
+          <p class="pc-note" style="margin-top:0">Share this connection code with guests. Guests can chat and make pictures, but cannot use PC controls, files, mail, notes, Jarvis, Browser or private items. They are warned that generated pictures can be seen by you, and after each chat the AI writes a recap below with every file made by the PC (never files inserted by the guest).</p>
+          <div class="pc-guest-code-row">
+            <code class="pc-guest-code" id="pcGuestCode">····-····-····-····</code>
+            <div class="row" style="margin:0">
+              <button class="btn small" id="pcCopyGuestCode" type="button">Copy guest code</button>
+              <button class="btn small" id="pcCopyGuestLink" type="button">Copy guest link</button>
+              <button class="btn small" id="pcNewGuestCode" type="button">Reset guest code</button>
+            </div>
+          </div>
+          <div class="pc-guest-code-row" style="margin-top:10px">
+            <div>
+              <small style="display:block;font-size:12px;color:var(--muted);margin-bottom:2px">Admin code (full PC access)</small>
+              <code class="pc-guest-code" id="pcAdminCode" style="font-size:17px">••••-••••-••••-••••</code>
+            </div>
+            <div class="row" style="margin:0">
+              <button class="btn small" id="pcShowAdminCode" type="button">Show</button>
+              <button class="btn small" id="pcCopyAdminCode" type="button">Copy admin code</button>
+              <button class="btn small" id="pcCopyAdminLink" type="button">Copy admin link</button>
+              <button class="btn small" id="pcResetAdminCode" type="button">Reset admin code</button>
+            </div>
+          </div>
+          <div class="row" style="align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:8px">
+            <h3 style="margin:0">Guest chat recaps</h3>
+            <button class="btn small" id="pcClearRecaps" type="button" hidden>Clear all recaps</button>
+          </div>
+          <div id="pcGuestRecaps" class="pc-recap-list"><div class="empty-note">No guest chats yet.</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -191,6 +227,10 @@
         <div class="effort-menu" id="effortMenu" role="menu" hidden></div>
       </div>
       <div class="queue-box" id="queueBox" hidden></div>
+      <div class="guest-img-warn" id="guestImgWarn" hidden role="alert">
+        <svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px;flex:none"><path d="M12 3l10 18H2z"/><path d="M12 10v4M12 17h.01"/></svg>
+        <span><b>Warning:</b> Pictures you generate are saved on the host PC and can be seen by the PC's owner.</span>
+      </div>
       <div class="box" id="box">
         <input type="file" id="fileInput" multiple hidden>
         <button class="attach-btn globe-btn" id="webBtn" type="button" aria-pressed="false" title="Search the web"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></button>
@@ -266,10 +306,34 @@
             <div class="field"><label for="ollamaUrl">Ollama URL</label><input id="ollamaUrl" placeholder="http://localhost:11434"><small>Default is http://localhost:11434</small></div>
           </div>
           <div id="connRemote" class="pane" style="padding:0">
-            <div class="field"><label for="codeInput">Device code</label><input id="codeInput" class="code-input" maxlength="19" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false"><small>Shown in the Burrow control center on the PC. The second half is the encryption key: it never leaves this device, so the server can't read your chats.</small></div>
+            <div class="field"><label for="codeInput">Device code</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input id="codeInput" class="code-input" maxlength="19" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="btn" id="codeInputShow" type="button">Show</button></div><small>Enter a guest code or admin code shown in the Control Center on the PC. The second half is the encryption key: it never leaves this device, so the server can't read your chats.</small></div>
             <div class="field"><label for="relayUrl">Albatross server</label><input id="relayUrl" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" placeholder="https://burrow-uu7e.onrender.com"><small>Default: https://burrow-uu7e.onrender.com</small></div>
           </div>
           <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connResult" style="align-self:center;font-size:14px;color:var(--muted)"></span></div>
+          <div class="note" id="connGuestOwnerBox" hidden>
+            <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:4px">
+              <strong style="color:var(--fg)">Guest code (main code)</strong>
+              <button class="btn small" id="connOpenGuestPage" type="button">View guest recaps</button>
+            </div>
+            <div>Share this guest code with others (PC controls and private items are off; generated pictures warn the guest that you can see them, and every chat makes an AI recap for you):</div>
+            <div class="row" style="align-items:center;margin-top:8px">
+              <code id="connGuestCodeDisplay" style="font-size:16px;font-weight:800;letter-spacing:.06em;color:var(--fg)">····-····-····-····</code>
+              <button class="btn small" id="connCopyGuestCode" type="button">Copy guest code</button>
+              <button class="btn small" id="connCopyGuestLink" type="button">Copy guest link</button>
+              <button class="btn small" id="connResetGuestCode" type="button">Reset guest code</button>
+            </div>
+            <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
+              <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px"><strong style="color:var(--fg)">Admin code</strong> (full access to PC, files &amp; private items — hidden by default):</div>
+              <div class="row" style="align-items:center">
+                <code id="connAdminCodeDisplay" style="font-size:15px;font-weight:700;letter-spacing:.06em">••••-••••-••••-••••</code>
+                <button class="btn small" id="connShowAdminCode" type="button">Show</button>
+                <button class="btn small" id="connCopyAdminCode" type="button">Copy admin code</button>
+                <button class="btn small" id="connCopyAdminLink" type="button">Copy admin link</button>
+                <button class="btn small" id="connResetAdminCode" type="button">Reset admin code</button>
+              </div>
+            </div>
+          </div>
+          <div class="pc-PowerAndSaved" id="connOwnerOnly">
           <h3>Saved connections</h3>
           <div class="note" style="margin:0">Several PCs or ways to reach them, each with its own power settings. Signed in, they travel with your account; the codes and power details only inside your passphrase vault, encrypted.</div>
           <div class="saved-conns" id="savedConns"></div>
@@ -295,6 +359,7 @@
             On this PC, with Ollama running, open a terminal in the Albatross folder and run<br>
             <code>node host/host.js <span id="serverHint">https://burrow-uu7e.onrender.com</span></code><br>
             It shows a code like <code>K7QM-4XPT-9F2C-HW3D</code>. Enter that code on the other device. Anyone with the code can use this PC's AI, so only share it with people you trust. Run it with <code>--new</code> to get a fresh code.
+          </div>
           </div>
         </section>
 
@@ -588,7 +653,7 @@
 <script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-10-30.2"></script>
+<script src="app.js?v=2026-11-11.1"></script>
 <script type="module" src="account.js?v=2026-10-30.2"></script>
 <script src="agent.js"></script>
 <script src="voice.js"></script>

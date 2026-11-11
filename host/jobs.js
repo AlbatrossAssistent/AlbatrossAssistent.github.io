@@ -10,7 +10,7 @@ const jobs = new Map();       // id -> job
 const KEEP_MS = 30 * 60e3;    // how long a finished answer waits to be picked up
 const MAX_CHARS = 24e6;       // per job; a longer answer is cut, never the whole PC's memory
 
-function start({ body, chatId, upstream, note, uid }) {
+function start({ body, chatId, upstream, note, uid, onGuestDone }) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   const id = crypto.randomBytes(9).toString("base64url");
   const ctrl = new AbortController();
@@ -46,8 +46,14 @@ function start({ body, chatId, upstream, note, uid }) {
       else job.cancelled = true;
     } finally {
       job.done = true; wake();
-      // Nobody has been looking for a minute (the app was closed or killed in the background): keep the answer in the chat on this PC.
-      setTimeout(() => saveOrphan(job, note), 65e3).unref();
+      if (job.uid === "guest") {
+        if (!job.cancelled && !job.error && job.content && typeof onGuestDone === "function") {
+          try { onGuestDone({ chatId: job.chatId, model: job.model, body, content: job.content }); } catch {}
+        }
+      } else {
+        // Nobody has been looking for a minute (the app was closed or killed in the background): keep the answer in the chat on this PC.
+        setTimeout(() => saveOrphan(job, note), 65e3).unref();
+      }
     }
   })();
   return [200, { id }];
@@ -70,9 +76,9 @@ function saveOrphan(job, note) {
 }
 
 // Returns the lines after `from`, waiting up to 20 s for new ones (so the device isn't asking every moment).
-async function poll({ id, from }) {
+async function poll({ id, from }, uid) {
   const job = jobs.get(id);
-  if (!job) return [404, { error: "That request is gone (the PC restarted or it is too old)." }];
+  if (!job || (uid === "guest" ? job.uid !== "guest" : job.uid === "guest")) return [404, { error: "That request is gone (the PC restarted or it is too old)." }];
   job.polled = Date.now();
   from = Math.max(0, Number(from) || 0);
   if (job.lines.length <= from && !job.done) {
@@ -85,16 +91,16 @@ async function poll({ id, from }) {
   return [200, { lines, next, done, error: done ? job.error : "" }];
 }
 
-function cancel({ id }) {
-  const job = jobs.get(id); if (!job) return [200, { ok: true }];
+function cancel({ id }, uid) {
+  const job = jobs.get(id); if (!job || (uid === "guest" ? job.uid !== "guest" : job.uid === "guest")) return [200, { ok: true }];
   job.cancelled = true; job.ctrl.abort(); return [200, { ok: true }];
 }
 // The live way to read a job: lines flow as the model writes them, starting at line `from`. If the connection drops (a phone goes to sleep),
 // the device simply attaches again from the last line it got. A line {"_ka":1} keeps proxies from closing a quiet connection, {"_end":true} says
 // the answer is complete.
-async function stream({ id, from }, write, signal) {
+async function stream({ id, from }, write, signal, uid) {
   const job = jobs.get(id);
-  if (!job) return write(JSON.stringify({ error: "That request is gone (the PC restarted or it is too old)." }) + "\n");
+  if (!job || (uid === "guest" ? job.uid !== "guest" : job.uid === "guest")) return write(JSON.stringify({ error: "That request is gone (the PC restarted or it is too old)." }) + "\n");
   let i = Math.max(0, Number(from) || 0);
   for (;;) {
     if (signal && signal.aborted) return;
@@ -116,9 +122,9 @@ function list(uid) {
 
 async function handle(method, p, body, ctx) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
-  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note, uid: ctx.uid });
-  if (p === "/jobs/poll") return poll(j);
-  if (p === "/jobs/cancel") return cancel(j);
+  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note, uid: ctx.uid, onGuestDone: ctx.onGuestDone });
+  if (p === "/jobs/poll") return poll(j, ctx.uid);
+  if (p === "/jobs/cancel") return cancel(j, ctx.uid);
   if (p === "/jobs/list") return list(ctx.uid);
   return [404, { error: "Unknown jobs request" }];
 }

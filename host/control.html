@@ -115,6 +115,21 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
 .switch input:disabled { opacity: .5; cursor: default; }
 .switch input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .banner { background: rgba(255,107,94,.12); border: 1px solid rgba(255,107,94,.35); color: #ffd0cb; border-radius: 16px; padding: 10px 14px; font-size: 14px; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.guest-code { font-size: clamp(19px, 2.8vw, 27px); font-weight: 800; letter-spacing: .07em; font-variant-numeric: tabular-nums; margin: 4px 0 6px; user-select: all; }
+.recap-list { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; }
+.recap-item { background: var(--soft); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.recap-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.recap-head b { font-size: 14.5px; font-weight: 650; }
+.recap-head small { color: var(--muted); font-size: 12.5px; }
+.recap-text { font-size: 13.5px; color: #e4e4ea; line-height: 1.5; white-space: pre-wrap; }
+.recap-files { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.recap-files-lbl { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.recap-file { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.recap-file img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: none; border: 1px solid var(--edge); }
+.recap-file .nm { flex: 1; min-width: 0; }
+.recap-file .nm b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recap-file .nm small { color: var(--muted); font-size: 12px; }
+.recap-acts { display: flex; gap: 6px; flex: none; }
 </style>
 </head>
 <body>
@@ -131,14 +146,18 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
   <div class="banner" id="lost" hidden>Lost contact with the Albatross host. Is it still running? Double-click burrow-host.bat to start it.</div>
 
   <section class="card hero" id="hero">
-    <div class="label">Your code</div>
-    <div class="code" id="code">····-····-····-····</div>
-    <div class="link" style="margin-bottom:4px">🔒 End-to-end encrypted. The lighter half is the key, and it's never sent to the server.</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
+      <div class="label" style="margin:0">Guest code</div>
+      <label class="switch" style="font-size:13px;gap:8px"><input type="checkbox" id="guestOn" role="switch"><span id="guestOnText">On</span></label>
+    </div>
+    <div class="code" id="guestCode">····-····-····-····</div>
+    <div class="link" style="margin-bottom:4px">🔒 End-to-end encrypted · Guests can chat and make pictures (with an owner visibility warning and AI recap), while PC and private items are off.</div>
     <div class="link" id="link"></div>
     <div class="state" id="heroState"></div>
     <div class="row">
-      <button id="copyCode">Copy code</button>
-      <button id="copyLink">Copy link</button>
+      <button id="copyGuestCode">Copy guest code</button>
+      <button id="copyGuestLink">Copy guest link</button>
+      <button id="newGuestCode">Reset guest code</button>
     </div>
   </section>
 
@@ -155,6 +174,24 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
     <div class="card"><h2>Tokens generated</h2><div class="num" id="nTok">0</div></div>
     <div class="card"><h2>Incoming requests</h2><div class="num" id="nReq">0</div></div>
     <div class="card"><h2>Errors</h2><div class="num" id="nErr">0</div></div>
+  </section>
+
+  <section class="cols" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+    <div class="card">
+      <h2>Admin code <span class="spacer"></span><button class="small" id="showAdminCode" type="button">Show</button></h2>
+      <div class="guest-code" id="code" style="user-select:none">••••-••••-••••-••••</div>
+      <div class="small" id="adminLink" style="margin-bottom:6px;word-break:break-all" hidden></div>
+      <div class="small" id="guestState" style="margin-bottom:10px">Full access to this PC, its files, Jarvis, Browser, Mail, Notes and settings. Hidden by default so only the guest code is visible on screen.</div>
+      <div class="row" style="justify-content:flex-start;margin-top:8px">
+        <button class="small" id="copyCode">Copy admin code</button>
+        <button class="small" id="copyLink">Copy admin link</button>
+        <button class="small" id="newAdminCode">Reset admin code</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Guest chat recaps <span class="spacer"></span><button class="small" id="clearRecaps" hidden>Clear all</button></h2>
+      <div class="recap-list" id="guestRecaps"></div>
+    </div>
   </section>
 
   <section class="cols" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
@@ -185,7 +222,7 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
 
 <script>
 const $ = (s) => document.querySelector(s);
-let S = null, seen = new Set(), first = true;
+let S = null, seen = new Set(), first = true, showAdmin = false;
 const FILE_ICON = '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
 
 function ago(ms) {
@@ -220,20 +257,46 @@ function render() {
   $("#uptime").textContent = "Running for " + ago(now - skew - S.startedAt);
 
   const online = S.connection === "online";
+  const gOn = S.guestEnabled !== false;
+  const gOnline = gOn && (S.guestConnection === "online" || online);
   // Two halves: the first finds this PC on the server, the second is the encryption key.
-  $("#code").innerHTML = "";
-  const g = (S.code || "····-····-····-····").split("-");
   const dash = () => Object.assign(document.createElement("span"), { className: "dash", textContent: "-" });
   const half = (x, y, cls, label) => {
     const h = Object.assign(document.createElement("span"), { className: "half " + cls, title: label });
-    h.append(x, dash(), y || "");
+    h.append(x || "····", dash(), y || "····");
     return h;
   };
-  $("#code").append(half(g[0], g[1], "route", "Finds this PC on the server"), dash(), half(g[2] || "····", g[3], "key", "Encryption key: never sent to the server"));
-  $("#hero").classList.toggle("off", !online);
-  $("#link").textContent = S.link || S.server;
-  $("#heroState").textContent = online ? "Share this code to let a device use this PC's AI and send it files" : "Not shared right now, waiting for the server…";
-  $("#heroState").style.color = online ? "var(--ok)" : "var(--warn)";
+  $("#guestOn").checked = gOn;
+  $("#guestOnText").textContent = gOn ? "On" : "Off";
+  $("#guestCode").innerHTML = "";
+  const gg = (S.guestCode || "····-····-····-····").split("-");
+  $("#guestCode").append(half(gg[0], gg[1], "route", "Finds this PC for guests"), dash(), half(gg[2], gg[3], "key", "Guest encryption key: never sent to the server"));
+  $("#guestCode").style.opacity = gOn ? "1" : ".45";
+  $("#hero").classList.toggle("off", !gOnline);
+  $("#link").textContent = S.guestCode ? (S.guestLink || (S.server + "/#code=" + S.guestCode)) : (S.server || "");
+  $("#heroState").textContent = !S.guestCode
+    ? "Double-click burrow-host.bat to finish loading the guest mode update"
+    : !gOn
+      ? "Guest mode is turned off — switch it on above to let guests connect"
+      : gOnline
+        ? "Share this guest code to let someone use this PC's AI (PC & private items are off)"
+        : "Not shared right now, waiting for the server…";
+  $("#heroState").style.color = (S.guestCode && gOnline) ? "var(--ok)" : "var(--warn)";
+
+  // Admin code (masked by default until Show is clicked)
+  $("#code").innerHTML = "";
+  if (showAdmin) {
+    const g = (S.code || "····-····-····-····").split("-");
+    $("#code").append(half(g[0], g[1], "route", "Finds this PC on the server (admin)"), dash(), half(g[2], g[3], "key", "Admin encryption key: never sent to the server"));
+    $("#code").style.userSelect = "all";
+    $("#adminLink").hidden = false;
+    $("#adminLink").textContent = S.code ? (S.link || (S.server + "/#code=" + S.code)) : "";
+  } else {
+    $("#code").append(half("••••", "••••", "route", "Click Show to reveal admin code"), dash(), half("••••", "••••", "key", "Click Show to reveal admin key"));
+    $("#code").style.userSelect = "none";
+    $("#adminLink").hidden = true;
+  }
+  $("#showAdminCode").textContent = showAdmin ? "Hide" : "Show";
 
   setTile("srv", online ? "ok" : S.connection === "connecting" ? "warn" : "bad",
     online ? "Online" : S.connection === "connecting" ? "Connecting…" : "Reconnecting…",
@@ -263,6 +326,67 @@ function render() {
   $("#nReq").textContent = fmt(S.totals.requests);
   $("#nErr").textContent = fmt(S.totals.errors);
   $("#nErr").style.color = S.totals.errors ? "var(--bad)" : "";
+
+  // guest recaps
+  const gRecaps = S.guestRecaps || [];
+  const grBox = $("#guestRecaps");
+  $("#clearRecaps").hidden = !gRecaps.length;
+  const sig = JSON.stringify(gRecaps.map((r) => [r.id, r.updatedAt, r.recap, r.recapBusy, (r.files || []).length]));
+  if (grBox.dataset.sig !== sig) {
+    grBox.dataset.sig = sig;
+    grBox.innerHTML = "";
+    if (!gRecaps.length) {
+      grBox.innerHTML = '<div class="empty">No guest chats yet. After each guest chat, an AI recap and every file made by this PC show up here.</div>';
+    }
+    for (const r of gRecaps) {
+      const item = document.createElement("div"); item.className = "recap-item";
+      const head = document.createElement("div"); head.className = "recap-head";
+      const title = document.createElement("b"); title.textContent = r.title || "Guest chat";
+      const meta = document.createElement("small");
+      meta.textContent = `${new Date(r.updatedAt || r.createdAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${r.turns || 1} turn${(r.turns || 1) === 1 ? "" : "s"}${r.model ? " · " + r.model : ""}`;
+      const spacer = Object.assign(document.createElement("span"), { className: "spacer" });
+      const del = document.createElement("button"); del.className = "small"; del.textContent = "Remove";
+      del.onclick = () => fetch("/action/guest-delete-recap", { method: "POST", headers: { "X-Burrow": "1", "Content-Type": "application/json" }, body: JSON.stringify({ id: r.id }) });
+      head.append(title, meta, spacer, del);
+      const txt = document.createElement("div"); txt.className = "recap-text";
+      txt.textContent = (r.recapBusy ? "Writing AI recap… " : "") + (r.recap || "Guest chat on this PC.");
+      item.append(head, txt);
+      if (Array.isArray(r.files) && r.files.length) {
+        const fbox = document.createElement("div"); fbox.className = "recap-files";
+        const flbl = document.createElement("div"); flbl.className = "recap-files-lbl";
+        flbl.textContent = `Files made by this PC (${r.files.length}) — user-inserted files excluded`;
+        fbox.appendChild(flbl);
+        for (const f of r.files) {
+          const frow = document.createElement("div"); frow.className = "recap-file";
+          if (f.kind === "image") {
+            const img = document.createElement("img");
+            img.src = `/guest-file?recap=${encodeURIComponent(r.id)}&file=${encodeURIComponent(f.id)}`;
+            img.alt = f.name;
+            frow.appendChild(img);
+          } else {
+            const ic = document.createElement("span"); ic.className = "ic"; ic.innerHTML = FILE_ICON;
+            ic.style.cssText = "width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--soft);border:1px solid var(--line)";
+            frow.appendChild(ic);
+          }
+          const nm = document.createElement("div"); nm.className = "nm";
+          const b = document.createElement("b"); b.textContent = f.name;
+          const sm = document.createElement("small");
+          sm.textContent = [f.kind === "image" ? "Generated picture" : "Generated file", f.size ? size(f.size) : "", f.prompt ? `“${f.prompt}”` : f.rel || ""].filter(Boolean).join(" · ");
+          nm.append(b, sm);
+          const acts = document.createElement("div"); acts.className = "recap-acts";
+          const openBtn = document.createElement("button"); openBtn.className = "small"; openBtn.textContent = "Open";
+          openBtn.onclick = () => fetch("/action/guest-open-file", { method: "POST", headers: { "X-Burrow": "1", "Content-Type": "application/json" }, body: JSON.stringify({ recapId: r.id, fileId: f.id }) });
+          const revBtn = document.createElement("button"); revBtn.className = "small"; revBtn.textContent = "Show in folder";
+          revBtn.onclick = () => fetch("/action/guest-reveal-file", { method: "POST", headers: { "X-Burrow": "1", "Content-Type": "application/json" }, body: JSON.stringify({ recapId: r.id, fileId: f.id }) });
+          acts.append(openBtn, revBtn);
+          frow.append(nm, acts);
+          fbox.appendChild(frow);
+        }
+        item.appendChild(fbox);
+      }
+      grBox.appendChild(item);
+    }
+  }
 
   // files
   const F = S.files || { outbox: [], received: [] };
@@ -357,8 +481,40 @@ drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove
 async function copy(text, btn) {
   try { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = "Copied"; setTimeout(() => (btn.textContent = t), 1200); } catch {}
 }
-$("#copyCode").onclick = (e) => S && copy(S.code, e.target);
-$("#copyLink").onclick = (e) => S && copy(S.link || S.server, e.target);
+$("#showAdminCode").onclick = () => { showAdmin = !showAdmin; render(); };
+$("#copyCode").onclick = (e) => S && S.code && copy(S.code, e.target);
+$("#copyLink").onclick = (e) => S && S.code && copy(S.link || (S.server + "/#code=" + S.code), e.target);
+$("#copyGuestCode").onclick = (e) => S && S.guestCode && copy(S.guestCode, e.target);
+$("#copyGuestLink").onclick = (e) => S && S.guestCode && copy(S.guestLink || (S.server + "/#code=" + S.guestCode), e.target);
+$("#newGuestCode").onclick = async (e) => {
+  const btn = e.target, old = btn.textContent;
+  btn.disabled = true; btn.textContent = "Generating…";
+  try {
+    const r = await fetch("/action/guest-new-code", { method: "POST", headers: { "X-Burrow": "1" } });
+    const j = await r.json().catch(() => ({}));
+    if (S && j.guestCode) { Object.assign(S, j); render(); }
+    btn.textContent = "New code!";
+    setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+  } catch { btn.textContent = old; btn.disabled = false; }
+};
+$("#newAdminCode").onclick = async (e) => {
+  const btn = e.target, old = btn.textContent;
+  btn.disabled = true; btn.textContent = "Generating…";
+  try {
+    const r = await fetch("/action/admin-new-code", { method: "POST", headers: { "X-Burrow": "1" } });
+    const j = await r.json().catch(() => ({}));
+    if (S && j.code) { Object.assign(S, j); render(); }
+    btn.textContent = "New code!";
+    setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+  } catch { btn.textContent = old; btn.disabled = false; }
+};
+$("#guestOn").onchange = async (e) => {
+  const enabled = e.target.checked;
+  try { await fetch("/action/guest-toggle", { method: "POST", headers: { "X-Burrow": "1", "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) }); } catch {}
+};
+$("#clearRecaps").onclick = async () => {
+  await fetch("/action/guest-clear-recaps", { method: "POST", headers: { "X-Burrow": "1" } });
+};
 let bootPending = null, bootError = "";
 $("#boot").onchange = async (e) => {
   const want = e.target.checked;

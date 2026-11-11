@@ -11,7 +11,7 @@ const HTML = path.join(__dirname, "control.html");
 // Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
 const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.github\.io|burrow-uu7e\.onrender\.com)$|^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-function startPanel({ port, getState, actions, files, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, monitor, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, guestFile, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, monitor, onListening, onBusy }) {
   const clients = new Set();
 
   const server = http.createServer((req, res) => {
@@ -203,6 +203,16 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
       return res.end(JSON.stringify(load(lp[1] ? decodeURIComponent(lp[1]) : "")));
     }
     // Files: download one that arrived from a device, or add one for devices to download (see files.js).
+    const gf = req.method === "GET" && req.url.match(/^\/guest-file\?recap=([^&]+)&file=([^&]+)$/);
+    if (gf && guestFile) {
+      const f = guestFile(decodeURIComponent(gf[1]), decodeURIComponent(gf[2]));
+      if (!f || !f.path || !fs.existsSync(f.path)) { res.writeHead(404); return res.end(); }
+      const ext = path.extname(f.path).toLowerCase();
+      const ct = ext === ".png" ? "image/png" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "application/octet-stream";
+      const disp = f.kind === "image" ? "inline" : `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(f.path))}`;
+      res.writeHead(200, { "Content-Type": ct, "Content-Disposition": disp, "Cache-Control": "no-store" });
+      return fs.createReadStream(f.path).pipe(res);
+    }
     const dl = req.method === "GET" && req.url.match(/^\/received\/(.+)$/);
     if (dl && files) {
       const f = files.receivedPath(decodeURIComponent(dl[1]));
@@ -249,7 +259,7 @@ function startPanel({ port, getState, actions, files, load, proxy, jarvis, code,
   server.on("listening", () => onListening(`http://127.0.0.1:${port}/`));
   server.listen(port, "127.0.0.1");
 
-  return { push };
+  return { push, close: () => server.close() };
 }
 
 module.exports = { startPanel };

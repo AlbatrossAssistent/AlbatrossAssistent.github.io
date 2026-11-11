@@ -1725,6 +1725,57 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .mon-seg button { padding: 0 12px; min-height: 32px; font-size: 13.5px; }
 .mon-opts .mon-row input { min-height: 36px; }
 
+/* ---------- Home: the AI launchpad and manual tools ---------- */
+.home-inner { max-width: 1080px; gap: 26px; padding: 8px 8px 36px; }
+.home-hero { padding: clamp(24px, 5vh, 56px) 0 4px; gap: 8px; }
+.home-hero svg { width: 48px; height: 48px; }
+.home-kicker { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 1.8px; }
+.home-hero h1 { font-size: clamp(34px, 5vw, 56px); letter-spacing: -.045em; }
+.home-hero p { font-size: 15px; }
+.home-feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); gap: 28px; align-items: center; padding: clamp(22px, 4vw, 38px); border: 1px solid var(--glass-edge); border-radius: 30px; background: radial-gradient(80% 130% at 0% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 68%), var(--glass); box-shadow: var(--glass-hi), var(--shadow); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.home-feature-copy h2, .home-section-head h2, .home-whatsapp-copy h2 { margin: 8px 0; font-size: clamp(22px, 3vw, 30px); letter-spacing: -.04em; line-height: 1.12; }
+.home-feature-copy p, .home-section-head > p, .home-whatsapp-copy p { margin: 0; max-width: 470px; color: var(--muted); line-height: 1.55; }
+.home-feature-actions { display: flex; flex-direction: column; gap: 9px; }
+.home-feature-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--glass-edge); border-radius: 18px; color: var(--fg); background: var(--btn-glass); text-align: left; cursor: pointer; font: inherit; transition: transform .18s, background-color .18s; }
+.home-feature-btn:hover { transform: translateY(-2px); background-color: var(--glass-strong); }
+.home-feature-btn .hi { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 13px; background: var(--soft); }
+.home-feature-btn .hi svg { width: 21px; height: 21px; }
+.home-feature-btn > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.home-feature-btn strong { font-size: 14px; }
+.home-feature-btn small { color: var(--muted); font-size: 12px; }
+.home-feature-btn > b { color: var(--muted); font-size: 20px; font-weight: 400; }
+.home-feature-btn.primary { border-color: color-mix(in srgb, var(--accent) 45%, var(--glass-edge)); background: color-mix(in srgb, var(--accent) 12%, var(--glass)); }
+.home-section { display: flex; flex-direction: column; gap: 12px; }
+.home-section-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+.home-section-head h2 { margin: 5px 0 0; font-size: 21px; }
+.home-section-head > p { font-size: 13px; text-align: right; }
+.home-actions { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; }
+.home-action { min-height: 140px; border-radius: 21px; padding: 14px; }
+.home-action .hi { width: 38px; height: 38px; border-radius: 13px; }
+.home-whatsapp { display: grid; grid-template-columns: minmax(0, .8fr) minmax(280px, 1.2fr); gap: 28px; align-items: start; padding: clamp(20px, 3vw, 30px); }
+.home-whatsapp-copy h2 { font-size: clamp(22px, 2.8vw, 28px); }
+.home-wa-form { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.home-wa-form label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 600; }
+.home-wa-form label small, .home-wa-note { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.45; }
+.home-wa-form input, .home-wa-form textarea { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 13px; padding: 10px 12px; color: var(--fg); background: var(--btn-glass); font: inherit; }
+.home-wa-form textarea { min-height: 84px; resize: vertical; }
+.home-wa-form input:focus, .home-wa-form textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
+.home-wa-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 3px; }
+.home-wa-actions .btn { min-height: 38px; padding: 8px 13px; font-size: 13px; cursor: pointer; }
+.home-wa-note { margin: 0; }
+.home-more { border-top: 1px solid var(--line); padding-top: 14px; }
+.home-more summary { width: fit-content; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; }
+.home-more[open] summary { margin-bottom: 12px; color: var(--fg); }
+.home-more .home-actions { padding-bottom: 4px; }
+@media (max-width: 700px) {
+  .home-feature, .home-whatsapp { grid-template-columns: 1fr; gap: 18px; }
+  .home-section-head { align-items: start; flex-direction: column; gap: 5px; }
+  .home-section-head > p { text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-feature-btn, .home-action { transition: none; animation: none; }
+}
+
 /* ---------- the List, a tab of the side panel (list.js): several requests, run on the PC one after another ---------- */
 /* only the middle scrolls; "Into" stays on top and "Run on PC" at the bottom. No glass blur inside: every blurred button
    would be painted again on each scrolled frame, which is what made scrolling lag. */
@@ -1763,3 +1814,43 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .lp-rb { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; } .lp-rb .btn.small { min-height: 28px; padding: 0 10px; font-size: 12px; }
 .lp-rb .icon-btn { width: 28px; height: 28px; margin-left: auto; }
 #goList .live { display: none; } #goList.busy .live { display: block; }
+
+/* ---------- Guest mode & Owner guest recaps ---------- */
+.guest-badge { background: rgba(255, 159, 10, .18); color: #ff9f0a; border: 1px solid rgba(255, 159, 10, .4); font-weight: 700; }
+.guest-banner { margin: 0 12px; padding: 9px 14px; border-radius: 16px; background: rgba(255, 159, 10, .12); border: 1px solid rgba(255, 159, 10, .35); color: var(--fg); font-size: 13px; line-height: 1.45; }
+.guest-img-warn { display: flex; align-items: center; gap: 8px; margin: 0 6px 6px; padding: 8px 12px; border-radius: 14px; background: rgba(255, 159, 10, .14); border: 1px solid rgba(255, 159, 10, .4); color: var(--fg); font-size: 13px; line-height: 1.35; }
+.guest-img-warn svg { color: #ff9f0a; }
+.guest-img-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 10px; border-radius: 999px; background: rgba(255, 159, 10, .14); border: 1px solid rgba(255, 159, 10, .38); color: var(--fg); font-size: 12px; }
+body.guest-mode #goJarvis,
+body.guest-mode #goNotes,
+body.guest-mode #goMail,
+body.guest-mode #goHub,
+body.guest-mode #goMonitor,
+body.guest-mode #goList,
+body.guest-mode #acctBar,
+body.guest-mode #connOwnerOnly,
+body.guest-mode #connGuestOwnerBox,
+body.guest-mode #spTabs button[data-sp="browser"],
+body.guest-mode #spTabs button[data-sp="agent"],
+body.guest-mode #spTabs button[data-sp="list"],
+body.guest-mode #cpSave,
+body.guest-mode #settings .tabs button[data-tab="tools"],
+body.guest-mode #settings .tabs button[data-tab="account"] { display: none !important; }
+
+.pc-guest-code-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 16px; background: var(--soft); border: 1px solid var(--line); }
+.pc-guest-code { font-size: clamp(17px, 2.5vw, 23px); font-weight: 800; letter-spacing: .07em; font-variant-numeric: tabular-nums; user-select: all; }
+.pc-recap-list { display: flex; flex-direction: column; gap: 10px; }
+.pc-recap-item { border-radius: 16px; padding: 12px 14px; background: var(--soft); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.pc-recap-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pc-recap-head b { font-size: 15px; font-weight: 650; }
+.pc-recap-head small { color: var(--muted); font-size: 12.5px; }
+.pc-recap-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; color: var(--fg); }
+.pc-recap-files { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.pc-recap-files-lbl { font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.pc-recap-file { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 4%, transparent); border: 1px solid var(--line); }
+.pc-recap-file img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex: none; border: 1px solid var(--line); cursor: pointer; }
+.pc-recap-file .nm { flex: 1; min-width: 0; }
+.pc-recap-file .nm b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-recap-file .nm small { color: var(--muted); font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-recap-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+#pcPage[data-pt="guest"] .pc-card, #pcPage[data-pt="guest"] #pcStatusCard { display: none; }

@@ -33,6 +33,25 @@ f.onload = () => setTimeout(async () => {
   for (const v of ["home", "chat", "notes", "mail", "hub", "monitor", "agent", "jarvis", "pc", "browser"]) {
     await tryIt("open page: " + v, async () => { w.setView(v); await sleep(120); return true; });
   }
+  await tryIt("home has AI modes and manual task shortcuts", () => {
+    w.setView("home");
+    return !!d.querySelector(".home-feature [data-go=chat]") && !!d.querySelector(".home-feature [data-go=agent]")
+      && !!d.querySelector(".home-action[data-go=beam]") && !!d.querySelector(".home-action[data-go=mail]")
+      && !!d.querySelector(".home-action[data-go=print]") && !!d.querySelector("#waForm");
+  });
+  await tryIt("WhatsApp handoff opens an editable draft", () => {
+    d.querySelector("#waPhone").value = "+1 555 123 4567";
+    d.querySelector("#waMessage").value = "Hi there";
+    w.__waUrl = "";
+    w.open = (url) => { w.__waUrl = url; return {}; };
+    d.querySelector("#waForm").dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+    return w.__waUrl === "https://wa.me/15551234567?text=Hi%20there";
+  });
+  await tryIt("WhatsApp draft shortcut prepares an unsent AI prompt", () => {
+    d.querySelector("#waMessage").value = "Ask if they are free tomorrow";
+    d.querySelector("#waDraft").click();
+    return /Ask if they are free tomorrow/.test(d.querySelector("#prompt").value) && !ev("controller");
+  });
   ev('setView("chat")');
   await tryIt("settings open", async () => { ev("openSettings()"); await sleep(100); const open = d.querySelector("#settings").open; d.querySelector("#settings").close(); return open; });
   await tryIt("markdown renders code blocks", () => { const f = "\\x60".repeat(3); return /class="code"/.test(w.md("**index.html**\\n" + f + "html\\n<p>hi</p>\\n" + f)); });

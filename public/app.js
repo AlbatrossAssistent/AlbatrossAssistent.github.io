@@ -56,6 +56,37 @@ let attachments = []; // base64 strings (no prefix)
 let models = [];      // [{name, size, details, kind}]
 let connected = false;
 let loadedInfo = []; // from /api/ps: what is in memory right now
+let guestMode = false;
+window.isGuestMode = () => guestMode;
+
+function updateGuestImgWarn() {
+  const el = $("#guestImgWarn");
+  if (!el) return;
+  const selImg = models.find(m => m.name === $("#model")?.value)?.kind === "image";
+  const promptTxt = $("#prompt")?.value || "";
+  el.hidden = !(guestMode && (forceImage || selImg || (typeof wantsImage === "function" && wantsImage(promptTxt))));
+}
+
+function setGuestMode(on) {
+  const next = !!on;
+  const changed = guestMode !== next;
+  guestMode = next;
+  document.body.classList.toggle("guest-mode", guestMode);
+  if ($("#guestBadge")) $("#guestBadge").hidden = !guestMode;
+  if ($("#guestBanner")) $("#guestBanner").hidden = !guestMode;
+  if ($("#connOwnerOnly")) $("#connOwnerOnly").hidden = guestMode;
+  if (guestMode && $("#connGuestOwnerBox")) $("#connGuestOwnerBox").hidden = true;
+  updateGuestImgWarn();
+  if (guestMode) {
+    if ($("#notesStart")) $("#notesStart").hidden = true;
+    if ($("#filesDlg")?.open) $("#filesDlg").close();
+    if ($("#sidePanel") && ["browser", "agent", "list"].includes($("#sidePanel").dataset.tab) && window.sideClose) window.sideClose();
+    if (["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor"].some(v => document.body.classList.contains(v + "-view"))) {
+      setView("home");
+    }
+  }
+  if (changed && typeof isHome === "function" && isHome()) renderHome();
+}
 
 function deepMerge(a, b) { for (const k in b) { if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) && a[k]) deepMerge(a[k], b[k]); else a[k] = b[k]; } return a; }
 function saveSettings() { store.set("settings", S); }
@@ -78,7 +109,7 @@ function saveChats() {
 // is connected, swaps what changed: newer there -> take it, newer here -> send it, deleted on one side -> deleted on the other.
 const sync = { sig: S.keepLocal === false ? {} : store.get(chatKey("chatSync"), {}), timer: 0, busy: false, ok: false, again: false, fail: 0 };
 const chatSig = (c) => [c.updated, c.messages.length, c.title, c.pinned ? 1 : 0, (c.system || "").length, (c.context || "").length, c.type || ""].join("|");
-const syncOn = () => S.persist && S.chatsOnPC !== false;
+const syncOn = () => !guestMode && S.persist && S.chatsOnPC !== false;
 function chatSyncSoon(ms = 1500) { if (!syncOn()) return; clearTimeout(sync.timer); sync.timer = setTimeout(syncChats, ms); }
 function slimChat(c) { return { ...c, messages: c.messages.map(m => ({ ...m, images: undefined, genImage: m.genImage ? "" : undefined })) }; }
 async function pushChat(c) {
@@ -218,7 +249,7 @@ async function chatApi(body, signal, chatId) {
 // ======================================================================
 let pcLocked = false;
 function setLocked(v) { v = !!v; if (v === pcLocked) return; pcLocked = v; document.body.classList.toggle("pc-locked", v); }
-async function pollLock() { if (!connected) return; try { setLocked((await pcCall("/pc/lock", null, "GET")).locked); } catch {} }
+async function pollLock() { if (!connected || guestMode) return; try { setLocked((await pcCall("/pc/lock", null, "GET")).locked); } catch {} }
 setInterval(() => { if (connected && !document.hidden) pollLock(); }, 15000);
 // Asks to continue when the PC is locked and waits for it to be unlocked. Resolves true when it is, false if cancelled.
 function ensureUnlocked(what) {
@@ -357,6 +388,7 @@ async function e2eFetch(path, opts = {}) {
   };
   const meta = await next();
   if (meta.k === "x") throw new Error(meta.error || "Device error");
+  if (meta.g !== undefined || guestMode) setGuestMode(!!meta.g);
   const body = new ReadableStream({
     async pull(c) {
       try {
@@ -383,8 +415,11 @@ async function connect(quiet) {
       if (!S.conn.relay) throw new Error("Enter your Albatross server address");
     }
     viaHost = false;
-    if (S.conn.mode !== "remote" && isLocalOllama()) {
-      try { viaHost = (await fetch(HOST_LOCAL + "/api/version", { signal: AbortSignal.timeout(1500) })).ok; } catch {}
+    if (S.conn.mode !== "remote") {
+      setGuestMode(false);
+      if (isLocalOllama()) {
+        try { viaHost = (await fetch(HOST_LOCAL + "/api/version", { signal: AbortSignal.timeout(1500) })).ok; } catch {}
+      }
     }
     const tags = await (await api("/api/tags")).json();
     let running = [];
@@ -402,10 +437,15 @@ async function connect(quiet) {
     launcher = "Ollama";
     try { const v = await (await api("/api/version")).json(); if (v.version) launcher = "Ollama " + v.version; } catch {}
     updateLoadedPill();
-    setStatus("ok", `${S.conn.mode === "remote" ? "Remotely" : "Locally"} connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"} · ${launcher}`);
+    setStatus("ok", `${guestMode ? "Guest mode · " : S.conn.mode === "remote" ? "Remotely" : "Locally"} connected · ${where} · ${models.length} model${models.length === 1 ? "" : "s"} · ${launcher}`);
     if (document.body.classList.contains("home-view")) renderHome();
-    updatePowerBox(true);
-    chatSyncSoon(400); pollLock(); syncLoadTimes(); window.listRefresh && window.listRefresh();
+    if (guestMode) {
+      updatePowerBox(false);
+    } else {
+      updatePowerBox(true);
+      chatSyncSoon(400); pollLock(); syncLoadTimes(); window.listRefresh && window.listRefresh();
+      loadOwnerGuestInfo();
+    }
     return true;
   } catch (e) {
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
@@ -547,14 +587,14 @@ const wake = () => ({ host: store.get("wakeHost", ""), port: store.get("wakePort
 const remotePC = () => S.conn.mode === "remote" && CODE_RE.test(S.conn.code);
 function updatePowerBox(online) {
   const box = $("#powerBox"), w = wake();
-  const canWake = (w.host && w.mac) || store.get("powerUrl", "");
-  $("#pcBtns").hidden = !(online && (remotePC() || viaHost));
-  if (online && !$("#pcBtns").hidden) loadSchedule();
+  const canWake = !guestMode && ((w.host && w.mac) || store.get("powerUrl", ""));
+  $("#pcBtns").hidden = guestMode || !(online && (remotePC() || viaHost));
+  if (online && !guestMode && !$("#pcBtns").hidden) loadSchedule();
   if (online || !remotePC() || !canWake) {
     box.hidden = true;
     if (powerWait) { clearInterval(powerWait); powerWait = null; toast("Your PC is on and connected"); }
     $("#powerMsg").textContent = "";
-    if (online) learnPC();
+    if (online && !guestMode) learnPC();
     return;
   }
   box.hidden = false;
@@ -562,7 +602,7 @@ function updatePowerBox(online) {
 // while the PC is connected, remember what Wake-on-LAN needs (its network card and the home's address)
 let learned = false;
 async function learnPC() {
-  if (learned) return;
+  if (learned || guestMode) return;
   learned = true;
   try {
     const r = remotePC() ? await e2eFetch("/pc/info", { base: hostBase() }) : await fetch("http://127.0.0.1:4747/pc/info", { signal: AbortSignal.timeout(3000) });
@@ -992,9 +1032,10 @@ const loadAvg = (model) => { const a = (store.get("loadTimes", {})[model] || [])
 function recordLoad(model, secs) {
   if (!(secs >= 1)) return;
   const all = store.get("loadTimes", {}); all[model] = [...(all[model] || []), Math.round(secs)].slice(-6); store.set("loadTimes", all);
-  if (connected) pcCall("/pc/loadtime", { model, secs }).catch(() => {});      // and on the PC, for every device
+  if (connected && !guestMode) pcCall("/pc/loadtime", { model, secs }).catch(() => {});      // and on the PC, for every device
 }
 async function syncLoadTimes() {
+  if (guestMode) return;
   try {
     const t = (await pcCall("/pc/loadtimes", null, "GET")).times || {}, all = store.get("loadTimes", {});
     for (const m in t) if (Array.isArray(t[m]) && t[m].length) all[m] = t[m].slice(-6);
@@ -1090,7 +1131,7 @@ function rememberCard(m, facts) {
 }
 // the facts, for the AI (and the instruction to suggest new ones)
 function memoryForAI() {
-  if (S.memoryOn === false) return "";
+  if (guestMode || S.memoryOn === false) return "";
   const list = memory();
   return (list.length ? "What the user asked you to remember about them (use it when it helps, don't repeat it back unasked):\n" + list.map((x) => "- " + x.text).join("\n") + "\n\n" : "") +
     "When the user tells you something lasting about themselves that would help in later chats (their name, school or job, devices, likes, people and places they mention often) and it isn't in the list above, add one line [[remember: one short sentence about the user]] at the end of your reply (before an [[ask: ...]] line if there is one). The user decides if it is saved.";
@@ -1137,6 +1178,11 @@ function fillBot(d, m, idx, live) {
   if (m.genImage !== undefined) {
     if (m.genImage) {
       const im = document.createElement("img"); im.className = "gen-img" + (Date.now() - (m.genAt || 0) < 4000 ? " fresh" : ""); im.alt = m.prompt || "Generated image"; im.src = "data:image/png;base64," + m.genImage; c.appendChild(im);
+      if (guestMode) {
+        const gw = document.createElement("div"); gw.className = "guest-img-note";
+        gw.textContent = "⚠ Saved on the host PC · can be seen by the PC's owner";
+        c.appendChild(gw);
+      }
       if (m.asked && m.prompt && m.asked !== m.prompt) { const pd = document.createElement("details"); pd.style.cssText = "margin-top:8px;color:var(--muted);font-size:13px"; pd.innerHTML = "<summary style='cursor:pointer'>Prompt used (with context)</summary><div style='margin-top:4px'></div>"; pd.lastChild.textContent = m.prompt; c.appendChild(pd); }
     } else if (live) {
       const [gw, gh] = (S.img.size || "1024x1024").split("x").map(Number);
@@ -1150,7 +1196,7 @@ function fillBot(d, m, idx, live) {
     const body = document.createElement("div"); body.className = "md";
     body.innerHTML = m.content ? md(stripAsk(m.content)) : "";
     c.appendChild(body);
-    const facts = !live && S.memoryOn !== false ? parseRemember(m.content) : [];
+    const facts = !live && !guestMode && S.memoryOn !== false ? parseRemember(m.content) : [];
     if (facts.length) c.appendChild(rememberCard(m, facts));
     const ask = !live && parseAsk(m.content);
     if (ask) c.appendChild(askCard(ask, idx === current.messages.map(x => !x.isEvent).lastIndexOf(true)));
@@ -2045,6 +2091,7 @@ let forceImage = false;
 function setForceImage(on) {
   forceImage = !!on;
   const b = $("#imgBtn"); if (b) { b.classList.toggle("on", forceImage); b.setAttribute("aria-pressed", String(forceImage)); }
+  updateGuestImgWarn();
 }
 // Messages written while an answer is still coming wait here, each for the chat it was written in, and go one after another
 const queue = [];
@@ -2147,7 +2194,8 @@ const TOOL_LIST = [
   ["challenge", "Challenge", "finds a hidden word in a puzzle file attached with the paperclip"],
 ];
 function whatYouCanDo() {
-  const on = TOOL_LIST.filter(([k]) => toolOn(k)), off = TOOL_LIST.filter(([k]) => !toolOn(k));
+  const avail = guestMode ? TOOL_LIST.filter(([k]) => !["agent", "notes", "docs"].includes(k)) : TOOL_LIST;
+  const on = avail.filter(([k]) => toolOn(k)), off = avail.filter(([k]) => !toolOn(k));
   return "You are the AI of Albatross, an app that runs AI models on the user's own PC. Answer in the language the user writes in." +
     (on.length ? "\nTools of the app (used automatically when a message asks for them):\n" + on.map(([, n, d]) => `- ${n}: ${d}`).join("\n") : "") +
     (off.length ? "\nSwitched off in Settings → Tools: " + off.map(([, n]) => n).join(", ") + "." : "");
@@ -2309,12 +2357,13 @@ async function chat(model, opts = {}) {
 
     for (let round = 0; round < 6; round++) {
       const body = { model, messages: msgs, stream: true, options: buildOptions(model) };
+      if (guestMode && conv?.id) body.chatId = conv.id;
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
       if (canThink) body.think = useThink ? (gptoss ? (effort === "max" ? "high" : effort) : true) : (gptoss ? "low" : false);
       const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : [])];
       if (toolsOk && round < 5 && tools.length) body.tools = tools;
 
-      const res = await chatApi(body, controller.signal);
+      const res = await chatApi(body, controller.signal, conv?.id);
       // the PC has the request (remote: its first answer frame is here; this PC: the first bytes)
       if (round === 0 && reply.phase === "sent") { ph(reply, "received"); redraw(); setTimeout(() => { if (reply.phase === "received") { ph(reply, "working"); redraw(); } }, 700); }
       let think = null, roundText = "", calls = [];
@@ -2374,8 +2423,85 @@ async function chat(model, opts = {}) {
     }
     if (stopped && !finished) addEvent("stop", "Response stopped" + (reply.content ? "" : reply.blocks && reply.blocks.length ? " while it was thinking" : " before anything was written"));
     saveChats();
+    if (guestMode && (reply.content || (reply.blocks && reply.blocks.length))) sendGuestRecap(conv, model);
     renderMessages();
   }
+}
+
+// Extracts AI-generated files from assistant replies only (never from user messages or user attachments).
+function extractGuestAiFiles(conv) {
+  const out = [], seen = new Set();
+  const add = (name, content, kind = "code") => {
+    if (!name || !content) return;
+    const key = name + "|" + content.length;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ name, content: String(content), kind });
+  };
+  let nCode = 0;
+  for (const m of (conv?.messages || [])) {
+    if (!m || m.role !== "assistant" || m.isError || m.isEvent) continue;
+    const parts = String(m.content || "").split(/```/);
+    for (let i = 1; i < parts.length; i += 2) {
+      const part = parts[i], before = parts[i - 1] || "";
+      const head = part.match(/^([\w+#.-]*)(?:[ \t]+(?:(?:title|file|filename)=)?["']?([\w./-]+\.\w{1,6})["']?)?[ \t]*\n/);
+      let lang = head ? head[1] : "", file = (head && head[2]) || "";
+      if (!file && /^[\w-][\w.-]*\.(html?|css|m?js|jsx|tsx?|json|py|txt|md|svg|xml|csv)$/i.test(lang)) { file = lang; lang = lang.split(".").pop(); }
+      const code = (head ? part.slice(head[0].length) : part).replace(/\n$/, "");
+      if (!code.trim()) continue;
+      if (!file) {
+        const prevLine = (before.trim().split("\n").pop() || "").trim();
+        const pm = new RegExp(FILE_NAME + "[\\s`*:)\\].—–-]*$", "i").exec(prevLine);
+        if (pm) file = pm[1];
+      }
+      if (!file) {
+        const first = code.split("\n", 1)[0];
+        const cm = new RegExp("^\\s*(?:\\/\\/|#|<!--|\\/\\*|--)\\s*(?:file(?:name)?\\s*:\\s*)?" + FILE_NAME + "\\s*(?:-->|\\*\\/)?\\s*$", "i").exec(first);
+        if (cm) file = cm[1];
+      }
+      if (!file && code.split("\n").length >= 3) {
+        const ext = ({ html: "html", htm: "html", css: "css", js: "js", javascript: "js", ts: "ts", typescript: "ts", py: "py", python: "py", json: "json", svg: "svg", md: "md", markdown: "md", csv: "csv", xml: "xml", sql: "sql", sh: "sh", bash: "sh" })[lang.toLowerCase()] || "txt";
+        file = `snippet-${++nCode}.${ext}`;
+      }
+      if (file) add(file, code, "code");
+    }
+    for (const b of (m.blocks || [])) {
+      if (b.type === "deck" && b.deck?.slides?.length) {
+        const mdDeck = `# ${b.deck.title || "Presentation"}\n${b.deck.subtitle ? b.deck.subtitle + "\n" : ""}\n` +
+          b.deck.slides.map((s, idx) => `## ${idx + 1}. ${s.title || ""}\n` + (s.bullets || []).map(x => `- ${x}`).join("\n") + (s.notes ? `\n\n> ${s.notes}` : "")).join("\n\n");
+        add(slug(b.deck.title || "presentation") + "-slides.md", mdDeck, "code");
+      } else if (b.type === "chart" && b.chart && typeof vizCsv === "function") {
+        try { add(slug(b.chart.title || "chart") + ".csv", vizCsv(b.chart), "code"); } catch {}
+      }
+    }
+  }
+  return out;
+}
+
+async function sendGuestRecap(conv, model, extraPcFiles) {
+  if (!guestMode || !conv || S.conn.mode !== "remote") return;
+  try {
+    // Only text from messages; NEVER user-inserted images (m.images) or user-attached files (m.file).
+    const messages = (conv.messages || []).filter(m => !m.isError && !m.isEvent).map(m => m.role === "user"
+      ? { role: "user", text: String(m.content || "").slice(0, 4000) }
+      : { role: "assistant", text: String(m.content || "").slice(0, 4000), genImage: !!m.genImage, prompt: m.prompt || "" });
+    const aiFiles = extractGuestAiFiles(conv);
+    const hasNewImages = Array.isArray(extraPcFiles) && extraPcFiles.some(f => f && f.kind === "image");
+    const isImgModel = models.find(m => m.name === model)?.kind === "image" || /:comfyui$/i.test(model || "");
+    await e2eFetch("/guest/recap", {
+      method: "POST",
+      body: JSON.stringify({
+        chatId: conv.id,
+        title: conv.title || "Guest chat",
+        model: model || $("#model")?.value || "",
+        messages,
+        pcFiles: Array.isArray(extraPcFiles) ? extraPcFiles : [],
+        aiFiles,
+        aiSummary: !(hasNewImages || isImgModel),
+      }),
+      base: hostBase(),
+    });
+  } catch {}
 }
 
 // ---------- Slides mode: plan first, then write slide by slide (any model, no tool support needed) ----------
@@ -2384,8 +2510,8 @@ let toolMode = "";   // older code paths still look at it; nothing sets it anymo
 const toolOn = (k) => S.tools?.[k] !== false;
 // Documents only takes part once the PC has some indexed (docsReady, from the PC's status); the other tools whenever they are on
 let docsReady = false;
-const routeOn = (k) => toolOn(k) && (k !== "docs" || docsReady);
-async function checkDocs() { try { const j = await pcCall("/agent/docs/status", {}); docsReady = j.files > 0; return j; } catch { docsReady = false; return null; } }
+const routeOn = (k) => toolOn(k) && (!guestMode || !["agent", "docs", "notes", "jarvis"].includes(k)) && (k !== "docs" || docsReady);
+async function checkDocs() { if (guestMode) { docsReady = false; return null; } try { const j = await pcCall("/agent/docs/status", {}); docsReady = j.files > 0; return j; } catch { docsReady = false; return null; } }
 // Quick check for words that hint at a tool, so an ordinary chat message costs nothing extra.
 const W = (alts) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, "iu");
 const TOOLISH = {
@@ -2786,6 +2912,7 @@ async function toolAnswer(model, text, block, work) {
     if (ok || block.error) {
       reply.stats = tokens && ns ? `${model} · ${(tokens / (ns / 1e9)).toFixed(1)} tok/s · ${tokens} tokens` : model;
       current.messages.push(reply); current.updated = Date.now(); saveChats();
+      if (guestMode) sendGuestRecap(current, model);
     }
     renderMessages();
   }
@@ -3334,6 +3461,7 @@ ${layoutList}
       current.messages.push(reply);
       current.updated = Date.now();
       saveChats();
+      if (guestMode) sendGuestRecap(current, model);
     }
     renderMessages();
     $("#deckSide").classList.remove("min");
@@ -3421,11 +3549,13 @@ async function generateImage(model, prompt, refs = []) {
   else try { imageModelForWriter = model; finalPrompt = await buildImagePrompt(prompt, bubble); } catch (e) { if (e.name === "AbortError") { controller = null; setBusy(false); renderMessages(); return; } }
   reply.prompt = finalPrompt; reply.asked = prompt;
   const body = { model, prompt: finalPrompt, stream: true, width: w, height: h, keepMinutes: S.img.keep || 10 };
+  if (guestMode && current?.id) body.chatId = current.id;
   if (refs.length) { body.images = refs; reply.edited = true; }
   const steps = S.img.steps, seed = S.img.seed;
   if (steps) body.steps = Number(steps);
   if (seed) body.seed = Number(seed);
   const t0 = performance.now();
+  let genPcFile = null;
   try {
     let drawing = false;
     let label = "Starting " + model + "…", lastPct = 0;
@@ -3452,6 +3582,7 @@ async function generateImage(model, prompt, refs = []) {
         show("Drawing…", Math.round((j.completed || 0) / j.total * 100));
       }
       if (j.preview) { reply.prev = { b64: j.preview, mime: j.mime || "image/jpeg" }; setPreview(bubble.querySelector(".gen-wait"), reply.prev); }
+      if (j.pcFile) genPcFile = j.pcFile;
       const img = j.image || j.images?.[0];
       if (img) { reply.genImage = img; reply.genAt = Date.now(); }
     });
@@ -3463,6 +3594,7 @@ async function generateImage(model, prompt, refs = []) {
     if (reply.genImage) {
       reply.stats = `${model} · ${w}×${h} · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
       current.messages.push(reply); current.updated = Date.now(); saveChats();
+      if (guestMode) sendGuestRecap(current, model, genPcFile ? [genPcFile] : []);
     }
     renderMessages();
   }
@@ -3579,7 +3711,7 @@ async function copy(t) { try { await navigator.clipboard.writeText(t); toast("Co
 function speak(t) { if (window.voiceSpeak) return window.voiceSpeak(t); speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t.replace(/[#*`]/g, "")); speechSynthesis.speak(u); }
 function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 function b64ToBlob(b64, type) { const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type }); }
-function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, 220) + "px"; }
+function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, 220) + "px"; updateGuestImgWarn(); }
 function slug(s) { return (s || "chat").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "chat"; }
 
 function applyAppearance() {
@@ -3597,6 +3729,7 @@ function applyType() {
   $("#prompt").placeholder = forceImage ? "Describe the picture you want…" : "Message your AI, or ask it to draw something…";
   $("#ctxFieldChat").hidden = false;
   fillModelSelect();
+  updateGuestImgWarn();
 }
 
 // ======================================================================
@@ -3607,9 +3740,14 @@ function openSettings(tab) {
   // connection
   setConnCards(S.conn.mode);
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay; renderSavedConns();
+  if ($("#codeInput") && $("#codeInputShow")) {
+    const maskCode = !!(S.conn.code && !guestMode);
+    $("#codeInput").classList.toggle("masked", maskCode);
+    $("#codeInputShow").textContent = maskCode ? "Show" : "Hide";
+  }
   $("#serverHint").textContent = S.conn.relay || DEFAULT_SERVER;
   $("#powerUrl").value = store.get("powerUrl", ""); $("#powerUrl").classList.add("masked"); $("#powerUrlShow").textContent = "Show";
-  loadSchedule();
+  if (!guestMode) { loadSchedule(); loadOwnerGuestInfo(); }
   $("#wakeHost").value = store.get("wakeHost", ""); $("#wakePort").value = store.get("wakePort", ""); $("#wakeMac").value = store.get("wakeMac", "");
   $("#connResult").textContent = "";
   // params
@@ -3648,6 +3786,10 @@ function formatCode(v) {
 $$("#settings .tabs button").forEach(b => (b.onclick = () => switchTab(b.dataset.tab)));
 $$(".mode-card[data-conn]").forEach(c => (c.onclick = () => setConnCards(c.dataset.conn)));
 $("#codeInput").addEventListener("input", e => { e.target.value = formatCode(e.target.value); });
+if ($("#codeInputShow")) $("#codeInputShow").onclick = () => {
+  const m = $("#codeInput").classList.toggle("masked");
+  $("#codeInputShow").textContent = m ? "Show" : "Hide";
+};
 // ---------- saved connections: several PCs (or ways to reach one), switch with one click ----------
 // S.connections holds what isn't secret (name, mode, Ollama URL, server). The code and the power details of each are secret:
 // they stay on this device (store "connSecrets") and travel with the account only inside the passphrase vault.
@@ -3856,6 +3998,10 @@ loadImgFields();
 // Home
 // ======================================================================
 function setView(v, opt) {
+  if (guestMode && ["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor"].includes(v)) {
+    toast("Not available in guest mode");
+    return;
+  }
   if ((v === "browser" || v === "agent") && window.sideClose) window.sideClose();   // the full-size page instead of the side panel
   if (v === "jarvis" && pcLocked) { ensureUnlocked("Jarvis").then(ok => ok && setView("jarvis", opt)); return; }
   document.body.classList.toggle("home-view", v === "home");
@@ -3886,7 +4032,7 @@ function setView(v, opt) {
 const isHome = () => document.body.classList.contains("home-view");
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
 function renderHome() {
-  const name = S.files.name ? ", " + S.files.name : "";
+  const name = !guestMode && S.files.name ? ", " + S.files.name : "";
   const home = $("#home");
   const I = {
     beam: '<svg class="i" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-8-8-4z"/></svg>',
@@ -3894,14 +4040,17 @@ function renderHome() {
     pc: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg>',
     jarvis: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/></svg>',
     install: '<svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>',
+    guest: '<svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    print: '<svg class="i" viewBox="0 0 24 24"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7zM17 11h.01"/></svg>',
   };
   const online = connected ? (remotePC() ? "Online · power and status" : "This PC · power and status") : "Not connected";
-  const tiles = [
+  const allTiles = [
     ["chat", TYPE_ICON.chat, "Chat", "Ask, write, plan, code, draw"],
     ["beam", I.beam, "Beam", "Send files to your PC or to people"],
     ["connect", I.connect, "Connect", "Use a PC with its code"],
     ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
     ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
+    ["guest", I.guest, "Guest mode", "Guest code & AI recaps of guest chats"],
     ["agent", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg>', "Agent", "Plans and works for you: files, web, mail, code, print"],
     ["browser", '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', "Browser", "Chrome on your PC, on any device"],
     ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
@@ -3910,20 +4059,49 @@ function renderHome() {
     ["hub", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>', "Hub", "Big buttons to control your PC: media, programs, Jarvis"],
     ["monitor", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/></svg>', "Monitor", "A picture or video full screen on your PC's screen"],
     ["mail", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>', "Mail", "Your accounts, with an AI that explains and answers"],
+    ["print", I.print, "Print a file", "Choose a file and review before printing"],
     ["notes", '<svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>', "Notes", "Lists, to-dos and thoughts"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
   ];
-  if (!isAppWindow()) tiles.push(["install", I.install, "Get the app", "On your phone, tablet or PC"]);
+  if (!isAppWindow()) allTiles.push(["install", I.install, "Get the app", "On your phone, tablet or PC"]);
+  const tiles = guestMode ? allTiles.filter(([k]) => ["chat", "connect", "codeplayer", "settings", "install"].includes(k)) : allTiles;
+  const quickKeys = guestMode ? ["chat", "connect"] : ["beam", "mail", "print", "notes"];
+  const quickTiles = tiles.filter(([k]) => quickKeys.includes(k));
+  const moreTiles = tiles.filter(([k]) => !quickKeys.includes(k));
+  const guestNotice = guestMode ? `<div class="guest-banner" style="margin:0 0 18px;border-radius:14px"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span><b>Guest mode</b> · Private &amp; PC items are off. After each chat, the AI writes a recap for the PC's owner including every file made by the PC (never files you attach). <b>Generated pictures are saved on the host PC and can be seen by its owner.</b></span></div>` : "";
   home.innerHTML = `<div class="home-inner">
-    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<h1></h1><p>Your own AI, on your own PC.</p></div>
-    <div class="home-actions">${tiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>
+    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">YOUR AI · YOUR CHOICE</span><h1></h1><p>${guestMode ? "Connected as a guest to this PC's AI." : "Ask your AI for a hand, or take care of things yourself."}</p></div>
+    ${guestNotice}
+    <section class="home-feature" aria-label="AI modes">
+      <div class="home-feature-copy"><span class="home-kicker">START HERE</span><h2>What would you like to do?</h2><p>Choose an AI chat for a conversation, or let the Agent help with a task on your PC.</p></div>
+      <div class="home-feature-actions">
+        <button class="home-feature-btn primary" data-go="chat"><span class="hi">${TYPE_ICON.chat}</span><span><strong>Open AI chat</strong><small>Ask, write, plan, code or create</small></span><b aria-hidden="true">→</b></button>
+        ${guestMode ? "" : `<button class="home-feature-btn" data-go="agent"><span class="hi"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><span><strong>Open AI Agent</strong><small>Get help with files, mail and printing</small></span><b aria-hidden="true">→</b></button>`}
+      </div>
+    </section>
+    <section class="home-section">
+      <div class="home-section-head"><div><span class="home-kicker">YOU'RE IN CONTROL</span><h2>${guestMode ? "Quick starts" : "Do it yourself"}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Open a tool and decide each step yourself."}</p></div>
+      <div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>
+    </section>
+    ${guestMode ? "" : `<section class="home-whatsapp home-card" aria-labelledby="homeWhatsappTitle">
+      <div class="home-whatsapp-copy"><span class="home-kicker">WHATSAPP · MANUAL MODE</span><h2 id="homeWhatsappTitle">Write here. Send in WhatsApp.</h2><p>Prepare a message on this site, then review and send it in WhatsApp. Your chats stay private: Albatross cannot read your inbox.</p></div>
+      <form id="waForm" class="home-wa-form">
+        <label for="waPhone">Recipient's number <small>Include the country code, e.g. +1 555 123 4567</small></label>
+        <input id="waPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+1 555 123 4567">
+        <label for="waMessage">Message</label>
+        <textarea id="waMessage" rows="3" maxlength="4096" placeholder="Write a message, or ask the AI to draft one for you."></textarea>
+        <div class="home-wa-actions"><button class="btn" id="waDraft" type="button">Ask AI to draft</button><button class="btn primary" type="submit">Continue in WhatsApp</button></div>
+        <small class="home-wa-note" id="waNote" role="status">Nothing is sent automatically. WhatsApp opens so you can review the message.</small>
+      </form>
+    </section>`}
     <div class="home-grid">
       <div class="home-card"><h3>Status</h3><div id="homeStatus"></div></div>
       <div class="home-card"><h3>Recent chats</h3><div class="recent" id="homeRecent"></div></div>
     </div>
+    <details class="home-more"><summary>More tools</summary><div class="home-actions">${moreTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div></details>
   </div>`;
   home.querySelector("h1").textContent = greeting() + name;
-  home.querySelector('[data-go="jarvis"]').dataset.needsPc = "1";
+  const jvTile = home.querySelector('[data-go="jarvis"]'); if (jvTile) jvTile.dataset.needsPc = "1";
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
     const g = b.dataset.go;
     if (g === "chat") { newChat("chat", "", false); setView("chat"); }
@@ -3931,18 +4109,55 @@ function renderHome() {
     else if (g === "connect") openConnect();
     else if (g === "pcstatus") setView("pc", { tab: "status" });
     else if (g === "power") setView("pc", { tab: "power" });
+    else if (g === "guest") setView("pc", { tab: "guest" });
     else if (g === "jarvis") setView("jarvis");
     else if (g === "agent") setView("agent");
+    else if (g === "print") {
+      setView("agent");
+      setTimeout(() => {
+        $("#agGoal").value = "Help me print a file from my PC. Ask me which file and printer to use, show me the exact print details, and wait for my confirmation before printing.";
+        $("#agGoal").focus();
+      }, 60);
+    }
     else if (g === "notes") setView("notes");
     else if (g === "mail") setView("mail");
     else if (g === "hub") setView("hub");
     else if (g === "monitor") setView("monitor");
     else if (g === "browser") setView("browser");
-    else if (g === "codeplayer") { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
+    else if (g === "codeplayer") {
+      if (guestMode) { setView("chat"); window.codeSide && window.codeSide("html", "<!doctype html>\n<html>\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h1>Hello!</h1>\n</body>\n</html>", true, { name: "index.html" }); }
+      else { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
+    }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
     else if (g === "install") openInstall();
     else openSettings();
   }));
+  const waForm = $("#waForm");
+  if (waForm) {
+    $("#waPhone").addEventListener("input", () => $("#waPhone").setCustomValidity(""));
+    waForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const phone = $("#waPhone").value.replace(/\D/g, "");
+      if (phone.length < 8 || phone.length > 15) {
+        $("#waPhone").setCustomValidity("Enter an international number with 8 to 15 digits, including its country code.");
+        $("#waPhone").reportValidity();
+        return;
+      }
+      const message = $("#waMessage").value.trim();
+      window.open(`https://wa.me/${phone}${message ? "?text=" + encodeURIComponent(message) : ""}`, "_blank", "noopener,noreferrer");
+    });
+    $("#waDraft").onclick = () => {
+      const idea = $("#waMessage").value.trim();
+      newChat("chat", "", false);
+      setView("chat");
+      $("#sidebar").classList.remove("open");
+      $("#prompt").value = idea
+        ? `Help me write a WhatsApp message based on this idea. Return only the message text; do not send it.\n\n${idea}`
+        : "Help me draft a WhatsApp message. Ask me what it should say, then return only the message text. Do not send it.";
+      $("#prompt").dispatchEvent(new Event("input", { bubbles: true }));
+      $("#prompt").focus();
+    };
+  }
   const rec = $("#homeRecent");
   const list = chats.filter(c => c.messages.length).sort((a, b) => b.updated - a.updated).slice(0, 6);
   if (!list.length) rec.innerHTML = '<div class="empty-note">No chats yet. Start one above.</div>';
@@ -3960,9 +4175,13 @@ function renderHomeStatus() {
   const rows = [
     ["AI", $("#dot").className.replace("dot", "").trim(), $("#statusText").textContent],
     ["Model", loadedInfo.length ? "ok" : "", $("#loadedText").textContent],
-    ["Your PC", hostState.kind, hostText().split(" · ")[0]],
-    ["Public", peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "", pubText()],
   ];
+  if (guestMode) {
+    rows.push(["Access", "ok", "Guest mode · private & PC items disabled"]);
+  } else {
+    rows.push(["Your PC", hostState.kind, hostText().split(" · ")[0]]);
+    rows.push(["Public", peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "", pubText()]);
+  }
   el.innerHTML = "";
   for (const [k, cls, v] of rows) {
     const r = document.createElement("div"); r.className = "stat-row";
@@ -3973,25 +4192,242 @@ function renderHomeStatus() {
 }
 setInterval(() => { if (isHome()) renderHomeStatus(); }, 2000);
 
-// ---------- the PC page: power and live status ----------
+// ---------- the PC page: power, live status, and guest mode ----------
 const pcv = { timer: 0 };
 function pcOpen(tab) {
+  if (guestMode) return;
   if (tab) $("#pcPage").dataset.pt = tab; else if (!$("#pcPage").dataset.pt) $("#pcPage").dataset.pt = "status";
   syncPcTabs();
   $("#pcSub").textContent = connected ? `${remotePC() ? "Remotely" : "Locally"} connected` : "Not connected";
   $("#pcNote").textContent = remotePC() ? "" : "Sleep and shut down work for the PC that runs the Albatross host. Turn it on from another device with Wake-on-LAN.";
-  pcStats(); clearInterval(pcv.timer); pcv.timer = setInterval(pcStats, 2000);
+  pcStats(); loadOwnerGuestInfo(); clearInterval(pcv.timer); pcv.timer = setInterval(() => { pcStats(); if ($("#pcPage").dataset.pt === "guest") loadOwnerGuestInfo(); }, 3000);
 }
 function syncPcTabs() { for (const b of $$("#pcTabs button")) b.classList.toggle("on", b.dataset.pt === $("#pcPage").dataset.pt); }
-for (const b of $$("#pcTabs button")) b.onclick = () => { $("#pcPage").dataset.pt = b.dataset.pt; syncPcTabs(); };
+for (const b of $$("#pcTabs button")) b.onclick = () => { $("#pcPage").dataset.pt = b.dataset.pt; syncPcTabs(); if (b.dataset.pt === "guest") loadOwnerGuestInfo(); };
 function pcClose() { clearInterval(pcv.timer); }
 $("#pcSetup").onclick = () => openSettings("connection");
+
+// ---------- Owner Guest Mode & Recaps ----------
+let ownerGuestState = { code: "", adminCode: "", showAdmin: false, enabled: true, recaps: [], sig: "" };
+const guestThumbCache = new Map();
+function guestShareLink(code) {
+  const c = code || ownerGuestState.code || "";
+  if (!c) return "";
+  return (typeof SITE_URL !== "undefined" ? SITE_URL : location.origin + location.pathname.replace(/index\.html$/, "")) + "#code=" + c;
+}
+function paintOwnerAdminCode() {
+  const shown = ownerGuestState.showAdmin;
+  const adminCode = ownerGuestState.adminCode || S.conn.code || "";
+  const txt = shown ? (adminCode || "—") : "••••-••••-••••-••••";
+  if ($("#pcAdminCode")) {
+    $("#pcAdminCode").textContent = txt;
+    $("#pcAdminCode").style.userSelect = shown ? "all" : "none";
+  }
+  if ($("#pcShowAdminCode")) $("#pcShowAdminCode").textContent = shown ? "Hide" : "Show";
+  if ($("#connAdminCodeDisplay")) {
+    $("#connAdminCodeDisplay").textContent = txt;
+    $("#connAdminCodeDisplay").style.userSelect = shown ? "all" : "none";
+  }
+  if ($("#connShowAdminCode")) $("#connShowAdminCode").textContent = shown ? "Hide" : "Show";
+}
+
+async function loadOwnerGuestInfo(forceRender) {
+  if (guestMode || !connected || (!remotePC() && !viaHost)) {
+    if ($("#connGuestOwnerBox")) $("#connGuestOwnerBox").hidden = true;
+    return;
+  }
+  try {
+    const j = await pcCall("/pc/guest", null, "GET");
+    ownerGuestState.code = j.guestCode || "";
+    ownerGuestState.adminCode = j.adminCode || S.conn.code || "";
+    ownerGuestState.enabled = j.guestEnabled !== false;
+    ownerGuestState.recaps = Array.isArray(j.recaps) ? j.recaps : [];
+    if ($("#pcGuestOn")) $("#pcGuestOn").checked = ownerGuestState.enabled;
+    if ($("#pcGuestCode")) $("#pcGuestCode").textContent = ownerGuestState.code || "—";
+    if ($("#connGuestOwnerBox")) $("#connGuestOwnerBox").hidden = !ownerGuestState.code;
+    if ($("#connGuestCodeDisplay")) $("#connGuestCodeDisplay").textContent = ownerGuestState.code || "—";
+    paintOwnerAdminCode();
+    const sig = ownerGuestState.code + "|" + ownerGuestState.adminCode + "|" + ownerGuestState.enabled + "|" + JSON.stringify(ownerGuestState.recaps.map(r => [r.id, r.updatedAt, r.recap || r.summary, r.recapBusy, (r.files || []).length]));
+    if (forceRender || sig !== ownerGuestState.sig) {
+      ownerGuestState.sig = sig;
+      renderOwnerGuestRecaps();
+    }
+  } catch {
+    if ($("#connGuestOwnerBox")) $("#connGuestOwnerBox").hidden = true;
+  }
+}
+
+function renderOwnerGuestRecaps() {
+  const box = $("#pcGuestRecaps");
+  if (!box) return;
+  const list = ownerGuestState.recaps || [];
+  if ($("#pcClearRecaps")) $("#pcClearRecaps").hidden = !list.length;
+  if (!list.length) {
+    box.innerHTML = '<div class="empty-note">No guest chats yet. When someone uses the guest code, an AI recap and every file made by the PC will appear here.</div>';
+    return;
+  }
+  box.innerHTML = "";
+  for (const r of list) {
+    const card = document.createElement("div");
+    card.className = "pc-recap-card";
+    const dt = new Date(r.updatedAt || r.createdAt || Date.now()).toLocaleString();
+    const turns = r.turns || 1;
+    const files = Array.isArray(r.files) ? r.files : [];
+    card.innerHTML = `<div class="pc-recap-top">
+      <div><div class="pc-recap-title"></div><div class="pc-recap-meta"></div></div>
+      <button class="btn small" data-a="del" type="button">Delete</button>
+    </div>
+    <div class="pc-recap-summary"></div>
+    <div class="pc-recap-files">
+      <div class="pc-recap-files-label"></div>
+      <div class="pc-recap-flist"></div>
+    </div>`;
+    card.querySelector(".pc-recap-title").textContent = r.title || "Guest chat";
+    card.querySelector(".pc-recap-meta").textContent = `${dt} · ${turns} message${turns === 1 ? "" : "s"}${r.model ? " · " + r.model : ""}`;
+    card.querySelector(".pc-recap-summary").textContent = (r.recapBusy ? "Writing AI recap… " : "") + (r.recap || r.summary || "(Generating recap…)");
+    card.querySelector('[data-a="del"]').onclick = async () => {
+      try { await pcCall("/pc/guest", { action: "delete-recap", id: r.id }); loadOwnerGuestInfo(true); toast("Recap deleted"); }
+      catch (e) { toast("Couldn't delete recap: " + e.message); }
+    };
+    const flabel = card.querySelector(".pc-recap-files-label");
+    const flist = card.querySelector(".pc-recap-flist");
+    flabel.textContent = files.length
+      ? `Files made by the PC (${files.length}) — user-inserted files are excluded`
+      : "No files were made by the PC in this chat";
+    for (const f of files) {
+      const frow = document.createElement("div");
+      frow.className = "pc-recap-file";
+      if (f.kind === "image") {
+        const im = document.createElement("img");
+        im.className = "pc-recap-thumb";
+        im.alt = f.name || "Generated image";
+        im.style.cursor = "pointer";
+        im.title = "Click to download / view image";
+        const cacheKey = r.id + ":" + f.id;
+        if (guestThumbCache.has(cacheKey)) {
+          im.src = guestThumbCache.get(cacheKey);
+        } else {
+          pcCall("/pc/guest", { action: "file", recapId: r.id, fileId: f.id }).then(res => {
+            if (res && res.data) {
+              const url = `data:${res.mime || "image/png"};base64,${res.data}`;
+              guestThumbCache.set(cacheKey, url);
+              im.src = url;
+            }
+          }).catch(() => {});
+        }
+        im.onclick = () => downloadGuestRecapFile(r.id, f);
+        frow.appendChild(im);
+      }
+      const info = document.createElement("div");
+      info.className = "finfo";
+      info.innerHTML = "<b></b><small></small>";
+      info.querySelector("b").textContent = f.name || f.rel || "File";
+      info.querySelector("small").textContent = [f.kind === "image" ? "Generated picture" : "PC-made file", f.size ? fsize(f.size) : "", f.prompt ? `Prompt: "${f.prompt.slice(0, 90)}"` : f.rel || ""].filter(Boolean).join(" · ");
+      frow.appendChild(info);
+      const acts = document.createElement("div");
+      acts.style.cssText = "display:flex;gap:6px;flex-wrap:wrap";
+      acts.append(
+        smallBtn("Download", () => downloadGuestRecapFile(r.id, f), true),
+        smallBtn("Open on PC", () => pcCall("/pc/guest", { action: "open", recapId: r.id, fileId: f.id }).then(() => toast("Opened on PC")).catch(e => toast(e.message))),
+        smallBtn("Show in folder", () => pcCall("/pc/guest", { action: "reveal", recapId: r.id, fileId: f.id }).then(() => toast("Shown in Explorer on PC")).catch(e => toast(e.message)))
+      );
+      frow.appendChild(acts);
+      flist.appendChild(frow);
+    }
+    box.appendChild(card);
+  }
+}
+
+async function downloadGuestRecapFile(recapId, f) {
+  try {
+    const res = await pcCall("/pc/guest", { action: "file", recapId, fileId: f.id });
+    if (!res || !res.data) throw new Error("File not found on the PC");
+    download(res.name || f.name || "file", b64ToBlob(res.data, res.mime || "application/octet-stream"));
+  } catch (e) {
+    toast("Couldn't download file: " + e.message);
+  }
+}
+
+if ($("#pcGuestOn")) $("#pcGuestOn").onchange = async (e) => {
+  try {
+    await pcCall("/pc/guest", { action: "toggle", enabled: e.target.checked });
+    toast(e.target.checked ? "Guest mode enabled" : "Guest mode disabled");
+    loadOwnerGuestInfo(true);
+  } catch (err) { toast("Couldn't change guest mode: " + err.message); }
+};
+if ($("#pcCopyGuestCode")) $("#pcCopyGuestCode").onclick = () => ownerGuestState.code ? copy(ownerGuestState.code) : toast("Guest code not loaded yet");
+if ($("#pcCopyGuestLink")) $("#pcCopyGuestLink").onclick = () => ownerGuestState.code ? copy(guestShareLink(ownerGuestState.code)) : toast("Guest code not loaded yet");
+if ($("#connCopyGuestCode")) $("#connCopyGuestCode").onclick = () => ownerGuestState.code ? copy(ownerGuestState.code) : toast("Guest code not loaded yet");
+if ($("#connCopyGuestLink")) $("#connCopyGuestLink").onclick = () => ownerGuestState.code ? copy(guestShareLink(ownerGuestState.code)) : toast("Guest code not loaded yet");
+if ($("#connOpenGuestPage")) $("#connOpenGuestPage").onclick = () => { $("#settings").close(); setView("pc", { tab: "guest" }); };
+const toggleShowAdminCode = () => { ownerGuestState.showAdmin = !ownerGuestState.showAdmin; paintOwnerAdminCode(); };
+if ($("#pcShowAdminCode")) $("#pcShowAdminCode").onclick = toggleShowAdminCode;
+if ($("#connShowAdminCode")) $("#connShowAdminCode").onclick = toggleShowAdminCode;
+if ($("#pcCopyAdminCode")) $("#pcCopyAdminCode").onclick = () => { const c = ownerGuestState.adminCode || S.conn.code; if (c) copy(c); };
+if ($("#pcCopyAdminLink")) $("#pcCopyAdminLink").onclick = () => { const c = ownerGuestState.adminCode || S.conn.code; if (c) copy(guestShareLink(c)); };
+if ($("#connCopyAdminCode")) $("#connCopyAdminCode").onclick = () => { const c = ownerGuestState.adminCode || S.conn.code; if (c) copy(c); };
+if ($("#connCopyAdminLink")) $("#connCopyAdminLink").onclick = () => { const c = ownerGuestState.adminCode || S.conn.code; if (c) copy(guestShareLink(c)); };
+const resetGuestCodeAction = async (e) => {
+  const btn = e?.currentTarget;
+  if (btn) btn.disabled = true;
+  try {
+    const j = await pcCall("/pc/guest", { action: "reset-guest-code" });
+    if (j.guestCode) {
+      ownerGuestState.code = j.guestCode;
+      if ($("#pcGuestCode")) $("#pcGuestCode").textContent = j.guestCode;
+      if ($("#connGuestCodeDisplay")) $("#connGuestCodeDisplay").textContent = j.guestCode;
+    }
+    loadOwnerGuestInfo(true);
+    toast("New guest code: " + (j.guestCode || "generated"));
+  } catch (err) { toast("Couldn't reset guest code: " + err.message); }
+  finally { if (btn) btn.disabled = false; }
+};
+if ($("#pcNewGuestCode")) $("#pcNewGuestCode").onclick = resetGuestCodeAction;
+if ($("#connResetGuestCode")) $("#connResetGuestCode").onclick = resetGuestCodeAction;
+const resetAdminCodeAction = async (e) => {
+  const btn = e?.currentTarget;
+  if (btn) btn.disabled = true;
+  try {
+    const oldCode = ownerGuestState.adminCode || S.conn.code;
+    const j = await pcCall("/pc/guest", { action: "reset-admin-code" });
+    const newCode = j.adminCode || j.code;
+    if (newCode) {
+      ownerGuestState.adminCode = newCode;
+      if (S.conn.mode === "remote" && S.conn.code === oldCode) {
+        S.conn.code = newCode;
+        if ($("#codeInput")) $("#codeInput").value = newCode;
+        const sec = connSecrets();
+        let secChanged = false;
+        for (const k of Object.keys(sec)) {
+          if (sec[k]?.code === oldCode) { sec[k].code = newCode; secChanged = true; }
+        }
+        if (secChanged) store.set("connSecrets", sec);
+        saveSettings();
+        renderSavedConns();
+      }
+      paintOwnerAdminCode();
+    }
+    setTimeout(() => loadOwnerGuestInfo(true), 1200);
+    toast("New admin code generated");
+  } catch (err) { toast("Couldn't reset admin code: " + err.message); }
+  finally { if (btn) btn.disabled = false; }
+};
+if ($("#pcResetAdminCode")) $("#pcResetAdminCode").onclick = resetAdminCodeAction;
+if ($("#connResetAdminCode")) $("#connResetAdminCode").onclick = resetAdminCodeAction;
+if ($("#pcClearRecaps")) $("#pcClearRecaps").onclick = () => armed2("clearGuestRecaps", async () => {
+  try {
+    await pcCall("/pc/guest", { action: "clear-recaps" });
+    loadOwnerGuestInfo(true);
+    toast("All guest recaps cleared");
+  } catch (e) { toast("Couldn't clear recaps: " + e.message); }
+});
+
 const meter = (pct, warn = 75, bad = 90) => `<div class="meter-line ${pct >= bad ? "bad" : pct >= warn ? "warn" : ""}"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>`;
 // a speed: file transfers are talked about in MB/s (megabytes), links in Mbit/s
 const rate = (bps) => bps == null ? "…" : bps >= 1e9 ? (bps / 1e9).toFixed(2) + " GB/s" : bps >= 1e6 ? (bps / 1e6).toFixed(1) + " MB/s" : bps >= 1e3 ? Math.round(bps / 1e3) + " KB/s" : Math.round(bps) + " B/s";
 const mbit = (bps) => bps == null ? "" : (bps * 8 / 1e6 >= 1000 ? (bps * 8 / 1e9).toFixed(2) + " Gbit/s" : (bps * 8 / 1e6).toFixed(0) + " Mbit/s");
 async function pcStats() {
-  if (!document.body.classList.contains("pc-view")) return pcClose();
+  if (!document.body.classList.contains("pc-view") || guestMode) return pcClose();
   let j = null;
   try { j = await pcCall("/pc/stats", null, "GET"); } catch {}
   const el = $("#pcStats"); if (!el) return;
@@ -4028,6 +4464,7 @@ const FILE_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0
 const fsize = b => b >= 1e9 ? (b / 1e9).toFixed(2) + " GB" : b >= 1e6 ? (b / 1e6).toFixed(1) + " MB" : b >= 1e3 ? Math.round(b / 1e3) + " KB" : b + " B";
 const b64ToU8 = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 function openFiles(tab) {
+  if (guestMode) return toast("Not available in guest mode");
   if (tab) filesTab(tab);
   $("#pubName").value = S.files.name; $("#pubOn").checked = S.files.public;
   $("#filesDlg").showModal();
@@ -4075,6 +4512,7 @@ function setHost(kind, text, sub) {
   if (isHome()) renderHomeStatus();
 }
 async function checkHost() {
+  if (guestMode) return;
   if (!CODE_RE.test(S.conn.code)) { setHost("", "No PC linked", "Enter your PC's code in Connect with code to send it files."); renderOutbox([]); return; }
   setHost("wait", "Checking your PC…");
   try {
@@ -4798,7 +5236,7 @@ function openConnect() { openSettings("connection"); setConnCards("remote"); set
 $("#search").addEventListener("input", renderSidebar);
 $("#model").onchange = e => {
   const m = models.find(x => x.name === e.target.value);
-  if (m && m.kind === "image") { S.pickedImage = m.name; S.imageModel = m.name; toast("Every message now makes a picture with " + m.name + ". Getting it ready…"); warmImage(m.name); }
+  if (m && m.kind === "image") { S.pickedImage = m.name; S.imageModel = m.name; toast("Every message now makes a picture with " + m.name + (guestMode ? " (saved on the host PC and visible to the owner)" : ". Getting it ready…")); warmImage(m.name); }
   else { S.pickedImage = ""; S.model = e.target.value; }
   saveSettings(); applyType();
 };
@@ -4812,9 +5250,9 @@ $("#webBtn").onclick = () => {
   if (!searchAvailable) return toast("Web search needs the Albatross server with its search key (see the README)");
   S.webSearch = !S.webSearch; saveSettings(); checkSearch(); toast(S.webSearch ? "Web search on: the AI can look things up" : "Web search off");
 };
-$("#imgBtn").onclick = () => { if (!imageModels().length) return toast("There's no picture model on the connected PC"); setForceImage(!forceImage); if (forceImage) { toast("The next message makes a picture with " + pickImageModel()); $("#prompt").focus(); } };
+$("#imgBtn").onclick = () => { if (!imageModels().length) return toast("There's no picture model on the connected PC"); setForceImage(!forceImage); if (forceImage) { toast("The next message makes a picture with " + pickImageModel() + (guestMode ? " (saved on the host PC and visible to the owner)" : "")); $("#prompt").focus(); } };
 $("#attachBtn").onclick = (ev) => {
-  if (!connected || !window.pcFilesOpen) return $("#fileInput").click();
+  if (guestMode || !connected || !window.pcFilesOpen) return $("#fileInput").click();
   ev.stopPropagation();
   const m = $("#attachMenu"); if (!m.hidden) { m.hidden = true; return; }
   const r = $("#attachBtn").getBoundingClientRect();
@@ -4843,8 +5281,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-10-30.2";
+const APP_VERSION = "2026-11-11.1";
 const WHATS_NEW = [
+  ["2026-11-11.1", ["A clearer Home screen brings AI chat, Beam, mail, notes and printing together","WhatsApp handoff: ask the AI for a draft, then review and send it yourself in WhatsApp"]],
   ["2026-10-30.2", ["The List is now a tab of the side panel on the right, and scrolls smoothly","Chats and lists are kept per account on your PC: only you see them when you're signed in"]],
   ["2026-10-30.1", ["Monitor: show a picture, a video or YouTube full screen on your PC's screen, with layout, options and its display data","List: write several requests in the sidebar (e.g. a picture 3 times, then a text step); they run on your PC one after another","Picture models stay loaded for a time frame (Settings → Image → Keep loaded) and are only unloaded completely after it"]],
   ["2026-10-29.5", ["Answers keep going when you open another chat or page, and land in their own chat","Write while an answer is coming: your messages wait in a queue above the message box and go one after another (✕ removes one); the stop button stops the answer when nothing is typed","Picture button in the message box: the next message makes a picture","Picture models: they're in the model list of every chat now, the one you choose (there or in Settings) is used, also for edits when it can edit, and a new picture request after a picture is a new picture instead of an edit"]],
@@ -4915,8 +5354,9 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) chec
 
 // ---------- start ----------
 // Links look like …/#code=K7QM-4XPT-9F2C-HW3D: the part after # is never sent to any server, so the key stays private.
+if (S.conn.code === "UNDE-FINE-D") { S.conn.code = ""; saveSettings(); }
 const urlCode = new URLSearchParams(location.hash.slice(1)).get("code") || new URLSearchParams(location.search).get("code");
-if (urlCode) { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER; saveSettings(); history.replaceState(null, "", location.pathname); }
+if (urlCode && urlCode !== "undefined") { S.conn.mode = "remote"; S.conn.code = formatCode(urlCode); if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER; saveSettings(); history.replaceState(null, "", location.pathname); }
 applyAppearance(); applyFold(); applyNavFold(); applyRail(); startSky();
 if (window.LiquidGlass) {
   LiquidGlass.setEnabled(S.glass !== false);

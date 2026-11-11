@@ -145,6 +145,25 @@ const pcPower = {
       if (p === "/pc/openurl") { const r = await pcDesk.call("url", String(j.url || "")); note("Hub: opened a web page"); return [200, r]; }
       if (p === "/pc/lockpc") { const r = await pcDesk.call("lock"); note("Hub: locked the PC"); return [200, r]; }
     }
+    if (p === "/pc/guest") {
+      if (method === "GET") {
+        return [200, { guestCode: stats.guestCode, guestLink: stats.guestLink, guestEnabled: stats.guestEnabled, guestConnection: stats.guestConnection, adminCode: stats.code, adminLink: stats.link, recaps: guestTool.listForOwner() }];
+      }
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      if (j.action === "toggle") return [200, toggleGuest(j.enabled !== false)];
+      if (j.action === "new-code" || j.action === "reset-guest-code") return [200, rollGuestCode()];
+      if (j.action === "new-admin-code" || j.action === "reset-admin-code") return [200, rollAdminCode()];
+      if (j.action === "delete-recap") { guestTool.deleteRecap(String(j.id || "")); changed(); return [200, { ok: true, recaps: guestTool.listForOwner() }]; }
+      if (j.action === "clear-recaps") { guestTool.clearRecaps(); changed(); return [200, { ok: true, recaps: [] }]; }
+      if (j.action === "file") return guestTool.readFileData(String(j.recapId || ""), String(j.fileId || ""));
+      if (j.action === "open" || j.action === "reveal") {
+        const f = guestTool.getFile(String(j.recapId || ""), String(j.fileId || ""));
+        if (!f) return [404, { error: "File not found on this PC." }];
+        if (j.action === "open") openLocalPath(f.path); else revealLocalPath(f.path);
+        return [200, { ok: true }];
+      }
+      return [400, { error: "Unknown guest action" }];
+    }
     if (method === "POST" && p === "/pc/cancel") {
       execFile("shutdown", ["/a"], { windowsHide: true }, () => {});
       note("Shutdown cancelled from the website");
@@ -164,6 +183,7 @@ const agentTools = require("./agent");
 const mailTools = require("./mail");
 const docsTool = require("./docs");
 const voiceTool = require("./voice");
+const guestTool = require("./guest");
 const agentHandle = (method, p, body) => (p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : p.startsWith("/agent/voice/") ? voiceTool.handle(method, p, body, note) : p.startsWith("/agent/docs/") ? docsTool.handle(method, p, body, note, { ollama: OLLAMA }) : agentTools.handle(method, p, body, note));
 
 const STATE_FILE = path.join(__dirname, "host-code.json");
@@ -176,7 +196,7 @@ const OLLAMA = (process.env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/+
 const NAME = process.env.BURROW_NAME || os.hostname();
 
 if (!SERVER) {
-  console.log("Usage: node host.js https://your-burrow-server.com [--new] [--no-panel]");
+  console.log("Usage: node host.js https://your-burrow-server.com [--new] [--new-guest] [--no-panel]");
   process.exit(1);
 }
 
@@ -193,22 +213,55 @@ function randomChars(n) {
   return s;
 }
 function newCode() { const s = randomChars(8); return s.slice(0, 4) + "-" + s.slice(4); }
-function loadState(forceNew) {
-  let st = !forceNew && readState();
+function loadState(forceNew, forceNewGuest) {
+  let st = readState();
   let dirty = !st;
-  if (!st) st = { code: newCode(), secret: crypto.randomBytes(24).toString("hex") };
-  if (!st.key) { st.key = randomChars(8); dirty = true; } // encryption key, the second half of the code
+  if (!st) st = {};
+  const prevCode = st.code, prevKey = st.key, prevGuestCode = st.guestCode, prevGuestKey = st.guestKey;
+  if (!st.code || forceNew) {
+    let ac = newCode();
+    while (ac === st.guestCode || ac === prevCode) ac = newCode();
+    st.code = ac;
+    st.secret = crypto.randomBytes(24).toString("hex");
+    dirty = true;
+  }
+  if (!st.secret) { st.secret = crypto.randomBytes(24).toString("hex"); dirty = true; }
+  if (!st.key || forceNew) {
+    let ak = randomChars(8);
+    while (ak === st.guestKey || ak === prevKey) ak = randomChars(8);
+    st.key = ak;
+    dirty = true;
+  } // encryption key, the second half of the code
+  if (!st.guestCode || forceNewGuest || st.guestCode === st.code) {
+    let gc = newCode();
+    while (gc === st.code || gc === prevGuestCode) gc = newCode();
+    st.guestCode = gc;
+    st.guestSecret = crypto.randomBytes(24).toString("hex");
+    dirty = true;
+  }
+  if (!st.guestSecret) { st.guestSecret = crypto.randomBytes(24).toString("hex"); dirty = true; }
+  if (!st.guestKey || forceNewGuest || st.guestKey === st.key) {
+    let gk = randomChars(8);
+    while (gk === st.key || gk === prevGuestKey) gk = randomChars(8);
+    st.guestKey = gk;
+    dirty = true;
+  }
+  if (typeof st.guestEnabled !== "boolean") { st.guestEnabled = true; dirty = true; }
   if (st.server !== SERVER) { st.server = SERVER; dirty = true; }
   if (dirty) fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2));
   return st;
 }
 // The full code: XXXX-XXXX finds this PC on the server, the second half is the key and is never sent anywhere.
 const fullCode = (st) => `${st.code}-${st.key.slice(0, 4)}-${st.key.slice(4)}`;
+const fullGuestCode = (st) => `${st.guestCode}-${st.guestKey.slice(0, 4)}-${st.guestKey.slice(4)}`;
 
 // ---------- end-to-end encryption ----------
 // Requests and answers are encrypted with AES-256-GCM using a key made from the second half of the code,
 // so the Burrow server only passes along data it can't read or change. public/index.html does the same.
-const deriveKey = (st) => crypto.pbkdf2Sync(st.key, "burrow-e2e-v1|" + st.code, 600000, 32, "sha256");
+const deriveKeyPair = (key8, routeCode) => crypto.pbkdf2Sync(key8, "burrow-e2e-v1|" + routeCode, 600000, 32, "sha256");
+const deriveKey = (st) => deriveKeyPair(st.key, st.code);
+const deriveGuestKey = (st) => deriveKeyPair(st.guestKey, st.guestCode);
+const deriveGuestSharedKey = (st) => deriveKeyPair(st.guestKey, st.code);
 function seal(key, text, aad) {
   const iv = crypto.randomBytes(12);
   const c = crypto.createCipheriv("aes-256-gcm", key, iv);
@@ -228,27 +281,46 @@ function unseal(key, b64, aad) {
 // Each request carries a random id and a time, so a captured request can't be sent again.
 const seen = new Map(); // request id -> time
 setInterval(() => { for (const [id, t] of seen) if (Date.now() - t > 11 * 60e3) seen.delete(id); }, 60e3).unref();
-function openRequest(msg) {
+function openRequest(msg, isGuestSocket = false) {
   if (msg.method !== "POST" || msg.path !== "/e2e") throw new Error("This PC only accepts encrypted connections. Reload the page (Ctrl+F5) and enter the full 16-character code.");
-  let r;
-  try { r = JSON.parse(unseal(aesKey, String(msg.body || "").trim(), "req")); } catch { throw new Error("Wrong code. Check the last 8 characters."); }
+  const rawBody = String(msg.body || "").trim();
+  let r = null, guest = false, usedKey = aesKey;
+  if (isGuestSocket) {
+    if (state.guestEnabled === false) throw new Error("Guest mode is turned off on this PC.");
+    try { r = JSON.parse(unseal(guestAesKey, rawBody, "req")); guest = true; usedKey = guestAesKey; }
+    catch { throw new Error("Wrong guest code. Check the 16-character guest code."); }
+  } else {
+    try { r = JSON.parse(unseal(aesKey, rawBody, "req")); guest = false; usedKey = aesKey; }
+    catch {
+      if (state.guestEnabled !== false) {
+        try { r = JSON.parse(unseal(guestSharedAesKey, rawBody, "req")); guest = true; usedKey = guestSharedAesKey; } catch {}
+      }
+      if (!r) throw new Error("Wrong code. Check the last 8 characters.");
+    }
+  }
   if (typeof r.id !== "string" || !(Math.abs(Date.now() - r.t) < 10 * 60e3)) throw new Error("Request expired. Check that the clock on your device is right.");
   if (seen.has(r.id)) throw new Error("Repeated request rejected");
   seen.set(r.id, Date.now());
-  seeDevice(r.dev);
-  return { rid: r.id, method: r.method, path: r.path, body: r.body };
+  if (!guest) seeDevice(r.dev);
+  return { rid: r.id, method: r.method, path: r.path, body: r.body, guest, key: usedKey };
 }
 
-let state = loadState(args.includes("--new"));
+let state = loadState(args.includes("--new"), args.includes("--new-guest"));
 let aesKey = deriveKey(state);
+let guestAesKey = deriveGuestKey(state);
+let guestSharedAesKey = deriveGuestSharedKey(state);
 const wsUrl = SERVER.replace(/^http/, "ws") + "/host";
 const running = new Map(); // id -> AbortController
-let retry = 1000;
+let retry = 1000, guestRetry = 1000, mainWs = null, guestWs = null;
 
 // ---------- what the control center shows ----------
 const stats = {
   name: NAME, server: SERVER, code: fullCode(state), startedAt: Date.now(),
-  link: "", connection: "connecting", connectionSince: Date.now(),
+  link: `${SERVER}/#code=${fullCode(state)}`, connection: "connecting", connectionSince: Date.now(),
+  guestCode: fullGuestCode(state),
+  guestLink: `${SERVER}/#code=${fullGuestCode(state)}`,
+  guestEnabled: state.guestEnabled !== false,
+  guestConnection: state.guestEnabled === false ? "off" : "connecting",
   ollama: { up: false, version: "", url: OLLAMA, models: [] },
   awake: false,
   background: args.includes("--background"), // started at boot by Windows, no visible windows
@@ -395,8 +467,321 @@ async function upstream(method, p, body, signal) {
 // So: touch the server over plain HTTPS every 4 minutes (that counts as a request), and ping through the socket.
 setInterval(() => { fetch(SERVER + "/tools/status", { signal: AbortSignal.timeout(20000) }).catch(() => {}); }, 4 * 60e3).unref();
 
+function openLocalPath(p) {
+  if (process.platform !== "win32") return;
+  const c = spawn("cmd", ["/c", "start", "", p], { detached: true, stdio: "ignore", windowsHide: true });
+  c.on("error", () => {}); c.unref();
+}
+function revealLocalPath(p) {
+  if (process.platform !== "win32") return;
+  const c = spawn("explorer.exe", ["/select," + p], { detached: true, stdio: "ignore", windowsHide: true });
+  c.on("error", () => {}); c.unref();
+}
+
+function updateGuestStats() {
+  stats.guestCode = fullGuestCode(state);
+  stats.guestLink = `${SERVER}/#code=${stats.guestCode}`;
+  stats.guestEnabled = state.guestEnabled !== false;
+  if (!stats.guestEnabled) stats.guestConnection = "off";
+  changed();
+}
+function toggleGuest(enabled) {
+  state.guestEnabled = !!enabled;
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  updateGuestStats();
+  note(state.guestEnabled ? "Guest mode turned on" : "Guest mode turned off");
+  if (!state.guestEnabled && guestWs) { try { guestWs.close(); } catch {} guestWs = null; }
+  else if (state.guestEnabled && !guestWs) connectGuest();
+  return { guestCode: stats.guestCode, guestLink: stats.guestLink, guestEnabled: stats.guestEnabled, guestConnection: stats.guestConnection };
+}
+function rollGuestCode() {
+  state = loadState(false, true);
+  guestAesKey = deriveGuestKey(state);
+  guestSharedAesKey = deriveGuestSharedKey(state);
+  updateGuestStats();
+  note("Reset guest connection code");
+  if (guestWs) { try { guestWs.close(); } catch {} guestWs = null; }
+  if (state.guestEnabled !== false) connectGuest();
+  return { guestCode: stats.guestCode, guestLink: stats.guestLink, guestEnabled: stats.guestEnabled, guestConnection: stats.guestConnection, adminCode: stats.code, adminLink: stats.link };
+}
+function rollAdminCode() {
+  state = loadState(true, false);
+  aesKey = deriveKey(state);
+  guestSharedAesKey = deriveGuestSharedKey(state);
+  stats.code = fullCode(state);
+  stats.link = `${SERVER}/#code=${stats.code}`;
+  changed();
+  note("Reset admin connection code");
+  const old = mainWs;
+  mainWs = null;
+  if (old) { try { old.close(); } catch {} }
+  connect();
+  return { code: stats.code, link: stats.link, adminCode: stats.code, adminLink: stats.link, guestCode: stats.guestCode, guestLink: stats.guestLink, guestEnabled: stats.guestEnabled, guestConnection: stats.guestConnection };
+}
+
+async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
+  const { id } = msg;
+  stats.totals.requests++;
+  let req;
+  try { req = openRequest(msg, isGuestSocket); }
+  catch (e) {
+    stats.totals.errors++;
+    note("Rejected a request: " + e.message, "error");
+    return send({ type: "fail", id, error: e.message });
+  }
+  const { rid, method, path: p, body, guest, key: replyKey } = req;
+  // The answer goes back as encrypted, numbered frames ending with an "end" frame,
+  // so the server can't change, reorder or cut off an answer without the browser noticing.
+  // When authenticated with the guest code, every metadata frame carries g: 1 so the website knows it's in guest mode.
+  let seq = 0;
+  const reply = (frame) => send({ type: "chunk", id, data: seal(replyKey, JSON.stringify(frame && frame.k === "m" && guest ? { ...frame, g: 1 } : frame), `${rid}:${seq++}`) + "\n" });
+  send({ type: "head", id, status: 200, contentType: "text/plain; charset=utf-8" });
+
+  if (typeof p === "string" && p.startsWith("/guest/")) {
+    let status = 500, out;
+    try { [status, out] = guestTool.handleGuestEndpoint(method, p, body, { guest, ollama: OLLAMA, comfy, note, changed }); }
+    catch (e) { out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+
+  // Guest mode restriction: block all PC control, private files, mail, docs, browser, Jarvis, Beam, and owner chats.
+  if (guest && typeof p === "string" && (p.startsWith("/pc/") || p.startsWith("/pcfiles/") || p.startsWith("/agent/") || p.startsWith("/browser/") || p.startsWith("/jarvis/") || p.startsWith("/files/") || p.startsWith("/chats/"))) {
+    reply({ k: "m", s: 403, c: "application/json" });
+    reply({ k: "d", d: JSON.stringify({ error: "Not available in guest mode: PC and private items are turned off." }) });
+    reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+
+  // Files to and from this PC (see files.js), answered here instead of by Ollama.
+  if (typeof p === "string" && p.startsWith("/pc/")) {
+    let status = 500, out;
+    try { [status, out] = await pcPower.handle(method, p, body, note); } catch (e) { status = e.status || 500; out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+  if (typeof p === "string" && p.startsWith("/code/")) {
+    let status = 500, out;
+    try {
+      let codeBody = body, parsed = {};
+      try { parsed = JSON.parse(body || "{}"); } catch {}
+      if (guest) {
+        if (p === "/code/projects") {
+          status = 200; out = { folder: "", projects: [] };
+        } else {
+          const proj = String(parsed.project || "project");
+          parsed.project = proj.startsWith("guest-") ? proj : "guest-" + proj;
+          codeBody = JSON.stringify(parsed);
+          [status, out] = codeTool.handle(method, p, codeBody, (t) => note("Guest " + t));
+          if (status === 200 && p === "/code/write" && Array.isArray(out?.written)) {
+            for (const w of out.written) {
+              guestTool.recordPcFile(parsed.chatId || "_last", {
+                kind: "code",
+                name: `${out.project}/${w.path}`,
+                path: path.join(out.folder, ...w.path.split("/")),
+                rel: `Code/${out.project}/${w.path}`,
+                size: w.size,
+              });
+            }
+            changed();
+          }
+        }
+      } else {
+        [status, out] = codeTool.handle(method, p, codeBody, note);
+      }
+    } catch (e) { out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+  if (typeof p === "string" && (p.startsWith("/pcfiles/") || p.startsWith("/agent/"))) {
+    let status = 500, out;
+    try { [status, out] = await agentHandle(method, p, body); } catch (e) { out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+  if (p === "/browser/stream") {
+    const ctrl = new AbortController(); running.set(id, ctrl);
+    try {
+      reply({ k: "m", s: 200, c: "application/x-ndjson" });
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      // a slow connection only gets the newest picture: skip frames while the socket still has a lot to send
+      await browserTool.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 1.5e6);
+      reply({ k: "e" });
+    } catch (e) { try { reply({ k: "d", d: JSON.stringify({ error: e.message }) + "\n" }); reply({ k: "e" }); } catch {} } finally { running.delete(id); }
+    return send({ type: "end", id });
+  }
+  if (typeof p === "string" && p.startsWith("/browser/")) {
+    let status = 500, out;
+    try { [status, out] = await browserTool.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+  if (p === "/jobs/stream") {
+    const ctrl = new AbortController(); running.set(id, ctrl);
+    try {
+      reply({ k: "m", s: 200, c: "application/x-ndjson" });
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      await jobStore.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, guest ? "guest" : undefined);
+      reply({ k: "e" });
+    } catch {} finally { running.delete(id); }
+    return send({ type: "end", id });
+  }
+  if (typeof p === "string" && p.startsWith("/jobs/")) {
+    let status = 500, out;
+    try {
+      if (guest) {
+        [status, out] = await jobStore.handle(method, p, body, {
+          upstream,
+          note: (t) => note("Guest: " + t),
+          uid: "guest",
+          onGuestDone: ({ chatId, model, body: jBody, content }) => {
+            // Fallback recap if the guest closed their tab while the job was running
+            setTimeout(() => {
+              const all = guestTool.listForOwner();
+              if (chatId && all.some((x) => x.id === chatId && (x.recapBusy || Date.now() - x.updatedAt < 15000))) return;
+              let jb = {}; try { jb = JSON.parse(jBody || "{}"); } catch {}
+              const msgs = [...(jb.messages || []).filter((m) => m.role === "user" || m.role === "assistant"), { role: "assistant", content }];
+              guestTool.upsertRecap({ chatId: chatId || "guest-job", model, messages: msgs, refreshRecap: false, aiSummary: false }, { ollama: OLLAMA, comfy, note, changed });
+            }, 4000).unref();
+          },
+        });
+      } else {
+        const [uid, b] = await account.fromBody(body);
+        [status, out] = await jobStore.handle(method, p, b, { upstream, note, uid });
+      }
+    } catch (e) { status = e.status || 500; out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    if (p === "/jobs/start") schedule.activity();
+    return send({ type: "end", id });
+  }
+  if (typeof p === "string" && p.startsWith("/chats/")) {
+    let status = 500, out;
+    try { const [uid, b] = await account.fromBody(body); [status, out] = chatStore.handle(method, p, b, note, uid); } catch (e) { status = e.status || 500; out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+  if (typeof p === "string" && p.startsWith("/jarvis/")) {
+    let status = 500, out;
+    try { [status, out] = await jarvis.handle(method, p, body, note, freeImageModels); } catch (e) { out = { error: e.message }; }
+    reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
+    if (method === "POST" && p === "/jarvis/ask") { note("Jarvis: a message from the website"); schedule.activity(); }
+    return send({ type: "end", id });
+  }
+  if (method === "GET" && p === "/load") {
+    reply({ k: "m", s: 200, c: "application/json" }); reply({ k: "d", d: JSON.stringify({ ...loadProgress(), guest: !!guest }) }); reply({ k: "e" });
+    return send({ type: "end", id });
+  }
+  if (typeof p === "string" && p.startsWith("/files/")) schedule.activity();
+  if (typeof p === "string" && p.startsWith("/files/")) {
+    let status = 500, out;
+    try { [status, out] = files.handle(method, p, body, note); } catch (e) { out = { error: e.message }; note("File transfer failed: " + e.message, "error"); }
+    reply({ k: "m", s: status, c: "application/json" });
+    reply({ k: "d", d: JSON.stringify(out) });
+    reply({ k: "e" });
+    send({ type: "end", id });
+    if (p === "/files/upload-end" || p === "/files/download") changed();
+    return;
+  }
+  if (!ALLOWED.has(`${method} ${p}`)) { changed(); reply({ k: "x", error: "Not allowed" }); return send({ type: "end", id }); }
+
+  // Model lists, status checks etc. only count; chats and generations get a row in the activity list.
+  const isChat = method === "POST" && (p === "/api/chat" || p === "/api/generate");
+  const desc = isChat ? describe(p, body) : null;
+  if (desc && guest && desc.text) desc.text = "[Guest] " + desc.text;
+  const entry = desc ? addLog({ ...desc, active: true, tokens: 0 }) : null;
+  if (entry?.kind === "chat") stats.totals.messages++;
+  if (isChat) schedule.activity();
+  stats.active++;
+  changed();
+
+  const ctrl = new AbortController();
+  running.set(id, ctrl);
+  const started = Date.now();
+  let tail = "", streamedText = "", madePcFile = null;
+  try {
+    const r = await upstream(method, p, body, ctrl.signal);
+    reply({ k: "m", s: r.status, c: r.headers.get("content-type") || "application/json" });
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const data = dec.decode(value, { stream: true });
+      reply({ k: "d", d: data });
+      if (entry?.model && !entry.image) markLoaded(entry.model); // first words arrived: the model is in memory
+      if (entry) {
+        tail = (tail + data).slice(-8192);
+        if (!entry.image) entry.tokens += (data.match(/\n/g) || []).length; // ~1 streamed line per token, exact count comes at the end
+        changed();
+      }
+      if (guest && isChat) {
+        for (const line of data.split("\n")) {
+          if (!line.trim()) continue;
+          try {
+            const o = JSON.parse(line);
+            if (o.message?.content) streamedText += o.message.content;
+            else if (typeof o.response === "string") streamedText += o.response;
+            if (o.pcFile) {
+              madePcFile = guestTool.recordPcFile("_last", o.pcFile);
+              changed();
+            }
+          } catch {}
+        }
+      }
+    }
+    reply({ k: "e" });
+    send({ type: "end", id });
+    if (entry) {
+      entry.status = r.status;
+      try {
+        const last = JSON.parse(tail.trim().split("\n").pop());
+        if (last.eval_count) {
+          entry.tokens = last.eval_count;
+          if (last.eval_duration) entry.tps = last.eval_count / (last.eval_duration / 1e9);
+        }
+        if (last.load_duration > 1e9) entry.loadSecs = last.load_duration / 1e9;
+        if (last.error) entry.error = last.error;
+      } catch {}
+      if (r.status >= 400 || entry.error) { entry.error = entry.error || "HTTP " + r.status; stats.totals.errors++; }
+      else stats.totals.tokens += entry.kind === "chat" ? entry.tokens : 0;
+    }
+    // If a guest generated a picture or chat answer and closed the page before /guest/recap arrived, ensure a recap is still saved
+    if (guest && entry?.kind === "chat" && !entry.error && (streamedText.trim() || madePcFile)) {
+      let reqJson = {}; try { reqJson = JSON.parse(body || "{}"); } catch {}
+      const cid = reqJson.chatId || "";
+      if (cid || madePcFile) {
+        setTimeout(() => {
+          const all = guestTool.listForOwner();
+          if (cid && all.some((x) => x.id === cid && (x.recapBusy || Date.now() - x.updatedAt < 15000))) return;
+          const msgs = p === "/api/chat"
+            ? [...(reqJson.messages || []).filter((m) => m.role === "user" || m.role === "assistant"), { role: "assistant", content: streamedText }]
+            : [{ role: "user", content: String(reqJson.prompt || "") }, { role: "assistant", content: madePcFile ? `[Generated picture: ${reqJson.prompt || ""}]` : streamedText, genImage: !!madePcFile, prompt: reqJson.prompt }];
+          guestTool.upsertRecap({ chatId: cid || "guest-" + Date.now().toString(36), model: reqJson.model, messages: msgs, pcFiles: madePcFile ? [madePcFile] : [], aiSummary: false }, { ollama: OLLAMA, comfy, note, changed });
+        }, 3500).unref();
+      }
+    }
+    if (p !== "/api/tags" && p !== "/api/ps") console.log(`  ${guest ? "[GUEST] " : ""}${method} ${p}  ${r.status}  ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  } catch (e) {
+    if (e.name === "AbortError") { if (entry) entry.stopped = true; }
+    else {
+      console.log("  Ollama error:", e.message);
+      reply({ k: "x", error: "Couldn't reach Ollama on the host PC — is it running?" });
+      send({ type: "end", id });
+      stats.totals.errors++;
+      if (entry) entry.error = "Couldn't reach Ollama";
+    }
+  } finally {
+    running.delete(id);
+    stats.active--;
+    if (entry) { entry.active = false; entry.secs = (Date.now() - started) / 1000; }
+    changed();
+    if (entry) pollOllama();
+  }
+}
+
 function connect() {
   const ws = new WebSocket(wsUrl, { maxPayload: 80 * 1024 * 1024 });
+  mainWs = ws;
   const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
   setConnection("connecting");
   let alive = true, tick = Date.now(), heart = 0;
@@ -427,9 +812,11 @@ function connect() {
       setConnection("online");
       note("Connected to the server, sharing is on (end-to-end encrypted)");
       console.log("\n  ┌─────────────────────────────────────────┐");
-      console.log(`  │   Your code:   ${stats.code}      │`);
+      console.log(`  │   Guest code:  ${stats.guestCode}      │`);
+      console.log("  │   Admin code:  ••••-••••-••••-••••      │");
       console.log("  └─────────────────────────────────────────┘");
-      console.log(`  Open ${stats.link} on another device.`);
+      console.log(`  Guest link: ${stats.guestLink}`);
+      console.log("  (Click Show in the Control Center to view or reset your Admin code.)");
       console.log("  Keep this window open. Ctrl+C to stop sharing.\n");
       return;
     }
@@ -439,6 +826,7 @@ function connect() {
         note("Code was taken on the server, made a new one", "error");
         state = loadState(true);
         aesKey = deriveKey(state);
+        guestSharedAesKey = deriveGuestSharedKey(state);
         send({ type: "register", code: state.code, secret: state.secret, name: NAME });
       } else { console.log("Server error:", msg.error); note("Server error: " + msg.error, "error"); }
       return;
@@ -449,173 +837,15 @@ function connect() {
       return;
     }
     if (msg.type !== "req") return;
-
-    const { id } = msg;
-    stats.totals.requests++;
-    let req;
-    try { req = openRequest(msg); }
-    catch (e) {
-      stats.totals.errors++;
-      note("Rejected a request: " + e.message, "error");
-      return send({ type: "fail", id, error: e.message });
-    }
-    const { rid, method, path: p, body } = req;
-    // The answer goes back as encrypted, numbered frames ending with an "end" frame,
-    // so the server can't change, reorder or cut off an answer without the browser noticing.
-    let seq = 0;
-    const reply = (frame) => send({ type: "chunk", id, data: seal(aesKey, JSON.stringify(frame), `${rid}:${seq++}`) + "\n" });
-    send({ type: "head", id, status: 200, contentType: "text/plain; charset=utf-8" });
-    // Files to and from this PC (see files.js), answered here instead of by Ollama.
-    if (typeof p === "string" && p.startsWith("/pc/")) {
-      let status = 500, out;
-      try { [status, out] = await pcPower.handle(method, p, body, note); } catch (e) { status = e.status || 500; out = { error: e.message }; }
-      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      return send({ type: "end", id });
-    }
-    if (typeof p === "string" && p.startsWith("/code/")) {
-      let status = 500, out;
-      try { [status, out] = codeTool.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
-      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      return send({ type: "end", id });
-    }
-    if (typeof p === "string" && (p.startsWith("/pcfiles/") || p.startsWith("/agent/"))) {
-      let status = 500, out;
-      try { [status, out] = await agentHandle(method, p, body); } catch (e) { out = { error: e.message }; }
-      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      return send({ type: "end", id });
-    }
-    if (p === "/browser/stream") {
-      const ctrl = new AbortController(); running.set(id, ctrl);
-      try {
-        reply({ k: "m", s: 200, c: "application/x-ndjson" });
-        let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
-        // a slow connection only gets the newest picture: skip frames while the socket still has a lot to send
-        await browserTool.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 1.5e6);
-        reply({ k: "e" });
-      } catch (e) { try { reply({ k: "d", d: JSON.stringify({ error: e.message }) + "\n" }); reply({ k: "e" }); } catch {} } finally { running.delete(id); }
-      return send({ type: "end", id });
-    }
-    if (typeof p === "string" && p.startsWith("/browser/")) {
-      let status = 500, out;
-      try { [status, out] = await browserTool.handle(method, p, body, note); } catch (e) { out = { error: e.message }; }
-      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      return send({ type: "end", id });
-    }
-    if (p === "/jobs/stream") {
-      const ctrl = new AbortController(); running.set(id, ctrl);
-      try {
-        reply({ k: "m", s: 200, c: "application/x-ndjson" });
-        let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
-        await jobStore.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal);
-        reply({ k: "e" });
-      } catch {} finally { running.delete(id); }
-      return send({ type: "end", id });
-    }
-    if (typeof p === "string" && p.startsWith("/jobs/")) {
-      let status = 500, out;
-      try { const [uid, b] = await account.fromBody(body); [status, out] = await jobStore.handle(method, p, b, { upstream, note, uid }); } catch (e) { status = e.status || 500; out = { error: e.message }; }
-      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      if (p === "/jobs/start") schedule.activity();
-      return send({ type: "end", id });
-    }
-    if (typeof p === "string" && p.startsWith("/chats/")) {
-      let status = 500, out;
-      try { const [uid, b] = await account.fromBody(body); [status, out] = chatStore.handle(method, p, b, note, uid); } catch (e) { status = e.status || 500; out = { error: e.message }; }
-      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      return send({ type: "end", id });
-    }
-    if (typeof p === "string" && p.startsWith("/jarvis/")) {
-      let status = 500, out;
-      try { [status, out] = await jarvis.handle(method, p, body, note, freeImageModels); } catch (e) { out = { error: e.message }; }
-      reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-      if (method === "POST" && p === "/jarvis/ask") { note("Jarvis: a message from the website"); schedule.activity(); }
-      return send({ type: "end", id });
-    }
-    if (method === "GET" && p === "/load") {
-      reply({ k: "m", s: 200, c: "application/json" }); reply({ k: "d", d: JSON.stringify(loadProgress()) }); reply({ k: "e" });
-      return send({ type: "end", id });
-    }
-    if (typeof p === "string" && p.startsWith("/files/")) schedule.activity();
-    if (typeof p === "string" && p.startsWith("/files/")) {
-      let status = 500, out;
-      try { [status, out] = files.handle(method, p, body, note); } catch (e) { out = { error: e.message }; note("File transfer failed: " + e.message, "error"); }
-      reply({ k: "m", s: status, c: "application/json" });
-      reply({ k: "d", d: JSON.stringify(out) });
-      reply({ k: "e" });
-      send({ type: "end", id });
-      if (p === "/files/upload-end" || p === "/files/download") changed();
-      return;
-    }
-    if (!ALLOWED.has(`${method} ${p}`)) { changed(); reply({ k: "x", error: "Not allowed" }); return send({ type: "end", id }); }
-
-    // Model lists, status checks etc. only count; chats and generations get a row in the activity list.
-    const isChat = method === "POST" && (p === "/api/chat" || p === "/api/generate");
-    const entry = isChat ? addLog({ ...describe(p, body), active: true, tokens: 0 }) : null;
-    if (entry?.kind === "chat") stats.totals.messages++;
-    if (isChat) schedule.activity();
-    stats.active++;
-    changed();
-
-    const ctrl = new AbortController();
-    running.set(id, ctrl);
-    const started = Date.now();
-    let tail = "";
-    try {
-      const r = await upstream(method, p, body, ctrl.signal);
-      reply({ k: "m", s: r.status, c: r.headers.get("content-type") || "application/json" });
-      const reader = r.body.getReader();
-      const dec = new TextDecoder();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const data = dec.decode(value, { stream: true });
-        reply({ k: "d", d: data });
-        if (entry?.model && !entry.image) markLoaded(entry.model); // first words arrived: the model is in memory
-        if (entry) {
-          tail = (tail + data).slice(-8192);
-          if (!entry.image) entry.tokens += (data.match(/\n/g) || []).length; // ~1 streamed line per token, exact count comes at the end
-          changed();
-        }
-      }
-      reply({ k: "e" });
-      send({ type: "end", id });
-      if (entry) {
-        entry.status = r.status;
-        try {
-          const last = JSON.parse(tail.trim().split("\n").pop());
-          if (last.eval_count) {
-            entry.tokens = last.eval_count;
-            if (last.eval_duration) entry.tps = last.eval_count / (last.eval_duration / 1e9);
-          }
-          if (last.load_duration > 1e9) entry.loadSecs = last.load_duration / 1e9;
-          if (last.error) entry.error = last.error;
-        } catch {}
-        if (r.status >= 400 || entry.error) { entry.error = entry.error || "HTTP " + r.status; stats.totals.errors++; }
-        else stats.totals.tokens += entry.kind === "chat" ? entry.tokens : 0;
-      }
-      if (p !== "/api/tags" && p !== "/api/ps") console.log(`  ${method} ${p}  ${r.status}  ${((Date.now() - started) / 1000).toFixed(1)}s`);
-    } catch (e) {
-      if (e.name === "AbortError") { if (entry) entry.stopped = true; }
-      else {
-        console.log("  Ollama error:", e.message);
-        reply({ k: "x", error: "Couldn't reach Ollama on the host PC — is it running?" });
-        send({ type: "end", id });
-        stats.totals.errors++;
-        if (entry) entry.error = "Couldn't reach Ollama";
-      }
-    } finally {
-      running.delete(id);
-      stats.active--;
-      if (entry) { entry.active = false; entry.secs = (Date.now() - started) / 1000; }
-      changed();
-      if (entry) pollOllama();
-    }
+    await handleRelayRequest(send, ws, msg, false);
   });
 
   ws.on("close", () => {
     clearInterval(heart);
     for (const c of running.values()) c.abort();
     running.clear();
+    if (mainWs !== ws) return;
+    mainWs = null;
     if (stats.connection === "online") note("Lost connection to the server, reconnecting…", "error");
     setConnection("offline");
     console.log(`Disconnected from server. Reconnecting in ${retry / 1000}s…`);
@@ -623,6 +853,68 @@ function connect() {
     retry = Math.min(retry * 2, 30000);
   });
   ws.on("error", (e) => console.log("Connection problem:", e.message));
+}
+
+// Separate relay registration for the Guest connection code (XXXX-XXXX-YYYY-YYYY), so guests use a completely different 16-char code.
+function connectGuest() {
+  if (state.guestEnabled === false || guestWs) return;
+  const ws = new WebSocket(wsUrl, { maxPayload: 80 * 1024 * 1024 });
+  guestWs = ws;
+  const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
+  stats.guestConnection = "connecting"; changed();
+  let alive = true, tick = Date.now(), heart = 0;
+
+  ws.on("open", () => {
+    guestRetry = 1000;
+    send({ type: "register", code: state.guestCode, secret: state.guestSecret, name: NAME + " (Guest)" });
+    heart = setInterval(() => {
+      const now = Date.now(), gap = now - tick; tick = now;
+      if (gap > 90e3 || !alive) return ws.terminate();
+      alive = false;
+      try { ws.ping(); } catch {}
+    }, 20e3);
+  });
+  ws.on("pong", () => { alive = true; });
+  ws.on("ping", () => { alive = true; });
+
+  ws.on("message", async (raw) => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+    if (msg.type === "registered") {
+      stats.guestCode = fullGuestCode(state);
+      stats.guestLink = `${SERVER}/#code=${stats.guestCode}`;
+      stats.guestConnection = "online";
+      changed();
+      return;
+    }
+    if (msg.type === "error") {
+      if (msg.error === "code-in-use") {
+        state = loadState(false, true);
+        guestAesKey = deriveGuestKey(state);
+        guestSharedAesKey = deriveGuestSharedKey(state);
+        updateGuestStats();
+        send({ type: "register", code: state.guestCode, secret: state.guestSecret, name: NAME + " (Guest)" });
+      }
+      return;
+    }
+    if (msg.type === "abort") {
+      running.get(msg.id)?.abort();
+      running.delete(msg.id);
+      return;
+    }
+    if (msg.type !== "req") return;
+    await handleRelayRequest(send, ws, msg, true);
+  });
+
+  ws.on("close", () => {
+    clearInterval(heart);
+    if (guestWs === ws) guestWs = null;
+    if (state.guestEnabled === false) { stats.guestConnection = "off"; changed(); return; }
+    stats.guestConnection = "offline"; changed();
+    setTimeout(() => { if (state.guestEnabled !== false && !guestWs) connectGuest(); }, guestRetry);
+    guestRetry = Math.min(guestRetry * 2, 30000);
+  });
+  ws.on("error", () => {});
 }
 
 // ---------- Ollama status ----------
@@ -714,8 +1006,9 @@ console.log(`Burrow host — sharing Ollama at ${OLLAMA} via ${SERVER}`);
 panel = startPanel({
   port: PANEL_PORT,
   monitor,
-  getState: () => ({ ...stats, files: files.state(), now: Date.now() }),
+  getState: () => ({ ...stats, files: files.state(), guestRecaps: guestTool.listForOwner(), now: Date.now() }),
   files,
+  guestFile: (recapId, fileId) => guestTool.getFile(recapId, fileId),
   code: (method, p, body) => codeTool.handle(method, p, body, note),
   chats: async (method, p, body) => { const [uid, b] = await account.fromBody(body); return chatStore.handle(method, p, b, note, uid); },
   agent: (method, p, body) => agentHandle(method, p, body),
@@ -734,7 +1027,33 @@ panel = startPanel({
     }
     return upstream(method, p, body, signal);
   },
-  actions: { "idle-tick": () => schedule.idleTick(), "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; }, "free-gpu": freeGpu, "autostart-on": () => runAutostartBat(true), "autostart-off": () => runAutostartBat(false) },
+  actions: {
+    "idle-tick": () => schedule.idleTick(),
+    "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; },
+    "free-gpu": freeGpu,
+    "autostart-on": () => runAutostartBat(true),
+    "autostart-off": () => runAutostartBat(false),
+    "guest-toggle": (b) => toggleGuest(b.enabled !== false),
+    "guest-new-code": () => rollGuestCode(),
+    "admin-new-code": () => rollAdminCode(),
+    "guest-delete-recap": (b) => { guestTool.deleteRecap(String(b.id || "")); changed(); return { ok: true }; },
+    "guest-clear-recaps": () => { guestTool.clearRecaps(); changed(); return { ok: true }; },
+    "guest-open-file": (b) => { const f = guestTool.getFile(String(b.recapId || ""), String(b.fileId || "")); if (f) openLocalPath(f.path); return { ok: !!f }; },
+    "guest-reveal-file": (b) => { const f = guestTool.getFile(String(b.recapId || ""), String(b.fileId || "")); if (f) revealLocalPath(f.path); return { ok: !!f }; },
+    "restart": () => {
+      setTimeout(() => {
+        try { panel.close && panel.close(); } catch {}
+        try { if (mainWs) mainWs.close(); } catch {}
+        try { if (guestWs) guestWs.close(); } catch {}
+        const entry = stats.background ? path.join(__dirname, "background.js") : __filename;
+        const child = spawn(process.execPath, [entry, ...args.filter((a) => a !== "--restarted")], { detached: true, stdio: "ignore", windowsHide: true });
+        child.on("error", () => {});
+        child.unref();
+        setTimeout(() => process.exit(0), 200);
+      }, 150);
+      return { ok: true };
+    },
+  },
   // Only start sharing once we hold the panel's port, so two hosts never fight over the same code.
   onListening: (url) => {
     console.log(`  Control center: ${url}`);
@@ -748,8 +1067,33 @@ panel = startPanel({
     checkAutostart();
     setInterval(checkAutostart, 5000);
     connect();
+    connectGuest();
   },
-  onBusy: (url) => {
+  onBusy: async (url) => {
+    let needsRestart = args.includes("--restart") || args.includes("--new") || args.includes("--new-guest");
+    if (!needsRestart) {
+      try {
+        const r = await fetch(`http://127.0.0.1:${PANEL_PORT}/pc/guest`, { signal: AbortSignal.timeout(1500) });
+        if (!r.ok) needsRestart = true;
+        else { const j = await r.json(); if (!j || !j.guestCode) needsRestart = true; }
+      } catch { needsRestart = true; }
+    }
+    if (needsRestart && process.platform === "win32" && !args.includes("--restarted")) {
+      console.log("  Updating running Burrow host with new version…");
+      execFile("schtasks", ["/End", "/TN", TASK], { windowsHide: true }, () => {
+        execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Get-NetTCPConnection -LocalPort ${PANEL_PORT} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`], { windowsHide: true }, () => {
+          execFile("schtasks", ["/Run", "/TN", TASK], { windowsHide: true }, (err) => {
+            if (err) {
+              const child = spawn(process.execPath, [__filename, ...args, "--restarted"], { detached: true, stdio: "ignore", windowsHide: true });
+              child.on("error", () => {});
+              child.unref();
+            }
+            setTimeout(() => process.exit(0), 500);
+          });
+        });
+      });
+      return;
+    }
     console.log(`  Burrow is already running on this PC. Control center: ${url}`);
     if (!args.includes("--no-panel")) openWindow(url);
     setTimeout(() => process.exit(0), 500);
