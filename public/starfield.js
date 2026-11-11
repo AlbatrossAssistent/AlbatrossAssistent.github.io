@@ -6,7 +6,7 @@
 //   night: the dark theme's stars; day: the light theme's soft blue, violet and amber lights; ember: red and orange embers (Max thinking)
 //   pointer:   sky.pointer(clientX, clientY)   (and sky.pointer(null) when it leaves)
 (function () {
-  const TINTS = [[255, 255, 255], [205, 225, 255], [170, 212, 255], [160, 255, 232], [255, 240, 214], [208, 190, 255]];
+  const TINTS = Array.from({ length: 6 }, () => [255, 255, 255]);
   const TINT_PICK = [0, 0, 0, 1, 1, 2, 2, 3, 4, 5];
   // a star keeps its tint number; each palette says what colour that is, how the lines near the pointer look, and if stars shoot
   const PALETTES = {
@@ -119,7 +119,7 @@
       const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
       const f = Math.min(W, H) * .95, R = 150 * DPR;
       ctx.clearRect(0, 0, W, H);
-      if (name === "night" && !still) drawNebula(t, A, [cy, sy, cp, sp, f]);   // behind the stars
+      if (name === "night" && !still && opts.nebula !== false) drawNebula(t, A, [cy, sy, cp, sp, f]);   // behind the stars
       const near = [];
       for (const s of stars) {
         const x1 = s.x * cy + s.z * sy, z1 = -s.x * sy + s.z * cy;
@@ -167,5 +167,30 @@
     // nebula(): one comes now, right where the sky is looking (for trying it out)
     const nebula = () => { neb = newNebula(null); neb.x = -Math.sin(cam.yaw); neb.z = Math.cos(cam.yaw); neb.y = .08; };
     return { draw, resize, pointer, cam, nebula };
+  };
+
+  window.createPolygonField = function (container) {
+    if (!container) return null;
+    const cols = 6, rows = 4;
+    const tiles = Array.from({ length: cols * rows }, () => document.createElement("i"));
+    container.replaceChildren(...tiles);
+    let active = -1;
+    const clear = () => {
+      if (active >= 0) tiles[active].classList.remove("hover");
+      active = -1;
+    };
+    const move = (e) => {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const col = Math.min(cols - 1, Math.max(0, Math.floor(e.clientX / innerWidth * cols)));
+      const row = Math.min(rows - 1, Math.max(0, Math.floor(e.clientY / innerHeight * rows)));
+      const next = row * cols + col;
+      if (next === active) return;
+      clear();
+      active = next;
+      tiles[active].classList.add("hover");
+    };
+    addEventListener("pointermove", move, { passive: true });
+    addEventListener("pointerleave", clear);
+    return { clear };
   };
 })();

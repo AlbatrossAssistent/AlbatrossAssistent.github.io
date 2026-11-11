@@ -45,9 +45,18 @@ f.onload = () => setTimeout(async () => {
       && new Set([...d.querySelectorAll("#homeManual .home-action")].map((e) => e.getBoundingClientRect().top)).size === 1
       && d.querySelector(".home-more").open && !!d.querySelector(".home-action[data-go=jarvis]");
   });
-  await tryIt("background glow follows the pointer", () => {
+  await tryIt("background is a restrained night sky", () => {
     w.dispatchEvent(new w.MouseEvent("pointermove", { clientX: 120, clientY: 240 }));
-    return d.documentElement.style.getPropertyValue("--pointer-x") === "9.375%" && d.documentElement.style.getPropertyValue("--pointer-y") === "30%";
+    return w.getComputedStyle(d.body).backgroundColor === "rgb(0, 0, 0)"
+      && w.getComputedStyle(d.querySelector("#sky")).opacity === "0.62"
+      && w.getComputedStyle(d.querySelector("#orbs")).display === "none";
+  });
+  await tryIt("light background has hover-enlarging polygons", () => {
+    d.documentElement.dataset.theme = "light";
+    w.dispatchEvent(new w.MouseEvent("pointermove", { clientX: 1000, clientY: 200 }));
+    return w.getComputedStyle(d.body).backgroundColor === "rgb(255, 255, 255)"
+      && w.getComputedStyle(d.querySelector("#orbs")).display === "grid"
+      && !!d.querySelector("#orbs i.hover");
   });
   await tryIt("WhatsApp handoff opens an editable draft", () => {
     d.querySelector("#waPhone").value = "+1 555 123 4567";

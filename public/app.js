@@ -3715,11 +3715,12 @@ function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.h
 function slug(s) { return (s || "chat").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "chat"; }
 
 function applyAppearance() {
-  // Aurora and Lagoon are the dark and the light look with their own moving scene (scenes.js) and a few colours of their own
+  // Aurora and Lagoon keep their accent colours while sharing the black/white backgrounds.
   const scene = S.theme === "aurora" || S.theme === "lagoon" ? S.theme : "";
   const theme = S.theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : S.theme === "aurora" ? "dark" : S.theme === "lagoon" ? "light" : S.theme;
   document.documentElement.dataset.theme = theme;
   if (scene) document.documentElement.dataset.scene = scene; else delete document.documentElement.dataset.scene;
+  startSky();
   document.documentElement.style.setProperty("--font-size", S.fontSize + "px");
   document.body.classList.toggle("compact", S.compact);
   $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
@@ -3899,22 +3900,22 @@ $$("dialog [data-close]").forEach(b => (b.onclick = () => b.closest("dialog").cl
 $$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d && d.id !== "termsDlg") d.close(); }));
 
 // the night sky behind the app (a canvas of stars, see starfield.js)
-const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), { count: Math.round(Math.min(900, Math.max(350, innerWidth * innerHeight / 2400))) }) : null;
+const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), { count: Math.round(Math.min(560, Math.max(220, innerWidth * innerHeight / 3800))), nebula: false }) : null;
+if (window.createPolygonField && $("#orbs")) createPolygonField($("#orbs"));
 let skyOn = false;
-const appScenes = {};                                 // the Aurora and Lagoon scenes, made when first shown
 function skyFrame(t) {
-  if (!appSky || S.stars === false || document.hidden) { skyOn = false; if (appSky && S.stars === false) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); } return; }
-  // dark: the night sky; light: daytime lights; Max thinking: red embers rising slowly, in both themes
-  const root = document.documentElement, dark = root.dataset.theme === "dark", max = root.classList.contains("effort-max"), scene = !max && root.dataset.scene;
-  if (scene && window.createScene) { (appScenes[scene] = appScenes[scene] || createScene($("#sky"), scene)).draw(t, { alpha: 1 }); }
-  else appSky.draw(t, max ? { palette: "ember", alpha: dark ? .95 : .8, flow: .025 } : dark ? { palette: "night", alpha: .9 } : { palette: "day", alpha: 1 });
+  if (!appSky || S.stars === false || document.hidden || document.documentElement.dataset.theme !== "dark") {
+    skyOn = false;
+    if (appSky && (S.stars === false || document.documentElement.dataset.theme !== "dark")) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); }
+    return;
+  }
+  appSky.draw(t, { palette: "night", alpha: .82 });
   requestAnimationFrame(skyFrame);
 }
 function startSky() { if (appSky && S.stars !== false && !skyOn) { skyOn = true; requestAnimationFrame(skyFrame); } }
-addEventListener("resize", () => { appSky && appSky.resize(); for (const s of Object.values(appScenes)) s.resize(); });
-addEventListener("pointermove", (e) => { appSky && appSky.pointer(e.clientX, e.clientY); for (const s of Object.values(appScenes)) s.pointer(e.clientX, e.clientY); document.documentElement.style.setProperty("--pointer-x", (e.clientX / innerWidth * 100) + "%"); document.documentElement.style.setProperty("--pointer-y", (e.clientY / innerHeight * 100) + "%"); }, { passive: true });
-addEventListener("pointerdown", (e) => { const s = appScenes[document.documentElement.dataset.scene]; if (s) s.click(e.clientX, e.clientY); }, { passive: true });
-document.documentElement.addEventListener("pointerleave", () => { appSky && appSky.pointer(null); for (const s of Object.values(appScenes)) s.pointer(null); });
+addEventListener("resize", () => { appSky && appSky.resize(); });
+addEventListener("pointermove", (e) => { appSky && appSky.pointer(e.clientX, e.clientY); }, { passive: true });
+document.documentElement.addEventListener("pointerleave", () => { appSky && appSky.pointer(null); });
 document.addEventListener("visibilitychange", startSky);
 $("#starsOn").onchange = (e) => { S.stars = e.target.checked; saveSettings(); startSky(); };
 $("#glassOn").onchange = (e) => { S.glass = e.target.checked; saveSettings(); window.LiquidGlass && LiquidGlass.setEnabled(S.glass); };
@@ -4031,6 +4032,20 @@ function setView(v, opt) {
 }
 const isHome = () => document.body.classList.contains("home-view");
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
+let homeJarvisRaf = 0;
+function startHomeJarvis(canvas) {
+  cancelAnimationFrame(homeJarvisRaf);
+  if (!window.createOrb) return;
+  const orb = createOrb(canvas, { budget: 1.2e6 });
+  if (!orb) return;
+  const frame = (t) => {
+    if (!canvas.isConnected || !document.body.classList.contains("home-view") || document.hidden) { homeJarvisRaf = 0; return; }
+    const { width, height } = canvas.getBoundingClientRect();
+    if (width && height) orb({ W: width, H: height, cx: width / 2, cy: height / 2, R: Math.min(width, height) / 2 / 1.36, t, dark: document.documentElement.dataset.theme === "dark", eyes: 1, alpha: 1 });
+    homeJarvisRaf = requestAnimationFrame(frame);
+  };
+  homeJarvisRaf = requestAnimationFrame(frame);
+}
 function renderHome() {
   const name = !guestMode && S.files.name ? ", " + S.files.name : "";
   const home = $("#home");
@@ -4070,7 +4085,7 @@ function renderHome() {
   const moreTiles = tiles.filter(([k]) => !quickKeys.includes(k));
   const guestNotice = guestMode ? `<div class="guest-banner" style="margin:0 0 18px;border-radius:14px"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span><b>Guest mode</b> · Private &amp; PC items are off. After each chat, the AI writes a recap for the PC's owner including every file made by the PC (never files you attach). <b>Generated pictures are saved on the host PC and can be seen by its owner.</b></span></div>` : "";
   home.innerHTML = `<div class="home-world">
-    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button>${guestMode ? "" : `<button class="home-cta secondary" data-go="agent"><span class="home-sparkle">${allTiles.find(([k]) => k === "agent")[1]}</span><span>Open AI Agent</span><b aria-hidden="true">→</b></button>`}<button class="home-cta manual-jump" type="button" data-scroll="homeManual"><span>Manual tools</span><b aria-hidden="true">↓</b></button></div></div>
+    <div class="home-hero"><canvas class="home-jarvis" aria-hidden="true"></canvas>${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button>${guestMode ? "" : `<button class="home-cta secondary" data-go="agent"><span class="home-sparkle">${allTiles.find(([k]) => k === "agent")[1]}</span><span>Open AI Agent</span><b aria-hidden="true">→</b></button>`}<button class="home-cta manual-jump" type="button" data-scroll="homeManual"><span>Manual tools</span><b aria-hidden="true">↓</b></button></div></div>
     ${guestNotice}
     <section class="home-section manual-section" id="homeManual">
       <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Do it yourself."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Pick a tool and take every step manually."}</p></div>
@@ -4102,6 +4117,7 @@ function renderHome() {
   </div>`;
   home.querySelector(".home-hero h1").innerHTML = "Your ideas.<br><span>Your universe.</span>";
   home.querySelector(".home-hero .home-kicker").textContent = greeting() + name + " · YOUR OWN AI";
+  startHomeJarvis(home.querySelector(".home-jarvis"));
   home.querySelector("[data-scroll='homeManual']").onclick = () => $("#homeManual").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   const jvTile = home.querySelector('[data-go="jarvis"]'); if (jvTile) jvTile.dataset.needsPc = "1";
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
@@ -5283,9 +5299,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-11.5";
+const APP_VERSION = "2026-11-11.7";
 const WHATS_NEW = [
-  ["2026-11-11.5", ["Manual tools are up front on Home; the whole background shifts with your pointer in an animated aurora"]],
+  ["2026-11-11.7", ["Pure black and white backgrounds; in light mode, geometric tiles grow under the pointer", "Jarvis now matches the selected background theme"]],
   ["2026-11-11.1", ["A clearer Home screen brings AI chat, Beam, mail, notes and printing together","WhatsApp handoff: ask the AI for a draft, then review and send it yourself in WhatsApp"]],
   ["2026-10-30.2", ["The List is now a tab of the side panel on the right, and scrolls smoothly","Chats and lists are kept per account on your PC: only you see them when you're signed in"]],
   ["2026-10-30.1", ["Monitor: show a picture, a video or YouTube full screen on your PC's screen, with layout, options and its display data","List: write several requests in the sidebar (e.g. a picture 3 times, then a text step); they run on your PC one after another","Picture models stay loaded for a time frame (Settings → Image → Keep loaded) and are only unloaded completely after it"]],
