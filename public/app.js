@@ -4069,38 +4069,39 @@ function renderHome() {
   const quickTiles = tiles.filter(([k]) => quickKeys.includes(k));
   const moreTiles = tiles.filter(([k]) => !quickKeys.includes(k));
   const guestNotice = guestMode ? `<div class="guest-banner" style="margin:0 0 18px;border-radius:14px"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span><b>Guest mode</b> · Private &amp; PC items are off. After each chat, the AI writes a recap for the PC's owner including every file made by the PC (never files you attach). <b>Generated pictures are saved on the host PC and can be seen by its owner.</b></span></div>` : "";
-  home.innerHTML = `<div class="home-inner">
-    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">YOUR AI · YOUR CHOICE</span><h1></h1><p>${guestMode ? "Connected as a guest to this PC's AI." : "Ask your AI for a hand, or take care of things yourself."}</p></div>
+  home.innerHTML = `<div class="home-world">
+    <div class="home-hero">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button>${guestMode ? "" : `<button class="home-cta secondary" data-go="agent"><span class="home-sparkle">${allTiles.find(([k]) => k === "agent")[1]}</span><span>Open AI Agent</span><b aria-hidden="true">→</b></button>`}</div></div>
     ${guestNotice}
     <section class="home-feature" aria-label="AI modes">
-      <div class="home-feature-copy"><span class="home-kicker">START HERE</span><h2>What would you like to do?</h2><p>Choose an AI chat for a conversation, or let the Agent help with a task on your PC.</p></div>
+      <div class="home-feature-copy"><span class="home-kicker">YOUR PRIVATE AI SPACE</span><h2>Dream it.<br>Make it real.</h2><p>Chat, create, or ask the Agent to help on your PC. You choose when AI acts and approve anything that matters.</p></div>
       <div class="home-feature-actions">
         <button class="home-feature-btn primary" data-go="chat"><span class="hi">${TYPE_ICON.chat}</span><span><strong>Open AI chat</strong><small>Ask, write, plan, code or create</small></span><b aria-hidden="true">→</b></button>
         ${guestMode ? "" : `<button class="home-feature-btn" data-go="agent"><span class="hi"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><span><strong>Open AI Agent</strong><small>Get help with files, mail and printing</small></span><b aria-hidden="true">→</b></button>`}
       </div>
     </section>
-    <section class="home-section">
-      <div class="home-section-head"><div><span class="home-kicker">YOU'RE IN CONTROL</span><h2>${guestMode ? "Quick starts" : "Do it yourself"}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Open a tool and decide each step yourself."}</p></div>
+    <section class="home-section" id="homeManual">
+      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Get things done.<br>Your way."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Write mail, print, send files, and take every step yourself."}</p></div>
       <div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>
     </section>
     ${guestMode ? "" : `<section class="home-whatsapp home-card" aria-labelledby="homeWhatsappTitle">
-      <div class="home-whatsapp-copy"><span class="home-kicker">WHATSAPP · MANUAL MODE</span><h2 id="homeWhatsappTitle">Write here. Send in WhatsApp.</h2><p>Prepare a message on this site, then review and send it in WhatsApp. Your chats stay private: Albatross cannot read your inbox.</p></div>
+      <div class="home-whatsapp-copy"><span class="home-kicker">A LITTLE HELP WITH THE WORDS</span><h2 id="homeWhatsappTitle">Write it here.<br>Send it yourself.</h2><p>Draft a WhatsApp message with AI, or write your own. We'll open WhatsApp for you to review and send. Your inbox stays yours.</p></div>
       <form id="waForm" class="home-wa-form">
-        <label for="waPhone">Recipient's number <small>Include the country code, e.g. +1 555 123 4567</small></label>
+        <label for="waPhone">To <small>Number with country code</small></label>
         <input id="waPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+1 555 123 4567">
-        <label for="waMessage">Message</label>
-        <textarea id="waMessage" rows="3" maxlength="4096" placeholder="Write a message, or ask the AI to draft one for you."></textarea>
-        <div class="home-wa-actions"><button class="btn" id="waDraft" type="button">Ask AI to draft</button><button class="btn primary" type="submit">Continue in WhatsApp</button></div>
-        <small class="home-wa-note" id="waNote" role="status">Nothing is sent automatically. WhatsApp opens so you can review the message.</small>
+        <label for="waMessage">Your message</label>
+        <textarea id="waMessage" rows="3" maxlength="4096" placeholder="Write a message, or ask AI to help with a draft."></textarea>
+        <div class="home-wa-actions"><button class="btn" id="waDraft" type="button">Draft with AI</button><button class="btn primary" type="submit">Review in WhatsApp <span aria-hidden="true">→</span></button></div>
+        <small class="home-wa-note" id="waNote" role="status">Never reads your chats · Never sends automatically</small>
       </form>
     </section>`}
     <div class="home-grid">
-      <div class="home-card"><h3>Status</h3><div id="homeStatus"></div></div>
-      <div class="home-card"><h3>Recent chats</h3><div class="recent" id="homeRecent"></div></div>
+      <div class="home-card"><h3>At a glance</h3><div id="homeStatus"></div></div>
+      <div class="home-card"><h3>Recent conversations</h3><div class="recent" id="homeRecent"></div></div>
     </div>
-    <details class="home-more"><summary>More tools</summary><div class="home-actions">${moreTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div></details>
+    <details class="home-more" open><summary>More to explore</summary><div class="home-actions">${moreTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div></details>
   </div>`;
-  home.querySelector("h1").textContent = greeting() + name;
+  home.querySelector(".home-hero h1").innerHTML = "Your ideas.<br><span>Your universe.</span>";
+  home.querySelector(".home-hero .home-kicker").textContent = greeting() + name + " · YOUR OWN AI";
   const jvTile = home.querySelector('[data-go="jarvis"]'); if (jvTile) jvTile.dataset.needsPc = "1";
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
     const g = b.dataset.go;
@@ -5281,8 +5282,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-11.1";
+const APP_VERSION = "2026-11-11.2";
 const WHATS_NEW = [
+  ["2026-11-11.2", ["Home is now a full intro-style launch page, with your AI, manual tools, WhatsApp and workspace in one place"]],
   ["2026-11-11.1", ["A clearer Home screen brings AI chat, Beam, mail, notes and printing together","WhatsApp handoff: ask the AI for a draft, then review and send it yourself in WhatsApp"]],
   ["2026-10-30.2", ["The List is now a tab of the side panel on the right, and scrolls smoothly","Chats and lists are kept per account on your PC: only you see them when you're signed in"]],
   ["2026-10-30.1", ["Monitor: show a picture, a video or YouTube full screen on your PC's screen, with layout, options and its display data","List: write several requests in the sidebar (e.g. a picture 3 times, then a text step); they run on your PC one after another","Picture models stay loaded for a time frame (Settings → Image → Keep loaded) and are only unloaded completely after it"]],

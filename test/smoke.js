@@ -37,7 +37,9 @@ f.onload = () => setTimeout(async () => {
     w.setView("home");
     return !!d.querySelector(".home-feature [data-go=chat]") && !!d.querySelector(".home-feature [data-go=agent]")
       && !!d.querySelector(".home-action[data-go=beam]") && !!d.querySelector(".home-action[data-go=mail]")
-      && !!d.querySelector(".home-action[data-go=print]") && !!d.querySelector("#waForm");
+      && !!d.querySelector(".home-action[data-go=print]") && !!d.querySelector("#waForm")
+      && !!d.querySelector(".home-hero h1") && !!d.querySelector("#homeManual")
+      && d.querySelector(".home-more").open && !!d.querySelector(".home-action[data-go=jarvis]");
   });
   await tryIt("WhatsApp handoff opens an editable draft", () => {
     d.querySelector("#waPhone").value = "+1 555 123 4567";
