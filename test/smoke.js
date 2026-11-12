@@ -42,7 +42,7 @@ f.onload = () => setTimeout(async () => {
       && !!d.querySelector(".home-hero [data-scroll=homeManual]")
       && !!(d.querySelector("#homeManual").compareDocumentPosition(d.querySelector(".home-feature")) & w.Node.DOCUMENT_POSITION_FOLLOWING)
       && d.querySelector("#homeManual .home-action").getBoundingClientRect().top < w.innerHeight
-      && new Set([...d.querySelectorAll("#homeManual .home-action")].map((e) => e.getBoundingClientRect().top)).size === 1
+      && d.querySelectorAll("#homeManual .home-action").length === 4 && !!d.querySelector("#homeManual .ai-panel textarea")
       && d.querySelector(".home-more").open && !!d.querySelector(".home-action[data-go=jarvis]");
   });
   await tryIt("background is a restrained night sky", () => {
@@ -98,9 +98,13 @@ f.onload = () => setTimeout(async () => {
     dlg.close();
     return (ok && chosen) || JSON.stringify({ open: dlg.open, ok, chosen });
   });
-  await tryIt("mail is manual: reply, reply all and forward, no AI", async () => {
+  await tryIt("mail: manual reply/forward plus the Agent beside it; icon rail; gold sparks", async () => {
     w.setView("mail"); await sleep(150);
     const src = ev("String(window.mailOpen)");
+    ev('appSky.draw(1000, { palette: "gold", dark: true }); appSky.draw(1100, { palette: "gold", dark: false }); appSky.draw(1200, { palette: "night" })');
+    ev("S.sideRail = true; applyRail()"); const railOk = w.getComputedStyle(d.querySelector("#goHome")).fontSize === "0px" && d.querySelector("#sidebar").getBoundingClientRect().width < 90; ev("S.sideRail = false; applyRail()");
+    if (!railOk) return "closed sidebar still shows labels";
+    if (!d.querySelector("#mailPage .mail-ai textarea")) return "no Agent next to the mail";
     return !!d.querySelector("#mlNew") && !d.querySelector("#mlAsk") && !/AI next to it/.test(d.querySelector("#mailPage").textContent) || "AI parts still in Mail";
   });
   ev('setView("chat")');

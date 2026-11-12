@@ -110,6 +110,7 @@
       const dt = last ? Math.min(.1, (t - last) / 1000) : .016; last = t;
       const name = PALETTES[o.palette] ? o.palette : o.dark === false ? "day" : "night", pal = PALETTES[name], sprites = spritesOf(name);
       const A = o.alpha == null ? 1 : o.alpha, still = reduce && !o.flow;
+      if (o.palette === "gold") return drawSparks(t, dt, A, o.dark !== false, still);
       // the sky turns slowly; the page scroll tips it up; "flow" streams the stars past (the loading screen)
       if (!still) cam.yaw += dt * (opts.drift == null ? .018 : opts.drift);
       cam.pitch = (o.scroll || 0) * 1.1 + (o.flow ? (cam.flow = (cam.flow || 0) + dt * o.flow) : (cam.flow || 0));
@@ -163,6 +164,39 @@
         }
       }
       ctx.globalAlpha = 1;
+    }
+    // ---- gold sparks (Max thinking): fine golden sparks that rise slowly from the bottom, sway, flicker and fade; the pointer
+    // nudges the ones near it aside ----
+    const GOLD = [[255, 214, 120], [255, 190, 80], [255, 232, 170], [245, 170, 60], [255, 204, 102]];
+    const GOLD_INK = [[196, 132, 18], [176, 110, 10], [214, 152, 40], [160, 96, 8], [205, 140, 28]];
+    let sparks = [];
+    const goldSprites = {};
+    const goldSprite = (rgb) => { const k = rgb.join(); if (goldSprites[k]) return goldSprites[k]; const c = document.createElement("canvas"); c.width = c.height = 48; const x = c.getContext("2d"), g = x.createRadialGradient(24, 24, 0, 24, 24, 24); g.addColorStop(0, `rgba(${k},.9)`); g.addColorStop(.25, `rgba(${k},.35)`); g.addColorStop(1, `rgba(${k},0)`); x.fillStyle = g; x.fillRect(0, 0, 48, 48); return (goldSprites[k] = c); };
+    function spark(anywhere) {
+      return { x: Math.random() * W, y: anywhere ? Math.random() * H : H + Math.random() * 60 * DPR, vy: (10 + Math.random() * 34) * DPR, vx: (Math.random() - .5) * 6 * DPR,
+        sw: (6 + Math.random() * 18) * DPR, f: .3 + Math.random() * 1.2, p: Math.random() * 6.28, r: (.5 + Math.random() ** 2 * 1.9) * DPR, c: (Math.random() * GOLD.length) | 0,
+        life: anywhere ? Math.random() * 6 : 0, max: 7 + Math.random() * 10, fl: 2 + Math.random() * 6 };
+    }
+    function drawSparks(t, dt, A, dark, still) {
+      ctx.clearRect(0, 0, W, H);
+      const want = Math.round(Math.min(260, Math.max(60, W * H / (6500 * DPR * DPR))));
+      if (sparks.length > want) sparks.length = want;
+      while (sparks.length < want) sparks.push(spark(true));
+      const pal = dark ? GOLD : GOLD_INK, R = 110 * DPR;
+      ctx.globalCompositeOperation = dark ? "lighter" : "source-over";
+      for (let i = 0; i < sparks.length; i++) {
+        let s = sparks[i];
+        if (!still) {
+          s.life += dt; s.y -= s.vy * dt; s.x += (s.vx + Math.sin(t / 1000 * s.f + s.p) * s.sw) * dt;
+          if (ptr.on) { const dx = s.x - ptr.x, dy = s.y - ptr.y, d = Math.hypot(dx, dy); if (d < R && d > .1) { const q = (1 - d / R) ** 2; s.x += dx / d * q * 90 * DPR * dt; s.y += dy / d * q * 90 * DPR * dt; } }
+          if (s.y < -20 * DPR || s.life > s.max || s.x < -40 || s.x > W + 40) s = sparks[i] = spark(false);
+        }
+        const fade = Math.max(0, Math.min(1, s.life / 1.4, (s.max - s.life) / 2.2)) * (still ? 1 : .65 + .35 * Math.sin(t / 1000 * s.fl + s.p));
+        const a = fade * A * (dark ? 1 : .75), rgb = pal[s.c];
+        if (s.r > 1.1 * DPR) { const gs = s.r * 7; ctx.globalAlpha = a * .55; ctx.drawImage(goldSprite(rgb), s.x - gs, s.y - gs, gs * 2, gs * 2); }
+        ctx.globalAlpha = a; ctx.fillStyle = `rgb(${rgb.join()})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
+      }
+      ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
     }
     // nebula(): one comes now, right where the sky is looking (for trying it out)
     const nebula = () => { neb = newNebula(null); neb.x = -Math.sin(cam.yaw); neb.z = Math.cos(cam.yaw); neb.y = .08; };

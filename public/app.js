@@ -954,7 +954,8 @@ const EFFORT_HINT = {
 function paintEffort() {
   const e = effortNow(), row = EFFORTS.find(x => x[0] === e);
   $("#effortName").textContent = row[1]; $("#effortBtn").dataset.e = e;
-  document.documentElement.classList.toggle("effort-max", e === "max");   // Max: the background turns red (see .effort-max)
+  document.documentElement.classList.toggle("effort-max", e === "max");   // Max: gold sparks rise behind everything (see skyFrame, .effort-max)
+  try { startSky(); } catch {}   // (not yet during start-up: the sky starts itself then)
   $("#effortMenu").innerHTML = EFFORTS.map(([k, n, sub]) => `<button class="effort-opt${k === e ? " on" : ""}" data-e="${k}" role="menuitemradio" aria-checked="${k === e}"><b>${n}</b><small>${sub}</small></button>`).join("");
   $("#effortMenu").querySelectorAll(".effort-opt").forEach(b => (b.onclick = () => { S.effort = b.dataset.e; S.think = b.dataset.e !== "low"; saveSettings(); closeEffort(); paintEffort(); }));
 }
@@ -2405,6 +2406,7 @@ async function chat(model, opts = {}) {
           catch (e) { if (e.name === "AbortError") throw e; block.error = e.message; out = "Error: " + e.message; }
         }
         block.active = false; block.done = true; redraw();
+        if (block.error || /^(Error|Unknown tool)/.test(String(out || "").trim())) out = String(out) + (window.TOOL_FAIL_HINT || "");   // it may try again
         msgs.push({ role: "tool", content: out, tool_name: name });
       }
     }
@@ -3905,16 +3907,19 @@ $$("dialog [data-close]").forEach(b => (b.onclick = () => b.closest("dialog").cl
 $$("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d && d.id !== "termsDlg") d.close(); }));
 
 // the night sky behind the app (a canvas of stars, see starfield.js)
-const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), { count: Math.round(Math.min(560, Math.max(220, innerWidth * innerHeight / 3800))), nebula: false }) : null;
+// dark mode: a darker, quieter sky (fewer and dimmer stars, a faint blue glow low on the horizon: see #sky in app.css);
+// Max thinking: fine gold sparks rising, in light and dark
+const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), { count: Math.round(Math.min(340, Math.max(140, innerWidth * innerHeight / 6200))), nebula: false, drift: .012 }) : null;
 const polygonField = window.createPolygonField && $("#orbs") ? createPolygonField($("#orbs")) : null;
 let skyOn = false;
 function skyFrame(t) {
-  if (!appSky || S.stars === false || document.hidden || document.documentElement.dataset.theme !== "dark") {
+  const root = document.documentElement, dark = root.dataset.theme === "dark", max = root.classList.contains("effort-max");
+  if (!appSky || S.stars === false || document.hidden || !(dark || max)) {
     skyOn = false;
-    if (appSky && (S.stars === false || document.documentElement.dataset.theme !== "dark")) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); }
+    if (appSky && (S.stars === false || !(dark || max))) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); }
     return;
   }
-  appSky.draw(t, { palette: "night", alpha: .82 });
+  appSky.draw(t, max ? { palette: "gold", dark, alpha: 1 } : { palette: "night", alpha: .6 });
   requestAnimationFrame(skyFrame);
 }
 function startSky() { if (appSky && S.stars !== false && !skyOn) { skyOn = true; requestAnimationFrame(skyFrame); } }
@@ -3975,8 +3980,12 @@ function applyRail() {
 }
 $("#railBtn").onclick = () => { S.sideRail = !S.sideRail; saveSettings(); applyRail(); };
 addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); $("#railBtn").click(); } });   // Ctrl+\
-function applyNavFold() { $("#sideNav").classList.toggle("folded", !!S.navFold); $("#brandToggle").setAttribute("aria-expanded", String(!S.navFold)); }
-$("#brandToggle").onclick = () => { S.navFold = !S.navFold; saveSettings(); applyNavFold(); };
+// Closing the sidebar always leaves its icons (the rail). On wide screens the chevron next to "Albatross" does that too; only in the
+// phone's slide-out menu does it still fold the menu away.
+const wideSide = () => matchMedia("(min-width: 821px)").matches;
+function applyNavFold() { const fold = !!S.navFold && !wideSide(); $("#sideNav").classList.toggle("folded", fold); $("#brandToggle").setAttribute("aria-expanded", String(!fold)); }
+$("#brandToggle").onclick = () => { if (wideSide()) { S.sideRail = !S.sideRail; saveSettings(); applyRail(); return; } S.navFold = !S.navFold; saveSettings(); applyNavFold(); };
+addEventListener("resize", () => applyNavFold());
 
 // per-chat (lives in Settings → Chat)
 function openChatSettings() { openSettings("chat"); setTimeout(() => $("#chatTitle").focus(), 50); }
@@ -4037,7 +4046,7 @@ function setView(v, opt) {
 }
 const isHome = () => document.body.classList.contains("home-view");
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
-let homeJarvisRaf = 0;
+let homeJarvisRaf = 0, homeAgent = null;
 function startHomeJarvis(canvas) {
   cancelAnimationFrame(homeJarvisRaf);
   if (!window.createOrb) return;
@@ -4093,8 +4102,8 @@ function renderHome() {
     <div class="home-hero"><canvas class="home-jarvis" aria-hidden="true"></canvas>${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button>${guestMode ? "" : `<button class="home-cta secondary" data-go="agent"><span class="home-sparkle">${allTiles.find(([k]) => k === "agent")[1]}</span><span>Open AI Agent</span><b aria-hidden="true">→</b></button>`}<button class="home-cta manual-jump" type="button" data-scroll="homeManual"><span>Manual tools</span><b aria-hidden="true">↓</b></button></div></div>
     ${guestNotice}
     <section class="home-section manual-section" id="homeManual">
-      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Do it yourself."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Pick a tool and take every step manually."}</p></div>
-      <div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>
+      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Do it yourself, or let the Agent."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Take every step yourself with a tool, or tell the Agent and it does it for you."}</p></div>
+      <div class="${guestMode ? "" : "manual-split"}"><div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>${guestMode ? "" : '<div id="homeAiSlot"></div>'}</div>
     </section>
     <section class="home-feature" aria-label="AI modes">
       <div class="home-feature-copy"><span class="home-kicker">YOUR PRIVATE AI SPACE</span><h2>Dream it.<br>Make it real.</h2><p>Chat, create, or ask the Agent to help on your PC. You choose when AI acts and approve anything that matters.</p></div>
@@ -4112,6 +4121,12 @@ function renderHome() {
   home.querySelector(".home-hero h1").innerHTML = "Your ideas.<br><span>Your universe.</span>";
   home.querySelector(".home-hero .home-kicker").textContent = greeting() + name + " · YOUR OWN AI";
   startHomeJarvis(home.querySelector(".home-jarvis"));
+  // the Agent chat next to the manual tools: made once and moved into each new Home, so a running request keeps going
+  const aiSlot = home.querySelector("#homeAiSlot");
+  if (aiSlot && window.agentPanel) {
+    if (!homeAgent) homeAgent = window.agentPanel(document.createElement("div"), { title: "Ask the Agent", sub: "It can write and send mail, print, sort files and look things up. Sending and printing wait for your OK.", placeholder: "Tell the Agent what to do…", ideas: ["Sum up my unread mail", "Write a mail to … that says …", "Print the newest PDF I sent to my PC"] });
+    aiSlot.replaceWith(homeAgent.root);
+  }
   home.querySelector("[data-scroll='homeManual']").onclick = () => $("#homeManual").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   const jvTile = home.querySelector('[data-go="jarvis"]'); if (jvTile) jvTile.dataset.needsPc = "1";
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
@@ -5573,8 +5588,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-12.2";
+const APP_VERSION = "2026-11-12.3";
 const WHATS_NEW = [
+  ["2026-11-12.3", ["Home: the Agent sits right next to the Do-it-yourself tools; ask it, or do it yourself","Mail: the Mail Agent next to your inbox reads, writes and sends mail for you (you OK every send); manual Reply, Reply all and Forward stay","The AI knows tools can fail now and then, and tries again or another way","Dark mode: a quieter, darker starfield with a faint blue horizon; Max thinking: gold sparks","A closed sidebar now shows just its icons"]],
   ["2026-11-12.2", ["Removed the WhatsApp section from the home page","Print is now fully manual: choose a file from this device or your PC, pick a printer and copies, then press Print","Mail is manual: Reply, Reply all and Forward, written by you, without the AI panel"]],
   ["2026-11-12.1", ["A calmer, cleaner design: flat sidebar, quieter glass, notifications that slide in from the top","Beam → My PC: send files to the other devices on your PC; if one is offline they wait on the PC until it opens Albatross","Beam → People is private now: add someone by their exact name or code, and nothing connects until they accept","Light mode: new shapes with real physics that stack, tumble and can be thrown, and on phones they follow the tilt"]],
   ["2026-11-11.8", ["Appearance themes are clearly named White and Black", "In light mode, geometric shapes fall, settle, and can be picked up and moved with the mouse"]],

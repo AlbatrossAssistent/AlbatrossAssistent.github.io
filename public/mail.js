@@ -20,13 +20,27 @@ function shell() {
       <div class="seg" id="mlFolder" role="tablist"><button data-f="inbox" type="button" class="on">Inbox</button><button data-f="sent" type="button">Sent</button></div>
       <button class="icon-btn" id="mlRefresh" type="button" title="Look for new mail" aria-label="Refresh"><svg class="i" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
       <span style="flex:1"></span>
+      <button class="btn small" id="mlAiBtn" type="button" title="The Agent can read, write and send mail for you">Agent</button>
       <button class="btn small" id="mlAccounts" type="button">Accounts</button>
       <button class="btn small primary" id="mlNew" type="button">New mail</button>
     </div>
     <div class="mail-panes">
       <div class="mail-list" id="mlList" aria-label="Messages"></div>
       <div class="mail-read" id="mlRead"><div class="empty-note">Pick a message on the left to read it.</div></div>
-    </div></div>`;
+    </div></div><div class="mail-ai" id="mlAi"></div>`;
+  // next to your mail: the Agent, which can read, write and send mail by itself (sending waits for your OK); it knows which mail is open
+  if (window.agentPanel) window.agentPanel($("#mlAi"), {
+    title: "Mail Agent", sub: "Reads, sorts and answers mail for you. You see every mail before it's sent.",
+    placeholder: M.open ? "e.g. Answer this and say Friday works" : "e.g. Write to anna@example.com that I'm late",
+    ideas: ["Answer the open mail politely", "Sum up my unread mail", "Which mails need an answer from me?"],
+    context: () => {
+      const a = `Mail account: ${M.account || "(main)"} · folder: ${M.folder}`;
+      if (!M.open) return a + "\nNo mail is open right now.";
+      const j = M.open;
+      return [a, `The open mail (id ${j.id}):`, "From: " + j.from, "To: " + j.to + (j.cc ? "\nCc: " + j.cc : ""), "Date: " + j.date, "Subject: " + j.subject, "", (j.text || "").slice(0, 5000)].join("\n");
+    },
+  });
+  $("#mlAiBtn").onclick = () => $("#mailPage").classList.toggle("ai-open");
   $("#mlAccount").onchange = () => { M.account = $("#mlAccount").value; M.page = 0; M.open = null; loadList(); };
   page.querySelectorAll("#mlFolder button").forEach((b) => (b.onclick = () => { M.folder = b.dataset.f; M.page = 0; M.open = null; page.querySelectorAll("#mlFolder button").forEach((x) => x.classList.toggle("on", x === b)); loadList(); }));
   $("#mlRefresh").onclick = () => { M.page = 0; loadList(); };
