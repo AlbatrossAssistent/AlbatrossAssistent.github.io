@@ -1,5 +1,5 @@
 // Raises the app's version for a release: APP_VERSION in public/app.js (today's date + a running number), a line for the
-// "Albatross was updated" pop-up (WHATS_NEW), and the ?v= on app.css / app.js / account.js in public/index.html, so no browser
+// "Albatross was updated" pop-up (WHATS_NEW), and the ?v= on app.css / app.js / account.js / starfield.js in public/index.html, so no browser
 // mixes a new page with an old cached script.
 //   node tools/bump.js "What changed, in one sentence" ["Another line" ...]
 const fs = require("fs"), path = require("path");
@@ -16,5 +16,5 @@ js = js.replace(`const APP_VERSION = "${old}";`, `const APP_VERSION = "${ver}";`
 js = js.replace("const WHATS_NEW = [\n", `const WHATS_NEW = [\n  [${JSON.stringify(ver)}, ${JSON.stringify(lines)}],\n`).replace("const WHATS_NEW = [\r\n", `const WHATS_NEW = [\r\n  [${JSON.stringify(ver)}, ${JSON.stringify(lines)}],\r\n`);
 fs.writeFileSync(path.join(P, "app.js"), js);
 const htmlFile = path.join(P, "index.html");
-fs.writeFileSync(htmlFile, fs.readFileSync(htmlFile, "utf8").replace(/((?:app\.css|app\.js|account\.js)\?v=)[\w.-]+/g, `$1${ver}`));
+fs.writeFileSync(htmlFile, fs.readFileSync(htmlFile, "utf8").replace(/((?:app\.css|app\.js|account\.js|starfield\.js)\?v=)[\w.-]+/g, `$1${ver}`));
 console.log(`${old} -> ${ver}`);

@@ -79,15 +79,9 @@ function isLocked() {
     });
   });
 }
-// ---------- devices that talk to this PC with the code ----------
-const devices = new Map();   // id -> { id, name, kind, first, last, requests }
-function seeDevice(d) {
-  if (!d || typeof d.id !== "string" || !/^[\w-]{6,64}$/.test(d.id)) return;
-  const now = Date.now(), name = String(d.name || "Device").slice(0, 40), kind = /^(phone|tablet|computer)$/.test(d.kind) ? d.kind : "computer";
-  const x = devices.get(d.id);
-  if (x) { x.last = now; x.requests++; x.name = name; x.kind = kind; }
-  else { devices.set(d.id, { id: d.id, name, kind, first: now, last: now, requests: 1 }); note(`A device connected: ${name}`); }
-}
+// ---------- devices that talk to this PC with the code (kept on disk by drops.js, which also passes files between them) ----------
+const drops = require("./drops");
+function seeDevice(d) { const n = drops.see(d); if (n) note(`A device connected: ${n.name}`); }
 // ---------- the PC's own power: what Wake-on-LAN needs to know, and shutting down ----------
 const pcPower = {
   publicIp: "",
@@ -106,7 +100,10 @@ const pcPower = {
     }
     if (method === "GET" && p === "/pc/loadtimes") return [200, { times: loadTimes.all() }];
     if (method === "POST" && p === "/pc/loadtime") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, { ok: loadTimes.record(j.model, j.secs) }]; }
-    if (method === "GET" && p === "/pc/devices") return [200, { devices: [...devices.values()].sort((a, b) => b.last - a.last).map((d) => ({ ...d, online: Date.now() - d.last < 5 * 60e3 })) }];
+    if (method === "GET" && p === "/pc/devices") return [200, { devices: drops.list() }];
+    if (method === "POST" && p === "/pc/devices") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} if (j.me) seeDevice(j.me); return [200, { devices: drops.list() }]; }
+    if (method === "POST" && p === "/pc/forgetdevice") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, { ok: drops.forget(j.id) }]; }
+    if (p.startsWith("/pc/drop")) return drops.handle(method, p, body, note);
     if (method === "GET" && p === "/pc/lock") return [200, { locked: await isLocked() }];
     if (method === "POST" && p === "/pc/shutdown") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}

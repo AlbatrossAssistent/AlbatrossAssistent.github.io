@@ -307,7 +307,7 @@ function handleWake(req, res) {
 
 function safeSend(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch {} }
 
-// ---------- WebSockets: /host for host PCs, /peer for public users sending files ----------
+// ---------- WebSockets: /host for host PCs, /peer for people sending files to their contacts ----------
 const wss = new WebSocketServer({ noServer: true, maxPayload: 80 * 1024 * 1024 });
 const peerWss = new WebSocketServer({ noServer: true, maxPayload: 2 * 1024 * 1024 });
 server.on("upgrade", (req, socket, head) => {
@@ -371,51 +371,162 @@ wss.on("connection", (ws, req) => {
   });
 });
 
-// ---------- public users (file sharing between people) ----------
-// Someone who turns "Public" on joins this list with a name and an ECDH public key. Files go from browser
-// to browser through here, encrypted with a key only the two browsers have; the server can't read them.
-// Nothing is stored: a user disappears from the list when the page closes.
-const peers = new Map(); // id -> { ws, name, pub }
-const MAX_PEERS = 500;
-const peerList = () => [...peers].map(([id, p]) => ({ id, name: p.name, pub: p.pub, idpub: p.idpub, sig: p.sig }));
-let peerTimer = 0;
-function broadcastPeers() {
-  if (peerTimer) return;
-  peerTimer = setTimeout(() => {
-    peerTimer = 0;
-    const msg = JSON.stringify({ type: "peers", peers: peerList() });
-    for (const p of peers.values()) { try { p.ws.send(msg); } catch {} }
-  }, 150);
+// ---------- people: private contacts and file sharing between them ----------
+// Nobody is listed. You reach someone by their exact name or their contact code; they get a request, and only after
+// they accept do the two of you see each other online and can send files. Each person's contact code is a fingerprint
+// of an identity key kept in their browser, and every session key is signed with it (checked here and by the browsers),
+// so nobody can pose as someone else. Requests wait here for people who are offline (14 days). Files go browser to
+// browser through here, encrypted with a key only the two browsers have; the server can't read them.
+const PEOPLE_FILE = path.join(process.env.PEOPLE_DIR || require("os").tmpdir(), "albatross-people.json");
+const people = new Map();   // cid -> { ws, sid, name, pub, idpub, sig, watch: Set<cid> }   online now
+const sids = new Map();     // session id -> cid
+const known = new Map();    // lower-case name -> { cid, name, seen }   names stay reserved for 90 days after last use
+const inbox = new Map();    // cid -> [{ t: "request" | "answer", from: { cid, name }, yes, at }]
+const MAX_PEERS = 2000, NAME_KEEP = 90 * 864e5, REQ_KEEP = 14 * 864e5;
+const CID_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const CID_RE = /^[A-HJ-NP-Z2-9]{4}(-[A-HJ-NP-Z2-9]{4}){3}$/;
+const nameKey = (n) => String(n).normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+try {
+  const j = JSON.parse(fs.readFileSync(PEOPLE_FILE, "utf8"));
+  for (const [k, v] of j.known || []) known.set(k, v);
+  for (const [k, v] of j.inbox || []) inbox.set(k, v);
+} catch {}
+let peopleSaveT = 0;
+function savePeople() {
+  clearTimeout(peopleSaveT);
+  peopleSaveT = setTimeout(() => {
+    const now = Date.now();
+    for (const [k, v] of known) if (now - v.seen > NAME_KEEP && !people.has(v.cid)) known.delete(k);
+    for (const [k, list] of inbox) { const l = list.filter((m) => now - m.at < REQ_KEEP); if (l.length) inbox.set(k, l); else inbox.delete(k); }
+    fs.writeFile(PEOPLE_FILE, JSON.stringify({ known: [...known], inbox: [...inbox] }), () => {});
+  }, 2000);
 }
-peerWss.on("connection", (ws, req) => {
-  let myId = null;
-  let budget = { bytes: 0, since: Date.now() }; // about 200 MB per minute per user
+async function cidOf(raw) {
+  const h = crypto.createHash("sha256").update(raw).digest();
+  let t = ""; for (let i = 0; i < 16; i++) t += CID_ALPHA[h[i] % 32];
+  return t.match(/.{4}/g).join("-");
+}
+async function verifyIdentity(idpub, sig, pub) {
+  try {
+    const raw = Buffer.from(idpub, "base64"), subtle = crypto.webcrypto.subtle;
+    const k = await subtle.importKey("raw", raw, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const ok = await subtle.verify({ name: "ECDSA", hash: "SHA-256" }, k, Buffer.from(sig, "base64"), Buffer.from(pub));
+    return ok ? await cidOf(raw) : "";
+  } catch { return ""; }
+}
+const mutual = (a, b) => !!(a && b && a.watch.has(b.cid) && b.watch.has(a.cid));
+const presenceOf = (p) => ({ type: "presence", cid: p.cid, online: true, id: p.sid, name: p.name, pub: p.pub, idpub: p.idpub, sig: p.sig });
+function queue(cid, m) {
+  const l = (inbox.get(cid) || []).filter((x) => !(x.t === m.t && x.from.cid === m.from.cid));
+  l.push(m); inbox.set(cid, l.slice(-100)); savePeople();
+}
+function deliver(cid, m) {
+  const p = people.get(cid);
+  if (p) safeSend(p.ws, { type: m.t, from: m.from, yes: m.yes, at: m.at });
+  return !!p;
+}
+peerWss.on("connection", (ws) => {
+  let me = null;                 // the entry in people
+  let budget = { bytes: 0, since: Date.now() }, reqs = { n: 0, since: Date.now() };
   ws.isAlive = true;
   ws.on("pong", () => (ws.isAlive = true));
-  ws.on("message", (raw) => {
+  let chain = Promise.resolve(); // hello is checked asynchronously: keep messages in order
+  ws.on("message", (raw) => { chain = chain.then(() => onMessage(raw)).catch(() => {}); });
+  async function onMessage(raw) {
     if (Date.now() - budget.since > 60e3) budget = { bytes: 0, since: Date.now() };
     if ((budget.bytes += raw.length) > 200 * 1024 * 1024) return safeSend(ws, { type: "error", error: "Slow down: too much data this minute." });
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+
     if (msg.type === "hello") {
-      const name = String(msg.name || "").replace(/[ -<>]/g, "").trim().slice(0, 32);
-      const pub = String(msg.pub || "");
-      if (!name || !/^[A-Za-z0-9+/=]{40,200}$/.test(pub)) return safeSend(ws, { type: "error", error: "Enter a name first." });
-      if (!myId && peers.size >= MAX_PEERS) return safeSend(ws, { type: "error", error: "Too many people online, try later." });
-      if (!myId) myId = crypto.randomBytes(6).toString("hex");
-      // the person's long-lived identity key and its signature over this session's key: the browsers check it, the server only passes it on
-      const b64 = /^[A-Za-z0-9+\/=]{80,100}$/;
-      peers.set(myId, { ws, name, pub, idpub: b64.test(String(msg.idpub || "")) ? String(msg.idpub) : "", sig: b64.test(String(msg.sig || "")) ? String(msg.sig) : "" });
-      safeSend(ws, { type: "welcome", id: myId });
-      return broadcastPeers();
+      const name = String(msg.name || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 32);
+      const pub = String(msg.pub || ""), idpub = String(msg.idpub || ""), sig = String(msg.sig || "");
+      if (!/^[A-Za-z0-9+/=]{40,200}$/.test(pub) || !/^[A-Za-z0-9+/=]{80,100}$/.test(idpub) || !/^[A-Za-z0-9+/=]{80,100}$/.test(sig)) return safeSend(ws, { type: "error", error: "This page is out of date. Reload it." });
+      if (name.length < 2) return safeSend(ws, { type: "error", error: "Pick a name with at least 2 characters." });
+      const cid = await verifyIdentity(idpub, sig, pub);
+      if (!cid) return safeSend(ws, { type: "error", error: "Couldn't check who you are. Reload the page." });
+      if (!people.has(cid) && people.size >= MAX_PEERS) return safeSend(ws, { type: "error", error: "Too many people online, try later." });
+      // the same person in another tab or after a reconnect: the newest connection wins
+      const old = people.get(cid);
+      if (old && old.ws !== ws) { sids.delete(old.sid); try { old.ws.close(4000, "replaced"); } catch {} }
+      if (me && me.cid !== cid) { people.delete(me.cid); sids.delete(me.sid); }
+      // names can be found, so each one belongs to one person (until it hasn't been used for 90 days)
+      const k = nameKey(name), owner = known.get(k);
+      const nameTaken = !!owner && owner.cid !== cid && Date.now() - owner.seen < NAME_KEEP;
+      if (!nameTaken) {
+        for (const [kk, v] of known) if (v.cid === cid && kk !== k) known.delete(kk);   // renamed: free the old name
+        known.set(k, { cid, name, seen: Date.now() });
+      }
+      me = { ws, sid: crypto.randomBytes(8).toString("hex"), cid, name, pub, idpub, sig, watch: old ? old.watch : new Set() };
+      people.set(cid, me); sids.set(me.sid, cid); savePeople();
+      safeSend(ws, { type: "welcome", id: me.sid, cid, nameTaken });
+      // what came while offline: requests stay until answered, answers are delivered once
+      const waiting = inbox.get(cid) || [];
+      for (const m of waiting) safeSend(ws, { type: m.t, from: m.from, yes: m.yes, at: m.at });
+      const left = waiting.filter((m) => m.t === "request");
+      if (left.length !== waiting.length) { if (left.length) inbox.set(cid, left); else inbox.delete(cid); savePeople(); }
+      // contacts who were already watching see this person come online
+      for (const c of me.watch) { const o = people.get(c); if (mutual(me, o)) { safeSend(ws, presenceOf(o)); safeSend(o.ws, presenceOf(me)); } }
+      return;
     }
-    if (msg.type === "to" && myId) {
-      const to = peers.get(String(msg.to));
-      if (!to) return safeSend(ws, { type: "gone", id: msg.to });
-      try { to.ws.send(JSON.stringify({ type: "from", from: myId, name: peers.get(myId)?.name, msg: msg.msg })); } catch {}
+    if (!me || people.get(me.cid) !== me) return;
+
+    // the contacts this person has: only mutual contacts see each other online
+    if (msg.type === "watch") {
+      const next = new Set((Array.isArray(msg.cids) ? msg.cids : []).map(String).filter((c) => CID_RE.test(c) && c !== me.cid).slice(0, 500));
+      const before = new Set([...me.watch].filter((c) => mutual(me, people.get(c))));
+      me.watch = next;
+      for (const c of next) { const o = people.get(c); if (mutual(me, o) && !before.has(c)) { safeSend(ws, presenceOf(o)); safeSend(o.ws, presenceOf(me)); } }
+      for (const c of before) if (!next.has(c)) { const o = people.get(c); if (o) { safeSend(o.ws, { type: "presence", cid: me.cid, online: false }); safeSend(ws, { type: "presence", cid: c, online: false }); } }
+      return;
     }
+    // ask someone (by exact name or contact code) to become a contact
+    if (msg.type === "request") {
+      if (Date.now() - reqs.since > 3600e3) reqs = { n: 0, since: Date.now() };
+      if (++reqs.n > 30) return safeSend(ws, { type: "request-result", ok: false, q: msg.q, error: "Too many requests this hour. Try again later." });
+      const q = String(msg.q || "").trim().slice(0, 40), code = q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      let cid = "", name = "";
+      if (code.length === 16 && CID_RE.test(code.match(/.{4}/g).join("-"))) { cid = code.match(/.{4}/g).join("-"); name = (people.get(cid) || [...known.values()].find((v) => v.cid === cid) || {}).name || ""; }
+      else { const v = known.get(nameKey(q)); if (v) { cid = v.cid; name = v.name; } }
+      if (!cid) return safeSend(ws, { type: "request-result", ok: false, q, error: `Nobody called “${q}” was found. Names have to match exactly, or ask them for their contact code.` });
+      if (cid === me.cid) return safeSend(ws, { type: "request-result", ok: false, q, error: "That's you." });
+      const m = { t: "request", from: { cid: me.cid, name: me.name }, at: Date.now() };
+      queue(cid, m); deliver(cid, m);
+      return safeSend(ws, { type: "request-result", ok: true, q, cid, name });
+    }
+    // accept or decline a request; or take back one you sent ("cancel")
+    if (msg.type === "answer" || msg.type === "cancel") {
+      const to = String(msg.to || "");
+      if (!CID_RE.test(to)) return;
+      if (msg.type === "cancel") {
+        const l = (inbox.get(to) || []).filter((x) => !(x.t === "request" && x.from.cid === me.cid));
+        if (l.length) inbox.set(to, l); else inbox.delete(to);
+        savePeople();
+        const o = people.get(to); if (o) safeSend(o.ws, { type: "request-cancel", from: { cid: me.cid } });
+        return;
+      }
+      const mine = inbox.get(me.cid) || [], had = mine.some((x) => x.t === "request" && x.from.cid === to);
+      const l = mine.filter((x) => !(x.t === "request" && x.from.cid === to));
+      if (l.length) inbox.set(me.cid, l); else inbox.delete(me.cid);
+      savePeople();
+      if (!had) return;                                     // only a real request can be answered
+      const m = { t: "answer", from: { cid: me.cid, name: me.name }, yes: !!msg.yes, at: Date.now() };
+      if (!deliver(to, m)) queue(to, m);
+      return;
+    }
+    // data for a contact who is online (an offer, a piece of a file…), sealed by the browsers
+    if (msg.type === "to") {
+      const cid = sids.get(String(msg.to)), to = cid && people.get(cid);
+      if (!to || !mutual(me, to)) return safeSend(ws, { type: "gone", id: msg.to });
+      try { to.ws.send(JSON.stringify({ type: "from", from: me.sid, msg: msg.msg })); } catch {}
+    }
+  }
+  ws.on("close", () => {
+    if (!me || people.get(me.cid) !== me) return;
+    people.delete(me.cid); sids.delete(me.sid);
+    const v = known.get(nameKey(me.name)); if (v && v.cid === me.cid) { v.seen = Date.now(); savePeople(); }
+    for (const c of me.watch) { const o = people.get(c); if (o && o.watch.has(me.cid)) safeSend(o.ws, { type: "presence", cid: me.cid, online: false }); }
   });
-  ws.on("close", () => { if (myId && peers.get(myId)?.ws === ws) { peers.delete(myId); broadcastPeers(); } });
 });
 
 // keep connections alive through proxies, drop dead ones

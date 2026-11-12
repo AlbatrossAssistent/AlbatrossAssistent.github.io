@@ -25,12 +25,15 @@ a { color: inherit; }
 #sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; opacity: .72; pointer-events: none; }
 #orbs { position: fixed; inset: 0; z-index: 0; display: none; overflow: hidden; pointer-events: none; }
 @media (prefers-color-scheme: light) { #sky { display: none; } #orbs { display: block; } }
-#orbs i { position: absolute; display: block; aspect-ratio: 1; pointer-events: auto; touch-action: none; cursor: grab; background: rgba(0,0,0,.065); clip-path: polygon(50% 0, 100% 100%, 0 100%); transform: rotate(var(--angle, 0rad)); transition: background-color .2s, filter .2s; }
-#orbs i:nth-child(3n + 1) { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
-#orbs i:nth-child(3n + 2) { clip-path: polygon(0 0, 100% 0, 50% 100%); }
-#orbs i.hover { background: rgba(0,0,0,.13); filter: drop-shadow(0 8px 8px rgba(0,0,0,.09)); }
-#orbs i.dragging { z-index: 1; cursor: grabbing; background: rgba(0,0,0,.2); filter: drop-shadow(0 14px 14px rgba(0,0,0,.16)); }
-@media (prefers-reduced-motion: reduce) { #orbs i { transition: none; } }
+#orbs i { position: absolute; left: 0; top: 0; display: block; pointer-events: none; will-change: transform; }
+#orbs svg { display: block; overflow: visible; transition: filter .2s; }
+#orbs .rim { fill: none; stroke: rgba(15,23,42,.07); stroke-width: 1; vector-effect: non-scaling-stroke; }
+#orbs i.hover svg { filter: drop-shadow(var(--sx, 0) var(--sy, 7px) 10px rgba(15,23,42,.10)); }
+#orbs i.dragging svg { filter: drop-shadow(var(--sx, 0) var(--sy, 16px) 18px rgba(15,23,42,.16)); }
+#orbs i.hover .rim, #orbs i.dragging .rim { stroke: rgba(0,122,255,.32); }
+html.pf-hover, html.pf-hover * { cursor: grab !important; }
+html.pf-grabbing, html.pf-grabbing * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+@media (prefers-reduced-motion: reduce) { #orbs svg { transition: none; } }
 
 /* top bar */
 .nav { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px; padding: 8px 10px 8px 16px; border-radius: 999px; width: min(960px, calc(100vw - 24px));
@@ -306,7 +309,7 @@ footer a:hover { color: var(--fg); }
 
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
 <script src="public/orb.js"></script>
-<script src="public/starfield.js"></script>
+<script src="public/starfield.js?v=2026-11-12"></script>
 <script>
 "use strict";
 const $ = (s) => document.querySelector(s);

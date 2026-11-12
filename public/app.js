@@ -20,7 +20,7 @@ const DEFAULTS = {
   theme: "light", fontSize: 16, intro: true, compact: false,
   model: "", imageModel: "", mode: "chat",
   img: { size: "1024x1024", steps: "", seed: "", style: "", history: true, ctxModel: "", keep: 10 },
-  files: { name: "", public: false },
+  files: { name: "" },
   tools: {}, stars: true, glass: true,
 };
 
@@ -3701,9 +3701,13 @@ function renderAttachments() {
 // ======================================================================
 // Helpers
 // ======================================================================
-// a short message at the bottom; o.action + o.onAction add a button (like "Undo"), and it stays a little longer then
+// Toasts and notification cards are popovers: they live in the top layer, so they show over an open dialog too. A dialog opened
+// later would cover them, so they're raised again (hidden and shown) whenever something new appears while a dialog is open.
+function raiseTop(el) { if (!el || !el.showPopover) return; try { if (el.matches(":popover-open")) { if (!document.querySelector("dialog[open]")) return; el.hidePopover(); } el.showPopover(); } catch {} }
+for (const id of ["#toast", "#offers"]) raiseTop($(id));
+// a short message at the top; o.action + o.onAction add a button (like "Undo"), and it stays a little longer then
 function toast(t, o) {
-  const el = $("#toast"); el.textContent = t; el.classList.add("show"); el.classList.toggle("has-act", !!(o && o.action));
+  const el = $("#toast"); raiseTop(el); el.textContent = t; el.classList.add("show"); el.classList.toggle("has-act", !!(o && o.action));
   if (o && o.action) { const b = document.createElement("button"); b.type = "button"; b.className = "toast-act"; b.textContent = o.action; b.onclick = () => { el.classList.remove("show"); o.onAction && o.onAction(); }; el.append(" ", b); }
   clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), o && o.action ? 6000 : 2200);
 }
@@ -4062,7 +4066,7 @@ function renderHome() {
   const online = connected ? (remotePC() ? "Online · power and status" : "This PC · power and status") : "Not connected";
   const allTiles = [
     ["chat", TYPE_ICON.chat, "Chat", "Ask, write, plan, code, draw"],
-    ["beam", I.beam, "Beam", "Send files to your PC or to people"],
+    ["beam", I.beam, "Beam", "Send files to your devices and contacts"],
     ["connect", I.connect, "Connect", "Use a PC with its code"],
     ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
     ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
@@ -4199,7 +4203,7 @@ function renderHomeStatus() {
     rows.push(["Access", "ok", "Guest mode · private & PC items disabled"]);
   } else {
     rows.push(["Your PC", hostState.kind, hostText().split(" · ")[0]]);
-    rows.push(["Public", peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "", pubText()]);
+    rows.push(["People", peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "", pubText()]);
   }
   el.innerHTML = "";
   for (const [k, cls, v] of rows) {
@@ -4485,29 +4489,71 @@ const b64ToU8 = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 function openFiles(tab) {
   if (guestMode) return toast("Not available in guest mode");
   if (tab) filesTab(tab);
-  $("#pubName").value = S.files.name; $("#pubOn").checked = S.files.public;
+  $("#pubName").value = S.files.name;
   $("#filesDlg").showModal();
-  checkHost(); loadDevices(); renderPeople(); renderXfers();
+  checkHost(); loadDevices(); pollDrops(); renderPeople(); renderXfers();
 }
 function filesTab(t) {
   $$("#filesDlg [data-ft]").forEach(b => b.classList.toggle("on", b.dataset.ft === t));
   $$("#filesDlg [data-fp]").forEach(p => (p.hidden = p.dataset.fp !== t));
 }
 $$("#filesDlg [data-ft]").forEach(b => (b.onclick = () => filesTab(b.dataset.ft)));
+// a person's round initial, with a colour that stays the same for the same name
+const PAV_HUES = [212, 262, 330, 24, 150, 190, 290, 45];
+function pav(name, el) {
+  const n = String(name || "?"); let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  el = el || document.createElement("span"); el.classList.add("pav"); el.textContent = (n.trim()[0] || "?").toUpperCase(); el.style.setProperty("--h", PAV_HUES[h % PAV_HUES.length]);
+  return el;
+}
 function fileRow(name, sub, right, cls) {
   const d = document.createElement("div"); d.className = "fitem" + (cls ? " " + cls : "");
-  d.innerHTML = `<span class="ic">${FILE_ICON}</span><span class="nm"><b></b><small></small></span>`;
+  d.innerHTML = `<span class="ic">${FILE_ICON}</span><span class="nm"><b></b><small></small></span><span class="acts"></span>`;
   d.querySelector("b").textContent = name; d.querySelector("small").textContent = sub;
-  if (right) for (const r of [].concat(right)) d.appendChild(r);
+  if (right) d.querySelector(".acts").append(...[].concat(right));
   return d;
 }
-function smallBtn(text, fn, primary) { const b = document.createElement("button"); b.className = "btn small" + (primary ? " primary" : ""); b.textContent = text; b.onclick = fn; return b; }
-function wireDrop(drop, input, onFiles) {
-  input.onchange = e => { onFiles([...e.target.files]); e.target.value = ""; };
-  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
-  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
-  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("drag"); onFiles([...e.dataTransfer.files]); });
+function personRow(name, sub, right, cls) {
+  const d = fileRow(name, sub, right, "person" + (cls ? " " + cls : ""));
+  d.querySelector(".ic").replaceWith(pav(name));
+  return d;
 }
+function smallBtn(text, fn, primary) { const b = document.createElement("button"); b.type = "button"; b.className = "btn small" + (primary === true ? " primary" : primary ? " " + primary : ""); b.textContent = text; b.onclick = fn; return b; }
+// a button that asks once more before doing it ("Remove" -> "Sure?")
+function sureBtn(text, fn) {
+  const b = smallBtn(text, () => { if (b.dataset.armed) return fn(); b.dataset.armed = "1"; b.textContent = "Sure?"; b.classList.add("danger"); setTimeout(() => { delete b.dataset.armed; b.textContent = text; b.classList.remove("danger"); }, 3000); }, "ghost");
+  return b;
+}
+function wireDrop(drop, input, onFiles) {
+  if (input) input.onchange = e => { onFiles([...e.target.files]); e.target.value = ""; };
+  drop.addEventListener("dragover", e => { if (drop.classList.contains("disabled")) return; e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("drag"); if (!drop.classList.contains("disabled") && e.dataTransfer.files.length) onFiles([...e.dataTransfer.files]); });
+}
+function setBadge(sel, n) { const b = $(sel); if (!b) return; b.hidden = !n; b.textContent = n > 9 ? "9+" : String(n); }
+
+// ---------- notifications: cards that slide in at the top (offers, requests, files waiting) ----------
+// notify(key, { who | icon, title, text, actions: [[label, fn, primary]], ttl }); notify(key, null) takes it away
+const BELL = '<svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+function notify(key, o) {
+  let card = $(`#offers [data-key="${CSS.escape(key)}"]`);
+  if (!o) { if (card) dismissCard(card); return; }
+  const fresh = !card;
+  if (fresh) { card = document.createElement("div"); card.className = "offer"; card.dataset.key = key; $("#offers").prepend(card); raiseTop($("#offers")); }
+  card.classList.remove("out");
+  card.innerHTML = `<div class="top"><span class="ic"></span><span class="tx"><b></b><small></small></span><button class="x" type="button" aria-label="Dismiss"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
+  if (o.who) card.querySelector(".ic").replaceWith(pav(o.who)); else card.querySelector(".ic").innerHTML = o.icon || BELL;
+  card.querySelector("b").textContent = o.title; card.querySelector("small").textContent = o.text || "";
+  card.querySelector(".x").onclick = () => dismissCard(card);
+  if (o.actions && o.actions.length) {
+    const acts = document.createElement("div"); acts.className = "acts";
+    for (const [label, fn, primary] of o.actions) acts.append(smallBtn(label, () => { fn(); }, primary));
+    card.append(acts);
+  }
+  if (o.progress != null) { const bar = document.createElement("div"); bar.className = "bar"; bar.innerHTML = `<div style="width:${o.progress}%"></div>`; card.append(bar); }
+  clearTimeout(card._t); if (o.ttl) card._t = setTimeout(() => dismissCard(card), o.ttl);
+  if (fresh && o.actions && o.actions.length && navigator.vibrate) try { navigator.vibrate(18); } catch {}
+}
+function dismissCard(card) { clearTimeout(card._t); card.classList.add("out"); setTimeout(() => card.remove(), 320); }
 
 // ---------- your PC (through the host, end-to-end encrypted with the code) ----------
 let hostState = { kind: "", text: "" };
@@ -4538,7 +4584,7 @@ async function checkHost() {
     const st = await (await fetch(hostBase() + "/status")).json();
     if (!st.online) throw new Error("offline");
     const list = await hostCall("GET", "/files/list");
-    setHost("ok", "Connected to host · " + (st.name || "PC"), "End-to-end encrypted with your code");
+    setHost("ok", "Connected to " + (st.name || "your PC"), "End-to-end encrypted with your code");
     renderOutbox(list.outbox || []);
   } catch (e) {
     if (/not allowed/i.test(e.message)) setHost("bad", "Your PC runs an older Albatross host", "Restart the PC or burrow-host.bat to update it.");
@@ -4548,10 +4594,10 @@ async function checkHost() {
 }
 function renderOutbox(list) {
   const el = $("#pcOutbox"); el.innerHTML = "";
-  if (!list.length) { el.innerHTML = '<div class="empty-note">Nothing here. Add files in the control center on your PC (Send to your devices).</div>'; return; }
+  if (!list.length) { el.innerHTML = '<div class="empty-note">Nothing yet. On the PC, add files in the control center under “Send to your devices”.</div>'; return; }
   for (const f of list) {
     const row = fileRow(f.name, fsize(f.size));
-    row.appendChild(smallBtn("Download", () => pullFromPc(f, row), true));
+    row.querySelector(".acts").appendChild(smallBtn("Download", () => pullFromPc(f, row), true));
     el.appendChild(row);
   }
 }
@@ -4571,15 +4617,16 @@ async function pullFromPc(f, row) {
   } catch (e) { row.querySelector("small").textContent = "Failed: " + e.message; }
   btn.disabled = false;
 }
-const xfers = { pc: [], peer: [] };
+const xfers = { pc: [], peer: [], drop: [] };
 function renderXfers() {
-  for (const k of ["pc", "peer"]) {
-    const el = $(k === "pc" ? "#pcXfers" : "#peerXfers"); el.innerHTML = "";
-    for (const x of xfers[k].slice(-8)) {
-      const acts = x.state === "offer" ? [smallBtn("Decline", () => answerOffer(x, false)), smallBtn("Accept", () => answerOffer(x, true), true)]
-        : x.active() ? smallBtn("Cancel", () => x.cancel()) : null;
-      const row = fileRow(x.name, x.label(), acts);
-      if (x.active()) { const bar = document.createElement("div"); bar.className = "bar"; bar.innerHTML = `<div style="width:${x.pct || 0}%"></div>`; row.querySelector(".nm").appendChild(bar); }
+  for (const k of ["pc", "peer", "drop"]) {
+    const el = $(k === "pc" ? "#pcXfers" : k === "peer" ? "#peerXfers" : "#dropXfers"); if (!el) continue; el.innerHTML = "";
+    const list = k === "drop" ? dropRows() : xfers[k].slice(-8);
+    for (const x of list) {
+      const acts = x.state === "offer" ? [smallBtn("Decline", () => answerOffer(x, false), "ghost"), smallBtn("Accept", () => answerOffer(x, true), true)]
+        : x.active && x.active() ? smallBtn("Cancel", () => x.cancel(), "ghost") : x.acts || null;
+      const row = fileRow(x.name, x.label(), acts, "xfer " + (x.state || ""));
+      if (x.active && x.active() && x.pct != null) { const bar = document.createElement("div"); bar.className = "bar"; bar.innerHTML = `<div style="width:${x.pct || 0}%"></div>`; row.querySelector(".nm").appendChild(bar); }
       el.appendChild(row);
     }
   }
@@ -4592,7 +4639,7 @@ const canBg = () => !!(window.AlbatrossXfer && window.indexedDB && navigator.loc
 function pcXfer(rec, state) {
   const x = { tid: rec.tid, rec, file: rec.file, name: rec.name, size: rec.size, state: state || "waiting", pct: 0 };
   x.active = () => ["waiting", "sending", "background"].includes(x.state);
-  x.label = () => ({ waiting: "Waiting… · " + fsize(x.size), sending: `Sending… ${Math.round(x.pct)}% of ${fsize(x.size)}`, background: "Sending in the background… · " + fsize(x.size), done: "Sent to your PC · " + fsize(x.size), cancelled: "Cancelled", error: "Paused: " + x.err + " · it continues next time" })[x.state];
+  x.label = () => ({ waiting: "Waiting… · " + fsize(x.size), sending: `Sending… ${Math.round(x.pct)}% of ${fsize(x.size)}`, background: "Sending in the background… · " + fsize(x.size), done: "Saved on your PC · " + fsize(x.size), cancelled: "Cancelled", error: "Paused: " + x.err + " · it continues next time" })[x.state];
   x.cancel = () => {
     x.state = "cancelled"; renderXfers();
     if (canBg()) AlbatrossXfer.del(x.tid).catch(() => {});
@@ -4671,10 +4718,150 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
 wireDrop($("#pcDrop"), $("#pcPick"), sendToPc);
 $("#pcRefresh").onclick = checkHost;
 
-// ---------- people (public users, browser to browser through the server, end-to-end encrypted) ----------
-// Each browser makes an ECDH key pair when it goes public. Two people derive the same AES key from
-// their keys, so the server only passes along data it can't read.
-const peer = { ws: null, id: null, list: [], keys: null, pub: "", status: "off", target: null, retry: 0, sharedKeys: new Map() };
+// ---------- devices that use your PC, and files between them (Beam -> My PC) ----------
+// A file for another device goes to the PC (host/drops.js) and waits there until that device opens Albatross. Every open page
+// asks the PC every 20 seconds what's waiting for it, which also tells the PC this device is online.
+const DEV_ICON = { phone: '<svg class="i" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M11 18.5h2"/></svg>', tablet: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.4"/><path d="M11 18h2"/></svg>', computer: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg>' };
+const beam = { devices: [], inbox: [], sent: [], seen: new Set(store.get("dropSeen", [])), target: null, busy: false, timer: 0 };
+const dropCall = (path, body) => pcCall(path, { ...(body || {}), me: deviceInfo() });
+async function loadDevices() {
+  const el = $("#devList"); if (!el) return;
+  if (!connected || guestMode) { el.innerHTML = '<div class="empty-note">Connect to your PC to see the devices that use it.</div>'; return; }
+  try {
+    let j; try { j = await dropCall("/pc/devices"); } catch { j = await pcCall("/pc/devices", null, "GET"); }   // older hosts only know GET
+    beam.devices = j.devices || []; renderDevices();
+  } catch (e) { el.innerHTML = `<div class="empty-note">Can't list devices: ${esc(/older|not allowed|Unknown/i.test(e.message) ? "your PC runs an older Albatross host (restart it to update)" : e.message)}</div>`; }
+}
+function renderDevices() {
+  const el = $("#devList"), me = deviceInfo().id; el.innerHTML = "";
+  const list = [...beam.devices].sort((a, b) => (a.id === me) - (b.id === me) || b.online - a.online || b.last - a.last);
+  if (!list.filter(d => d.id !== me).length) el.innerHTML = '<div class="empty-note">No other device uses your PC yet. Open Albatross on your phone or laptop and connect it with the PC\'s code.</div>';
+  for (const d of list) {
+    const self = d.id === me;
+    const card = document.createElement(self ? "div" : "button");
+    card.className = "dev" + (d.online ? " on" : "") + (self ? " self" : "");
+    if (!self) card.type = "button";
+    card.innerHTML = `<span class="dev-ic">${DEV_ICON[d.kind] || DEV_ICON.computer}<i></i></span><span class="nm"><b></b><small></small></span>`;
+    card.querySelector("b").textContent = d.name;
+    card.querySelector("small").textContent = self ? "This device" : d.online ? "Online now" : "Last seen " + ago(d.last);
+    if (!self) {
+      card.title = "Send files to " + d.name;
+      card.insertAdjacentHTML("beforeend", '<span class="dev-go"><svg class="i" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-8-8-4z"/></svg></span>');
+      card.onclick = () => { beam.target = d; $("#devPick").click(); };
+      wireDrop(card, null, files => sendToDevice(d, files));
+      if (!d.online && Date.now() - d.last > 14 * 864e5) {
+        const f = document.createElement("span"); f.className = "dev-forget"; f.title = "Forget this device"; f.textContent = "Forget";
+        f.onclick = async (e) => { e.stopPropagation(); if (!f.dataset.armed) { f.dataset.armed = "1"; f.textContent = "Sure?"; return; } try { await dropCall("/pc/forgetdevice", { id: d.id }); loadDevices(); } catch (er) { toast(er.message); } };
+        card.appendChild(f);
+      }
+    }
+    el.appendChild(card);
+  }
+}
+$("#devPick").onchange = e => { const files = [...e.target.files]; e.target.value = ""; if (beam.target && files.length) sendToDevice(beam.target, files); };
+// sending: each file goes up to the PC in pieces; then it waits there for the other device
+function sendToDevice(d, files) {
+  for (const file of files) {
+    const x = { tid: crypto.randomUUID(), file, name: file.name, size: file.size, to: d, state: "waiting", pct: 0 };
+    x.active = () => ["waiting", "sending"].includes(x.state);
+    x.label = () => ({ waiting: `To ${d.name} · waiting…`, sending: `To ${d.name} · ${Math.round(x.pct)}% of ${fsize(x.size)}`, error: `To ${d.name} · ${x.err}`, cancelled: `To ${d.name} · cancelled` })[x.state] || "";
+    x.cancel = () => { x.state = "cancelled"; if (x.id) dropCall("/pc/dropcancel", { id: x.id }).catch(() => {}); renderXfers(); };
+    xfers.drop.push(x);
+  }
+  renderXfers(); runDropQueue();
+}
+async function runDropQueue() {
+  if (beam.busy) return; beam.busy = true; keepAwake(true);
+  const CH = 1536 * 1024;
+  for (let x; (x = xfers.drop.find(t => t.state === "waiting"));) {
+    x.state = "sending"; renderXfers();
+    try {
+      x.id = (await dropCall("/pc/dropstart", { to: x.to.id, name: x.name, size: x.size })).id;
+      let off = 0;
+      while (off < x.size) {
+        if (x.state === "cancelled") break;
+        const buf = new Uint8Array(await x.file.slice(off, off + CH).arrayBuffer());
+        off = (await dropCall("/pc/dropchunk", { id: x.id, offset: off, data: toB64(buf) })).got;
+        x.pct = off / Math.max(1, x.size) * 100; renderXfers();
+      }
+      if (x.state === "cancelled") continue;
+      const r = await dropCall("/pc/dropend", { id: x.id });
+      x.state = "done";
+      toast(r.online ? `${x.name} is ready for ${x.to.name}` : `${x.name} is waiting on your PC until ${x.to.name} opens Albatross`);
+    } catch (e) { if (x.state !== "cancelled") { x.state = "error"; x.err = e.message; } }
+    renderXfers();
+  }
+  beam.busy = false; keepAwake(false);
+  pollDrops();
+}
+// what the "sent to devices" list shows: files still going up, then what the PC says about them
+function dropRows() {
+  const up = xfers.drop.filter(x => x.state !== "done").slice(-6);
+  const rows = beam.sent.filter(s => !up.some(x => x.id === s.id)).slice(0, 8).map(s => ({
+    name: s.name, state: s.state,
+    label: () => s.state === "taken" ? `To ${s.toName} · delivered ${ago(s.done)}` : s.state === "declined" ? `To ${s.toName} · declined` : s.state === "up" ? `To ${s.toName} · incomplete` : `To ${s.toName} · waiting on your PC` + (s.online ? " (they're online)" : " until they open Albatross"),
+    acts: s.state === "ready" || s.state === "up" ? smallBtn("Take back", async () => { try { await dropCall("/pc/dropcancel", { id: s.id }); pollDrops(); } catch (e) { toast(e.message); } }, "ghost") : null,
+  }));
+  return [...up, ...rows];
+}
+// receiving: ask the PC what's waiting for this device
+async function pollDrops() {
+  clearTimeout(beam.timer); beam.timer = setTimeout(pollDrops, 20000);
+  if (!connected || guestMode || document.hidden) return;
+  let j; try { j = await dropCall("/pc/dropinbox"); } catch { return; }
+  beam.inbox = j.inbox || []; beam.sent = j.sent || [];
+  for (const it of beam.inbox) if (!beam.seen.has(it.id)) {
+    beam.seen.add(it.id);
+    notify("drop-" + it.id, { icon: DEV_ICON[it.from.kind] || DEV_ICON.computer, title: `${it.from.name} sent you a file`, text: `${it.name} · ${fsize(it.size)}`, actions: [["Decline", () => declineDrop(it), "ghost"], ["Save", () => saveDrop(it), true]] });
+  }
+  store.set("dropSeen", [...beam.seen].slice(-200));
+  renderDropInbox(); renderXfers();
+}
+function renderDropInbox() {
+  const el = $("#dropInList"); if (!el) return; el.innerHTML = "";
+  $("#dropInWrap").hidden = !beam.inbox.length; setBadge("#pcBadge", beam.inbox.length);
+  for (const it of beam.inbox) {
+    const row = fileRow(it.name, it.prog || `From ${it.from.name} · ${fsize(it.size)} · ${ago(it.time)}`, it.prog ? null : [smallBtn("Decline", () => declineDrop(it), "ghost"), smallBtn("Save", () => saveDrop(it), true)], "incoming");
+    el.appendChild(row);
+  }
+}
+async function saveDrop(it) {
+  if (it.busy) return; it.busy = true;
+  const parts = []; let off = 0;
+  const show = (pct) => { it.prog = `From ${it.from.name} · saving ${Math.round(pct)}%`; renderDropInbox(); notify("drop-" + it.id, { icon: DEV_ICON[it.from.kind] || DEV_ICON.computer, title: `Saving ${it.name}`, text: `${fsize(off)} of ${fsize(it.size)}`, progress: pct }); };
+  try {
+    show(0);
+    while (off < it.size) {
+      const j = await dropCall("/pc/dropget", { id: it.id, offset: off });
+      const u = b64ToU8(j.data); if (!u.length) throw new Error("The file stopped early");
+      parts.push(u); off += u.length; show(off / it.size * 100);
+    }
+    download(it.name, new Blob(parts));
+    await dropCall("/pc/droptaken", { id: it.id }).catch(() => {});
+    beam.inbox = beam.inbox.filter(x => x !== it); renderDropInbox();
+    notify("drop-" + it.id, { icon: DEV_ICON[it.from.kind] || DEV_ICON.computer, title: "Saved " + it.name, text: "In your Downloads", ttl: 3500 });
+  } catch (e) {
+    it.busy = false; it.prog = ""; renderDropInbox();
+    notify("drop-" + it.id, { title: "Couldn't save " + it.name, text: e.message, actions: [["Try again", () => saveDrop(it), true]] });
+  }
+}
+async function declineDrop(it) {
+  notify("drop-" + it.id, null);
+  try { await dropCall("/pc/dropcancel", { id: it.id }); } catch {}
+  beam.inbox = beam.inbox.filter(x => x !== it); renderDropInbox();
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pollDrops(); });
+setTimeout(pollDrops, 4000);
+$("#devRefresh").onclick = () => { loadDevices(); pollDrops(); };
+
+// ---------- people: private contacts (browser to browser through the server, end-to-end encrypted) ----------
+// Nobody is listed anywhere. You add someone by their exact name or their contact code; they accept, and only then do you
+// two see each other online and can send files. Each browser makes an ECDH key pair per session; two contacts derive the
+// same AES key from their keys, so the server only passes along data it can't read.
+const peer = { ws: null, id: null, cid: "", online: new Map(), keys: null, pub: "", status: "off", target: null, retry: 0, sharedKeys: new Map(), nameTaken: false, err: "" };
+const requests = new Map();                       // cid -> { cid, name, at }: people who asked me
+let sentReqs = store.get("sentReqs", []);         // [{ cid, name, at }]: people I asked
+const saveSent = () => store.set("sentReqs", sentReqs);
 // ---------- who I am to other people: a signing key kept on this device, and the contact code made from it ----------
 // The code is a fingerprint of the public key. Each time I go online I sign my session key with it, so nobody can pretend to be me.
 const CID_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -4708,25 +4895,12 @@ const isContact = (cid) => !!cid && contacts.some(c => c.cid === cid);
 function saveContacts() { store.set("contacts", contacts); }
 function addContact(cid, name) {
   if (isContact(cid)) return false;
-  contacts.push({ cid, name: String(name || "Contact").slice(0, 32), added: Date.now() }); saveContacts(); return true;
+  contacts.push({ cid, name: String(name || "Contact").slice(0, 32), added: Date.now() }); saveContacts(); sendWatch(); return true;
 }
-function removeContact(cid) { contacts = contacts.filter(c => c.cid !== cid); saveContacts(); if (peer.target && peer.target.cid === cid) peer.target = null; renderPeople(); }
-// ---------- devices connected to the PC (Beam -> Your PC) ----------
-const DEV_ICON = { phone: '<svg class="i" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M11 18.5h2"/></svg>', tablet: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.4"/><path d="M11 18h2"/></svg>', computer: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg>' };
-async function loadDevices() {
-  const el = $("#devList"); if (!el) return;
-  if (!connected) { el.innerHTML = '<div class="empty-note">Connect to your PC to see the devices that use it.</div>'; return; }
-  try {
-    const j = await pcCall("/pc/devices", null, "GET"), me = deviceInfo().id;
-    el.innerHTML = "";
-    if (!j.devices.length) el.innerHTML = '<div class="empty-note">No device has used the code yet (devices on this PC itself don\'t count).</div>';
-    for (const d of j.devices) {
-      const row = fileRow(d.name + (d.id === me ? " (this device)" : ""), `${d.kind} · ${d.online ? "online now" : "last seen " + ago(d.last)} · connected since ${new Date(d.first).toLocaleDateString()}`, null, "device" + (d.online ? " on" : ""));
-      row.querySelector(".ic").innerHTML = DEV_ICON[d.kind] || DEV_ICON.computer;
-      el.appendChild(row);
-    }
-  } catch (e) { el.innerHTML = `<div class="empty-note">Can't list devices: ${esc(/older|not allowed|Unknown/i.test(e.message) ? "your PC runs an older Albatross host (restart it to update)" : e.message)}</div>`; }
-}
+function removeContact(cid) { contacts = contacts.filter(c => c.cid !== cid); saveContacts(); sendWatch(); if (peer.target === cid) peer.target = null; renderPeople(); }
+const onlineByCid = (cid) => peer.online.get(cid) || null;
+const onlineById = (id) => [...peer.online.values()].find(p => p.id === id) || null;
+function sendWatch() { if (peer.ws && peer.status === "on") peer.ws.send(JSON.stringify({ type: "watch", cids: contacts.map(c => c.cid) })); }
 async function peerKeys() {
   if (peer.keys) return;
   peer.keys = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveKey"]);
@@ -4738,13 +4912,14 @@ function keyFor(pub) {
   return peer.sharedKeys.get(pub);
 }
 function pubText() {
-  if (peer.status === "on") { const n = peer.list.length; return `Public as ${S.files.name} · ${n} other${n === 1 ? "" : "s"} online` + (peer.target ? ` · connected to ${peer.target.name}` : ""); }
-  return peer.status === "connecting" ? "Going public…" : "Public is off";
+  if (!S.files.name) return "Choose a name to start";
+  if (peer.status === "on") { const n = contacts.filter(c => peer.online.has(c.cid)).length; return peer.nameTaken ? `“${S.files.name}” is taken · people can add you by code` : `Reachable as ${S.files.name}` + (contacts.length ? ` · ${n} contact${n === 1 ? "" : "s"} online` : ""); }
+  return peer.status === "connecting" ? "Connecting…" : peer.err || "Offline · reconnecting";
 }
 function setPeerStatus(st) { peer.status = st; renderPeople(); }
 function peerConnect() {
-  if (peer.ws || !S.files.public || !S.files.name) return;
-  if (!crypto.subtle) return toast("Sharing with people needs the page opened over https");
+  if (peer.ws || guestMode || !S.files.name) return;
+  if (!crypto.subtle) return;
   setPeerStatus("connecting");
   peerKeys().then(() => {
     const ws = new WebSocket((S.conn.relay || DEFAULT_SERVER).replace(/\/+$/, "").replace(/^http/, "ws") + "/peer");
@@ -4757,44 +4932,82 @@ function peerConnect() {
     // Decrypting is async, so handle messages strictly one after another to keep file pieces in order.
     let chain = Promise.resolve();
     ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } chain = chain.then(() => onPeerMessage(m)).catch(() => {}); };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       if (peer.ws !== ws) return;
-      peer.ws = null; peer.id = null; peer.list = [];
+      peer.ws = null; peer.id = null; peer.online.clear();
       for (const x of xfers.peer) if (x.active()) x.fail("Connection lost");
       setPeerStatus("off");
-      if (S.files.public) setTimeout(peerConnect, Math.min(30000, 2000 * ++peer.retry));
+      if (S.files.name && e.code !== 4000) setTimeout(peerConnect, Math.min(30000, 2000 * ++peer.retry));
     };
-  }).catch(e => { setPeerStatus("off"); toast("Couldn't go public: " + e.message); });
+  }).catch(e => { peer.err = "Couldn't connect: " + e.message; setPeerStatus("off"); });
 }
-function peerDisconnect() { const ws = peer.ws; peer.ws = null; peer.target = null; if (ws) ws.close(); peer.list = []; setPeerStatus("off"); }
+function peerDisconnect() { const ws = peer.ws; peer.ws = null; peer.target = null; if (ws) ws.close(); peer.online.clear(); setPeerStatus("off"); }
 async function peerSend(to, obj) {
-  const p = peer.list.find(x => x.id === to);
+  const p = onlineById(to);
   if (!p || !peer.ws) throw new Error("They aren't online anymore");
   const sealed = await seal(await keyFor(p.pub), JSON.stringify(obj), "albatross-peer");
   peer.ws.send(JSON.stringify({ type: "to", to, msg: sealed }));
 }
+function reqNotify(r) {
+  notify("req-" + r.cid, { who: r.name, title: `${r.name} wants to add you`, text: "As a contact, you can send each other files.", actions: [["Decline", () => answerRequest(r.cid, false), "ghost"], ["Accept", () => answerRequest(r.cid, true), true]] });
+}
+function answerRequest(cid, yes) {
+  const r = requests.get(cid); if (!r) return;
+  requests.delete(cid); notify("req-" + cid, null);
+  if (peer.ws) peer.ws.send(JSON.stringify({ type: "answer", to: cid, yes }));
+  if (yes) { addContact(cid, r.name); toast(`${r.name} is now a contact`); }
+  renderPeople();
+}
 async function onPeerMessage(m) {
-  if (m.type === "welcome") { peer.id = m.id; peer.retry = 0; setPeerStatus("on"); return; }
-  if (m.type === "error") { toast(m.error); return; }
-  if (m.type === "peers") {
-    peer.list = m.peers.filter(p => p.id !== peer.id);
-    for (const p of peer.list) p.cid = await verifyPeer(p);
-    peer.list = peer.list.filter(p => p.cid !== (ident && ident.cid));
-    { let upd = false; for (const p of peer.list) { const c = contacts.find(x => x.cid === p.cid); if (c && c.name !== p.name) { c.name = p.name; upd = true; } } if (upd) saveContacts(); }
-    if (peer.target && !peer.list.some(p => p.id === peer.target.id)) { toast(peer.target.name + " went offline"); peer.target = null; }
+  if (m.type === "welcome") {
+    peer.id = m.id; peer.cid = m.cid; peer.retry = 0; peer.err = ""; peer.nameTaken = !!m.nameTaken; setPeerStatus("on"); sendWatch();
+    if (m.nameTaken) toast(`The name “${S.files.name}” is already taken. People can still add you by your code, or pick another name.`);
+    return;
+  }
+  if (m.type === "error") { peer.err = m.error; toast(m.error); renderPeople(); return; }
+  if (m.type === "presence") {
+    if (!m.online) {
+      const was = peer.online.get(m.cid); peer.online.delete(m.cid);
+      if (was) for (const x of xfers.peer) if (x.peerId === was.id && x.active()) x.fail("They went offline");
+      if (peer.target === m.cid) peer.target = null;
+    } else if (isContact(m.cid) && await verifyPeer(m) === m.cid) {
+      peer.online.set(m.cid, m);
+      const c = contacts.find(x => x.cid === m.cid); if (c && c.name !== m.name) { c.name = m.name; saveContacts(); }
+    }
     renderPeople(); return;
+  }
+  if (m.type === "request") {
+    if (isContact(m.from.cid)) { peer.ws.send(JSON.stringify({ type: "answer", to: m.from.cid, yes: true })); return; }   // already a contact (they lost theirs)
+    if (sentReqs.some(s => s.cid === m.from.cid)) {   // we both asked: that's a yes
+      requests.set(m.from.cid, { cid: m.from.cid, name: m.from.name, at: m.at }); answerRequest(m.from.cid, true); return;
+    }
+    const r = { cid: m.from.cid, name: m.from.name, at: m.at }; const fresh = !requests.has(r.cid);
+    requests.set(r.cid, r); if (fresh) reqNotify(r);
+    renderPeople(); return;
+  }
+  if (m.type === "request-cancel") { requests.delete(m.from.cid); notify("req-" + m.from.cid, null); renderPeople(); return; }
+  if (m.type === "answer") {
+    const s = sentReqs.find(x => x.cid === m.from.cid);
+    sentReqs = sentReqs.filter(x => x.cid !== m.from.cid); saveSent();
+    if (m.yes) { addContact(m.from.cid, m.from.name); notify("ans-" + m.from.cid, { who: m.from.name, title: `${m.from.name} accepted`, text: "You can now send each other files.", ttl: 5000 }); }
+    else if (s) notify("ans-" + m.from.cid, { who: m.from.name, title: `${m.from.name} declined your request`, ttl: 5000 });
+    renderPeople(); return;
+  }
+  if (m.type === "request-result") {
+    $("#cidAdd").disabled = false;
+    if (!m.ok) { toast(m.error); return; }
+    if (isContact(m.cid)) { toast((m.name || "They") + " is already a contact"); return; }
+    sentReqs = sentReqs.filter(x => x.cid !== m.cid); sentReqs.push({ cid: m.cid, name: m.name || m.q, at: Date.now() }); saveSent();
+    $("#cidInput").value = ""; toast(`Request sent to ${m.name || m.q}`); renderPeople(); return;
   }
   if (m.type === "gone") { for (const x of xfers.peer) if (x.peerId === m.id && x.active()) x.fail("They went offline"); return; }
   if (m.type !== "from") return;
-  const from = peer.list.find(p => p.id === m.from); if (!from) return;
+  const from = onlineById(m.from); if (!from) return;
   let o; try { o = JSON.parse(await unseal(await keyFor(from.pub), m.msg, "albatross-peer")); } catch { return; }
   const out = xfers.peer.find(x => x.tid === o.tid && x.dir === "out");
   const inc = xfers.peer.find(x => x.tid === o.tid && x.dir === "in");
   if (o.t === "offer") {
-    if (!isContact(from.cid)) {      // only contacts can send: everyone else is told no, without a popup
-      peerSend(from.id, { t: "decline", tid: o.tid }).catch(() => {});
-      return toast(`${from.name} tried to send you a file, but isn't in your contacts. Add them in Beam → People first.`);
-    }
+    if (!isContact(from.cid)) { peerSend(from.id, { t: "decline", tid: o.tid }).catch(() => {}); return; }
     return incomingOffer(from, o);
   }
   if (o.t === "accept" && out) out.onAnswer(true);
@@ -4830,25 +5043,19 @@ function answerOffer(x, yes) {
 }
 function renderOffer(x) {
   if (x.dir !== "in") return;
-  let card = $(`#offers [data-tid="${x.tid}"]`);
-  if (!card) { card = document.createElement("div"); card.className = "offer"; card.dataset.tid = x.tid; $("#offers").appendChild(card); }
-  card.innerHTML = `<div class="top"><span class="ic"></span><span><b></b><small></small></span></div><div class="acts"></div>`;
-  card.querySelector(".ic").textContent = (x.who[0] || "?").toUpperCase();
-  card.querySelector("b").textContent = x.state === "offer" ? `${x.who} wants to send you a file` : x.name;
-  card.querySelector("small").textContent = x.state === "offer" ? `${x.name} · ${fsize(x.size)}` : x.label();
-  const acts = card.querySelector(".acts");
-  if (x.state === "offer") acts.append(smallBtn("Decline", () => answerOffer(x, false)), smallBtn("Accept", () => answerOffer(x, true), true));
-  else if (x.state === "receiving") acts.append(smallBtn("Cancel", () => x.cancel()));
-  else { acts.remove(); setTimeout(() => card.remove(), 4000); }
+  const key = "x-" + x.tid;
+  if (x.state === "offer") notify(key, { who: x.who, title: `${x.who} wants to send you a file`, text: `${x.name} · ${fsize(x.size)}`, actions: [["Decline", () => answerOffer(x, false), "ghost"], ["Accept", () => answerOffer(x, true), true]] });
+  else if (x.state === "receiving") notify(key, { who: x.who, title: `Receiving ${x.name}`, text: x.label(), progress: x.pct, actions: [["Cancel", () => x.cancel(), "ghost"]] });
+  else notify(key, { who: x.who, title: x.state === "done" ? "Saved " + x.name : x.name, text: x.label(), ttl: 4000 });
 }
 // outgoing: one file at a time, each waits for "Accept"
 let peerBusy = false;
-function sendToPeer(list) {
-  const t = peer.target;
-  if (!t) return toast("Pick someone first");
-  if (!isContact(t.cid)) return toast("Add " + t.name + " as a contact first");
+function sendToPeer(list, cid) {
+  const c = contacts.find(x => x.cid === (cid || peer.target)), p = c && onlineByCid(c.cid);
+  if (!c) return toast("Pick a contact first");
+  if (!p) return toast(c.name + " isn't online right now");
   for (const file of list) {
-    const x = baseXfer({ dir: "out", tid: crypto.randomUUID(), peerId: t.id, who: t.name, file, name: file.name, size: file.size, state: "waiting", pct: 0 });
+    const x = baseXfer({ dir: "out", tid: crypto.randomUUID(), peerId: p.id, who: c.name, file, name: file.name, size: file.size, state: "waiting", pct: 0 });
     x.label = () => ({ waiting: `To ${x.who} · waiting in line`, asking: `To ${x.who} · waiting for them to accept…`, sending: `To ${x.who} · ${Math.round(x.pct)}% of ${fsize(x.size)}`, done: `To ${x.who} · delivered`, declined: `To ${x.who} · they declined`, error: `To ${x.who} · ${x.err}` })[x.state];
     xfers.peer.push(x);
   }
@@ -4882,54 +5089,54 @@ async function runPeerQueue() {
 }
 function renderPeople() {
   const l = $("#pubLine");
-  l.querySelector(".dot").className = "dot " + (peer.status === "on" ? "ok" : peer.status === "connecting" ? "wait" : "");
+  l.querySelector(".dot").className = "dot " + (peer.status === "on" ? (peer.nameTaken ? "wait" : "ok") : peer.status === "connecting" ? "wait" : S.files.name ? "bad" : "");
   l.querySelector(".t").textContent = pubText();
+  pav(S.files.name || "?", $("#meAvatar"));
   identity().then(i => { $("#myCid").textContent = i.cid; }).catch(() => { $("#myCid").textContent = "needs https"; });
+  // requests: theirs (accept / decline) and mine (waiting, can be taken back)
+  const rl = $("#reqList"); rl.innerHTML = "";
+  for (const r of requests.values()) rl.appendChild(personRow(r.name, "Wants to add you", [smallBtn("Decline", () => answerRequest(r.cid, false), "ghost"), smallBtn("Accept", () => answerRequest(r.cid, true), true)], "incoming"));
+  for (const s of sentReqs) rl.appendChild(personRow(s.name, "Waiting for them to accept · " + ago(s.at), smallBtn("Take back", () => {
+    if (peer.ws) peer.ws.send(JSON.stringify({ type: "cancel", to: s.cid }));
+    sentReqs = sentReqs.filter(x => x.cid !== s.cid); saveSent(); renderPeople();
+  }, "ghost"), "pending"));
+  $("#reqWrap").hidden = !rl.children.length;
+  setBadge("#peopleBadge", requests.size);
+  // contacts, the ones online first
   const cl = $("#contactList"); cl.innerHTML = "";
-  if (!contacts.length) cl.innerHTML = '<div class="empty-note">No contacts yet. Add someone with their code, or from the list below.</div>';
-  for (const c of contacts) {
-    const live = peer.list.find(p => p.cid === c.cid), on = !!live && peer.target?.id === live.id;
+  if (!contacts.length) cl.innerHTML = '<div class="empty-note">No contacts yet. Send a request with someone\'s name or code above.</div>';
+  for (const c of [...contacts].sort((a, b) => !!onlineByCid(b.cid) - !!onlineByCid(a.cid) || a.name.localeCompare(b.name))) {
+    const live = onlineByCid(c.cid), on = live && peer.target === c.cid;
     const btns = [];
-    if (live) btns.push(smallBtn(on ? "Connected" : "Connect", () => { peer.target = on ? null : live; renderPeople(); }, on));
-    btns.push(smallBtn("Remove", () => removeContact(c.cid)));
-    const row = fileRow(c.name, on ? "Connected · send files below" : live ? "Online" : "Offline", btns, "person" + (on ? " on" : ""));
-    row.querySelector(".ic").textContent = (c.name[0] || "?").toUpperCase();
+    if (live) btns.push(smallBtn("Send files", () => { peer.target = c.cid; renderPeople(); $("#peerPick").click(); }, true));
+    btns.push(sureBtn("Remove", () => removeContact(c.cid)));
+    const row = personRow(c.name, on ? "Selected · drop files below" : live ? "Online" : "Offline", btns, (live ? "live" : "") + (on ? " on" : ""));
+    if (live) { row.onclick = (e) => { if (e.target.closest("button")) return; peer.target = on ? null : c.cid; renderPeople(); }; wireDrop(row, null, files => sendToPeer(files, c.cid)); }
     cl.appendChild(row);
   }
-  const el = $("#peopleList"); el.innerHTML = "";
-  const others = peer.list.filter(p => !isContact(p.cid));
-  if (peer.status === "on" && !others.length) el.innerHTML = '<div class="empty-note">Nobody else is public right now.</div>';
-  if (peer.status !== "on") el.innerHTML = '<div class="empty-note">Turn Public on to see who else is online.</div>';
-  for (const p of others) {
-    const row = fileRow(p.name, p.cid ? "Not a contact" : "Couldn't verify who this is", p.cid ? smallBtn("Add as contact", () => { addContact(p.cid, p.name); toast(p.name + " is now a contact"); renderPeople(); }, true) : null, "person");
-    row.querySelector(".ic").textContent = (p.name[0] || "?").toUpperCase();
-    el.appendChild(row);
-  }
-  $("#peerDrop").classList.toggle("disabled", !peer.target || !isContact(peer.target.cid));
-  $("#peerDropTitle").textContent = peer.target ? "Send files to " + peer.target.name : "Pick someone above";
+  const t = contacts.find(c => c.cid === peer.target), tl = t && onlineByCid(t.cid);
+  $("#peerDrop").classList.toggle("disabled", !tl);
+  $("#peerDropTitle").textContent = tl ? "Send files to " + t.name : "Pick a contact who is online";
   if (isHome()) renderHomeStatus();
 }
-wireDrop($("#peerDrop"), $("#peerPick"), sendToPeer);
+wireDrop($("#peerDrop"), $("#peerPick"), files => sendToPeer(files));
 $("#copyCid").onclick = () => copy($("#myCid").textContent);
-$("#devRefresh").onclick = loadDevices;
-$("#cidAdd").onclick = async () => {
-  const raw = $("#cidInput").value.toUpperCase().replace(/[^A-Z2-9]/g, "");
-  if (raw.length !== 16) return toast("A contact code has 16 letters and numbers (XXXX-XXXX-XXXX-XXXX)");
-  const cid = raw.match(/.{4}/g).join("-");
-  if (ident && cid === ident.cid) return toast("That's your own code");
-  if (isContact(cid)) return toast("Already a contact");
-  const live = peer.list.find(p => p.cid === cid);
-  addContact(cid, live ? live.name : "Contact " + cid.slice(0, 4)); $("#cidInput").value = ""; toast(live ? live.name + " added" : "Added. Their name shows when they are online"); renderPeople();
+$("#addForm").onsubmit = (e) => {
+  e.preventDefault();
+  const q = $("#cidInput").value.trim();
+  if (!q) return $("#cidInput").focus();
+  if (!S.files.name) { toast("Choose your name first"); return $("#pubName").focus(); }
+  if (!peer.ws || peer.status !== "on") { toast("Not connected yet, try again in a moment"); peerConnect(); return; }
+  const raw = q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (raw.length === 16 && ident && raw.match(/.{4}/g).join("-") === ident.cid) return toast("That's your own code");
+  $("#cidAdd").disabled = true; setTimeout(() => ($("#cidAdd").disabled = false), 5000);
+  peer.ws.send(JSON.stringify({ type: "request", q }));
 };
 $("#pubName").onchange = e => {
   S.files.name = e.target.value.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 32); e.target.value = S.files.name; saveSettings();
-  if (peer.ws) { peerDisconnect(); peerConnect(); }
-};
-$("#pubOn").onchange = e => {
-  if (e.target.checked && !$("#pubName").value.trim()) { e.target.checked = false; toast("Enter your name first"); $("#pubName").focus(); return; }
-  S.files.name = $("#pubName").value.trim().slice(0, 32);
-  S.files.public = e.target.checked; saveSettings();
-  if (S.files.public) peerConnect(); else peerDisconnect();
+  if (S.files.name.length === 1) { toast("Use at least 2 characters"); return; }
+  if (peer.ws) peerDisconnect();
+  peer.retry = 0; peerConnect(); renderPeople();
 };
 
 // ---------- full screen & install as app ----------
@@ -5300,8 +5507,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-11.8";
+const APP_VERSION = "2026-11-12.1";
 const WHATS_NEW = [
+  ["2026-11-12.1", ["A calmer, cleaner design: flat sidebar, quieter glass, notifications that slide in from the top","Beam → My PC: send files to the other devices on your PC; if one is offline they wait on the PC until it opens Albatross","Beam → People is private now: add someone by their exact name or code, and nothing connects until they accept","Light mode: new shapes with real physics that stack, tumble and can be thrown, and on phones they follow the tilt"]],
   ["2026-11-11.8", ["Appearance themes are clearly named White and Black", "In light mode, geometric shapes fall, settle, and can be picked up and moved with the mouse"]],
   ["2026-11-11.7", ["Pure black and white backgrounds; Jarvis matches the selected background theme"]],
   ["2026-11-11.1", ["A clearer Home screen brings AI chat, Beam, mail, notes and printing together","WhatsApp handoff: ask the AI for a draft, then review and send it yourself in WhatsApp"]],
@@ -5383,11 +5591,9 @@ if (window.LiquidGlass) {
   LiquidGlass.setEnabled(S.glass !== false);
   LiquidGlass.auto([
     // thin bars bend less (bezel, refraction), or what passes behind them smears into streaks
-    ["aside", { bezel: 30, frost: .3 }], [".topbar", { bezel: 14, refraction: 70, frost: .3 }], [".box", { bezel: 16, refraction: 90, frost: .3 }], ["dialog", { bezel: 34, frost: .45 }],
-    [".home-action", { bezel: 24, frost: .3 }], [".home-card", { bezel: 24, frost: .35 }], [".jv-card", { bezel: 26, frost: .35 }],
-    ["#jvPop", { bezel: 28, frost: .4 }], [".toast", { bezel: 14, refraction: 80, frost: .4 }], [".deck-side", { bezel: 30, frost: .4 }],
-    // the smaller glass: suggestions, the new-chat cards, segmented controls, menus (not inside other glass: that doubles the tint)
-    [".suggestions button", { bezel: 16, refraction: 90, frost: .3 }], [".type-card", { bezel: 22, frost: .3 }], [".seg", { bezel: 12, refraction: 60, frost: .3 }],
+    ["aside", { bezel: 30, frost: .3 }], [".topbar", { bezel: 14, refraction: 70, frost: .3 }], [".box", { bezel: 16, refraction: 90, frost: .3 }],
+    [".home-card", { bezel: 24, frost: .35 }], [".jv-card", { bezel: 26, frost: .35 }], ["#jvPop", { bezel: 28, frost: .4 }], [".deck-side", { bezel: 30, frost: .4 }],
+    // small controls (buttons, cards, segmented controls, toasts) stay plain: a bright refracting rim on every one of them looked busy
     [".attach-menu, .effort-menu", { bezel: 16, refraction: 80, frost: .7 }],
   ]);
 }
@@ -5396,7 +5602,7 @@ if (!current) newChat(); else renderAll();
 showWhatsNew();
 window.notesOnStart && window.notesOnStart();
 // the terms have to be accepted once (again when they change: bump TERMS_VERSION)
-const TERMS_VERSION = "2026-10-09";
+const TERMS_VERSION = "2026-11-12";
 if (store.get("termsAccepted", "") !== TERMS_VERSION) {
   const d = $("#termsDlg");
   d.addEventListener("cancel", (e) => e.preventDefault());           // Esc doesn't skip it
@@ -5407,7 +5613,7 @@ if (store.get("termsAccepted", "") !== TERMS_VERSION) {
 setView("home");
 { const go = new URLSearchParams(location.search).get("go");
   if (go === "chat") { newChat("chat", "", false); setView("chat"); } else if (go === "pc") setView("pc", { tab: "status" }); else if (go === "jarvis") setView("jarvis"); }
-if (S.files.public && S.files.name) peerConnect();
+if (S.files.name) peerConnect();
 checkHost();
 connect();
 checkSearch();

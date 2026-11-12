@@ -46,7 +46,7 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
       }
       let body = "";
       // the Monitor takes pictures and videos from the device in pieces of a few MB
-      const max = jx[1] === "/pc/monitor" ? 12e6 : 1e5;
+      const max = jx[1] === "/pc/monitor" || jx[1] === "/pc/dropchunk" ? 12e6 : 1e5;
       req.on("data", (c) => { body += c; if (body.length > max) req.destroy(); });
       req.on("end", async () => {
         let status = 500, out = {};

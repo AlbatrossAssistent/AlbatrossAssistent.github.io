@@ -55,22 +55,37 @@ f.onload = () => setTimeout(async () => {
     const options = [...d.querySelectorAll("#theme option")].map((o) => o.textContent);
     return options.includes("White (light mode)") && options.includes("Black (dark mode)");
   });
-  await tryIt("light background shapes fall and can be dragged", async () => {
+  await tryIt("light background shapes fall, collide and can be dragged", async () => {
     Object.defineProperty(d, "hidden", { configurable: true, get: () => false });
     ev('S.theme = "light"; applyAppearance()');
-    const tiles = [...d.querySelectorAll("#orbs i")], starts = tiles.map((tile) => parseFloat(tile.style.top));
-    await sleep(180);
-    const fallen = tiles.some((tile, i) => parseFloat(tile.style.top) > starts[i] + 10);
-    const tile = tiles[0], startX = parseFloat(tile.style.left), startY = parseFloat(tile.style.top);
-    const r = tile.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
-    tile.dispatchEvent(new w.MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
-    w.dispatchEvent(new w.MouseEvent("pointermove", { bubbles: true, clientX: x + 80, clientY: y - 40 }));
-    const dragged = parseFloat(tile.style.left) > startX + 30 && tile.classList.contains("dragging");
-    w.dispatchEvent(new w.MouseEvent("pointerup", { bubbles: true }));
+    const tiles = [...d.querySelectorAll("#orbs i")], mid = (t) => { const r = t.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+    const starts = tiles.map((t) => mid(t)[1]);
+    ev("polygonField.advance(.6)");
+    const fallen = tiles.some((t, i) => mid(t)[1] > starts[i] + 10);
+    const tile = tiles[tiles.length - 1], [x, y] = mid(tile);
+    tile.dispatchEvent(new w.PointerEvent("pointerdown", { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, pointerId: 7 }));
+    const held = tile.classList.contains("dragging");
+    w.dispatchEvent(new w.PointerEvent("pointermove", { bubbles: true, clientX: x + 160, clientY: y + 60, pointerId: 7 }));
+    ev("polygonField.advance(.6)");
+    const [x2] = mid(tile), dragged = held && x2 > x + 40;
+    w.dispatchEvent(new w.PointerEvent("pointerup", { bubbles: true, pointerId: 7 }));
     const ok = w.getComputedStyle(d.body).backgroundColor === "rgb(255, 255, 255)"
       && w.getComputedStyle(d.querySelector("#orbs")).display === "block"
-      && fallen && dragged;
-    if (!ok) throw new Error(JSON.stringify({ fallen, dragged, startX, startY, x: tile.style.left, y: tile.style.top, cls: tile.className, display: w.getComputedStyle(d.querySelector("#orbs")).display }));
+      && tiles.length >= 8 && !!tile.querySelector("svg path") && fallen && dragged;
+    if (!ok) throw new Error(JSON.stringify({ n: tiles.length, fallen, held, dragged, x, x2, display: w.getComputedStyle(d.querySelector("#orbs")).display }));
+    return true;
+  });
+  await tryIt("Beam: devices tab, private contacts, notifications from the top", async () => {
+    ev('openFiles("people")');
+    await sleep(150);
+    const ok1 = !!d.querySelector("#addForm #cidInput") && !d.querySelector("#pubOn") && !d.querySelector("#peopleList") && !!d.querySelector("#devList") && !!d.querySelector("#contactList");
+    ev('notify("smoke", { title: "Smoke test", text: "card", actions: [["OK", () => {}, true]] })');
+    ev('toast("Hello from the top")');
+    await sleep(400);
+    const card = d.querySelector('#offers [data-key="smoke"]'), t = d.querySelector("#toast").getBoundingClientRect();
+    const ok2 = !!card && card.getBoundingClientRect().top < 200 && t.top < 120;
+    ev('notify("smoke", null); document.querySelector("#filesDlg").close()');
+    if (!(ok1 && ok2)) throw new Error(JSON.stringify({ ok1, ok2, card: !!card, cardTop: card && card.getBoundingClientRect().top, toastTop: t.top }));
     return true;
   });
   await tryIt("WhatsApp handoff opens an editable draft", () => {

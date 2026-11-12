@@ -12,10 +12,10 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-11-11.9">
+<link rel="stylesheet" href="app.css?v=2026-11-12.1">
 </head>
 <body class="intro">
-<div id="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+<div id="orbs" aria-hidden="true"></div>
 <canvas id="sky" aria-hidden="true"></canvas>
 
 <!-- ================= INTRO ================= -->
@@ -526,45 +526,69 @@
   </div>
 </dialog>
 
-<!-- files: to and from your PC, and to other people -->
-<dialog id="filesDlg">
+<!-- Beam: files between the devices on your PC, to the PC itself, and to your contacts -->
+<dialog id="filesDlg" class="beam-dlg">
   <div class="modal">
-    <div class="modal-head"><h2>Beam</h2><button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div class="body">
-      <div class="seg files-tabs" role="tablist"><button data-ft="pc" class="on">Your PC</button><button data-ft="people">People</button></div>
-
+    <div class="modal-head beam-head">
+      <div class="beam-title"><span class="beam-mark"><svg class="i" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-8-8-4z"/></svg></span><div><h2>Beam</h2><small>Files between your devices and the people you know</small></div></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="beam-tabs"><div class="seg files-tabs" role="tablist"><button data-ft="pc" class="on">My PC <span class="tab-badge" id="pcBadge" hidden></span></button><button data-ft="people">People <span class="tab-badge" id="peopleBadge" hidden></span></button></div></div>
+    <div class="body beam-body">
       <section class="fpane" data-fp="pc">
         <div class="conn-status" id="hostLine"><span class="dot"></span><span class="t">Checking…</span></div>
-        <div class="sub-head"><h3>Devices on your PC</h3><button class="btn small" id="devRefresh">Refresh</button></div>
-        <div class="flist" id="devList"></div>
-        <label class="drop" id="pcDrop"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><b>Send files to your PC</b><span>Drop files here or click to choose. They're saved in Downloads → Albatross on the PC.</span><input type="file" id="pcPick" multiple hidden></label>
-        <div class="xfers" id="pcXfers"></div>
-        <div class="sub-head"><h3>From your PC</h3><button class="btn small" id="pcRefresh">Refresh</button></div>
-        <div class="flist" id="pcOutbox"></div>
+        <div id="dropInWrap" class="beam-group" hidden>
+          <div class="sub-head"><h3>Waiting for you</h3></div>
+          <div class="flist" id="dropInList"></div>
+        </div>
+        <div class="beam-group">
+          <div class="sub-head"><h3>Devices on your PC</h3><button class="link-btn" id="devRefresh">Refresh</button></div>
+          <div class="dev-grid" id="devList"></div>
+          <p class="beam-hint">Choose a device, or drop files on it. If it's offline, the files wait on your PC and arrive the next time it opens Albatross.</p>
+          <div class="xfers" id="dropXfers"></div>
+        </div>
+        <div class="beam-group">
+          <div class="sub-head"><h3>The PC itself</h3></div>
+          <label class="drop" id="pcDrop"><span class="drop-ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></span><b>Send files to the PC</b><span>Drop files here or click. They're saved in Downloads → Albatross.</span><input type="file" id="pcPick" multiple hidden></label>
+          <div class="xfers" id="pcXfers"></div>
+        </div>
+        <div class="beam-group">
+          <div class="sub-head"><h3>From your PC</h3><button class="link-btn" id="pcRefresh">Refresh</button></div>
+          <div class="flist" id="pcOutbox"></div>
+        </div>
       </section>
 
       <section class="fpane" data-fp="people" hidden>
-        <div class="pub-row">
-          <div class="field"><label for="pubName">Your name</label><input id="pubName" maxlength="32" placeholder="How others see you" autocomplete="off"></div>
-          <label class="pub-toggle"><input type="checkbox" class="switch" id="pubOn">Public</label>
+        <div class="me-card">
+          <span class="pav pav-lg" id="meAvatar">?</span>
+          <div class="me-main">
+            <label class="sr" for="pubName">Your name</label>
+            <input id="pubName" maxlength="32" placeholder="Choose your name" autocomplete="off" spellcheck="false">
+            <div class="me-status" id="pubLine"><span class="dot"></span><span class="t">Choose a name to start</span></div>
+          </div>
+          <button class="code-chip" id="copyCid" title="Copy your contact code"><small>Your code</small><code id="myCid">…</code></button>
         </div>
-        <div class="conn-status" id="pubLine"><span class="dot"></span><span class="t">Public is off</span></div>
-        <div class="sub-head"><h3>Your contact code</h3></div>
-        <div class="cid-row"><code id="myCid">…</code><button class="btn small" id="copyCid">Copy</button></div>
-        <div class="note">Share this code with someone you know. Only people who are in each other's contacts can connect and send files.</div>
-        <div class="sub-head"><h3>Contacts</h3></div>
-        <div class="flist" id="contactList"></div>
-        <div class="add-contact"><input id="cidInput" placeholder="Their code: XXXX-XXXX-XXXX-XXXX" maxlength="24" autocomplete="off" spellcheck="false"><button class="btn small primary" id="cidAdd">Add contact</button></div>
-        <div class="sub-head"><h3>Others online</h3></div>
-        <div class="flist" id="peopleList"></div>
-        <label class="drop disabled" id="peerDrop"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><b id="peerDropTitle">Pick someone above</b><span>Files go one at a time, each only after they accept it. End-to-end encrypted.</span><input type="file" id="peerPick" multiple hidden></label>
+        <form class="add-contact" id="addForm" autocomplete="off">
+          <input id="cidInput" placeholder="Name or contact code" maxlength="40" spellcheck="false" aria-label="Their name or contact code">
+          <button class="btn primary" id="cidAdd" type="submit">Send request</button>
+        </form>
+        <p class="beam-hint">You're not listed anywhere. People add you by your exact name or your code, and nothing connects until you accept.</p>
+        <div id="reqWrap" class="beam-group" hidden>
+          <div class="sub-head"><h3>Requests</h3></div>
+          <div class="flist" id="reqList"></div>
+        </div>
+        <div class="beam-group">
+          <div class="sub-head"><h3>Contacts</h3></div>
+          <div class="flist" id="contactList"></div>
+        </div>
+        <label class="drop disabled" id="peerDrop"><span class="drop-ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></span><b id="peerDropTitle">Pick a contact who is online</b><span>Each file waits until they accept it. End-to-end encrypted.</span><input type="file" id="peerPick" multiple hidden></label>
         <div class="xfers" id="peerXfers"></div>
-        <div class="note">While Public is on, others who are public can see your name and add you as a contact. Files only come from your contacts, and nothing arrives without your OK.</div>
       </section>
     </div>
   </div>
 </dialog>
-<div class="offers" id="offers" aria-live="polite"></div>
+<input type="file" id="devPick" multiple hidden>
+<div class="offers" id="offers" aria-live="polite" popover="manual"></div>
 
 <dialog id="termsDlg">
   <div class="modal">
@@ -630,7 +654,7 @@
     <button class="icon-btn" id="jvPopClose" aria-label="Hide">×</button>
   </div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" popover="manual"></div>
 
 <script src="orb.js"></script>
 <div class="jv-full" id="jvFull" hidden role="dialog" aria-label="Jarvis, full screen">
@@ -642,7 +666,7 @@
   <div class="jvf-bottom"><div class="jvf-log" id="jvFullLog"></div>
     <form class="jvf-ask" id="jvFullAsk"><input id="jvFullInput" placeholder="Tell Jarvis what to do…" autocomplete="off"><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form></div>
 </div>
-<script src="starfield.js"></script>
+<script src="starfield.js?v=2026-11-12.1"></script>
 <script src="scenes.js"></script>
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
@@ -653,8 +677,8 @@
 <script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-11-11.9"></script>
-<script type="module" src="account.js?v=2026-10-30.2"></script>
+<script src="app.js?v=2026-11-12.1"></script>
+<script type="module" src="account.js?v=2026-11-12.1"></script>
 <script src="agent.js"></script>
 <script src="voice.js"></script>
 <script src="browser.js"></script>
