@@ -5588,8 +5588,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-12.3";
+const APP_VERSION = "2026-11-12.4";
 const WHATS_NEW = [
+  ["2026-11-12.4", ["The version is shown under Settings (click it to see what changed); it turns orange when a newer one is out","If the site you're on is older than the newest version, Albatross tells you and offers to reload"]],
   ["2026-11-12.3", ["Home: the Agent sits right next to the Do-it-yourself tools; ask it, or do it yourself","Mail: the Mail Agent next to your inbox reads, writes and sends mail for you (you OK every send); manual Reply, Reply all and Forward stay","The AI knows tools can fail now and then, and tries again or another way","Dark mode: a quieter, darker starfield with a faint blue horizon; Max thinking: gold sparks","A closed sidebar now shows just its icons"]],
   ["2026-11-12.2", ["Removed the WhatsApp section from the home page","Print is now fully manual: choose a file from this device or your PC, pick a printer and copies, then press Print","Mail is manual: Reply, Reply all and Forward, written by you, without the AI panel"]],
   ["2026-11-12.1", ["A calmer, cleaner design: flat sidebar, quieter glass, notifications that slide in from the top","Beam → My PC: send files to the other devices on your PC; if one is offline they wait on the PC until it opens Albatross","Beam → People is private now: add someone by their exact name or code, and nothing connects until they accept","Light mode: new shapes with real physics that stack, tumble and can be thrown, and on phones they follow the tilt"]],
@@ -5663,6 +5664,42 @@ async function checkForUpdate() {
 }
 setInterval(checkForUpdate, 10 * 60 * 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
+
+// ---------- the version you're on, and live settings from the server (no GitHub push needed to change them) ----------
+// The server (server.js GET /version) says which version it was deployed with, and passes on ALBATROSS_CONFIG, which can be
+// changed on Render without touching GitHub: { "notice": "…", "minVersion": "2026-11-12.3", "flags": { … } }.
+// If this copy of the site is older than the server's (GitHub Pages can lag behind, or a browser kept an old copy), it says so.
+window.liveConfig = { flags: {} };
+let liveSeen = { version: "", at: 0 };
+function paintVersion() {
+  const el = $("#appVer"); if (!el) return;
+  el.textContent = "Version " + APP_VERSION;
+  el.title = liveSeen.version ? `This copy: ${APP_VERSION} · newest on the server: ${liveSeen.version}` : "This copy: " + APP_VERSION;
+  el.classList.toggle("old", !!liveSeen.version && newerVersion(liveSeen.version, APP_VERSION));
+}
+async function checkLive() {
+  if (document.hidden) return;
+  let j; try { j = await (await fetch(DEFAULT_SERVER.replace(/\/+$/, "") + "/version", { cache: "no-store" })).json(); } catch { return; }
+  liveSeen = { version: j.version || "", at: Date.now() };
+  const cfg = j.config && typeof j.config === "object" ? j.config : {};
+  window.liveConfig = { ...cfg, flags: cfg.flags && typeof cfg.flags === "object" ? cfg.flags : {} };
+  paintVersion();
+  // a message for everyone, shown once per text
+  if (typeof cfg.notice === "string" && cfg.notice.trim() && store.get("liveNotice", "") !== cfg.notice) {
+    store.set("liveNotice", cfg.notice); updatePop("Albatross", [cfg.notice.trim()], [["OK", null, true]]);
+  }
+  const tooOld = typeof cfg.minVersion === "string" && newerVersion(cfg.minVersion, APP_VERSION);
+  const behind = j.version && newerVersion(j.version, APP_VERSION);
+  if ((tooOld || behind) && !updateOffered) {
+    updateOffered = true;
+    updatePop(tooOld ? "Please update Albatross" : "A newer version of Albatross is out", [`You have ${APP_VERSION}, the newest is ${j.version || cfg.minVersion}.`, "If nothing changes after reloading, this website is still being published. Try again in a few minutes."],
+      [["Later", null, false], ["Reload", () => location.reload(), true]]);
+  }
+}
+setTimeout(checkLive, 5000); setInterval(checkLive, 10 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - liveSeen.at > 60e3) checkLive(); });
+setTimeout(paintVersion, 0);
+$("#appVer").onclick = () => updatePop("What changed lately", WHATS_NEW.slice(0, 3).flatMap(([v, l]) => l.map((t) => t)).slice(0, 10), [["OK", null, true]]);
 
 // ---------- start ----------
 // Links look like …/#code=K7QM-4XPT-9F2C-HW3D: the part after # is never sent to any server, so the key stays private.

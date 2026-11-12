@@ -2208,3 +2208,9 @@ body:has(.toast.show) .offers { transform: translateY(54px); }
 html.effort-max #sky { display: block; opacity: 1; }
 html.effort-max[data-theme="dark"] #sky { background: radial-gradient(120% 70% at 50% 115%, rgba(255, 166, 60, .16), transparent 62%), radial-gradient(ellipse at center, transparent 50%, rgba(40, 20, 0, .55)); }
 html.effort-max[data-theme="light"] #sky { background: radial-gradient(120% 70% at 50% 115%, rgba(255, 190, 90, .18), transparent 62%), radial-gradient(ellipse at center, transparent 55%, rgba(214, 160, 60, .16)); }
+
+/* the version, under Settings: click for what changed; it turns orange when the server has a newer one */
+.app-ver { align-self: flex-start; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11.5px; padding: 2px 12px 4px; cursor: pointer; opacity: .75; }
+.app-ver:hover { opacity: 1; color: var(--fg); }
+.app-ver.old { color: var(--warn); opacity: 1; }
+aside.rail .app-ver { display: none; }

@@ -178,8 +178,26 @@ function handleTools(req, res, url) {
   });
 }
 
+// ---------- version and live settings ----------
+// GET /version: the app's version this server was deployed with (read from public/app.js), and settings that can be changed
+// WITHOUT a push to GitHub: put JSON into the ALBATROSS_CONFIG environment variable on Render (Dashboard -> the service ->
+// Environment). Render restarts the server with it; the website asks for it when it opens and every few minutes. Understood keys:
+//   notice      a line shown once to everyone (change the text to show it again), e.g. "Maintenance tonight 22:00"
+//   minVersion  copies older than this (like "2026-11-12.3") are asked to reload
+//   flags       anything else, readable in the page as window.liveConfig.flags
+const DEPLOYED_VERSION = (() => { try { return (/const APP_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(PUBLIC_DIR, "app.js"), "utf8")) || [])[1] || ""; } catch { return ""; } })();
+function liveConfig() {
+  try { const j = JSON.parse(process.env.ALBATROSS_CONFIG || "{}"); return j && typeof j === "object" && !Array.isArray(j) ? j : {}; } catch { return { error: "ALBATROSS_CONFIG isn't valid JSON" }; }
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
+  if (url.pathname === "/version") {
+    cors(res);
+    if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    return res.end(JSON.stringify({ version: DEPLOYED_VERSION, config: liveConfig(), at: Date.now() }));
+  }
 
   if (url.pathname.startsWith("/relay/")) return handleRelay(req, res, url);
   if (url.pathname.startsWith("/tools/")) return handleTools(req, res, url);
@@ -193,7 +211,7 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); return res.end("Not found"); }
-    res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" });
+    res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream", ...(/\.(html|webmanifest)$|sw\.js$/.test(file) ? { "Cache-Control": "no-cache" } : {}) });
     res.end(data);
   });
 });

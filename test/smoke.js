@@ -108,6 +108,7 @@ f.onload = () => setTimeout(async () => {
     return !!d.querySelector("#mlNew") && !d.querySelector("#mlAsk") && !/AI next to it/.test(d.querySelector("#mailPage").textContent) || "AI parts still in Mail";
   });
   ev('setView("chat")');
+  await tryIt("the version shows in the sidebar", () => /Version d{4}-dd-dd.d+/.test(d.querySelector("#appVer").textContent) || d.querySelector("#appVer").textContent);
   await tryIt("settings open", async () => { ev("openSettings()"); await sleep(100); const open = d.querySelector("#settings").open; d.querySelector("#settings").close(); return open; });
   await tryIt("markdown renders code blocks", () => { const f = "\\x60".repeat(3); return /class="code"/.test(w.md("**index.html**\\n" + f + "html\\n<p>hi</p>\\n" + f)); });
   await tryIt("maths and arrows render", () => { const h = ev('md("go $\\\\\\\\rightarrow$ now -> then :white_check_mark:")'); return /→/.test(h) && /✅/.test(h) || h; });
