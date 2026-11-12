@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-11-12.1">
+<link rel="stylesheet" href="app.css?v=2026-11-12.2">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"></div>
@@ -588,6 +588,38 @@
   </div>
 </dialog>
 <input type="file" id="devPick" multiple hidden>
+<!-- Print, by hand: choose a file and a printer, check, print. No AI involved. -->
+<dialog id="printDlg" class="tool-dlg">
+  <div class="modal">
+    <div class="modal-head beam-head">
+      <div class="beam-title"><span class="beam-mark"><svg class="i" viewBox="0 0 24 24"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7zM17 11h.01"/></svg></span><div><h2>Print</h2><small>Choose a file and a printer. Nothing prints until you press Print.</small></div></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="body tool-body">
+      <div class="conn-status" id="prConn" hidden><span class="dot bad"></span><span class="t"><span>Your PC isn't connected</span><small>Printing goes through your PC. Connect to it first.</small></span></div>
+      <section class="beam-group">
+        <div class="sub-head"><h3>1 · File</h3></div>
+        <div class="pr-chosen" id="prChosen" hidden></div>
+        <div class="pr-src" id="prSrc">
+          <label class="drop" id="prDrop"><span class="drop-ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></span><b>From this device</b><span>Drop a file here or click. PDF, pictures, text and Office files.</span><input type="file" id="prPick" hidden accept=".pdf,.png,.jpg,.jpeg,.bmp,.gif,.txt,.md,.csv,.log,.json,.doc,.docx,.rtf,.odt,.html,.htm,.xls,.xlsx,.ods,.ppt,.pptx,.odp"></label>
+          <div class="pr-pc">
+            <div class="pr-pc-head"><b>From your PC</b><span class="pf-crumb" id="prCrumb"></span></div>
+            <div class="flist pr-list" id="prList"></div>
+          </div>
+        </div>
+      </section>
+      <section class="beam-group">
+        <div class="sub-head"><h3>2 · Printer</h3><button class="link-btn" id="prReload" type="button">Refresh</button></div>
+        <div class="pr-opts">
+          <label class="field"><span class="sr">Printer</span><select id="prPrinter"><option>Looking for printers…</option></select></label>
+          <label class="pr-copies">Copies <input id="prCopies" type="number" min="1" max="20" value="1" inputmode="numeric"></label>
+        </div>
+      </section>
+      <div class="pr-summary" id="prSummary">Choose a file to print.</div>
+      <div class="pr-foot"><span class="pr-status" id="prStatus" role="status"></span><button class="btn" data-close type="button">Cancel</button><button class="btn primary" id="prGo" type="button" disabled>Print</button></div>
+    </div>
+  </div>
+</dialog>
 <div class="offers" id="offers" aria-live="polite" popover="manual"></div>
 
 <dialog id="termsDlg">
@@ -666,7 +698,7 @@
   <div class="jvf-bottom"><div class="jvf-log" id="jvFullLog"></div>
     <form class="jvf-ask" id="jvFullAsk"><input id="jvFullInput" placeholder="Tell Jarvis what to do…" autocomplete="off"><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form></div>
 </div>
-<script src="starfield.js?v=2026-11-12.1"></script>
+<script src="starfield.js?v=2026-11-12.2"></script>
 <script src="scenes.js"></script>
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
@@ -677,8 +709,8 @@
 <script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-11-12.1"></script>
-<script type="module" src="account.js?v=2026-11-12.1"></script>
+<script src="app.js?v=2026-11-12.2"></script>
+<script type="module" src="account.js?v=2026-11-12.2"></script>
 <script src="agent.js"></script>
 <script src="voice.js"></script>
 <script src="browser.js"></script>

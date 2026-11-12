@@ -1734,8 +1734,8 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .home-hero h1 { font-size: clamp(34px, 5vw, 56px); letter-spacing: -.045em; }
 .home-hero p { font-size: 15px; }
 .home-feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); gap: 28px; align-items: center; padding: clamp(22px, 4vw, 38px); border: 1px solid var(--glass-edge); border-radius: 30px; background: radial-gradient(80% 130% at 0% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 68%), var(--glass); box-shadow: var(--glass-hi), var(--shadow); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
-.home-feature-copy h2, .home-section-head h2, .home-whatsapp-copy h2 { margin: 8px 0; font-size: clamp(22px, 3vw, 30px); letter-spacing: -.04em; line-height: 1.12; }
-.home-feature-copy p, .home-section-head > p, .home-whatsapp-copy p { margin: 0; max-width: 470px; color: var(--muted); line-height: 1.55; }
+.home-feature-copy h2, .home-section-head h2 { margin: 8px 0; font-size: clamp(22px, 3vw, 30px); letter-spacing: -.04em; line-height: 1.12; }
+.home-feature-copy p, .home-section-head > p { margin: 0; max-width: 470px; color: var(--muted); line-height: 1.55; }
 .home-feature-actions { display: flex; flex-direction: column; gap: 9px; }
 .home-feature-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--glass-edge); border-radius: 18px; color: var(--fg); background: var(--btn-glass); text-align: left; cursor: pointer; font: inherit; transition: transform .18s, background-color .18s; }
 .home-feature-btn:hover { transform: translateY(-2px); background-color: var(--glass-strong); }
@@ -1753,23 +1753,12 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .home-actions { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; }
 .home-action { min-height: 140px; border-radius: 21px; padding: 14px; }
 .home-action .hi { width: 38px; height: 38px; border-radius: 13px; }
-.home-whatsapp { display: grid; grid-template-columns: minmax(0, .8fr) minmax(280px, 1.2fr); gap: 28px; align-items: start; padding: clamp(20px, 3vw, 30px); }
-.home-whatsapp-copy h2 { font-size: clamp(22px, 2.8vw, 28px); }
-.home-wa-form { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.home-wa-form label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 600; }
-.home-wa-form label small, .home-wa-note { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.45; }
-.home-wa-form input, .home-wa-form textarea { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 13px; padding: 10px 12px; color: var(--fg); background: var(--btn-glass); font: inherit; }
-.home-wa-form textarea { min-height: 84px; resize: vertical; }
-.home-wa-form input:focus, .home-wa-form textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
-.home-wa-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 3px; }
-.home-wa-actions .btn { min-height: 38px; padding: 8px 13px; font-size: 13px; cursor: pointer; }
-.home-wa-note { margin: 0; }
 .home-more { border-top: 1px solid var(--line); padding-top: 14px; }
 .home-more summary { width: fit-content; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; }
 .home-more[open] summary { margin-bottom: 12px; color: var(--fg); }
 .home-more .home-actions { padding-bottom: 4px; }
 @media (max-width: 700px) {
-  .home-feature, .home-whatsapp { grid-template-columns: 1fr; gap: 18px; }
+  .home-feature { grid-template-columns: 1fr; gap: 18px; }
   .home-section-head { align-items: start; flex-direction: column; gap: 5px; }
   .home-section-head > p { text-align: left; }
 }
@@ -1831,13 +1820,6 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
 .home-action .hi { width: 46px; height: 46px; border-radius: 16px; }
 .home-action strong { font-size: 17px; }
 .home-action small { max-width: 240px; margin-top: -8px; line-height: 1.5; }
-.home-whatsapp { position: relative; overflow: hidden; grid-template-columns: minmax(0, .85fr) minmax(300px, 1.15fr); gap: clamp(22px, 5vw, 68px); align-items: center; padding: clamp(26px, 5vw, 54px); border-radius: 32px; background: radial-gradient(75% 110% at 5% 0%, color-mix(in srgb, #26d366 15%, transparent), transparent 75%), var(--glass); }
-.home-whatsapp-copy h2 { font-size: clamp(30px, 4vw, 46px); }
-.home-whatsapp-copy p { line-height: 1.65; }
-.home-wa-privacy { display: flex; align-items: center; gap: 8px; margin-top: 18px; color: var(--muted); font-size: 12px; }
-.home-wa-form { position: relative; z-index: 1; padding: 18px; border: 1px solid var(--glass-edge); border-radius: 24px; background: var(--glass-strong); box-shadow: var(--glass-hi); }
-.home-wa-form input, .home-wa-form textarea { border-radius: 13px; padding: 12px 14px; }
-.home-wa-actions .btn { min-height: 42px; }
 .home-grid { gap: 14px; }
 .home-card { border-radius: 24px; }
 .home-more { border-top: 1px solid var(--line); padding-top: 20px; }
@@ -1850,7 +1832,7 @@ body.monitor-view .messages, body.monitor-view .composer, body.monitor-view #hom
   .home-hero h1 { width: 100%; font-size: clamp(42px, 10.5vw, 62px); }
   .home-hero p { width: min(440px, 94%); }
   .home-hero > .home-jarvis { width: min(46vw, 240px); right: 5%; top: 66%; }
-  .home-feature, .home-whatsapp { grid-template-columns: 1fr; gap: 22px; }
+  .home-feature { grid-template-columns: 1fr; gap: 22px; }
   .home-section-head { align-items: flex-start; flex-direction: column; }
   .home-section-head > p { text-align: left; }
   .home-actions { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
@@ -2138,3 +2120,31 @@ body:has(.toast.show) .offers { transform: translateY(54px); }
   .home-hero > .home-jarvis { position: relative; order: -1; align-self: center; right: auto; top: auto; transform: none; width: min(42vw, 170px); margin: 0 0 6px; }
   .home-hero p { width: 100%; }
 }
+
+/* ---------- Print, by hand ---------- */
+#printDlg { width: min(620px, calc(100vw - 24px)); }
+.tool-body { padding: 16px 22px 22px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+.pr-src { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 10px; }
+.pr-src[hidden] { display: none; }
+.pr-src .drop { justify-content: center; min-height: 200px; }
+.pr-pc { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border-radius: 16px; border: 1px solid var(--line); }
+.pr-pc-head { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.pr-pc-head .pf-crumb { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-pc-head .pf-crumb button { border: 0; background: none; color: var(--accent); font: inherit; padding: 0; cursor: pointer; }
+.pr-list { max-height: 210px; overflow-y: auto; gap: 4px; }
+.pr-list .fitem { padding: 6px 8px; cursor: pointer; }
+.pr-list .fitem:hover, .pr-list .fitem:focus-visible { background: var(--accent-soft); outline: none; }
+.pr-list .fitem .ic { width: 28px; height: 28px; }
+.pr-list .empty-note { font-size: 12.5px; }
+.pr-chosen .fitem { background: var(--accent-soft); }
+.pr-opts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pr-opts .field { flex: 1 1 240px; }
+.pr-opts select { width: 100%; }
+.pr-copies { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.pr-copies input { width: 64px; min-height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--btn-glass); color: var(--fg); font: inherit; text-align: center; }
+.pr-summary { padding: 12px 14px; border-radius: 14px; background: var(--soft); font-size: 14px; line-height: 1.5; }
+.pr-foot { display: flex; align-items: center; gap: 8px; }
+.pr-status { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); }
+@media (max-width: 560px) { .pr-src { grid-template-columns: 1fr; } .pr-src .drop { min-height: 0; } .tool-body { padding-left: 16px; padding-right: 16px; } }
+/* Mail, by hand: the actions on an open message */
+.ml-acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }

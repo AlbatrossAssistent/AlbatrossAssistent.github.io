@@ -37,7 +37,7 @@ f.onload = () => setTimeout(async () => {
     w.setView("home");
     return !!d.querySelector(".home-feature [data-go=chat]") && !!d.querySelector(".home-feature [data-go=agent]")
       && !!d.querySelector(".home-action[data-go=beam]") && !!d.querySelector(".home-action[data-go=mail]")
-      && !!d.querySelector(".home-action[data-go=print]") && !!d.querySelector("#waForm")
+      && !!d.querySelector(".home-action[data-go=print]")
       && !!d.querySelector(".home-hero h1") && !!d.querySelector("#homeManual")
       && !!d.querySelector(".home-hero [data-scroll=homeManual]")
       && !!(d.querySelector("#homeManual").compareDocumentPosition(d.querySelector(".home-feature")) & w.Node.DOCUMENT_POSITION_FOLLOWING)
@@ -88,18 +88,20 @@ f.onload = () => setTimeout(async () => {
     if (!(ok1 && ok2)) throw new Error(JSON.stringify({ ok1, ok2, card: !!card, cardTop: card && card.getBoundingClientRect().top, toastTop: t.top }));
     return true;
   });
-  await tryIt("WhatsApp handoff opens an editable draft", () => {
-    d.querySelector("#waPhone").value = "+1 555 123 4567";
-    d.querySelector("#waMessage").value = "Hi there";
-    w.__waUrl = "";
-    w.open = (url) => { w.__waUrl = url; return {}; };
-    d.querySelector("#waForm").dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
-    return w.__waUrl === "https://wa.me/15551234567?text=Hi%20there";
+  await tryIt("no WhatsApp section; Print is a manual dialog, not the Agent", async () => {
+    w.setView("home"); await sleep(80);
+    if (d.querySelector("#waForm") || /whatsapp/i.test(d.querySelector("#home").textContent)) return "WhatsApp still on the home page";
+    d.querySelector('.home-action[data-go=print]').click(); await sleep(150);
+    const dlg = d.querySelector("#printDlg"), ok = dlg.open && !d.body.classList.contains("agent-view") && !!d.querySelector("#prPrinter") && d.querySelector("#prGo").disabled;
+    ev('prChoose({ name: "letter.pdf", size: 1234, blob: new Blob(["x"]), from: "This device" })');
+    const chosen = !d.querySelector("#prChosen").hidden && /letter.pdf/.test(d.querySelector("#prChosen").textContent);
+    dlg.close();
+    return (ok && chosen) || JSON.stringify({ open: dlg.open, ok, chosen });
   });
-  await tryIt("WhatsApp draft shortcut prepares an unsent AI prompt", () => {
-    d.querySelector("#waMessage").value = "Ask if they are free tomorrow";
-    d.querySelector("#waDraft").click();
-    return /Ask if they are free tomorrow/.test(d.querySelector("#prompt").value) && !ev("controller");
+  await tryIt("mail is manual: reply, reply all and forward, no AI", async () => {
+    w.setView("mail"); await sleep(150);
+    const src = ev("String(window.mailOpen)");
+    return !!d.querySelector("#mlNew") && !d.querySelector("#mlAsk") && !/AI next to it/.test(d.querySelector("#mailPage").textContent) || "AI parts still in Mail";
   });
   ev('setView("chat")');
   await tryIt("settings open", async () => { ev("openSettings()"); await sleep(100); const open = d.querySelector("#settings").open; d.querySelector("#settings").close(); return open; });

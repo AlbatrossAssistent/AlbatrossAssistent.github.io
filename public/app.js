@@ -4078,8 +4078,8 @@ function renderHome() {
     ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
     ["hub", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>', "Hub", "Big buttons to control your PC: media, programs, Jarvis"],
     ["monitor", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/></svg>', "Monitor", "A picture or video full screen on your PC's screen"],
-    ["mail", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>', "Mail", "Your accounts, with an AI that explains and answers"],
-    ["print", I.print, "Print a file", "Choose a file and review before printing"],
+    ["mail", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>', "Mail", "Read, write and answer your mail"],
+    ["print", I.print, "Print a file", "Choose a file and a printer, then print"],
     ["notes", '<svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>', "Notes", "Lists, to-dos and thoughts"],
     ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
   ];
@@ -4103,17 +4103,6 @@ function renderHome() {
         ${guestMode ? "" : `<button class="home-feature-btn" data-go="agent"><span class="hi"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><span><strong>Open AI Agent</strong><small>Get help with files, mail and printing</small></span><b aria-hidden="true">→</b></button>`}
       </div>
     </section>
-    ${guestMode ? "" : `<section class="home-whatsapp home-card" aria-labelledby="homeWhatsappTitle">
-      <div class="home-whatsapp-copy"><span class="home-kicker">A LITTLE HELP WITH THE WORDS</span><h2 id="homeWhatsappTitle">Write it here.<br>Send it yourself.</h2><p>Draft a WhatsApp message with AI, or write your own. We'll open WhatsApp for you to review and send. Your inbox stays yours.</p></div>
-      <form id="waForm" class="home-wa-form">
-        <label for="waPhone">To <small>Number with country code</small></label>
-        <input id="waPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+1 555 123 4567">
-        <label for="waMessage">Your message</label>
-        <textarea id="waMessage" rows="3" maxlength="4096" placeholder="Write a message, or ask AI to help with a draft."></textarea>
-        <div class="home-wa-actions"><button class="btn" id="waDraft" type="button">Draft with AI</button><button class="btn primary" type="submit">Review in WhatsApp <span aria-hidden="true">→</span></button></div>
-        <small class="home-wa-note" id="waNote" role="status">Never reads your chats · Never sends automatically</small>
-      </form>
-    </section>`}
     <div class="home-grid">
       <div class="home-card"><h3>At a glance</h3><div id="homeStatus"></div></div>
       <div class="home-card"><h3>Recent conversations</h3><div class="recent" id="homeRecent"></div></div>
@@ -4135,13 +4124,7 @@ function renderHome() {
     else if (g === "guest") setView("pc", { tab: "guest" });
     else if (g === "jarvis") setView("jarvis");
     else if (g === "agent") setView("agent");
-    else if (g === "print") {
-      setView("agent");
-      setTimeout(() => {
-        $("#agGoal").value = "Help me print a file from my PC. Ask me which file and printer to use, show me the exact print details, and wait for my confirmation before printing.";
-        $("#agGoal").focus();
-      }, 60);
-    }
+    else if (g === "print") openPrint();
     else if (g === "notes") setView("notes");
     else if (g === "mail") setView("mail");
     else if (g === "hub") setView("hub");
@@ -4155,32 +4138,6 @@ function renderHome() {
     else if (g === "install") openInstall();
     else openSettings();
   }));
-  const waForm = $("#waForm");
-  if (waForm) {
-    $("#waPhone").addEventListener("input", () => $("#waPhone").setCustomValidity(""));
-    waForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const phone = $("#waPhone").value.replace(/\D/g, "");
-      if (phone.length < 8 || phone.length > 15) {
-        $("#waPhone").setCustomValidity("Enter an international number with 8 to 15 digits, including its country code.");
-        $("#waPhone").reportValidity();
-        return;
-      }
-      const message = $("#waMessage").value.trim();
-      window.open(`https://wa.me/${phone}${message ? "?text=" + encodeURIComponent(message) : ""}`, "_blank", "noopener,noreferrer");
-    });
-    $("#waDraft").onclick = () => {
-      const idea = $("#waMessage").value.trim();
-      newChat("chat", "", false);
-      setView("chat");
-      $("#sidebar").classList.remove("open");
-      $("#prompt").value = idea
-        ? `Help me write a WhatsApp message based on this idea. Return only the message text; do not send it.\n\n${idea}`
-        : "Help me draft a WhatsApp message. Ask me what it should say, then return only the message text. Do not send it.";
-      $("#prompt").dispatchEvent(new Event("input", { bubbles: true }));
-      $("#prompt").focus();
-    };
-  }
   const rec = $("#homeRecent");
   const list = chats.filter(c => c.messages.length).sort((a, b) => b.updated - a.updated).slice(0, 6);
   if (!list.length) rec.innerHTML = '<div class="empty-note">No chats yet. Start one above.</div>';
@@ -5139,6 +5096,115 @@ $("#pubName").onchange = e => {
   peer.retry = 0; peerConnect(); renderPeople();
 };
 
+// ---------- Print, by hand: pick a file (from this device or the PC), pick a printer, check, print. No AI involved. ----------
+// The PC prints it (host/agent.js print(): Windows' own printing, no app opens). A file from this device is first copied to
+// the PC, into Downloads → Albatross → To print.
+const PRINTABLE_RE = /\.(txt|md|csv|log|json|pdf|png|jpe?g|bmp|gif|docx?|rtf|odt|html?|xlsx?|ods|pptx?|odp)$/i;
+const PR = { file: null, dir: "all:", printers: [], busy: false };
+function openPrint() {
+  if (guestMode) return toast("Not available in guest mode");
+  PR.file = null; $("#prStatus").textContent = "";
+  $("#printDlg").showModal();
+  $("#prConn").hidden = connected;
+  prRender(); prLoadPrinters(); prBrowse(PR.dir);
+}
+async function prLoadPrinters() {
+  const sel = $("#prPrinter");
+  if (!connected) { sel.innerHTML = "<option>Connect to your PC first</option>"; sel.disabled = true; return prRender(); }
+  sel.disabled = true; sel.innerHTML = "<option>Looking for printers…</option>";
+  try {
+    PR.printers = (await pcCall("/agent/printers", {})).printers || [];
+    const keep = store.get("printer", "");
+    sel.innerHTML = "";
+    for (const p of PR.printers) {
+      const o = document.createElement("option"); o.value = p.name; o.disabled = p.offline;
+      o.textContent = p.name + (p.toFile ? " (saves a file on the PC)" : "") + (p.default ? " · default" : "") + (p.offline ? " · offline" : "");
+      sel.appendChild(o);
+    }
+    if (!PR.printers.length) sel.innerHTML = "<option>No printer is installed on your PC</option>";
+    const pick = PR.printers.find((p) => p.name === keep && !p.offline) || PR.printers.find((p) => p.default && !p.toFile && !p.offline) || PR.printers.find((p) => !p.toFile && !p.offline) || PR.printers.find((p) => !p.offline);
+    if (pick) sel.value = pick.name;
+    sel.disabled = !PR.printers.length;
+  } catch (e) { sel.innerHTML = `<option>${esc("Couldn't list printers: " + e.message)}</option>`; }
+  prRender();
+}
+// the Albatross folder on the PC: folders open, files that can be printed are picked
+async function prBrowse(spec) {
+  const el = $("#prList"), crumb = $("#prCrumb");
+  if (!connected) { el.innerHTML = '<div class="empty-note">Connect to your PC to choose one of its files.</div>'; crumb.textContent = ""; return; }
+  el.innerHTML = '<div class="empty-note">Loading…</div>';
+  try {
+    const j = await pcCall("/agent/list", { spec });
+    PR.dir = j.spec; const rel = j.spec.replace(/^all:/, "");
+    crumb.innerHTML = "";
+    const parts = rel ? rel.split("/") : [];
+    const link = (label, to) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.onclick = () => prBrowse(to); return b; };
+    crumb.append(link("Albatross", "all:"));
+    parts.forEach((p, i) => { crumb.append(" / ", link(p, "all:" + parts.slice(0, i + 1).join("/"))); });
+    el.innerHTML = "";
+    const ents = j.entries.filter((e) => e.dir || PRINTABLE_RE.test(e.name));
+    if (!ents.length) el.innerHTML = '<div class="empty-note">No printable files here. Files you send to the PC with Beam land in this folder.</div>';
+    for (const e of ents) {
+      const row = fileRow(e.name, e.dir ? "Folder" : fsize(e.size) + " · " + ago(e.mtime), null, "pick" + (e.dir ? " folder" : ""));
+      if (e.dir) row.querySelector(".ic").innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>';
+      row.tabIndex = 0; row.setAttribute("role", "button");
+      const go = () => (e.dir ? prBrowse((j.spec.endsWith(":") ? j.spec : j.spec + "/") + e.name) : prChoose({ name: e.name, size: e.size, spec: (j.spec.endsWith(":") ? j.spec : j.spec + "/") + e.name, from: "Your PC" }));
+      row.onclick = go; row.onkeydown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } };
+      el.appendChild(row);
+    }
+  } catch (e) { el.innerHTML = `<div class="empty-note">${esc(e.message)}</div>`; }
+}
+function prChoose(f) {
+  if (!PRINTABLE_RE.test(f.name)) return toast("That kind of file can't be printed (PDF, pictures, text and Office files can)");
+  PR.file = f; $("#prStatus").textContent = ""; prRender();
+}
+wireDrop($("#prDrop"), $("#prPick"), (files) => { const f = files[0]; if (f) prChoose({ name: f.name, size: f.size, blob: f, from: "This device" }); });
+function prRender() {
+  const f = PR.file, ch = $("#prChosen");
+  ch.hidden = !f; $("#prSrc").hidden = !!f;
+  if (f) {
+    ch.innerHTML = "";
+    const row = fileRow(f.name, `${f.from} · ${fsize(f.size)}`, smallBtn("Change", () => { PR.file = null; prRender(); }, "ghost"), "chosen");
+    ch.appendChild(row);
+  }
+  const printer = PR.printers.find((p) => p.name === $("#prPrinter").value);
+  const copies = Math.min(20, Math.max(1, parseInt($("#prCopies").value, 10) || 1));
+  $("#prSummary").innerHTML = !f ? "Choose a file to print." : !printer ? "Choose a printer." :
+    `<b></b> on <b></b>${copies > 1 ? `, ${copies} copies` : ""}${printer.toFile ? " · saved as a file in Albatross → Printed" : ""}`;
+  if (f && printer) { const bs = $("#prSummary").querySelectorAll("b"); bs[0].textContent = f.name; bs[1].textContent = printer.name; }
+  $("#prGo").disabled = !f || !printer || printer.offline || PR.busy || !connected;
+}
+$("#prPrinter").onchange = () => { store.set("printer", $("#prPrinter").value); prRender(); };
+$("#prCopies").oninput = prRender;
+$("#prReload").onclick = () => { prLoadPrinters(); prBrowse(PR.dir); };
+$("#prGo").onclick = async () => {
+  const f = PR.file, printer = $("#prPrinter").value, copies = Math.min(20, Math.max(1, parseInt($("#prCopies").value, 10) || 1));
+  if (!f || PR.busy) return;
+  const st = (t) => ($("#prStatus").textContent = t);
+  PR.busy = true; prRender();
+  try {
+    let spec = f.spec;
+    if (!spec) {                                     // from this device: copy it to the PC first
+      const CH = 1536 * 1024; let id, off = 0;
+      while (off < f.size) {
+        st(`Sending to your PC… ${Math.round(off / f.size * 100)}%`);
+        const buf = new Uint8Array(await f.blob.slice(off, off + CH).arrayBuffer());
+        const r = await pcCall("/agent/upload", { id, name: f.name, size: f.size, offset: off, data: toB64(buf) });
+        id = r.id; off = r.got; if (r.done) spec = r.spec;
+      }
+      f.spec = spec;                                   // printing it again doesn't send it again
+    }
+    let pages = 0, last = null;
+    for (let i = 1; i <= copies; i++) {
+      st(copies > 1 ? `Printing copy ${i} of ${copies}…` : "Printing…");
+      last = await pcCall("/agent/print", { spec, printer }); pages += last.pages || 0;
+    }
+    const done = last.savedAs ? `Saved as ${last.savedAs.replace(/^all:/, "Albatross/")}` : `Printed on ${last.printer}` + (pages ? ` · ${pages} page${pages === 1 ? "" : "s"}` : "");
+    st(done); toast(done);
+  } catch (e) { st("Couldn't print: " + e.message); }
+  PR.busy = false; prRender();
+};
+
 // ---------- full screen & install as app ----------
 // Real full screen for one view (the Browser, Jarvis). Not on iPad and iPhone: Safari there leaves an element's full screen
 // again at once, so those views just cover the window. fsElemOn() remembers when it started: an exit in the first second isn't
@@ -5507,8 +5573,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-12.1";
+const APP_VERSION = "2026-11-12.2";
 const WHATS_NEW = [
+  ["2026-11-12.2", ["Removed the WhatsApp section from the home page","Print is now fully manual: choose a file from this device or your PC, pick a printer and copies, then press Print","Mail is manual: Reply, Reply all and Forward, written by you, without the AI panel"]],
   ["2026-11-12.1", ["A calmer, cleaner design: flat sidebar, quieter glass, notifications that slide in from the top","Beam → My PC: send files to the other devices on your PC; if one is offline they wait on the PC until it opens Albatross","Beam → People is private now: add someone by their exact name or code, and nothing connects until they accept","Light mode: new shapes with real physics that stack, tumble and can be thrown, and on phones they follow the tilt"]],
   ["2026-11-11.8", ["Appearance themes are clearly named White and Black", "In light mode, geometric shapes fall, settle, and can be picked up and moved with the mouse"]],
   ["2026-11-11.7", ["Pure black and white backgrounds; Jarvis matches the selected background theme"]],

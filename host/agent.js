@@ -163,6 +163,33 @@ async function print(spec, printer) {
   const pages = Number((/"pages":(\d+)/.exec(out) || [])[1]) || 0;
   return { printed: r.spec, printer: pick.name, pages, savedAs };
 }
+// A file from the device, for printing it by hand (Print on the website): it arrives in pieces and is kept in
+// <Downloads>AlbatrossTo print, then printed with print() like any other file there.
+const printUploads = new Map();   // id -> { full, size, got, time }
+function upload(j) {
+  for (const [id, u] of printUploads) if (Date.now() - u.time > 3600e3) { printUploads.delete(id); try { fs.unlinkSync(u.full); } catch {} }
+  const off = Number(j.offset) || 0, data = Buffer.from(String(j.data || ""), "base64");
+  let u = typeof j.id === "string" ? printUploads.get(j.id) : null;
+  if (!u) {
+    if (off !== 0) throw new Error("The upload stopped. Choose the file again.");
+    const size = Math.floor(Number(j.size));
+    if (!(size > 0) || size > 200 * 1024 * 1024) throw new Error("Files to print can be up to 200 MB.");
+    let name = path.basename(String(j.name || "file")).replace(/[<>:"/\|?*\u0000-\u001f]/g, "_").replace(/^\.+/, "").replace(/[. ]+$/, "").slice(0, 150) || "file";
+    if (RESERVED.test(name)) name = "file_" + name;
+    if (BAD_EXT.test(name)) throw new Error("Programs and scripts can't be printed.");
+    if (!PRINTABLE.test(name)) throw new Error("That kind of file can't be printed from here (text, PDF, pictures and Office files can).");
+    const dir = path.join(BASE, "To print"); fs.mkdirSync(dir, { recursive: true });
+    const ext = path.extname(name), stem = name.slice(0, name.length - ext.length);
+    let full = path.join(dir, name); for (let i = 2; fs.existsSync(full); i++) full = path.join(dir, `${stem} (${i})${ext}`);
+    fs.writeFileSync(full, "");
+    u = { id: crypto.randomUUID(), full, size, got: 0, time: Date.now() }; printUploads.set(u.id, u);
+  }
+  if (off !== u.got) return { id: u.id, got: u.got };
+  if (data.length > 4 * 1024 * 1024 || u.got + data.length > u.size) { printUploads.delete(u.id); try { fs.unlinkSync(u.full); } catch {} throw new Error("The file changed while it was being sent. Choose it again."); }
+  fs.appendFileSync(u.full, data); u.got += data.length; u.time = Date.now();
+  const done = u.got === u.size; if (done) printUploads.delete(u.id);
+  return { id: u.id, got: u.got, done, spec: done ? "all:To print/" + path.basename(u.full) : undefined };
+}
 
 // ---------- reading a web page (for the Agent's browser) ----------
 function privateIp(ip) {
@@ -245,6 +272,7 @@ async function handle(method, p, body, note) {
     if (p === "/agent/move") { const r = move(j.from, j.to, !!j.copy); note(`Agent: ${r.copied ? "copied" : "moved"} ${r.from} to ${r.to}`); return [200, r]; }
     if (p === "/agent/mkdir") return [200, mkdir(j.spec)];
     if (p === "/agent/printers") return [200, { printers: await printers() }];
+    if (p === "/agent/upload") return [200, upload(j)];
     if (p === "/agent/print") { const r = await print(j.spec, j.printer); note(`Agent: printed ${r.printed} on ${r.printer}`); return [200, r]; }
     if (p === "/agent/browse") return [200, await browse(j.url)];
   } catch (e) { return [400, { error: e.message }]; }
