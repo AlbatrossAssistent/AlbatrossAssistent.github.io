@@ -1,14 +1,16 @@
-// Albatross Agent: connects this Chrome to the Albatross host on the same PC (ws://127.0.0.1:4749) and does what the Agent asks
+// Albatross for Chrome: the sidebar (sidepanel.html: the Albatross app plus controls), and the link that lets the AI use this Chrome.
+// Connects this Chrome to the Albatross host on the same PC (ws://127.0.0.1:4749) and does what the Agent asks
 // in one tab of its own (the "Albatross Agent" tab group), through Chrome's debugger: open a page, read it, click, type, scroll.
 // Chrome shows a bar "Albatross Agent started debugging this browser" while it's attached; "Cancel" there pauses the Agent.
 // Nothing leaves this PC: the host is on 127.0.0.1, and only after pairing with a code from the app.
 
 const HOST = "ws://127.0.0.1:4749";
-const st = { key: "", paused: false, tab: null };     // kept in chrome.storage.local
+const st = { key: "", paused: false, tab: null, follow: false };     // kept in chrome.storage.local
+let panelWin = null;    // the window whose sidebar is open (follow mode works there)
 let ws = null, ready = false, attached = null, pairWait = null;
 
-const load = async () => Object.assign(st, await chrome.storage.local.get({ key: "", paused: false, tab: null }));
-const save = () => chrome.storage.local.set({ key: st.key, paused: st.paused, tab: st.tab });
+const load = async () => Object.assign(st, await chrome.storage.local.get({ key: "", paused: false, tab: null, follow: false }));
+const save = () => chrome.storage.local.set({ key: st.key, paused: st.paused, tab: st.tab, follow: st.follow });
 const out = (o) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -20,7 +22,26 @@ async function tabInfo() {
   if (st.tab == null) return null;
   try { const t = await chrome.tabs.get(st.tab); return { id: t.id, title: t.title || "", url: t.url || "" }; } catch { st.tab = null; save(); return null; }
 }
-async function sendState() { out({ type: "state", paused: st.paused, tab: await tabInfo() }); badge(); }
+async function sendState() { out({ type: "state", paused: st.paused, tab: await tabInfo(), follow: st.follow }); badge(); }
+
+// ---------- the sidebar ----------
+// a click on the Albatross icon opens it
+const panelOnClick = () => chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+panelOnClick();
+// "Follow my tab": the AI's tab is the one you're looking at in the window with the sidebar
+async function followTab() {
+  if (!st.follow || panelWin == null) return;
+  const [t] = await chrome.tabs.query({ active: true, windowId: panelWin });
+  if (!t || t.id === st.tab) return;
+  await detach(); st.tab = t.id; save(); sendState();
+}
+chrome.tabs.onActivated.addListener((i) => { if (i.windowId === panelWin) followTab(); });
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port.name.startsWith("panel:")) return;
+  panelWin = Number(port.name.slice(6)); followTab();
+  // sidebar closed: stop working in your tab (the next job opens a tab of its own again)
+  port.onDisconnect.addListener(async () => { if (panelWin !== Number(port.name.slice(6))) return; panelWin = null; if (st.follow) { await detach(); st.tab = null; save(); sendState(); } });
+});
 
 async function connect() {
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
@@ -36,7 +57,7 @@ setInterval(() => out({ type: "ping" }), 20000);
 chrome.alarms.create("albatross", { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener(() => connect());
 chrome.runtime.onStartup.addListener(() => connect());
-chrome.runtime.onInstalled.addListener(() => connect());
+chrome.runtime.onInstalled.addListener(() => { panelOnClick(); connect(); });
 connect();
 
 // ---------- the Agent's tab ----------
@@ -51,7 +72,8 @@ async function agentTab(create, url) {
 async function attach(tabId) {
   if (attached === tabId) return;
   if (attached != null) { try { await chrome.debugger.detach({ tabId: attached }); } catch {} attached = null; }
-  await chrome.debugger.attach({ tabId }, "1.3");
+  try { await chrome.debugger.attach({ tabId }, "1.3"); }
+  catch (e) { throw new Error(/cannot (access|attach)|chrome:\/\/|webstore|extensions gallery/i.test(String(e && e.message)) ? "Chrome doesn't let extensions work on this page (chrome:// pages, the Web Store, other extensions). Switch to a normal web page." : "Couldn't attach to the tab: " + (e && e.message || e)); }
   attached = tabId;
   await chrome.debugger.sendCommand({ tabId }, "Page.enable");
 }
@@ -110,7 +132,7 @@ async function control(action) {
   else if (action === "resume") st.paused = false;
   else if (action === "detach") await detach();
   else if (action === "show") { const t = await tabInfo(); if (t) { const tab = await chrome.tabs.update(t.id, { active: true }); await chrome.windows.update(tab.windowId, { focused: true }); } }
-  else if (action === "closetab") { const t = await tabInfo(); await detach(); if (t) { try { await chrome.tabs.remove(t.id); } catch {} } st.tab = null; }
+  else if (action === "closetab") { const t = await tabInfo(); await detach(); if (t && !st.follow) { try { await chrome.tabs.remove(t.id); } catch {} } st.tab = null; st.follow = false; }
   else if (action === "unpair") { st.key = ""; ready = false; await detach(); }
   save(); sendState();
   return { paused: st.paused, tab: await tabInfo() };
@@ -135,10 +157,11 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
       await sleep(300);
       return r;
     }
-    if (msg.action === "useTab") { await detach(); st.tab = msg.tabId; save(); await sendState(); }
+    if (msg.action === "useTab") { await detach(); st.tab = msg.tabId; st.follow = false; save(); await sendState(); }
+    else if (msg.action === "follow") { st.follow = !!msg.on; if (msg.windowId != null) panelWin = msg.windowId; if (st.follow) { st.paused = false; await followTab(); } else { await detach(); st.tab = null; } save(); await sendState(); }
     else if (msg.action) await control(msg.action);
     if (!ws) connect();
-    return { connected: ready, hostUp: !!(ws && ws.readyState === WebSocket.OPEN), paired: !!st.key, paused: st.paused, tab: await tabInfo() };
+    return { connected: ready, hostUp: !!(ws && ws.readyState === WebSocket.OPEN), paired: !!st.key, paused: st.paused, follow: st.follow, tab: await tabInfo() };
   })().then(reply, (e) => reply({ error: String(e.message || e) }));
   return true;
 });

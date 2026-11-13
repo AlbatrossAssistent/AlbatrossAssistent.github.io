@@ -4,7 +4,7 @@
 // Where things live (all inside <Downloads>\Albatross, which is what Beam saves into):
 //   all      the whole Albatross folder (what devices sent here, what the Code tool wrote, ...)   read, and move into
 //   code     <Downloads>\Albatross\Code        projects written by the Code tool                    read, write
-//   agent    <Downloads>\Albatross\Agent       the Agent's workspace                                read, write, move
+//   agent    <Downloads>\Albatross\AI          the chat's own folder (also "ai:")                   read, write, move
 //   pictures <Downloads>\Albatross\Pictures    pictures made on this PC                             read
 // Nothing outside these folders is ever touched, the Agent can't delete anything (only the user can, in the PC files window, and it
 // goes to the Recycle Bin), and nothing here runs a program.
@@ -20,9 +20,11 @@ const BASE = path.resolve(process.env.ALBATROSS_FILES || path.join(os.homedir(),
 const ROOTS = {
   all: { name: "All files", dir: BASE, write: false },
   code: { name: "Code projects", dir: path.resolve(process.env.ALBATROSS_CODE || path.join(BASE, "Code")), write: true },
-  agent: { name: "Agent workspace", dir: path.join(BASE, "Agent"), write: true },
+  agent: { name: "AI folder", dir: path.join(BASE, "AI"), write: true },     // the chat's own folder: anything it wants to keep
   pictures: { name: "Pictures", dir: path.join(BASE, "Pictures"), write: false },
 };
+// it used to be called "Agent": moved over once, so nothing the AI saved before is lost
+try { const old = path.join(BASE, "Agent"); if (fs.existsSync(old) && !fs.existsSync(ROOTS.agent.dir)) fs.renameSync(old, ROOTS.agent.dir); } catch {}
 const MAX_TEXT = 400 * 1024, MAX_B64 = 20 * 1024 * 1024, MAX_WRITE = 4 * 1024 * 1024, MAX_ENTRIES = 500;
 const BAD_EXT = /\.(exe|dll|msi|scr|com|pif|lnk|scf|url|inf|sys|cpl|bat|cmd|ps1|vbs|js?e|wsf|reg)$/i;   // never written by the Agent
 const RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i;
@@ -32,8 +34,8 @@ const mimeOf = (n) => MIME[path.extname(n).slice(1).toLowerCase()] || "applicati
 // "agent:notes/todo.txt" -> { root, dir, parts, full }, or throws a message the AI can understand
 function resolve(spec, { write = false } = {}) {
   let rootId = "agent", rel = String(spec == null ? "" : spec).trim();
-  const m = /^(all|code|agent|pictures|received):(.*)$/i.exec(rel);
-  if (m) { rootId = m[1].toLowerCase() === "received" ? "all" : m[1].toLowerCase(); rel = m[2]; }
+  const m = /^(all|code|agent|ai|pictures|received):(.*)$/i.exec(rel);
+  if (m) { const k = m[1].toLowerCase(); rootId = k === "received" ? "all" : k === "ai" ? "agent" : k; rel = m[2]; }
   const root = ROOTS[rootId];
   rel = rel.replace(/\\/g, "/").replace(/^\/+/, "");
   const parts = rel.split("/").filter((x) => x !== "" && x !== ".");

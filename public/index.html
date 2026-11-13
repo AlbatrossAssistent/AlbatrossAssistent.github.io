@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-11-13.9">
+<link rel="stylesheet" href="app.css?v=2026-11-13.10">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"></div>
@@ -65,7 +65,7 @@
     <button class="badge loaded" id="loadedPill" title="Model currently loaded in memory (click to manage)"><span class="ld"></span><span id="loadedText">Nothing loaded</span></button>
     <div class="spacer"></div>
     <button class="icon-btn" id="topFold" aria-label="Fold the top bar" title="Fold the top bar"><svg class="i" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
-    <button class="icon-btn" id="sideBtn" type="button" aria-label="Side panel: browser and agent" title="Side panel: browser, agent, code and list"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/></svg></button>
+    <button class="icon-btn" id="sideBtn" type="button" aria-label="Side panel: browser, code and list" title="Side panel: browser, code and list"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/></svg></button>
     <button class="icon-btn" id="fullBtn" aria-label="Full screen" title="Full screen (F11)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
     
   </div>
@@ -160,12 +160,6 @@
         <div class="home-card ag-top">
           <label class="field"><span>Model</span><select id="agModel"></select></label>
           <div class="pc-note" id="agNote"></div>
-          <div class="ag-tools" id="agTools" role="group" aria-label="What the Agent may use">
-            <button type="button" data-tg="files">Files</button><button type="button" data-tg="browser">Browser</button><button type="button" data-tg="mail">Mail</button><button type="button" data-tg="code">Code</button><button type="button" data-tg="print" data-needs-pc>Print</button>
-          </div>
-          <div class="ag-mail ag-browser"><span class="pc-note">Browser</span><div class="seg" id="agVia" role="group" aria-label="Which browser the Agent uses"><button type="button" data-via="pc">PC browser</button><button type="button" data-via="ext">My Chrome</button></div><span id="agExtState" class="pc-note"></span></div>
-          <div id="agExtBox" class="ag-form ag-ext" hidden></div>
-          <div class="ag-mail"><span id="agMailState" class="pc-note"></span><button class="btn small" id="agMailSetup" type="button">Mail account…</button><button class="btn small" id="agMailForget" type="button" hidden>Remove</button></div>
           <div id="agMailForm" class="ag-form" hidden>
             <input id="agMailUser" type="email" placeholder="Your email address" autocomplete="off">
             <input id="agMailPw" type="password" placeholder="App password" autocomplete="new-password">
@@ -247,9 +241,9 @@
     </div>
   </div>
 </main>
-<section class="deck-side side-panel" id="sidePanel" hidden aria-label="Side panel: browser, agent, code and list" data-tab="browser">
+<section class="deck-side side-panel" id="sidePanel" hidden aria-label="Side panel: browser, code and list" data-tab="browser">
   <div class="sp-head">
-    <div class="seg" id="spTabs" role="tablist"><button data-sp="browser" class="on" type="button">Browser</button><button data-sp="agent" type="button">Agent</button><button data-sp="code" type="button">Code</button><button data-sp="list" type="button">List</button></div>
+    <div class="seg" id="spTabs" role="tablist"><button data-sp="browser" class="on" type="button">Browser</button><button data-sp="code" type="button">Code</button><button data-sp="list" type="button">List</button></div>
     <span style="flex:1"></span>
     <button class="icon-btn" id="spFull" type="button" title="Open full size" aria-label="Open full size"><svg class="i" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
     <button class="icon-btn" id="spClose" type="button" title="Close the side panel" aria-label="Close the side panel"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -422,7 +416,16 @@
           <label class="check"><span>Documents<small>Ask about your own files (“what does my biology worksheet say about enzymes?”). Pick folders on your PC; they are read there, and answers name the file. Reads PDF, Word, PowerPoint, Excel, text and web pages; never changes them.</small></span><input type="checkbox" class="switch" data-tool="docs"></label>
           <div class="docs-box" id="docsBox"></div>
           <label class="check"><span>Challenge<small>Attach a puzzle file with the paperclip and the AI digs for the hidden word.</small></span><input type="checkbox" class="switch" data-tool="challenge"></label>
-          <label class="check"><span>Agent<small>Handles jobs with your files, mail, web pages and printer by itself, step by step, inside the chat. Also writes programs, websites and games: it saves them in Code projects on your PC, runs them in the Code tab and fixes what doesn't work. Sending mail and printing always ask you first. Needs a model that can use tools. (Also open as the Agent tab in Home.)</small></span><input type="checkbox" class="switch" data-tool="agent"></label>
+          <label class="check"><span>Work on your PC<small>The chat itself works with your files, mail, web pages and printer, and writes and runs programs, websites and games (saved in Code projects, run in the Code tab). It keeps whatever it needs in its own folder on the PC (Downloads → Albatross → AI). Sending mail, printing and risky clicks always ask you first. Needs a model that can use tools.</small></span><input type="checkbox" class="switch" data-tool="agent"></label>
+          <div class="pc-tools" id="pcToolsBox">
+            <div class="pc-note">What it may use:</div>
+            <div class="ag-tools" id="agTools" role="group" aria-label="What the AI may use on your PC">
+              <button type="button" data-tg="files">Files</button><button type="button" data-tg="browser">Browser</button><button type="button" data-tg="mail">Mail</button><button type="button" data-tg="code">Code</button><button type="button" data-tg="print" data-needs-pc>Print</button>
+            </div>
+            <div class="ag-mail ag-browser"><span class="pc-note">Browser</span><div class="seg" id="agVia" role="group" aria-label="Which browser the AI uses"><button type="button" data-via="pc">PC browser</button><button type="button" data-via="ext">My Chrome</button></div><span id="agExtState" class="pc-note"></span></div>
+            <div id="agExtBox" class="ag-form ag-ext" hidden></div>
+            <div class="ag-mail"><span id="agMailState" class="pc-note"></span><button class="btn small" id="agMailSetup" type="button">Mail accounts…</button><button class="btn small" id="agMailForget" type="button" hidden>Remove</button></div>
+          </div>
         </section>
 
         <!-- Chat -->
@@ -702,7 +705,7 @@
   <div class="jvf-bottom"><div class="jvf-log" id="jvFullLog"></div>
     <form class="jvf-ask" id="jvFullAsk"><input id="jvFullInput" placeholder="Tell Jarvis what to do…" autocomplete="off"><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form></div>
 </div>
-<script src="starfield.js?v=2026-11-13.9"></script>
+<script src="starfield.js?v=2026-11-13.10"></script>
 <script src="scenes.js"></script>
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
@@ -713,8 +716,8 @@
 <script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-11-13.9"></script>
-<script type="module" src="account.js?v=2026-11-13.9"></script>
+<script src="app.js?v=2026-11-13.10"></script>
+<script type="module" src="account.js?v=2026-11-13.10"></script>
 <script src="agent.js"></script>
 <script src="voice.js"></script>
 <script src="browser.js"></script>

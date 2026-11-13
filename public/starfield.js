@@ -436,11 +436,36 @@
     function schedule() { if (enabled && !raf) raf = requestAnimationFrame(tick); }
     const wake = () => { calm = 0; schedule(); };
 
+    // how many shapes: a few for the screen size, plus `extra` (more the more a chat holds, see setAmount)
+    let extra = 0;
+    const baseCount = () => Math.round(Math.min(22, Math.max(8, W * H / 56000)));
+    const baseSize = () => Math.min(118, Math.max(50, Math.sqrt(W * H) / 11));
+    // new shapes get smaller as the screen fills, so the pile never covers more than about a third of it
+    const shrinkFor = (total) => Math.max(.42, Math.min(1, Math.sqrt(.34 * W * H / (total * Math.pow(baseSize() * .87, 2) * .72))));
+    function addBody() {
+      const i = bodies.length, b = makeBody(i, baseSize() * (.62 + Math.random() * .5) * shrinkFor(baseCount() + extra));
+      b.x = b.R + Math.random() * Math.max(1, W - 2 * b.R); b.y = -b.R - 20 - Math.random() * 160; b.w = (Math.random() - .5) * 3; b.vx = (Math.random() - .5) * 120;
+      bodies.push(b); container.appendChild(b.el);
+    }
+    function setAmount(n) {
+      extra = Math.max(0, Math.min(40, Math.round(Number(n) || 0)));
+      if (!enabled || !bodies.length) return;
+      const target = baseCount() + extra;
+      if (bodies.length === target) return;
+      while (bodies.length < target) addBody();
+      while (bodies.length > target) {
+        const b = bodies.pop();
+        if (drag && drag.b === b) { drag = null; document.documentElement.classList.remove("pf-grabbing"); }
+        if (hover === b) setHover(null);
+        b.el.remove();
+      }
+      wake();
+    }
     function seed() {
       W = Math.max(1, container.clientWidth); H = Math.max(1, container.clientHeight);
-      const count = Math.round(Math.min(22, Math.max(8, W * H / 56000)));
-      const base = Math.min(118, Math.max(50, Math.sqrt(W * H) / 11));
-      bodies = Array.from({ length: count }, (_, i) => makeBody(i, base * (.62 + Math.random() * .5)));
+      const count = baseCount() + extra;
+      const base = baseSize(), shrink = shrinkFor(count);
+      bodies = Array.from({ length: count }, (_, i) => makeBody(i, base * (.62 + Math.random() * .5) * (i < baseCount() ? 1 : shrink)));
       bodies.forEach((b, i) => { b.x = b.R + Math.random() * Math.max(1, W - 2 * b.R); b.y = -b.R - i * (H / count) * .7 - Math.random() * 80; b.w = (Math.random() - .5) * 3; b.vx = (Math.random() - .5) * 120; });
       container.replaceChildren(...bodies.map(b => b.el));
       if (reduced) { for (let i = 0; i < 1400; i++) step(STEP); for (const b of bodies) b.vx = b.vy = b.w = 0; }
@@ -568,7 +593,7 @@
     addEventListener("blur", () => up());
     addEventListener("resize", () => { if (enabled) fit(); });
     document.addEventListener("visibilitychange", () => { if (enabled && !document.hidden) { last = 0; wake(); } });
-    return { setEnabled, reseed: () => { if (enabled) { seed(); wake(); } },
+    return { setEnabled, setAmount, reseed: () => { if (enabled) { seed(); wake(); } },
       // run the world forward right away (tests: headless browsers give hardly any animation frames)
       advance: (secs) => { for (let i = 0; i < secs / STEP; i++) step(STEP); draw(); }, gravity: (x, y) => { grav.tx = x; grav.ty = y; wake(); }, tilt: tiltGravity, bodies: () => bodies };
   };

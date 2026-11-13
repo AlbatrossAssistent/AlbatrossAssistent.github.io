@@ -33,9 +33,9 @@ f.onload = () => setTimeout(async () => {
   for (const v of ["home", "chat", "notes", "mail", "hub", "monitor", "agent", "jarvis", "pc", "browser"]) {
     await tryIt("open page: " + v, async () => { w.setView(v); await sleep(120); return true; });
   }
-  await tryIt("home has AI modes and manual task shortcuts", () => {
+  await tryIt("home has the chat (no Agent mode) and manual task shortcuts", () => {
     w.setView("home");
-    return !!d.querySelector(".home-feature [data-go=chat]") && !!d.querySelector(".home-feature [data-go=agent]")
+    return !!d.querySelector(".home-feature [data-go=chat]") && !d.querySelector("[data-go=agent]")
       && !!d.querySelector(".home-action[data-go=beam]") && !!d.querySelector(".home-action[data-go=mail]")
       && !!d.querySelector(".home-action[data-go=print]")
       && !!d.querySelector(".home-hero h1") && !!d.querySelector("#homeManual")

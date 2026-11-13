@@ -31,6 +31,18 @@ const store = {
 };
 
 let S = deepMerge(structuredClone(DEFAULTS), store.get("settings", {}));
+// Inside the Albatross sidebar in Chrome (extension/sidepanel.html): the AI browses in that Chrome, and knows the page you're on
+window.EMBED_CHROME = new URLSearchParams(location.search).get("embed") === "chrome" && window.parent !== window;
+window.chromeTab = null;
+if (window.EMBED_CHROME) {
+  document.documentElement.classList.add("embed-chrome");
+  addEventListener("message", (e) => {
+    if (e.source !== window.parent || !/^chrome-extension:\/\/[a-p]{32}$/.test(e.origin) || !e.data || e.data.type !== "albatross-tab") return;
+    const t = e.data.tab || {};
+    window.chromeTab = { title: String(t.title || "").slice(0, 200), url: String(t.url || "").slice(0, 500), follow: !!t.follow };
+  });
+  try { window.parent.postMessage({ type: "albatross-tab?" }, "*"); } catch {}
+}
 // Older versions saved whatever address the page was opened from as the server.
 // Switch every saved setup to the Render server once; changes made after that are kept.
 if (store.get("settings", {}).serverVersion !== 2) { S.conn.relay = DEFAULT_SERVER; S.serverVersion = 2; store.set("settings", S); }
@@ -953,7 +965,16 @@ function finishRun() {
   if (moved) { r.chat.updated = Date.now(); saveChats(); renderMessages(); renderSidebar(); }
   setTimeout(nextQueued, 0);
 }
+// Light mode: the shapes behind the page grow in number with what the open chat holds (messages, text, pictures); none extra elsewhere
+function shapesForChat() {
+  if (typeof polygonField === "undefined" || !polygonField || !polygonField.setAmount) return;
+  const inChat = !["home", "pc", "jarvis", "notes", "mail", "hub", "monitor", "browser", "list"].some((v) => document.body.classList.contains(v + "-view"));
+  const msgs = inChat && current ? current.messages.filter((m) => !m.isEvent) : [];
+  const chars = msgs.reduce((n, m) => n + String(m.content || "").length + (m.genImage ? 2500 : 0) + (m.images ? m.images.length * 1500 : 0), 0);
+  polygonField.setAmount(msgs.length * .8 + chars / 1200);
+}
 function renderMessages() {
+  setTimeout(shapesForChat, 0);
   const inner = $("#inner"), box = $("#messages"), top = box.scrollTop, was = stick;
   document.body.classList.toggle("run-elsewhere", !!run && current !== run.chat);
   inner.innerHTML = "";
@@ -2252,7 +2273,7 @@ async function agentJob(model, text, task) {
 // What the chat model is told about the app: a short description and the list of its tools (the switched-on ones, and which
 // are switched off). When a message asks for one of them, the app hands it to that tool by itself (routeTool).
 const TOOL_LIST = [
-  ["agent", "Agent", "works on the user's PC: prints files, reads, writes, sorts and moves files, reads and sends mail (each mail is approved by the user), uses websites in the browser on the PC, and writes and runs programs, websites and games (saved in PC files → Code projects, shown in the Code tab)"],
+  ["agent", "Work on your PC", "works on the user's PC: prints files, reads, writes, sorts and moves files, reads and sends mail (each mail is approved by the user), uses websites in the browser on the PC, and writes and runs programs, websites and games (saved in PC files → Code projects, shown in the Code tab)"],
   ["music", "Music", "composes short pieces (chords, melody, bass, drums) that play in the chat and download as MIDI for GarageBand or as WAV"],
   ["notes", "Notes", "the user's notes and lists (bullets, numbered, checklists, priorities, text)"],
   ["slides", "Slides", "presentations with speaker notes, downloadable for PowerPoint"],
@@ -2424,18 +2445,19 @@ async function chat(model, opts = {}) {
       : { role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) });
     if (system) msgs.unshift({ role: "system", content: system });
 
-    // a job on the PC (the router said so): the Agent's tools for it, in this chat; a job takes more rounds than a search
-    // Offered only when the message is about mail, files, printing, a website or a program (or follows up on a PC job just done);
-    // the model itself decides whether to use them, so nothing switches into an "Agent mode".
+    // the PC tools (files, mail, browser, code, printing, its own folder): always there for a model that can use tools, and the
+    // model decides when to use them (Settings → Tools → Work on your PC switches them off). A job takes more rounds than a search.
     let agentKit = null;
-    if (toolsOk && !guestMode && window.agentChatTools) {
-      const users = conv.messages.filter(m => m.role === "user" && !m.isEvent), lastUser = users.at(-1)?.content || "";
-      const lastBot = conv.messages.filter(m => m.role === "assistant" && !m.isEvent && !m.isError).at(-1);
-      const followUp = (lastBot?.blocks || []).some(b => b.type === "agent") && users.length > 1 ? "\n" + users.at(-2).content : "";
-      agentKit = window.agentChatTools((opts.agentTask ? opts.agentTask + "\n" : "") + lastUser + followUp, { all: !!opts.agentTask, ownSearch: useTools });
-    }
+    if (toolsOk && !guestMode && window.agentChatTools && toolOn("agent")) agentKit = window.agentChatTools("", { every: true, ownSearch: useTools });
     let agentBlock = null;
-    if (agentKit) msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + agentKit.system) : msgs.unshift({ role: "system", content: agentKit.system });
+    if (agentKit) {
+      let sys = agentKit.system;
+      // in the Chrome sidebar: the page the user is looking at
+      const t = window.EMBED_CHROME && window.chromeTab;
+      if (t && t.url && agentKit.groups.includes("browser")) sys += `\nThe user is chatting in the Albatross sidebar of their Chrome and is looking at this page right now: "${t.title}" (${t.url}). "This page", "this tab", "here" or "this" mean that page. ` +
+        (t.follow ? "Your browser tools work in exactly that tab: use browser_read to read it, browser_click / browser_type to act there. Don't open another page unless asked." : "To read it, use browser_open with that address (your browser tools work in a tab of your own).");
+      msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + sys) : msgs.unshift({ role: "system", content: sys });
+    }
     const rounds = agentKit ? 16 : 6;
     for (let round = 0; round < rounds; round++) {
       const body = { model, messages: msgs, stream: true, options: buildOptions(model) };
@@ -2660,7 +2682,7 @@ async function routeTool(model, text) {
     const sys = `You decide whether the user's last message needs one of these tools or is a normal chat message. Reply only with JSON.
 Tools:
 ${list}
-- chat: anything else: questions, explanations, writing text (emails, essays, stories, poems), advice, translation, maths, jokes, and talking about code, presentations or charts without asking for one to be made.${enabled.includes("agent") ? `
+- chat: anything else: questions, explanations, writing text (emails, essays, stories, poems), advice, translation, maths, jokes, and talking about code, presentations or charts without asking for one to be made.${direct ? ` The chat also does every job on the user's PC itself: files and folders (saving something as a file, in the AI's own folder or the user's PC files), mail, websites, programs and games, printing. Those are "chat" too; "notes" is only the user's Notes page.` : ""}${enabled.includes("agent") ? `
 Asking for any program, script, website, game or app to be written or changed (in any language, small or big) is "agent". Explaining or discussing code is "chat".` : ""}
 For "agent", "task" is the instruction in the user's language, as a clear command (for example "Summarize my unread mail and list what needs an answer"). For every other tool "task" is "".
 A follow-up that asks to change or continue what a tool just made ("make it faster", "add bread too", "another one") goes to that same tool.
@@ -3841,6 +3863,7 @@ function applyType() {
 // ======================================================================
 function openSettings(tab) {
   const d = $("#settings");
+  window.pcToolsPaint && window.pcToolsPaint();
   // connection
   setConnCards(S.conn.mode);
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay; renderSavedConns();
@@ -4109,6 +4132,7 @@ loadImgFields();
 // Home
 // ======================================================================
 function setView(v, opt) {
+  if (v === "agent") v = "chat";     // the Agent mode is gone: the chat itself works on the PC now
   if (guestMode && ["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor"].includes(v)) {
     toast("Not available in guest mode");
     return;
@@ -4119,6 +4143,7 @@ function setView(v, opt) {
   document.body.classList.toggle("jarvis-view", v === "jarvis");
   document.body.classList.toggle("pc-view", v === "pc");
   document.body.classList.toggle("agent-view", v === "agent");
+  setTimeout(shapesForChat, 0);
   document.body.classList.toggle("browser-view", v === "browser");
   document.body.classList.toggle("notes-view", v === "notes");
   document.body.classList.toggle("mail-view", v === "mail");
@@ -4136,7 +4161,7 @@ function setView(v, opt) {
   if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
   if (v === "pc") pcOpen(opt && opt.tab); else pcClose();
-  if (v === "agent") { window.agentOpen && window.agentOpen(); } else { window.agentClose && window.agentClose(); }
+  window.agentClose && window.agentClose();
   if (v === "browser") { window.browserOpen && window.browserOpen(); } else { window.browserClose && window.browserClose(); }
   if (v === "jarvis") jarvisOpen(); else jarvisClose();
 }
@@ -4176,7 +4201,6 @@ function renderHome() {
     ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
     ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
     ["guest", I.guest, "Guest mode", "Guest code & AI recaps of guest chats"],
-    ["agent", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg>', "Agent", "Plans and works for you: files, web, mail, code, print"],
     ["browser", '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', "Browser", "Chrome on your PC, on any device"],
     ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
     ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
@@ -4195,17 +4219,16 @@ function renderHome() {
   const moreTiles = tiles.filter(([k]) => !quickKeys.includes(k));
   const guestNotice = guestMode ? `<div class="guest-banner" style="margin:0 0 18px;border-radius:14px"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span><b>Guest mode</b> · Private &amp; PC items are off. After each chat, the AI writes a recap for the PC's owner including every file made by the PC (never files you attach). <b>Generated pictures are saved on the host PC and can be seen by its owner.</b></span></div>` : "";
   home.innerHTML = `<div class="home-world">
-    <div class="home-hero"><canvas class="home-jarvis" aria-hidden="true"></canvas>${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button>${guestMode ? "" : `<button class="home-cta secondary" data-go="agent"><span class="home-sparkle">${allTiles.find(([k]) => k === "agent")[1]}</span><span>Open AI Agent</span><b aria-hidden="true">→</b></button>`}<button class="home-cta manual-jump" type="button" data-scroll="homeManual"><span>Manual tools</span><b aria-hidden="true">↓</b></button></div></div>
+    <div class="home-hero"><canvas class="home-jarvis" aria-hidden="true"></canvas>${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button><button class="home-cta manual-jump" type="button" data-scroll="homeManual"><span>Manual tools</span><b aria-hidden="true">↓</b></button></div></div>
     ${guestNotice}
     <section class="home-section manual-section" id="homeManual">
-      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Do it yourself, or let the Agent."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Take every step yourself with a tool, or tell the Agent and it does it for you."}</p></div>
+      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Do it yourself, or ask the AI."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Take every step yourself with a tool, or tell the Agent and it does it for you."}</p></div>
       <div class="${guestMode ? "" : "manual-split"}"><div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>${guestMode ? "" : '<div id="homeAiSlot"></div>'}</div>
     </section>
     <section class="home-feature" aria-label="AI modes">
-      <div class="home-feature-copy"><span class="home-kicker">YOUR PRIVATE AI SPACE</span><h2>Dream it.<br>Make it real.</h2><p>Chat, create, or ask the Agent to help on your PC. You choose when AI acts and approve anything that matters.</p></div>
+      <div class="home-feature-copy"><span class="home-kicker">YOUR PRIVATE AI SPACE</span><h2>Dream it.<br>Make it real.</h2><p>Chat, create, and let the AI work on your PC: files, mail, the web, code. You approve anything that matters.</p></div>
       <div class="home-feature-actions">
         <button class="home-feature-btn primary" data-go="chat"><span class="hi">${TYPE_ICON.chat}</span><span><strong>Open AI chat</strong><small>Ask, write, plan, code or create</small></span><b aria-hidden="true">→</b></button>
-        ${guestMode ? "" : `<button class="home-feature-btn" data-go="agent"><span class="hi"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><span><strong>Open AI Agent</strong><small>Get help with files, mail and printing</small></span><b aria-hidden="true">→</b></button>`}
       </div>
     </section>
     <div class="home-grid">
@@ -4220,7 +4243,7 @@ function renderHome() {
   // the Agent chat next to the manual tools: made once and moved into each new Home, so a running request keeps going
   const aiSlot = home.querySelector("#homeAiSlot");
   if (aiSlot && window.agentPanel) {
-    if (!homeAgent) homeAgent = window.agentPanel(document.createElement("div"), { title: "Ask the Agent", sub: "It can write and send mail, print, sort files and look things up. Sending and printing wait for your OK.", placeholder: "Tell the Agent what to do…", ideas: ["Sum up my unread mail", "Write a mail to … that says …", "Print the newest PDF I sent to my PC"] });
+    if (!homeAgent) homeAgent = window.agentPanel(document.createElement("div"), { title: "Ask Albatross", sub: "It can write and send mail, print, sort files and look things up. Sending and printing wait for your OK.", placeholder: "What should it do?", ideas: ["Sum up my unread mail", "Write a mail to … that says …", "Print the newest PDF I sent to my PC"] });
     aiSlot.replaceWith(homeAgent.root);
   }
   home.querySelector("[data-scroll='homeManual']").onclick = () => $("#homeManual").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -4234,7 +4257,7 @@ function renderHome() {
     else if (g === "power") setView("pc", { tab: "power" });
     else if (g === "guest") setView("pc", { tab: "guest" });
     else if (g === "jarvis") setView("jarvis");
-    else if (g === "agent") setView("agent");
+    else if (g === "agent") { setView("chat"); newChat("chat"); }
     else if (g === "print") openPrint();
     else if (g === "notes") setView("notes");
     else if (g === "mail") setView("mail");
@@ -4243,7 +4266,7 @@ function renderHome() {
     else if (g === "browser") setView("browser");
     else if (g === "codeplayer") {
       if (guestMode) { setView("chat"); window.codeSide && window.codeSide("html", "<!doctype html>\n<html>\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h1>Hello!</h1>\n</body>\n</html>", true, { name: "index.html" }); }
-      else { setView("agent"); setTimeout(() => window.agentShow && window.agentShow(g), 60); }
+      else { setView("chat"); window.codeSide && window.codeSide("html", "<!doctype html>\n<html>\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h1>Hello!</h1>\n</body>\n</html>", true, { name: "index.html" }); }
     }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
     else if (g === "install") openInstall();
@@ -5702,8 +5725,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.9";
+const APP_VERSION = "2026-11-13.10";
 const WHATS_NEW = [
+  ["2026-11-13.10", ["No more Agent mode: the normal chat has all the PC tools (files, mail, browser, code, printing) and its own folder (Downloads → Albatross → AI), set up in Settings → Tools → Work on your PC; Albatross opens as a sidebar in Chrome and can work in the tab you're on; light-mode shapes grow with the chat"]],
   ["2026-11-13.9", ["Agent → Browser: choose the PC's hidden browser or your own Chrome (new Albatross Agent extension in the extension folder): pair it with a code, then pause, resume, show or close the Agent's tab from the app or the extension"]],
   ["2026-11-13.8", ["Pictures keep being made on the PC when your device loses the connection or the page closes, and arrive in their chat as soon as you're back (also in guest mode)"]],
   ["2026-11-13.7", ["Guest chats are saved on your PC; in PC → Guest mode press Describe to have your selected model check one (it runs on the PC, also after the guest left); the guest chat list is styled properly"]],

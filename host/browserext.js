@@ -3,7 +3,7 @@
 // browser (browser.js) through Chrome's debugger on one tab of its own: the "Albatross Agent" tab group. Your logins are the ones in
 // your Chrome; you see every step happen, and Chrome shows a bar while the Agent is attached ("Cancel" there stops it).
 //
-// Pairing: the app shows a 6-digit code (Agent tab → Browser → My Chrome); typed into the extension it's swapped for a long key
+// Pairing: the app shows a 6-digit code (Settings → Tools → Work on your PC → My Chrome); typed into the extension it's swapped for a long key
 // kept in the extension and in <LocalAppData>\Albatross\extension.json. Only a paired extension is listened to.
 //
 // Messages, as JSON:  PC → extension  { id, type: "cdp", method, params } | { id, type: "open", url } | { id, type: "control", action }
@@ -42,7 +42,7 @@ function listen(note) {
     ws.on("message", (raw) => {
       let m; try { m = JSON.parse(raw); } catch { return; }
       if (m.type === "pair") {
-        if (!X.pair || Date.now() > X.pair.until || String(m.code || "").replace(/\D/g, "") !== X.pair.code) return out({ type: "paired", ok: false, error: "That code is wrong or too old. Make a new one in the app (Agent → Browser → My Chrome)." });
+        if (!X.pair || Date.now() > X.pair.until || String(m.code || "").replace(/\D/g, "") !== X.pair.code) return out({ type: "paired", ok: false, error: "That code is wrong or too old. Make a new one in the app (Settings → Tools → Work on your PC → My Chrome)." });
         const key = crypto.randomBytes(24).toString("hex");
         saveKeys([...keys().filter((k) => k.origin !== origin), { hash: hash(key), origin, at: Date.now() }]);
         X.pair = null; X.note("Chrome extension paired");
@@ -58,7 +58,7 @@ function listen(note) {
         return;
       }
       if (!ok) return;
-      if (m.type === "state") { X.paused = !!m.paused; X.tab = m.tab || null; if (m.vp) X.vp = m.vp; return; }
+      if (m.type === "state") { X.paused = !!m.paused; X.tab = m.tab || null; X.follow = !!m.follow; if (m.vp) X.vp = m.vp; return; }
       if (m.type === "event") {
         const p = m.params || {};
         if (m.method === "Page.frameStartedLoading") X.loading = true;
@@ -93,7 +93,7 @@ const driver = {
 };
 
 function status() {
-  return { connected: !!(X.ws && X.ws.readyState === WebSocket.OPEN), paired: keys().length > 0, paused: X.paused, tab: X.tab, info: X.info, dialog: X.dialog, folder: FOLDER, port: PORT, pairing: X.pair && Date.now() < X.pair.until ? { code: X.pair.code, until: X.pair.until } : null };
+  return { connected: !!(X.ws && X.ws.readyState === WebSocket.OPEN), paired: keys().length > 0, paused: X.paused, tab: X.tab, follow: !!X.follow, info: X.info, dialog: X.dialog, folder: FOLDER, port: PORT, pairing: X.pair && Date.now() < X.pair.until ? { code: X.pair.code, until: X.pair.until } : null };
 }
 
 // Agent tab → Browser → My Chrome: everything the app can do with the extension
