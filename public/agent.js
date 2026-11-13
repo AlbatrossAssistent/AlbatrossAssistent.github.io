@@ -627,7 +627,8 @@ window.runAgentTool = async function (model, text, task) {
 window.agentCard = function (b) {
   const w = document.createElement("div"); w.className = "tcard agent-card";
   w.innerHTML = `<div class="tcard-head"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><span style="min-width:0"><b></b><small></small></span></div><div class="ag-plan-mini"></div><div class="ag-flow"></div><div class="ag-chat-extra"></div>`;
-  w.querySelector("b").textContent = b.active ? "The Agent is working" : b.error ? "The Agent stopped" : "The Agent is done";
+  w.querySelector("b").textContent = b.inline ? (b.active ? "Working on your PC" : b.error ? "Something went wrong" : "Done on your PC")
+    : b.active ? "The Agent is working" : b.error ? "The Agent stopped" : "The Agent is done";
   w.querySelector("small").textContent = b.goal.slice(0, 140) + (b.active && b.status ? " · " + b.status : "");
   const plan = w.querySelector(".ag-plan-mini");
   plan.innerHTML = (b.plan || []).map((s) => `<div class="ag-pl ${esc(s.status)}"><span></span>${esc(s.text)}</div>`).join("");
@@ -660,6 +661,53 @@ window.agentCard = function (b) {
   }
   if (b.error) { const e = document.createElement("div"); e.className = "tool-err"; e.style.marginTop = "8px"; e.textContent = b.error; w.appendChild(e); }
   return w;
+};
+
+// ====================================================================== the Agent's tools inside a normal chat ======================================================================
+// For a message that is about mail, files, printing, a website or a program, the chat model gets the matching Agent tools itself:
+// no Agent run, no plan, no side panel. Only the groups the message is about are offered, and the same rules apply (sending mail
+// and printing wait for "Allow" in the answer). The steps show in the answer as one card.
+const GROUP_HINT = {
+  mail: /(?<![\p{L}\p{N}])(?:e-?mails?|mails?|inbox|mailbox|posteingang|postfach|nachricht\p{L}*|reply|antwort\p{L}*|beantwort\p{L}*|send(?:e|en)?|schick\p{L}*)(?![\p{L}\p{N}])/iu,
+  files: /(?<![\p{L}\p{N}])(?:files?|folders?|datei\p{L}*|ordner|workspace|pc files|sort\p{L}*|move|verschieb\p{L}*|rename|umbenenn\p{L}*|save|speicher\p{L}*|received|empfangen\p{L}*)(?![\p{L}\p{N}])/iu,
+  print: /(?<![\p{L}\p{N}])(?:print\p{L}*|druck\p{L}*|printer)(?![\p{L}\p{N}])/iu,
+  browser: /(?<![\p{L}\p{N}])(?:browse|browser|web ?page|website|webseite|url|https?|site|seite|google|amazon|youtube|log ?in|anmeld\p{L}*|form|formular)(?![\p{L}\p{N}])/iu,
+  code: /(?<![\p{L}\p{N}])(?:program\p{L}*|script|skript|app|game|spiel|html|javascript|python|code|website|webseite|bot)(?![\p{L}\p{N}])/iu,
+};
+// the Agent's instructions, line by line, for the groups that are offered
+function chatToolsSystem(groups) {
+  const lines = SYSTEM().split("\n");
+  const pick = (start) => lines.find((l) => l.startsWith(start)) || "";
+  return ["You can use tools on the user's own PC for this request. Use them to actually do it rather than describing it, then answer briefly with what you did.",
+    (groups.has("files") || groups.has("print") || groups.has("code")) && pick("Files:"),
+    (groups.has("files") || groups.has("print")) && "When the user means their files on the PC (\"my Albatross folder\", \"my PC files\", \"what I sent to the PC\", \"my files\"), look in all: first. all: itself IS the Albatross folder (list all: to see what's in it, never all:Albatross); agent: is only your own workspace.",
+    groups.has("code") && pick("Programs, websites and games:"),
+    pick("Important:"),
+    groups.has("print") && pick("Printing:"),
+    groups.has("browser") && pick("Web:"),
+    pick("Tools can fail")].filter(Boolean).join("\n");
+}
+window.agentChatTools = function (text, opts = {}) {
+  if (!text) return null;
+  const groups = new Set(Object.keys(GROUP_HINT).filter((g) => agOn(g) && GROUP_HINT[g].test(text)));
+  if (opts.all && !groups.size) for (const g of Object.keys(GROUP_HINT)) if (agOn(g)) groups.add(g);   // the router said it's a PC job, but no word matched
+  if (!groups.size) return null;
+  if ((groups.has("code") || groups.has("print")) && agOn("files")) groups.add("files");   // projects are files; printing picks a file
+  const tools = ALL_TOOLS.filter((t) => {
+    const n = t.function.name, g = TOOL_GROUP[n];
+    if (n === "web_search" && opts.ownSearch) return false;      // the chat's own web search is offered already
+    return g ? groups.has(g) : n === "ask_user";
+  });
+  return { groups: [...groups], tools, names: new Set(tools.map((t) => t.function.name)), system: chatToolsSystem(groups) };
+};
+// runs one of those tools for the chat; the steps and any "Allow" go into block (a card drawn by agentCard)
+window.agentChatRun = async function (name, args, signal, block, redraw) {
+  if (AG.running) return "Error: the Agent is busy with another task (Agent tab). Wait until it's done, then try again.";
+  AG.running = true; if (!AG.created) AG.created = new Set();
+  ui = chatUI(block, redraw);
+  try { const out = await runTool(name, args, signal); return typeof out === "string" ? out : JSON.stringify(out); }
+  catch (e) { if (e.name === "AbortError") throw e; return "Error: " + e.message; }
+  finally { AG.running = false; ui = pageUI; for (const fin of [...AG.pendingResolvers]) fin(null); block.pending = null; redraw(); }
 };
 
 // ====================================================================== the Agent as a small chat next to the manual tools ======================================================================

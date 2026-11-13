@@ -2177,8 +2177,15 @@ async function send(textOverride, opts = {}) {
     if (r.aborted) return finishRun();
     tool = r.tool && r.tool !== "chat" ? r.tool : ""; task = r.task || "";
   }
-  try { await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "music" && window.runMusicTool ? window.runMusicTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" && window.runAgentTool ? window.runAgentTool(model, text, task) : tool === "docs" ? chat(model, { docs: text }) : chat(model)); }
+  try { await (asImage ? generateImage(model, text, refs) : tool === "slides" ? buildSlides(model, text) : tool === "graph" ? buildGraph(model, text) : tool === "chances" ? buildChances(model, text) : tool === "notes" && window.runNotesTool ? window.runNotesTool(model, text) : tool === "music" && window.runMusicTool ? window.runMusicTool(model, text) : tool === "challenge" ? buildChallenge(model, text, fileForTool) : tool === "jarvis" ? runJarvisTool(model, text, task) : tool === "agent" ? agentJob(model, text, task) : tool === "docs" ? chat(model, { docs: text }) : chat(model)); }
   finally { finishRun(); }
+}
+
+// A job on the user's PC (mail, files, printing, a website, a program): the chat model does it itself with the matching Agent tools,
+// in this chat, without starting the Agent. Only a model that can't use tools hands it to the Agent (which picks one that can).
+async function agentJob(model, text, task) {
+  if (!guestMode && window.agentChatTools && (await getCaps(model)).includes("tools")) return chat(model, { agentTask: task || text });
+  return window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model);
 }
 
 // What the chat model is told about the app: a short description and the list of its tools (the switched-on ones, and which
@@ -2356,13 +2363,18 @@ async function chat(model, opts = {}) {
       : { role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) });
     if (system) msgs.unshift({ role: "system", content: system });
 
-    for (let round = 0; round < 6; round++) {
+    // a job on the PC (the router said so): the Agent's tools for it, in this chat; a job takes more rounds than a search
+    const agentKit = opts.agentTask && toolsOk && !guestMode && window.agentChatTools ? window.agentChatTools(opts.agentTask + "\n" + (conv.messages.filter(m => m.role === "user").at(-1)?.content || ""), { all: true, ownSearch: useTools }) : null;
+    let agentBlock = null;
+    if (agentKit) msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + agentKit.system) : msgs.unshift({ role: "system", content: agentKit.system });
+    const rounds = agentKit ? 16 : 6;
+    for (let round = 0; round < rounds; round++) {
       const body = { model, messages: msgs, stream: true, options: buildOptions(model) };
       if (guestMode && conv?.id) body.chatId = conv.id;
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
       if (canThink) body.think = useThink ? (gptoss ? (effort === "max" ? "high" : effort) : true) : (gptoss ? "low" : false);
-      const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : [])];
-      if (toolsOk && round < 5 && tools.length) body.tools = tools;
+      const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : []), ...(agentKit ? agentKit.tools : [])];
+      if (toolsOk && round < rounds - 1 && tools.length) body.tools = tools;
 
       const res = await chatApi(body, controller.signal, conv?.id);
       // the PC has the request (remote: its first answer frame is here; this PC: the first bytes)
@@ -2394,6 +2406,15 @@ async function chat(model, opts = {}) {
         const name = tc.function?.name;
         let args = tc.function?.arguments || {};
         if (typeof args === "string") { try { args = JSON.parse(args); } catch { args = {}; } }
+        // one of the Agent's tools (mail, files, printing, browser, code): its steps go into one card in this answer
+        if (agentKit && agentKit.names.has(name)) {
+          if (!agentBlock) { agentBlock = { type: "agent", inline: true, active: true, goal: opts.agentTask || "", steps: [], plan: [], pending: null }; reply.blocks.push(agentBlock); }
+          agentBlock.active = true; redraw();
+          let out = await window.agentChatRun(name, args, controller.signal, agentBlock, redraw);
+          if (/^(Error|Unknown tool)/.test(String(out || "").trim())) out = String(out) + (window.TOOL_FAIL_HINT || "");
+          msgs.push({ role: "tool", content: String(out).slice(0, 12000), tool_name: name });
+          continue;
+        }
         const block = name === "web_fetch" ? { type: "fetch", url: args.url, active: true }
           : name === "image_search" ? { type: "images", query: args.query || "", active: true, images: [] }
           : name === "make_slides" ? { type: "deck", active: true, deck: { title: args.title || "Presentation", slides: [] } }
@@ -2410,7 +2431,9 @@ async function chat(model, opts = {}) {
         msgs.push({ role: "tool", content: out, tool_name: name });
       }
     }
+    if (agentBlock) { agentBlock.active = false; redraw(); }
   } catch (e) {
+    for (const b of reply.blocks) if (b.type === "agent" && b.inline && b.active) { b.active = false; if (e.name === "AbortError") b.error = "Stopped. Nothing more will happen."; }
     if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message); else stopped = true;
   } finally {
     controller = null; setBusy(false);
@@ -5589,8 +5612,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.2";
+const APP_VERSION = "2026-11-13.3";
 const WHATS_NEW = [
+  ["2026-11-13.3", ["The chat AI can now use the Agent's tools itself (mail, files, printing, websites, programs) right in the chat, without starting the Agent, and only for messages about those things"]],
   ["2026-11-13.2", ["Your Beam name and this device's name now stay on the device: they are no longer shared through your account, so your own devices can send files to each other"]],
   ["2026-11-13.1", ["Light mode shapes on iPhone and iPad: gravity now follows the tilt correctly instead of piling up on the left edge"]],
   ["2026-11-12.4", ["The version is shown under Settings (click it to see what changed); it turns orange when a newer one is out","If the site you're on is older than the newest version, Albatross tells you and offers to reload"]],
