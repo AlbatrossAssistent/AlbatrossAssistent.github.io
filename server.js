@@ -100,6 +100,7 @@ function searchLimited(ip) {
   return ++u.count > 60;
 }
 const clip = (s, n) => (typeof s === "string" && s.length > n ? s.slice(0, n) + " …" : s || "");
+const freeSearch = require("./host/freesearch");     // no key, no credits (DuckDuckGo's plain results page)
 
 // ---------- photos from the web ----------
 // Freely licensed photos only (Openverse: Creative Commons / public domain; Wikimedia Commons as backup),
@@ -147,11 +148,11 @@ function imageSearch(req, res) {
 function handleTools(req, res, url) {
   cors(res);
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
-  if (url.pathname === "/tools/status") return sendJson(res, 200, { webSearch: !!OLLAMA_API_KEY, imageSearch: true });
+  if (url.pathname === "/tools/status") return sendJson(res, 200, { webSearch: true, webFetch: !!OLLAMA_API_KEY, imageSearch: true });
   const name = url.pathname.slice("/tools/".length);
   if (name === "image_search" && req.method === "POST") return imageSearch(req, res);
   if (req.method !== "POST" || !["web_search", "web_fetch"].includes(name)) return sendJson(res, 404, { error: "Unknown tool" });
-  if (!OLLAMA_API_KEY) return sendJson(res, 501, { error: "Web search isn't set up on the server (OLLAMA_API_KEY missing)." });
+  if (!OLLAMA_API_KEY && name === "web_fetch") return sendJson(res, 501, { error: "Reading pages isn't set up on the server (OLLAMA_API_KEY missing)." });
   if (searchLimited(clientIp(req))) return sendJson(res, 429, { error: "Too many searches — wait a few minutes." });
 
   let body = "";
@@ -165,6 +166,16 @@ function handleTools(req, res, url) {
         const query = String(args.query || "").slice(0, 400);
         if (!query) return sendJson(res, 400, { error: "Empty query" });
         payload = { query, max_results: Math.min(Math.max(Number(args.max_results) || 5, 1), 10) };
+        // the free search when there's no key, or when Ollama refuses (credits used up, service down)
+        const free = async (why) => {
+          try { return sendJson(res, 200, { results: await freeSearch.search(query, payload.max_results), via: "free" }); }
+          catch (e) { return sendJson(res, 502, { error: (why ? why + " — and the free search failed too: " : "Search failed: ") + e.message }); }
+        };
+        if (!OLLAMA_API_KEY) return free("");
+        const r = await fetch(`${WEB_API}/web_search`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${OLLAMA_API_KEY}` }, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000) }).catch(() => null);
+        const j = r ? await r.json().catch(() => ({})) : {};
+        if (!r || !r.ok) return free("Ollama's web search refused (" + String(j.error || (r ? r.status : "no answer")).slice(0, 60) + ")");
+        return sendJson(res, 200, { results: (j.results || []).map((x) => ({ title: x.title || x.url, url: x.url, content: clip(x.content, 1500) })) });
       } else {
         const u = String(args.url || "");
         if (!/^https?:\/\//i.test(u)) return sendJson(res, 400, { error: "Only http(s) URLs can be fetched" });

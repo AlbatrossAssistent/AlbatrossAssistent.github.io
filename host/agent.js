@@ -277,6 +277,7 @@ async function handle(method, p, body, note) {
     if (p === "/agent/upload") return [200, upload(j)];
     if (p === "/agent/print") { const r = await print(j.spec, j.printer); note(`Agent: printed ${r.printed} on ${r.printer}`); return [200, r]; }
     if (p === "/agent/browse") return [200, await browse(j.url)];
+    if (p === "/agent/search") return [200, { results: await require("./freesearch").search(j.query, Math.min(10, Math.max(1, Number(j.max) || 6))), via: "pc" }];
   } catch (e) { return [400, { error: e.message }]; }
   return [404, { error: "Unknown request" }];
 }
