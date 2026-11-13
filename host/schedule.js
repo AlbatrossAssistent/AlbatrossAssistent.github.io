@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 
-const FILE = path.join(__dirname, "schedule.json");
+const FILE = path.join(process.env.ALBATROSS_DATA || __dirname, "schedule.json");
 const PANEL = Number(process.env.BURROW_PANEL_PORT) || 4747;
 const DEFAULTS = {
   idle: { on: false, hours: 2, action: "sleep" },

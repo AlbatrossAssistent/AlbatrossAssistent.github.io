@@ -7,7 +7,7 @@ const path = require("path");
 const util = require("util");
 const { spawn } = require("child_process");
 
-const LOG = path.join(__dirname, "background.log");
+const LOG = path.join(process.env.ALBATROSS_DATA || __dirname, "background.log");
 try { if (fs.statSync(LOG).size > 5e6) fs.renameSync(LOG, LOG + ".old"); } catch {}
 const out = fs.createWriteStream(LOG, { flags: "a" });
 const stamp = () => new Date().toLocaleString();
@@ -50,7 +50,7 @@ function runtimeCopy() {
   if (!(await up())) {
     const exe = runtimeCopy() || [path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama.exe")].find((f) => fs.existsSync(f)) || "ollama";
     console.log("Starting Ollama:", exe);
-    const ollamaLog = fs.openSync(path.join(__dirname, "ollama-background.log"), "a");
+    const ollamaLog = fs.openSync(path.join(process.env.ALBATROSS_DATA || __dirname, "ollama-background.log"), "a");
     // One model in memory at a time, also for the website used directly on this PC.
     // The website talks to Ollama directly when used on this PC, so Ollama must accept its origin.
     const origins = new Set((process.env.OLLAMA_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean));

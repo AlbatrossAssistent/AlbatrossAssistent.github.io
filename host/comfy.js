@@ -65,7 +65,7 @@ function ensureRunning(log, status = () => {}) {
     // still starting from an earlier request (from a slow disk this takes minutes): wait for it, don't start a second one
     if (!alive()) {
       log("Starting ComfyUI for image generation…");
-      const out = fs.openSync(path.join(__dirname, "comfyui.log"), "a");
+      const out = fs.openSync(path.join(process.env.ALBATROSS_DATA || __dirname, "comfyui.log"), "a");
       child = spawn(path.join(COMFY_DIR, "python_embeded", "python.exe"),
         ["-s", path.join("ComfyUI", "main.py"), "--windows-standalone-build", "--listen", "127.0.0.1", "--port", new URL(COMFY).port || "8188", "--disable-auto-launch",
          // keep the image model and its text encoder on the graphics card between pictures: the text encoder is stored

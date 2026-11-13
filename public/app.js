@@ -5927,8 +5927,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.16";
+const APP_VERSION = "2026-11-13.17";
 const WHATS_NEW = [
+  ["2026-11-13.17", ["Albatross as a Windows app: an installer (desktop/) that starts everything by itself"]],
   ["2026-11-13.16", ["Install and remove AI models right in the app (Settings → Installed models): suggestions, progress bar, keeps going on the PC; models stay with Ollama, not in the app"]],
   ["2026-11-13.15", ["Chrome sidebar works without extra permissions (the app comes from your PC); the AI can show your pictures in its answer and attach PC files; Appearance: background, accent colour, and each device keeps its own look; answers in German when you write German"]],
   ["2026-11-13.14", ["Chrome sidebar answers in your language"]],

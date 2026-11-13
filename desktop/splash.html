@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Albatross</title>
+<style>
+  html, body { margin: 0; height: 100%; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; color: #1d1d1f; background: #fff; -webkit-app-region: drag; user-select: none; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px; box-sizing: border-box; }
+  img { width: 72px; height: 72px; border-radius: 18px; }
+  h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  p { margin: 0; color: #6e6e73; min-height: 2.9em; }
+  .bar { width: 240px; height: 6px; border-radius: 999px; background: rgba(0,0,0,.08); overflow: hidden; }
+  .bar div { height: 100%; width: 30%; border-radius: 999px; background: #007aff; animation: slide 1.2s ease-in-out infinite; }
+  .bar.pct div { animation: none; transition: width .3s; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(330%); } }
+</style>
+</head>
+<body>
+  <img src="icon.png" alt="">
+  <h1>Albatross</h1>
+  <p id="st">Starting…</p>
+  <div class="bar" id="bar"><div></div></div>
+<script>
+  window.setStatus = (text, pct) => {
+    document.getElementById("st").textContent = text;
+    const bar = document.getElementById("bar");
+    bar.classList.toggle("pct", pct != null);
+    bar.firstElementChild.style.width = pct != null ? pct + "%" : "30%";
+  };
+</script>
+</body>
+</html>

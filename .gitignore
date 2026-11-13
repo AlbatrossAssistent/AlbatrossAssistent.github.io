@@ -8,3 +8,6 @@ host/schedule.json
 extension.pem
 extension.crx
 *.pem
+desktop/node_modules/
+desktop/dist/
+desktop/bundle/
