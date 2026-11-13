@@ -5725,8 +5725,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.10";
+const APP_VERSION = "2026-11-13.11";
 const WHATS_NEW = [
+  ["2026-11-13.11", ["Chrome sidebar: the app inside it may reach your PC (Chrome asks once to allow local network access)"]],
   ["2026-11-13.10", ["No more Agent mode: the normal chat has all the PC tools (files, mail, browser, code, printing) and its own folder (Downloads → Albatross → AI), set up in Settings → Tools → Work on your PC; Albatross opens as a sidebar in Chrome and can work in the tab you're on; light-mode shapes grow with the chat"]],
   ["2026-11-13.9", ["Agent → Browser: choose the PC's hidden browser or your own Chrome (new Albatross Agent extension in the extension folder): pair it with a code, then pause, resume, show or close the Agent's tab from the app or the extension"]],
   ["2026-11-13.8", ["Pictures keep being made on the PC when your device loses the connection or the page closes, and arrive in their chat as soon as you're back (also in guest mode)"]],
