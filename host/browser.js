@@ -9,6 +9,7 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
+const ext = require("./browserext");
 
 const PROFILE = process.env.ALBATROSS_BROWSER_PROFILE || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "Browser");
 const DOWNLOADS = path.join(path.resolve(process.env.ALBATROSS_FILES || path.join(os.homedir(), "Downloads", "Albatross")), "Browser downloads");
@@ -36,6 +37,8 @@ function send(method, params = {}, sessionId) {
   });
 }
 const cur = () => B.sessions.get(B.active);
+// where the AI's page reading, clicks and typing go: this hidden browser, or your own Chrome through the extension (browserext.js)
+const pcD = { send: (method, params) => { const s = cur(); if (!s) throw new Error("The browser isn't open."); return send(method, params, s); }, loading: () => B.loading, vp: () => B.vp };
 
 async function start() {
   if (B.ws && B.ws.readyState === WebSocket.OPEN && B.active) return;
@@ -164,25 +167,24 @@ function fixUrl(u) {
   return "https://www.google.com/search?q=" + encodeURIComponent(u);
 }
 const KEYS = { Enter: [13, "Enter", "\r"], Backspace: [8, "Backspace"], Tab: [9, "Tab"], Escape: [27, "Escape"], Delete: [46, "Delete"], ArrowLeft: [37, "ArrowLeft"], ArrowUp: [38, "ArrowUp"], ArrowRight: [39, "ArrowRight"], ArrowDown: [40, "ArrowDown"], Home: [36, "Home"], End: [35, "End"], PageUp: [33, "PageUp"], PageDown: [34, "PageDown"], F5: [116, "F5"] };
-async function input(j) {
-  const s = cur(); if (!s) throw new Error("The browser isn't open.");
+async function input(j, D = pcD) {
   const mods = (j.alt ? 1 : 0) | (j.ctrl ? 2 : 0) | (j.meta ? 4 : 0) | (j.shift ? 8 : 0);
   const x = Number(j.x) || 0, y = Number(j.y) || 0, button = ["left", "right", "middle"].includes(j.button) ? j.button : "left";
-  const mouse = (type, extra) => send("Input.dispatchMouseEvent", { type, x, y, modifiers: mods, ...extra }, s);
+  const mouse = (type, extra) => D.send("Input.dispatchMouseEvent", { type, x, y, modifiers: mods, ...extra });
   switch (j.t) {
     case "click": await mouse("mousePressed", { button, clickCount: j.count || 1 }); await mouse("mouseReleased", { button, clickCount: j.count || 1 }); break;
     case "down": await mouse("mousePressed", { button, clickCount: j.count || 1 }); break;
     case "up": await mouse("mouseReleased", { button, clickCount: j.count || 1 }); break;
     case "move": await mouse("mouseMoved", { button: j.drag ? "left" : "none", buttons: j.drag ? 1 : 0 }); break;
     case "wheel": await mouse("mouseWheel", { deltaX: Number(j.dx) || 0, deltaY: Number(j.dy) || 0 }); break;
-    case "text": if (j.text) await send("Input.insertText", { text: String(j.text).slice(0, 5000) }, s); break;
+    case "text": if (j.text) await D.send("Input.insertText", { text: String(j.text).slice(0, 5000) }); break;
     case "key": {
       let k = KEYS[j.key];
       if (!k && /^[a-z0-9]$/i.test(j.key || "")) { const c = j.key.toUpperCase(); k = [c.charCodeAt(0), /\d/.test(c) ? "Digit" + c : "Key" + c]; }
       if (!k) break;
       const [vk, code, text] = k;
-      await send("Input.dispatchKeyEvent", { type: text && !mods ? "keyDown" : "rawKeyDown", key: j.key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods, ...(text && !mods ? { text, unmodifiedText: text } : {}) }, s);
-      await send("Input.dispatchKeyEvent", { type: "keyUp", key: j.key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods }, s);
+      await D.send("Input.dispatchKeyEvent", { type: text && !mods ? "keyDown" : "rawKeyDown", key: j.key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods, ...(text && !mods ? { text, unmodifiedText: text } : {}) });
+      await D.send("Input.dispatchKeyEvent", { type: "keyUp", key: j.key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods });
       break;
     }
   }
@@ -199,32 +201,70 @@ const READ_JS = `(() => {
   });
   return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : "").replace(/\\n{3,}/g, "\\n\\n").slice(0, 6000), elements, scrolled: Math.round(scrollY), pageHeight: document.documentElement.scrollHeight, windowHeight: innerHeight };
 })()`;
-async function evalJs(expression) {
-  const r = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, cur());
+async function evalJs(expression, D = pcD) {
+  const r = await D.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
   if (r.exceptionDetails) throw new Error("The page didn't answer: " + (r.exceptionDetails.text || "error"));
   return r.result ? r.result.value : null;
 }
-async function settle(ms = 10000) {   // wait until the page has loaded (or give up quietly)
+async function settle(ms = 10000, D = pcD) {   // wait until the page has loaded (or give up quietly)
   const end = Date.now() + ms; await sleep(400);
-  while (B.loading && Date.now() < end) await sleep(200);
+  while (D.loading() && Date.now() < end) await sleep(200);
   await sleep(300);
 }
-async function readPage() { return evalJs(READ_JS); }
-async function act(j) {
-  if (j.action === "scroll") { await input({ t: "wheel", x: Math.round(B.vp.w / 2), y: Math.round(B.vp.h / 2), dy: (j.direction === "up" ? -0.8 : 0.8) * B.vp.h }); await sleep(500); return { ok: true }; }
+async function readPage(D = pcD) { return evalJs(READ_JS, D); }
+// In your own Chrome the Agent's tab is usually in the background, where Chrome holds back mouse and keyboard events: clicks and
+// typing are done inside the page instead (the same events a site sees from a real click; values set so React & co. notice them).
+const DOM_ACT = (j) => `(() => {
+  const e = document.querySelector('[data-alb="${Math.round(Number(j.n))}"]'); if (!e) return null;
+  const label = (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || "").replace(/\\s+/g, " ").trim().slice(0, 80);
+  const action = ${JSON.stringify(j.action)}, text = ${JSON.stringify(String(j.text || ""))}, clear = ${j.clear !== false}, submit = ${!!j.submit};
+  if (action === "type" && e.type === "password") return { password: true, label };
+  e.scrollIntoView({ block: "center", inline: "center" });
+  try { e.focus({ preventScroll: true }); } catch {}
+  if (action === "click") {
+    const o = { bubbles: true, cancelable: true, view: window, button: 0 };
+    e.dispatchEvent(new PointerEvent("pointerdown", o)); e.dispatchEvent(new MouseEvent("mousedown", o));
+    e.dispatchEvent(new PointerEvent("pointerup", o)); e.dispatchEvent(new MouseEvent("mouseup", o));
+    e.click();
+    return { ok: true, label };
+  }
+  if (e.isContentEditable) { if (clear) document.execCommand("selectAll"); document.execCommand("insertText", false, text); }
+  else {
+    const proto = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : e instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(e, (clear ? "" : e.value) + text);
+    e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  if (submit) {
+    const k = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    const go = e.dispatchEvent(new KeyboardEvent("keydown", k)); e.dispatchEvent(new KeyboardEvent("keypress", k)); e.dispatchEvent(new KeyboardEvent("keyup", k));
+    if (go && e.form) { try { e.form.requestSubmit(); } catch { e.form.submit(); } }
+  }
+  return { ok: true, label };
+})()`;
+async function domAct(j, D) {
+  if (j.action === "scroll") { await evalJs(`scrollBy(0, ${j.direction === "up" ? -0.8 : 0.8} * innerHeight)`, D); await sleep(400); return { ok: true }; }
+  const r = await evalJs(DOM_ACT(j), D);
+  if (!r) throw new Error(`There is no number ${Math.round(Number(j.n))} on the page any more. Read the page again.`);
+  if (r.password) throw new Error("Passwords are never typed by the AI. Ask the user to type it in their Chrome themselves.");
+  await sleep(500); await settle(6000, D);
+  return { ok: true, on: r.label };
+}
+async function act(j, D = pcD) {
+  if (D.dom) return domAct(j, D);
+  if (j.action === "scroll") { const v = D.vp(); await input({ t: "wheel", x: Math.round(v.w / 2), y: Math.round(v.h / 2), dy: (j.direction === "up" ? -0.8 : 0.8) * v.h }, D); await sleep(500); return { ok: true }; }
   const n = Math.round(Number(j.n));
-  const r = await evalJs(`(() => { const e = document.querySelector('[data-alb="${n}"]'); if (!e) return null; e.scrollIntoView({ block: "center", inline: "center" }); const b = e.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), password: e.type === "password", label: (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || "").trim().slice(0, 80) }; })()`);
+  const r = await evalJs(`(() => { const e = document.querySelector('[data-alb="${n}"]'); if (!e) return null; e.scrollIntoView({ block: "center", inline: "center" }); const b = e.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), password: e.type === "password", label: (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || "").trim().slice(0, 80) }; })()`, D);
   if (!r) throw new Error(`There is no number ${n} on the page any more. Read the page again.`);
   if (j.action === "type" && r.password) throw new Error("Passwords are never typed by the AI. Ask the user to type it in the Browser themselves.");
   await sleep(150);
-  await input({ t: "click", x: r.x, y: r.y });
+  await input({ t: "click", x: r.x, y: r.y }, D);
   if (j.action === "type") {
     await sleep(120);
-    if (j.clear !== false) { await input({ t: "key", key: "a", ctrl: true }); await input({ t: "key", key: "Backspace" }); }
-    await input({ t: "text", text: String(j.text || "") });
-    if (j.submit) await input({ t: "key", key: "Enter" });
+    if (j.clear !== false) { await input({ t: "key", key: "a", ctrl: true }, D); await input({ t: "key", key: "Backspace" }, D); }
+    await input({ t: "text", text: String(j.text || "") }, D);
+    if (j.submit) await input({ t: "key", key: "Enter" }, D);
   }
-  await settle(6000);
+  await settle(6000, D);
   return { ok: true, on: r.label };
 }
 // Private: a separate session like an incognito window. Nothing it sees is written to the profile (no history, cookies, logins),
@@ -325,6 +365,14 @@ async function handle(method, p, body, note) {
     if (p === "/browser/state") return [200, B.ws ? state() : { closed: true }];
     if (p === "/browser/stop") { await stop(); return [200, { closed: true }]; }
     if (p === "/browser/clearhistory") { const n = await clearHistory(); B.note("Browser: history cleared"); return [200, { cleared: n }]; }
+    if (p === "/browser/ext") { ext.listen(B.note); return [200, await ext.handle(j)]; }
+    // the Agent set to "My Chrome": the same reading and clicking, in your Chrome through the extension (the hidden browser isn't started)
+    if (j.via === "ext" && (p === "/browser/open" || p === "/browser/read" || p === "/browser/act")) {
+      const D = ext.driver;
+      if (p === "/browser/open") { const u = fixUrl(j.url); if (!u) return [400, { error: "That address can't be opened here." }]; await D.open(u); await settle(10000, D); return [200, await readPage(D)]; }
+      if (p === "/browser/read") return [200, await readPage(D)];
+      const r = await act(j, D); return [200, { ...r, page: await readPage(D) }];
+    }
     await start();
     if (p === "/browser/input") { await input(j); return [200, { ok: true }]; }
     if (p === "/browser/nav") {
@@ -350,4 +398,4 @@ async function handle(method, p, body, note) {
   return [404, { error: "Unknown browser request" }];
 }
 
-module.exports = { handle, stream };
+module.exports = { handle, stream, listenExtension: (note) => ext.listen(note) };

@@ -178,6 +178,7 @@ const chatStore = require("./chats");
 const jobStore = require("./jobs");
 const loadTimes = require("./loadtimes");
 const browserTool = require("./browser");
+setImmediate(() => browserTool.listenExtension((t) => note(t)));   // the Albatross Agent extension in your own Chrome connects here (browserext.js)
 const agentTools = require("./agent");
 const mailTools = require("./mail");
 const docsTool = require("./docs");

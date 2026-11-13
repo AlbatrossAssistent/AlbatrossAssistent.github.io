@@ -5702,8 +5702,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.8";
+const APP_VERSION = "2026-11-13.9";
 const WHATS_NEW = [
+  ["2026-11-13.9", ["Agent → Browser: choose the PC's hidden browser or your own Chrome (new Albatross Agent extension in the extension folder): pair it with a code, then pause, resume, show or close the Agent's tab from the app or the extension"]],
   ["2026-11-13.8", ["Pictures keep being made on the PC when your device loses the connection or the page closes, and arrive in their chat as soon as you're back (also in guest mode)"]],
   ["2026-11-13.7", ["Guest chats are saved on your PC; in PC → Guest mode press Describe to have your selected model check one (it runs on the PC, also after the guest left); the guest chat list is styled properly"]],
   ["2026-11-13.6", ["Settings → Connection: switch off the server's 10-minute block for your own PC's codes, so your devices aren't locked out while the PC is asleep or restarting"]],

@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --fg: #1d1d1f; --muted: #6e6e73; --line: rgba(0,0,0,.1); --bg: #fff; --soft: #f5f5f7; --accent: #007aff; --ok: #34c759; --warn: #ff9500; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #f5f5f7; --muted: #a1a1a6; --line: rgba(255,255,255,.14); --bg: #1c1c1e; --soft: #2c2c2e; } }
+  body { margin: 0; width: 300px; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
+  .wrap { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  h1 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  h1 img { width: 22px; height: 22px; }
+  .state { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px; background: var(--soft); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); }
+  .tab { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--soft); color: var(--fg); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  input { font: inherit; letter-spacing: .2em; text-align: center; width: 100%; box-sizing: border-box; padding: 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+  small { color: var(--muted); }
+  .err { color: #ff3b30; font-size: 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><img src="icon48.png" alt="">Albatross Agent</h1>
+  <div class="state"><span class="dot" id="dot"></span><div style="min-width:0"><div id="stateText">Checking…</div><div class="tab" id="tabText"></div></div></div>
+
+  <div id="pairBox" hidden>
+    <small>In Albatross: Agent tab → Browser → <b>My Chrome</b> → Make a code. Type it here:</small>
+    <input id="code" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="off">
+    <div class="row" style="margin-top:6px"><button class="primary" id="pairGo">Connect</button></div>
+    <div class="err" id="pairErr"></div>
+  </div>
+
+  <div id="ctlBox" hidden>
+    <div class="row">
+      <button id="pause"></button>
+      <button id="show">Show the Agent's tab</button>
+      <button id="useTab">Give the Agent this tab</button>
+      <button id="closeTab">Close its tab</button>
+    </div>
+    <small>The Agent only works in its own tab. Chrome shows a bar while it's attached; Cancel there pauses it.</small>
+  </div>
+
+  <div class="row"><button id="openApp">Open Albatross</button></div>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>
