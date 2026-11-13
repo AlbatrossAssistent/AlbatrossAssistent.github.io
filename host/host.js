@@ -104,6 +104,7 @@ const pcPower = {
     if (method === "POST" && p === "/pc/devices") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} if (j.me) seeDevice(j.me); return [200, { devices: drops.list() }]; }
     if (method === "POST" && p === "/pc/forgetdevice") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, { ok: drops.forget(j.id) }]; }
     if (p.startsWith("/pc/drop")) return drops.handle(method, p, body, note);
+    if (p === "/pc/modelpull" || p === "/pc/modeldelete") { const [st, out] = await require("./models").handle(method, p, body, OLLAMA, note); if (p === "/pc/modeldelete") pollOllama(); return [st, out]; }
     if (p === "/pc/relayban") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, method === "POST" ? setNoBan(j.noBan) : { noBan: !!state.noBan }]; }
     if (method === "GET" && p === "/pc/lock") return [200, { locked: await isLocked() }];
     if (method === "POST" && p === "/pc/shutdown") {

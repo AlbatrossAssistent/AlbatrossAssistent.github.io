@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='#0A0A0A'/%3E%3Cg fill='#fff' transform='translate(3.5 2.2) scale(.75)'%3E%3Cpath fill-rule='evenodd' d='M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z'/%3E%3Cpath d='M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z'/%3E%3Cpath d='M11 20.6H17L16.2 22.4H11.8Z'/%3E%3Cpath d='M12.3 23.2Q14 28.4 15.7 23.2Z' fill='#cfdcff'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-11-13.15">
+<link rel="stylesheet" href="app.css?v=2026-11-13.16">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"></div>
@@ -399,7 +399,13 @@
         <section class="pane" data-pane="models">
           <div class="row" style="justify-content:space-between;align-items:center"><h3>On the connected device</h3><div class="row"><button class="btn" id="unloadAll">Free GPU memory</button><button class="btn" id="refreshModels">Refresh</button></div></div>
           <div style="overflow-x:auto"><table class="model-table"><thead><tr><th>Model</th><th>Size</th><th>Type</th><th>Status</th></tr></thead><tbody id="modelRows"></tbody></table></div>
-          <div class="note">Install more with <code>ollama pull &lt;name&gt;</code> on the PC that runs Ollama. Image models (e.g. <code>x/z-image-turbo</code>, <code>x/flux2-klein</code>) work in Image mode where Ollama supports image generation.</div>
+          <div class="model-get" id="modelGet">
+            <h3>Install a model</h3>
+            <div class="row"><input id="pullName" placeholder="Name, e.g. qwen3:14b (see ollama.com/library)" autocomplete="off" spellcheck="false" style="flex:1 1 220px"><button class="btn primary" id="pullGo" type="button">Install</button></div>
+            <div class="pull-sugg" id="pullSugg"></div>
+            <div class="pull-list" id="pullList"></div>
+            <div class="note">Models are kept by Ollama on the PC (its own folder), not in the app: updating or reinstalling Albatross never removes them. Bigger models answer better but need more memory and disk space; a graphics card with as much memory as the model's size makes them fast.</div>
+          </div>
         </section>
 
         <!-- Tools -->
@@ -708,7 +714,7 @@
   <div class="jvf-bottom"><div class="jvf-log" id="jvFullLog"></div>
     <form class="jvf-ask" id="jvFullAsk"><input id="jvFullInput" placeholder="Tell Jarvis what to do…" autocomplete="off"><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form></div>
 </div>
-<script src="starfield.js?v=2026-11-13.15"></script>
+<script src="starfield.js?v=2026-11-13.16"></script>
 <script src="scenes.js"></script>
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
@@ -719,8 +725,8 @@
 <script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-11-13.15"></script>
-<script type="module" src="account.js?v=2026-11-13.15"></script>
+<script src="app.js?v=2026-11-13.16"></script>
+<script type="module" src="account.js?v=2026-11-13.16"></script>
 <script src="agent.js"></script>
 <script src="voice.js"></script>
 <script src="browser.js"></script>

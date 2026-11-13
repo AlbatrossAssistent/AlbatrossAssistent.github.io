@@ -597,9 +597,78 @@ function renderModelTable() {
     tr.querySelector(".pill").textContent = m.details?.parameter_size || "";
     const ub = tr.querySelector(".unload");
     if (ub) ub.onclick = () => freeGpu([m.name]);
+    // Ollama's own models can be removed here (picture models of ComfyUI and cloud models can't)
+    if (!guestMode && !m.cloud && m.kind !== "image") {
+      const rb = document.createElement("button"); rb.className = "btn small model-rm"; rb.type = "button"; rb.textContent = "Remove"; rb.title = "Delete this model from the PC";
+      rb.onclick = async () => {
+        if (!confirm(`Remove ${m.name} from the PC? It frees ${size} and can be installed again any time.`)) return;
+        rb.disabled = true;
+        try { await pcCall("/pc/modeldelete", { name: m.name }); toast(m.name + " removed"); await connect(true); renderModelTable(); }
+        catch (e) { rb.disabled = false; toast("Couldn't remove it: " + e.message); }
+      };
+      tr.lastElementChild.appendChild(rb);
+    }
     tb.appendChild(tr);
   }
 }
+
+// ---------- installing models (Settings → Installed models) ----------
+// The download runs on the PC (host/models.js) through Ollama, so it goes on when this page closes; here we show the progress.
+const MODEL_SUGG = [
+  ["qwen3:14b", "about 9 GB", "Very good all-rounder, uses tools (files, mail, browser)"],
+  ["qwen3:8b", "about 5 GB", "Smaller and faster, uses tools"],
+  ["gemma4:12b", "about 8 GB", "Also looks at pictures, uses tools"],
+  ["qwen3:4b", "about 2.5 GB", "For PCs with little memory"],
+  ["llava:7b", "about 4.5 GB", "Looks at pictures (older)"],
+];
+let pullTimer = 0;
+function paintPullSugg() {
+  const box = $("#pullSugg"); if (!box) return;
+  box.innerHTML = "";
+  const have = new Set(models.map((m) => m.name));
+  for (const [name, size, what] of MODEL_SUGG) {
+    if (have.has(name)) continue;
+    const b = document.createElement("button"); b.type = "button"; b.className = "pull-chip";
+    b.innerHTML = "<b></b><small></small>"; b.querySelector("b").textContent = name; b.querySelector("small").textContent = size + " · " + what;
+    b.onclick = () => { $("#pullName").value = name; startPull(); };
+    box.appendChild(b);
+  }
+}
+async function startPull() {
+  const name = $("#pullName").value.trim();
+  if (!name) { $("#pullName").focus(); return; }
+  if (!connected || guestMode) return toast("Connect to your PC first");
+  try { paintPulls((await pcCall("/pc/modelpull", { name })).pulls); $("#pullName").value = ""; watchPulls(); }
+  catch (e) { toast(e.message); }
+}
+function paintPulls(list) {
+  const box = $("#pullList"); if (!box) return;
+  box.innerHTML = "";
+  for (const p of list || []) {
+    const pct = p.total ? Math.floor(p.completed / p.total * 100) : 0;
+    const row = document.createElement("div"); row.className = "pull-row" + (p.error ? " bad" : p.done ? " done" : "");
+    row.innerHTML = `<div class="pull-top"><b></b><span class="pull-st"></span><button class="btn small" type="button"></button></div><div class="progress"><div></div></div>`;
+    row.querySelector("b").textContent = p.name;
+    row.querySelector(".pull-st").textContent = p.error ? p.error : p.done ? "Installed ✓" : p.total ? `${pct}% · ${(p.completed / 1e9).toFixed(1)} of ${(p.total / 1e9).toFixed(1)} GB` : p.status;
+    row.querySelector(".progress div").style.width = (p.done && !p.error ? 100 : pct) + "%";
+    const btn = row.querySelector("button");
+    if (p.done) { btn.textContent = "OK"; btn.onclick = async () => paintPulls((await pcCall("/pc/modelpull", { clear: true })).pulls); }
+    else { btn.textContent = "Cancel"; btn.onclick = async () => paintPulls((await pcCall("/pc/modelpull", { name: p.name, cancel: true })).pulls); }
+    box.appendChild(row);
+  }
+}
+async function watchPulls() {
+  clearTimeout(pullTimer);
+  if (!connected || guestMode) return;
+  let list = [];
+  try { list = (await pcCall("/pc/modelpull", null, "GET")).pulls || []; } catch { return; }
+  paintPulls(list);
+  const running = list.some((p) => !p.done);
+  if (list.some((p) => p.done && !p.error && !models.some((m) => m.name === p.name))) { await connect(true); renderModelTable(); paintPullSugg(); }
+  if (running && $("#settings").open) pullTimer = setTimeout(watchPulls, 1500);
+}
+$("#pullGo").onclick = startPull;
+$("#pullName").onkeydown = (e) => { if (e.key === "Enter") startPull(); };
 
 // ---------- free GPU memory ----------
 // keep_alive: 0 tells Ollama to drop a model from GPU/RAM right away.
@@ -1062,6 +1131,13 @@ function renderEmpty() {
     btn.querySelector("strong").textContent = a; btn.querySelector("small").textContent = b;
     btn.onclick = () => { const p = $("#prompt"); p.value = imageMode ? `${a}, ${b}` : `${a} ${b}: `; autosize(); p.focus(); };
     d.querySelector(".suggestions").appendChild(btn);
+  }
+  // connected, but no model to chat with yet (a new PC): offer to install one right here
+  if (connected && !guestMode && !models.some((m) => m.kind !== "image" && m.kind !== "embed")) {
+    const b = document.createElement("button"); b.className = "btn primary"; b.type = "button"; b.style.marginTop = "14px";
+    b.textContent = "Install a model to get started";
+    b.onclick = () => { openSettings("models"); switchTab("models"); };
+    d.appendChild(b);
   }
   $("#inner").appendChild(d);
 }
@@ -4006,6 +4082,7 @@ function openSettings(tab) {
   d.showModal();
 }
 function switchTab(name) {
+  if (name === "models") { paintPullSugg(); watchPulls(); $("#modelGet").hidden = guestMode; }
   $$("#settings .tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
   $$("#settings .pane[data-pane]").forEach(p => p.classList.toggle("on", p.dataset.pane === name));
 }
@@ -5850,8 +5927,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.15";
+const APP_VERSION = "2026-11-13.16";
 const WHATS_NEW = [
+  ["2026-11-13.16", ["Install and remove AI models right in the app (Settings → Installed models): suggestions, progress bar, keeps going on the PC; models stay with Ollama, not in the app"]],
   ["2026-11-13.15", ["Chrome sidebar works without extra permissions (the app comes from your PC); the AI can show your pictures in its answer and attach PC files; Appearance: background, accent colour, and each device keeps its own look; answers in German when you write German"]],
   ["2026-11-13.14", ["Chrome sidebar answers in your language"]],
   ["2026-11-13.13", ["Web search works without Ollama credits (a free search, from your PC when needed); in the Chrome sidebar the AI always knows it's in your browser and sees the page you're on"]],
