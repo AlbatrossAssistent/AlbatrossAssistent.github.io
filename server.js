@@ -56,6 +56,16 @@ function noteFailure(ip) {
   if (!f || Date.now() - f.since > 10 * 60 * 1000) failures.set(ip, { count: 1, since: Date.now() });
   else f.count++;
 }
+// A PC can switch this off for its own codes (Settings → Connection): its owner's devices retrying while it is asleep or restarting
+// then never get blocked. Remembered for 30 days after the PC was last online, so it still holds while the PC is off.
+const NOBAN_FILE = path.join(process.env.PEOPLE_DIR || require("os").tmpdir(), "albatross-noban.json");
+const noBan = new Map(); // code -> last seen (ms)
+try { for (const [c, t] of Object.entries(JSON.parse(fs.readFileSync(NOBAN_FILE, "utf8")))) if (Date.now() - t < 30 * 864e5) noBan.set(c, t); } catch {}
+function setNoBan(code, on) {
+  const had = noBan.has(code);
+  if (on) noBan.set(code, Date.now()); else noBan.delete(code);
+  if (on !== had || on) try { fs.writeFileSync(NOBAN_FILE, JSON.stringify(Object.fromEntries(noBan))); } catch {}
+}
 setInterval(() => {
   for (const [ip, f] of failures) if (Date.now() - f.since > 10 * 60 * 1000) failures.delete(ip);
 }, 60 * 1000).unref();
@@ -228,11 +238,12 @@ function handleRelay(req, res, url) {
   const apiPath = m[2];
   const ip = clientIp(req);
 
-  if (tooManyFailures(ip)) return sendJson(res, 429, { error: "Too many wrong codes. Try again in 10 minutes." });
+  const exempt = noBan.has(code);   // this PC turned the lockout off for its codes
+  if (!exempt && tooManyFailures(ip)) return sendJson(res, 429, { error: "Too many wrong codes. Try again in 10 minutes." });
 
   const host = CODE_RE.test(code) ? hosts.get(code) : null;
   if (!host) {
-    noteFailure(ip);
+    if (!exempt) noteFailure(ip);
     return sendJson(res, 404, { error: "No device is online with that code." });
   }
 
@@ -358,12 +369,14 @@ wss.on("connection", (ws, req) => {
       }
       myCode = code;
       hosts.set(code, { ws, name: String(msg.name || "PC").slice(0, 60), secretHash: sha(msg.secret), pending: new Map() });
+      setNoBan(code, msg.noBan === true);
       console.log(`[relay] device online: ${code} (${msg.name || "PC"})`);
       return safeSend(ws, { type: "registered", code, ip: publicIp });
     }
 
     const host = myCode && hosts.get(myCode);
     if (!host || host.ws !== ws) return;
+    if (msg.type === "options") { setNoBan(myCode, msg.noBan === true); return; }
     const p = host.pending.get(msg.id);
     if (!p) return;
 

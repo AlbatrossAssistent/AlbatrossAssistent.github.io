@@ -104,6 +104,7 @@ const pcPower = {
     if (method === "POST" && p === "/pc/devices") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} if (j.me) seeDevice(j.me); return [200, { devices: drops.list() }]; }
     if (method === "POST" && p === "/pc/forgetdevice") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, { ok: drops.forget(j.id) }]; }
     if (p.startsWith("/pc/drop")) return drops.handle(method, p, body, note);
+    if (p === "/pc/relayban") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, method === "POST" ? setNoBan(j.noBan) : { noBan: !!state.noBan }]; }
     if (method === "GET" && p === "/pc/lock") return [200, { locked: await isLocked() }];
     if (method === "POST" && p === "/pc/shutdown") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
@@ -482,6 +483,16 @@ function updateGuestStats() {
   if (!stats.guestEnabled) stats.guestConnection = "off";
   changed();
 }
+// Settings → Connection: the relay blocks an internet address for 10 minutes after 30 requests to a code with no PC online (against
+// guessing codes). Your own devices retrying while this PC is asleep or restarting can trip it. With noBan, the relay doesn't count or
+// block requests to this PC's two codes; guessing other codes stays blocked.
+function setNoBan(on) {
+  state.noBan = !!on;
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  for (const ws of [mainWs, guestWs]) if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "options", noBan: state.noBan }));
+  note(state.noBan ? "Wrong-code lockout turned off for this PC's codes" : "Wrong-code lockout turned back on");
+  return { noBan: state.noBan };
+}
 function toggleGuest(enabled) {
   state.guestEnabled = !!enabled;
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
@@ -785,7 +796,7 @@ function connect() {
 
   ws.on("open", () => {
     retry = 1000;
-    send({ type: "register", code: state.code, secret: state.secret, name: NAME });
+    send({ type: "register", code: state.code, secret: state.secret, name: NAME, noBan: !!state.noBan });
     heart = setInterval(() => {
       const now = Date.now(), gap = now - tick; tick = now;
       if (gap > 90e3) { note("The PC was asleep or offline, reconnecting…"); return ws.terminate(); }   // woke up: the old connection is dead
@@ -824,7 +835,7 @@ function connect() {
         state = loadState(true);
         aesKey = deriveKey(state);
         guestSharedAesKey = deriveGuestSharedKey(state);
-        send({ type: "register", code: state.code, secret: state.secret, name: NAME });
+        send({ type: "register", code: state.code, secret: state.secret, name: NAME, noBan: !!state.noBan });
       } else { console.log("Server error:", msg.error); note("Server error: " + msg.error, "error"); }
       return;
     }
@@ -863,7 +874,7 @@ function connectGuest() {
 
   ws.on("open", () => {
     guestRetry = 1000;
-    send({ type: "register", code: state.guestCode, secret: state.guestSecret, name: NAME + " (Guest)" });
+    send({ type: "register", code: state.guestCode, secret: state.guestSecret, name: NAME + " (Guest)", noBan: !!state.noBan });
     heart = setInterval(() => {
       const now = Date.now(), gap = now - tick; tick = now;
       if (gap > 90e3 || !alive) return ws.terminate();
@@ -890,7 +901,7 @@ function connectGuest() {
         guestAesKey = deriveGuestKey(state);
         guestSharedAesKey = deriveGuestSharedKey(state);
         updateGuestStats();
-        send({ type: "register", code: state.guestCode, secret: state.guestSecret, name: NAME + " (Guest)" });
+        send({ type: "register", code: state.guestCode, secret: state.guestSecret, name: NAME + " (Guest)", noBan: !!state.noBan });
       }
       return;
     }

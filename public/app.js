@@ -731,7 +731,18 @@ async function loadSchedule() {
     $("#schedWakeOn").checked = j.wake.on; $("#schedWakeTime").value = j.wake.time;
     $("#schedNote").textContent = "Runs on your PC, even when no browser is open.";
   } catch { $("#schedNote").textContent = "Connect to your PC to change its schedule."; }
+  loadNoBan();
 }
+// the relay's 10-minute block after many tries to an offline code: the PC can switch it off for its own codes
+async function loadNoBan() {
+  try { const j = await pcCall("/pc/relayban", null, "GET"); $("#noBanOn").checked = !!j.noBan; $("#noBanOn").disabled = false; }
+  catch { $("#noBanOn").disabled = true; }
+}
+$("#noBanOn").onchange = async (e) => {
+  const on = e.target.checked;
+  try { const j = await pcCall("/pc/relayban", { noBan: on }); e.target.checked = !!j.noBan; toast(j.noBan ? "Your devices won't be blocked from this PC anymore" : "The 10-minute block is on again"); }
+  catch (err) { e.target.checked = !on; toast("Couldn't change it: " + err.message); }
+};
 async function saveSchedule() {
   if (!schedLoaded) return;
   const body = {
@@ -5625,8 +5636,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.5";
+const APP_VERSION = "2026-11-13.6";
 const WHATS_NEW = [
+  ["2026-11-13.6", ["Settings → Connection: switch off the server's 10-minute block for your own PC's codes, so your devices aren't locked out while the PC is asleep or restarting"]],
   ["2026-11-13.5", ["Agent action drawings are solid again (they showed as outlines over each other); the tab title is just Albatross"]],
   ["2026-11-13.4", ["The chat uses the PC tools itself only when a message is clearly about mail, files, printing, a website or a program, and no longer gets stuck sending every follow-up to the Agent; shapes always draw filled"]],
   ["2026-11-13.3", ["The chat AI can now use the Agent's tools itself (mail, files, printing, websites, programs) right in the chat, without starting the Agent, and only for messages about those things"]],
