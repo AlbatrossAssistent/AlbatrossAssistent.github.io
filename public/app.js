@@ -5588,8 +5588,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-12.4";
+const APP_VERSION = "2026-11-13.1";
 const WHATS_NEW = [
+  ["2026-11-13.1", ["Light mode shapes on iPhone and iPad: gravity now follows the tilt correctly instead of piling up on the left edge"]],
   ["2026-11-12.4", ["The version is shown under Settings (click it to see what changed); it turns orange when a newer one is out","If the site you're on is older than the newest version, Albatross tells you and offers to reload"]],
   ["2026-11-12.3", ["Home: the Agent sits right next to the Do-it-yourself tools; ask it, or do it yourself","Mail: the Mail Agent next to your inbox reads, writes and sends mail for you (you OK every send); manual Reply, Reply all and Forward stay","The AI knows tools can fail now and then, and tries again or another way","Dark mode: a quieter, darker starfield with a faint blue horizon; Max thinking: gold sparks","A closed sidebar now shows just its icons"]],
   ["2026-11-12.2", ["Removed the WhatsApp section from the home page","Print is now fully manual: choose a file from this device or your PC, pick a printer and copies, then press Print","Mail is manual: Reply, Reply all and Forward, written by you, without the AI panel"]],

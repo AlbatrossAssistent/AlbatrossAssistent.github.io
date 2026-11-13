@@ -503,13 +503,38 @@
 
     // ---- tilt (phones and tablets): gravity points to wherever "down" is ----
     let tiltOn = false;
+    // Where "down" is on the page, from the device's tilt. beta and gamma are measured against the upright device (its portrait
+    // body), whichever way the page is turned. angle: how far the page is turned (0 upright, 90 turned counter-clockwise, ...),
+    // landscape: the window is wider than tall. Returns [x, y] with y > 0 meaning towards the bottom of the screen.
+    function tiltGravity(beta, gamma, angle, landscape) {
+      const b = beta * Math.PI / 180, g = gamma * Math.PI / 180;
+      const x = Math.sin(g) * Math.cos(b), y = Math.sin(b);            // down, on the screen as it is built into the device
+      const turn = (a) => { const r = a * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); return [c * x + s * y, -s * x + c * y]; };
+      const a = ((Math.round(Number(angle) / 90) * 90) % 360 + 360) % 360;
+      // A window taller than wide is turned by 0 or 180, a wider one by 90 or 270. Some browsers (iPhone, iPad, tablets) report the
+      // angle against the other axis, which puts everything a quarter turn off, with the shapes piled on one side. Then take the two
+      // turns that fit the window and use the one that makes things fall towards the bottom (flat on a table: the nearer one).
+      if ((a % 180 === 90) !== !!landscape) {
+        const v1 = turn((a + 90) % 360), v2 = turn((a + 270) % 360);
+        return Math.abs(v1[1] - v2[1]) > .05 ? (v1[1] > v2[1] ? v1 : v2) : v2;
+      }
+      return turn(a);
+    }
+    // iPhone and iPad know window.orientation best (0 upright, 90 / -90 sideways); elsewhere screen.orientation.angle
+    const pageAngle = () => (typeof window.orientation === "number" ? window.orientation : screen.orientation && typeof screen.orientation.angle === "number" ? screen.orientation.angle : 0);
+    let tiltDbg = null;
     function onTilt(e) {
       if (e.beta == null || e.gamma == null) return;
-      const b = e.beta * Math.PI / 180, g = e.gamma * Math.PI / 180;
-      const x = Math.sin(g) * Math.cos(b), y = Math.sin(b);
-      const ang = ((screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0) * Math.PI / 180, c = Math.cos(ang), s = Math.sin(ang);
-      const nx = c * x + s * y, ny = -s * x + c * y;
+      const ang = pageAngle(), [nx, ny] = tiltGravity(e.beta, e.gamma, ang, innerWidth > innerHeight);
+      if (tiltDbg) tiltDbg.textContent = `beta ${e.beta.toFixed(0)}  gamma ${e.gamma.toFixed(0)}  angle ${ang}  ${innerWidth}x${innerHeight}\ngravity x ${nx.toFixed(2)}  y ${ny.toFixed(2)}`;
       if (Math.abs(nx - grav.tx) + Math.abs(ny - grav.ty) > .04) { grav.tx = nx; grav.ty = ny; if (enabled) wake(); }
+    }
+    // open the page with ?tilt to see the raw numbers on screen (for checking a device)
+    if (/[?&]tilt\b/.test(location.search)) {
+      tiltDbg = document.createElement("pre");
+      tiltDbg.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:999;margin:0;padding:6px 8px;border-radius:8px;font:11px/1.4 monospace;background:rgba(0,0,0,.7);color:#fff;pointer-events:none;white-space:pre";
+      tiltDbg.textContent = "tilt: waiting for the first reading (tap the page once on iPhone)";
+      document.body.appendChild(tiltDbg);
     }
     function startTilt() {
       if (tiltOn || !coarse || !("DeviceOrientationEvent" in window)) return;
@@ -545,6 +570,6 @@
     document.addEventListener("visibilitychange", () => { if (enabled && !document.hidden) { last = 0; wake(); } });
     return { setEnabled, reseed: () => { if (enabled) { seed(); wake(); } },
       // run the world forward right away (tests: headless browsers give hardly any animation frames)
-      advance: (secs) => { for (let i = 0; i < secs / STEP; i++) step(STEP); draw(); }, gravity: (x, y) => { grav.tx = x; grav.ty = y; wake(); }, bodies: () => bodies };
+      advance: (secs) => { for (let i = 0; i < secs / STEP; i++) step(STEP); draw(); }, gravity: (x, y) => { grav.tx = x; grav.ty = y; wake(); }, tilt: tiltGravity, bodies: () => bodies };
   };
 })();

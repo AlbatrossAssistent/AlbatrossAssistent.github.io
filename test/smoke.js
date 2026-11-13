@@ -108,7 +108,22 @@ f.onload = () => setTimeout(async () => {
     return !!d.querySelector("#mlNew") && !d.querySelector("#mlAsk") && !/AI next to it/.test(d.querySelector("#mailPage").textContent) || "AI parts still in Mail";
   });
   ev('setView("chat")');
-  await tryIt("the version shows in the sidebar", () => /Version d{4}-dd-dd.d+/.test(d.querySelector("#appVer").textContent) || d.querySelector("#appVer").textContent);
+  await tryIt("the version shows in the sidebar", () => /^Version \\d{4}-\\d\\d-\\d\\d\\.\\d+$/.test(d.querySelector("#appVer").textContent) || "shows: " + d.querySelector("#appVer").textContent);
+  await tryIt("tilt gravity is right whichever angle the browser reports", () => {
+    const t = (beta, gamma, angle, land) => ev("polygonField").tilt(beta, gamma, angle, land).map((v) => Math.round(v * 100) / 100).join(",");
+    const cases = [
+      ["portrait upright", t(90, 0, 0, false), "0,1"],
+      ["portrait, leaning back a little", t(45, 0, 0, false), "0,0.71"],
+      ["tilted to the right, held flat", t(0, 30, 0, false), "0.5,0"],
+      ["iOS-style: angle 90 in a tall window", t(90, 0, 90, false), "0,1"],
+      ["angle 270 in a tall window", t(90, 0, 270, false), "0,1"],
+      ["sideways, turned counter-clockwise", t(0, -90, 90, true), "0,1"],
+      ["sideways, turned clockwise (-90)", t(0, 90, -90, true), "0,1"],
+      ["angle 0 in a wide window", t(0, -90, 0, true), "0,1"],
+    ];
+    const bad = cases.filter(([, got, want]) => got !== want);
+    return !bad.length || JSON.stringify(bad);
+  });
   await tryIt("settings open", async () => { ev("openSettings()"); await sleep(100); const open = d.querySelector("#settings").open; d.querySelector("#settings").close(); return open; });
   await tryIt("markdown renders code blocks", () => { const f = "\\x60".repeat(3); return /class="code"/.test(w.md("**index.html**\\n" + f + "html\\n<p>hi</p>\\n" + f)); });
   await tryIt("maths and arrows render", () => { const h = ev('md("go $\\\\\\\\rightarrow$ now -> then :white_check_mark:")'); return /→/.test(h) && /✅/.test(h) || h; });
