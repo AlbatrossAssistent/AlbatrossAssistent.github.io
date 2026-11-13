@@ -6,6 +6,8 @@ const fs = require("fs");
 const path = require("path");
 
 const HTML = path.join(__dirname, "control.html");
+const APP_DIR = path.resolve(__dirname, "..", "public");
+const APP_TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".webmanifest": "application/manifest+json", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".woff2": "font/woff2", ".mp3": "audio/mpeg", ".wav": "audio/wav" };
 
 // The panel's port doubles as a lock: if it's taken, another Burrow host is already running (onBusy).
 // Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
@@ -22,6 +24,17 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
     if (req.method === "GET" && req.url === "/") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       return fs.createReadStream(HTML).pipe(res);
+    }
+    // The Albatross app itself, from this PC (..\public): the Chrome sidebar loads it from here, because a page from this PC may
+    // talk to Ollama and the host on 127.0.0.1 without Chrome's "local network access" permission (which a sidebar can't ask for).
+    if (req.method === "GET" && /^\/app(\/|\?|$)/.test(req.url)) {
+      if (/^\/app(\?|$)/.test(req.url)) { res.writeHead(302, { Location: "/app/" + (req.url.split("?")[1] ? "?" + req.url.split("?")[1] : "") }); return res.end(); }
+      let rel = ""; try { rel = decodeURIComponent(req.url.split("?")[0].slice(5)); } catch {}
+      const file = path.resolve(APP_DIR, rel || "index.html");
+      if (!file.startsWith(APP_DIR + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); }
+      const type = APP_TYPES[path.extname(file).toLowerCase()] || "application/octet-stream";
+      res.writeHead(200, { "Content-Type": type, "Cache-Control": /\.(html|webmanifest)$|sw\.js$/.test(file) ? "no-cache" : "max-age=300" });
+      return fs.createReadStream(file).pipe(res);
     }
     // The Monitor's full-screen window on this PC (see monitor.js)
     if (monitor && /^\/monitor(\/|\?|$)/.test(req.url) && monitor.serve(req, res)) return;

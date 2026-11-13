@@ -270,6 +270,7 @@ async function handle(method, p, body, note) {
     if (p === "/pcfiles/trash") { const r = await trash(j.spec); note(`PC files: moved ${r.spec} to the Recycle Bin`); return [200, r]; }
     if (p === "/agent/list") return [200, list(j.spec)];
     if (p === "/agent/read") return [200, read(j.spec, { max: 60 * 1024 })];
+    if (p === "/agent/readfile") return [200, read(j.spec, { b64: true })];     // a file the AI attached to an answer (shown or downloaded)
     if (p === "/agent/write") { const r = write(j.spec, j.content, j.mode); note(`Agent: ${r.created ? "wrote" : "changed"} ${r.spec}`); return [200, r]; }
     if (p === "/agent/move") { const r = move(j.from, j.to, !!j.copy); note(`Agent: ${r.copied ? "copied" : "moved"} ${r.from} to ${r.to}`); return [200, r]; }
     if (p === "/agent/mkdir") return [200, mkdir(j.spec)];

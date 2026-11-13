@@ -2251,3 +2251,25 @@ html.embed-chrome #topFold, html.embed-chrome #sideBtn, html.embed-chrome #fullB
 html.embed-chrome .embed-empty h1 { font-size: 24px; }
 html.embed-chrome .embed-page { font-weight: 600; color: var(--fg); overflow-wrap: anywhere; max-width: 100%; }
 html.embed-chrome .embed-empty .suggestions { grid-template-columns: 1fr; }
+
+/* pictures and files the AI puts into its answer ([[pic:N]], [[file:...]]) */
+.md .ans-pic { display: block; position: relative; width: fit-content; max-width: min(100%, 360px); margin: 8px 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 6px 18px -10px rgba(0,0,0,.35); }
+.md .ans-pic img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.md .ans-pic-n { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 650; color: #fff; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md .ans-file { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; margin: 2px 0; border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--fg); font-size: 13px; cursor: pointer; vertical-align: middle; }
+.md .ans-file .i { width: 15px; height: 15px; }
+.md .ans-file.is-pic { display: block; position: relative; width: fit-content; max-width: min(100%, 360px); padding: 0; border-radius: 14px; overflow: hidden; }
+.md .ans-file.is-pic img { display: block; max-width: 100%; max-height: 320px; }
+.md .ans-file.bad { opacity: .6; text-decoration: line-through; cursor: default; }
+
+/* Settings → Appearance → Background: shapes, night sky or plain, whatever the theme */
+html[data-bg="shapes"] #orbs { display: block; }
+html[data-bg="shapes"] #sky { display: none; }
+html[data-bg="stars"] #sky { display: block; }
+html[data-bg="stars"] #orbs { display: none; }
+html[data-bg="plain"] #orbs, html[data-bg="plain"] #sky { display: none; }
+html.effort-max #sky { display: block; }
+.accent-row { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 0; }
+.accent-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.accent-dot.theme { background: conic-gradient(#007AFF, #AF52DE, #FF2D55, #FF9500, #34C759, #007AFF); }
+.accent-dot[aria-checked="true"] { box-shadow: 0 0 0 2px var(--fg); }

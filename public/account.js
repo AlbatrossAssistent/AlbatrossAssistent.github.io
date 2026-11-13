@@ -37,11 +37,16 @@ const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl"
 // were shared, all your devices would have the same name, the server would refuse the second one (a Beam name belongs to one
 // device), and the devices could not be told apart in Beam → My PC.
 const DEVICE_ONLY = () => ({ name: S.files && S.files.name || "", deviceName: S.deviceName || "" });
+// the appearance belongs to the device too, unless "Same look on all my devices" (lookSync) is on
+const LOOK = ["theme", "fontSize", "glass", "stars", "compact", "intro", "bgStyle", "accent"];
+const myLook = () => Object.fromEntries(LOOK.filter((k) => S[k] !== undefined).map((k) => [k, S[k]]));
 function publicSettings() {
   const c = structuredClone(S);
   c.conn = { ...c.conn, code: "" };           // the code only travels inside the vault
   if (c.files) delete c.files.name;
   delete c.deviceName;
+  if (!S.lookSync) for (const k of LOOK) delete c[k];
+  delete c.lookSync;
   return c;
 }
 
@@ -62,11 +67,13 @@ store.set = function (k, v) { const r = _set.call(store, k, v); if (/^(powerUrl|
 
 function applyCloud(settings) {
   applying = true;
-  const keepCode = S.conn.code, mine = DEVICE_ONLY();
+  const keepCode = S.conn.code, mine = DEVICE_ONLY(), look = myLook(), lookSync = !!S.lookSync;
   S = deepMerge(structuredClone(DEFAULTS), settings || {});
   if (!S.conn.code) S.conn.code = keepCode;
   S.files = { ...(S.files || {}), name: mine.name };           // names stay on this device (older saves in the account may still hold one: ignored)
   S.deviceName = mine.deviceName;
+  S.lookSync = lookSync;
+  if (!lookSync) Object.assign(S, look);          // this device keeps its own look
   _save(); applyAppearance(); loadImgFields(); renderAll(); if (isHome()) renderHome();
   applying = false;
 }

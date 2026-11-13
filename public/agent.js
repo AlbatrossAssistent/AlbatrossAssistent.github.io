@@ -689,6 +689,7 @@ function chatToolsSystem(groups) {
     (groups.has("files") || groups.has("print")) && "When the user means their files on the PC (\"my Albatross folder\", \"my PC files\", \"what I sent to the PC\", \"my files\"), look in all: first. all: itself IS the Albatross folder (list all: to see what's in it, never all:Albatross); agent: is only your own workspace.",
     (groups.has("files") || groups.has("code")) && "Your own folder is agent: (also written ai:; on the PC it is Downloads → Albatross → AI). Keep anything you need there without asking: notes, drafts, research, downloaded pages, lists, things to remember for later. Look in it (list_files agent:) when earlier work may help.",
     groups.has("code") && pick("Programs, websites and games:"),
+    groups.has("files") && "To attach a file from the PC to your answer (a picture, a document you wrote), write [[file:PATH]] with its path, like [[file:agent:summary.txt]] or [[file:all:Pictures/cat.png]]: the user sees it there and can download it.",
     pick("Important:"),
     groups.has("print") && pick("Printing:"),
     groups.has("browser") && pick("Web:"),

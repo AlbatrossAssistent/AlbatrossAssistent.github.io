@@ -2147,8 +2147,42 @@ function md(src) {
     flushP(); flushL();
     if (maths.length) out = out.slice(0, start) + mathBack(out.slice(start), maths);
   });
+  return picTokens(out);
+}
+// ---------- pictures and files in answers ----------
+// Every picture in a chat has a number, oldest first: the ones the user attached and the ones made here. The model shows one in its
+// answer with [[pic:N]] ("this banana is ripe: [[pic:2]]"), and attaches a file from the PC with [[file:all:Pictures/x.png]].
+const picSrc = (b64) => (String(b64).startsWith("data:") ? b64 : "data:image/jpeg;base64," + b64);
+function chatPics(conv) {
+  const out = [];
+  for (const m of (conv && conv.messages) || []) {
+    if (m.isError || m.isEvent) continue;
+    if (m.role === "user" && Array.isArray(m.images)) for (const im of m.images) out.push({ src: picSrc(im), from: "user" });
+    if (m.genImage) out.push({ src: picSrc(m.genImage), from: "made" });
+  }
   return out;
 }
+function picTokens(html) {
+  if (!/\[\[(?:pic|bild|image|file|datei):/i.test(html)) return html;
+  const pics = typeof current !== "undefined" && current ? chatPics(current) : [];
+  html = html.replace(/\[\[(?:pic|bild|image):\s*#?(\d+)\]\]/gi, (m, n) => { const p = pics[Number(n) - 1]; return p ? `<span class="ans-pic"><img src="${p.src}" alt="Picture ${n}" loading="lazy"><span class="ans-pic-n">#${n}</span></span>` : m; });
+  html = html.replace(/\[\[(?:file|datei):\s*([^\]<>"]{1,300}?)\s*\]\]/gi, (m, spec) => `<span class="ans-file" data-spec="${spec}"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7L14 5.5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg><span>${spec.split(/[\/:]/).pop()}</span></span>`);
+  return html;
+}
+// a file the AI attached: pictures show inline, anything else becomes a download (read from the PC)
+const ansFiles = new Map();
+async function hydrateAnsFile(el) {
+  el.dataset.done = "1";
+  const spec = el.dataset.spec.replace(/&amp;/g, "&");
+  try {
+    const j = ansFiles.get(spec) || await pcCall("/agent/readfile", { spec });
+    ansFiles.set(spec, j);
+    if (/^image\//.test(j.mime)) { el.classList.add("is-pic"); el.innerHTML = `<img src="data:${j.mime};base64,${j.b64}" alt=""><span class="ans-pic-n"></span>`; el.querySelector(".ans-pic-n").textContent = j.name; }
+    el.onclick = () => download(j.name, b64ToBlob(j.b64, j.mime || "application/octet-stream"));
+    el.title = "Download " + j.name;
+  } catch (e) { el.classList.add("bad"); el.title = e.message; }
+}
+new MutationObserver(() => { for (const el of document.querySelectorAll(".ans-file:not([data-done])")) if (connected && !guestMode) hydrateAnsFile(el); }).observe(document.documentElement, { childList: true, subtree: true });
 // A code block's file name: from its info line (```js game.js), from the end of the line right before it ("**game.js**:",
 // "### style.css"), or from a comment on its first line (// game.js, <!-- index.html -->, # main.py). "" when it has none.
 const FILE_NAME = "([\\w-][\\w.-]*(?:\\/[\\w.-]+)*\\.(?:html?|css|m?js|jsx|tsx?|json|py|txt|md|svg|xml|csv|glsl|frag|vert))";
@@ -2267,7 +2301,10 @@ async function send(textOverride, opts = {}) {
   let refs = [];
   const pickedImg = models.find(m => m.name === $("#model").value && m.kind === "image");
   const picturesOn = toolOn("image");
-  let asImage = (!!text || (wantImage && atts.length)) && !fileTool && (wantImage || !!pickedImg || (picturesOn && wantsImage(text)) || (picturesOn && !!atts.length && !!editModel && editVerb));
+  // photos attached plus a question about them ("which of these bananas are good?", "welches Bild zeigt…?") is for a model that
+  // looks at them, never for drawing a new picture
+  const askingAbout = !!atts.length && /\?/.test(text) && !/\b(draw|paint|generate|create|make|render|zeichne|male|mal|erstelle|generiere|mach)\b/i.test(text);
+  let asImage = (!!text || (wantImage && atts.length)) && !fileTool && (wantImage || !!pickedImg || (picturesOn && !askingAbout && wantsImage(text)) || (picturesOn && !askingAbout && !!atts.length && !!editModel && editVerb));
   if (asImage && atts.length) {
     if (editModel) refs = atts.slice(0, 3);
     else asImage = false;                               // a vision model will look at the photo instead
@@ -2477,6 +2514,9 @@ async function chat(model, opts = {}) {
     }
     if (S.askMid !== false) system = (system ? system + "\n\n" : "") + "If you really need something from the user before you can do the job well (a choice between options, a missing detail), ask by ending your reply with exactly one line like [[ask: Your question? | Option A | Option B | Option C]] with 2 to 4 short options, and write nothing after it. The user can also type their own answer. If a sensible assumption works, make it and don't ask.";
     if (window.EMBED_CHROME) system = (system ? system + "\n\n" : "") + await sidebarContext();
+    // the instructions are in English, and small models then often answer in English: say the user's language plainly
+    { const lastU = String(conv.messages.filter(m => m.role === "user").at(-1)?.content || "");
+      if (/[äöüß]|\b(und|ist|das|nicht|ich|du|wie|was|wo|bitte|mir|mein|meine|kannst|welche|warum|danke)\b/i.test(lastU)) system = (system ? system + "\n\n" : "") + "Der Nutzer schreibt Deutsch: antworte auf Deutsch."; }
     { const prev = [...conv.messages].reverse().find(m => m.role === "assistant" && m.model && !m.isEvent); if (prev && prev.model !== model) addEvent("model", `${model} takes over from ${prev.model}`, bubble); }
     // If the model isn't in memory yet, Ollama loads it first, which can take a while.
     // Say so in the bubble and pop a notification once it's ready.
@@ -2498,9 +2538,13 @@ async function chat(model, opts = {}) {
       refreshLoaded();
     };
 
-    const msgs = conv.messages.filter(m => !m.isError && !m.isEvent).map(m => m.genImage !== undefined
-      ? { role: "assistant", content: `(I made a picture for that: ${m.prompt || m.asked || ""})` }
-      : { role: m.role, content: m.content, ...(m.images ? { images: m.images } : {}) });
+    let picN = 0;
+    const msgs = conv.messages.filter(m => !m.isError && !m.isEvent).map(m => {
+      if (m.genImage !== undefined) return { role: "assistant", content: `(I made a picture for that${m.genImage ? ", picture #" + ++picN : ""}: ${m.prompt || m.asked || ""})` };
+      const n = Array.isArray(m.images) ? m.images.length : 0, first = picN + 1; picN += n;
+      return { role: m.role, content: (n ? `[Picture${n > 1 ? "s" : ""} #${first}${n > 1 ? "–#" + picN : ""} attached]\n` : "") + m.content, ...(m.images ? { images: m.images } : {}) };
+    });
+    if (picN) system = (system ? system + "\n\n" : "") + `This chat has ${picN} picture${picN > 1 ? "s" : ""}, numbered #1 to #${picN} in order (the user's attached pictures and pictures made here, oldest first; each message says which numbers it carries). To show a picture in your answer, write [[pic:N]] where it belongs, for example "This banana is ripe: [[pic:2]]". Whenever you talk about one particular picture (which is good, which is bad, which one you mean), show it that way.`;
     if (system) msgs.unshift({ role: "system", content: system });
 
     // the PC tools (files, mail, browser, code, printing, its own folder): always there for a model that can use tools, and the
@@ -3903,8 +3947,14 @@ function applyAppearance() {
   const theme = S.theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : S.theme === "aurora" ? "dark" : S.theme === "lagoon" ? "light" : S.theme;
   document.documentElement.dataset.theme = theme;
   if (scene) document.documentElement.dataset.scene = scene; else delete document.documentElement.dataset.scene;
-  polygonField && polygonField.setEnabled(theme === "light");
+  // the background: shapes, stars or plain (automatic: shapes in light, stars in dark; the old "night sky off" means plain)
+  const bg = S.bgStyle && S.bgStyle !== "auto" ? S.bgStyle : S.stars === false ? "plain" : theme === "light" ? "shapes" : "stars";
+  document.documentElement.dataset.bg = bg;
+  polygonField && polygonField.setEnabled(bg === "shapes");
   startSky();
+  // an accent colour of your own (else the theme's)
+  const root = document.documentElement.style;
+  if (S.accent) { root.setProperty("--accent", S.accent); root.setProperty("--accent-fg", "#fff"); } else { root.removeProperty("--accent"); root.removeProperty("--accent-fg"); }
   document.documentElement.style.setProperty("--font-size", S.fontSize + "px");
   document.body.classList.toggle("compact", S.compact);
   $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
@@ -3951,6 +4001,7 @@ function openSettings(tab) {
   paintMemory();
   $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#chatsDeviceOnly").checked = !!S.chatsDeviceOnly; $("#bgJobs").checked = S.bgJobs !== false; $("#askMid").checked = S.askMid !== false; $("#deviceName").value = S.deviceName || "";
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
+  $("#bgStyle").value = S.bgStyle || (S.stars === false ? "plain" : "auto"); $("#lookSync").checked = !!S.lookSync; paintAccents();
   if (tab) switchTab(tab);
   d.showModal();
 }
@@ -4064,6 +4115,20 @@ $("#bgJobs").onchange = e => { S.bgJobs = e.target.checked; saveSettings(); };
 $("#deviceName").onchange = e => { S.deviceName = e.target.value.trim().slice(0, 40); saveSettings(); };
 $("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del(chatKey("chats")); };
 $("#theme").onchange = e => { S.theme = e.target.value; saveSettings(); applyAppearance(); };
+$("#bgStyle").onchange = e => { S.bgStyle = e.target.value; if (S.bgStyle !== "plain") S.stars = true; saveSettings(); applyAppearance(); };
+$("#lookSync").onchange = e => { S.lookSync = e.target.checked; saveSettings(); };
+const ACCENTS = [["", "Theme"], ["#007AFF", "Blue"], ["#5E5CE6", "Indigo"], ["#AF52DE", "Purple"], ["#FF2D55", "Pink"], ["#FF3B30", "Red"], ["#FF9500", "Orange"], ["#34C759", "Green"], ["#00A6A6", "Teal"], ["#8E8E93", "Graphite"]];
+function paintAccents() {
+  const row = $("#accentRow"); if (!row) return;
+  row.innerHTML = "";
+  for (const [c, name] of ACCENTS) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "accent-dot" + (c ? "" : " theme"); b.title = name; b.setAttribute("aria-label", name);
+    b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String((S.accent || "") === c));
+    if (c) b.style.background = c;
+    b.onclick = () => { S.accent = c; saveSettings(); applyAppearance(); paintAccents(); };
+    row.appendChild(b);
+  }
+}
 $("#fontSize").addEventListener("input", e => { S.fontSize = Number(e.target.value); e.target.nextElementSibling.textContent = S.fontSize + "px"; saveSettings(); applyAppearance(); });
 $("#replayIntro").onclick = () => { $("#settings").close(); playIntro(); };
 $("#exportAll").onclick = () => download(`burrow-chats-${new Date().toISOString().slice(0, 10)}.json`, new Blob([JSON.stringify(chats, null, 2)], { type: "application/json" }));
@@ -4091,16 +4156,16 @@ const appSky = window.createStarfield && $("#sky") ? createStarfield($("#sky"), 
 const polygonField = window.createPolygonField && $("#orbs") ? createPolygonField($("#orbs")) : null;
 let skyOn = false;
 function skyFrame(t) {
-  const root = document.documentElement, dark = root.dataset.theme === "dark", max = root.classList.contains("effort-max");
-  if (!appSky || S.stars === false || document.hidden || !(dark || max)) {
+  const root = document.documentElement, dark = root.dataset.theme === "dark", max = root.classList.contains("effort-max"), stars = root.dataset.bg === "stars";
+  if (!appSky || document.hidden || !(stars || max)) {
     skyOn = false;
-    if (appSky && (S.stars === false || !(dark || max))) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); }
+    if (appSky && !(stars || max)) { const c = $("#sky"); c.getContext("2d").clearRect(0, 0, c.width, c.height); }
     return;
   }
-  appSky.draw(t, max ? { palette: "gold", dark, alpha: 1 } : { palette: "night", alpha: .6 });
+  appSky.draw(t, max || !dark ? { palette: "gold", dark, alpha: 1 } : { palette: "night", alpha: .6 });
   requestAnimationFrame(skyFrame);
 }
-function startSky() { if (appSky && S.stars !== false && !skyOn) { skyOn = true; requestAnimationFrame(skyFrame); } }
+function startSky() { if (appSky && !skyOn) { skyOn = true; requestAnimationFrame(skyFrame); } }
 addEventListener("resize", () => { appSky && appSky.resize(); });
 addEventListener("pointermove", (e) => { appSky && appSky.pointer(e.clientX, e.clientY); }, { passive: true });
 document.documentElement.addEventListener("pointerleave", () => { appSky && appSky.pointer(null); });
@@ -5785,8 +5850,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.14";
+const APP_VERSION = "2026-11-13.15";
 const WHATS_NEW = [
+  ["2026-11-13.15", ["Chrome sidebar works without extra permissions (the app comes from your PC); the AI can show your pictures in its answer and attach PC files; Appearance: background, accent colour, and each device keeps its own look; answers in German when you write German"]],
   ["2026-11-13.14", ["Chrome sidebar answers in your language"]],
   ["2026-11-13.13", ["Web search works without Ollama credits (a free search, from your PC when needed); in the Chrome sidebar the AI always knows it's in your browser and sees the page you're on"]],
   ["2026-11-13.12", ["Chrome sidebar is a browser assistant now: one chat about the page you're on, with your PC files, its AI folder, documents and notes (no pictures, music, slides or other pages); it follows your tab by default"]],

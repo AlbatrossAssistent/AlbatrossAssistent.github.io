@@ -1,6 +1,9 @@
 // The Albatross sidebar: the Albatross app (chat and all) in Chrome's side panel, plus the controls for the AI in this Chrome.
 // The app gets told which tab you're looking at, and with "Follow my tab" on, the AI's browser tools work in that tab.
-const APP = "https://albatrossassistent.github.io/public/?embed=chrome";
+// the app comes from the Albatross host on this PC: a page from 127.0.0.1 may reach Ollama and the host there without Chrome's
+// "local network access" permission, which a sidebar can't ask for
+const APP_ORIGIN = "http://127.0.0.1:4747", APP = APP_ORIGIN + "/app/?embed=chrome";
+let appReady = false;
 const $ = (s) => document.querySelector(s);
 const ask = (msg) => chrome.runtime.sendMessage(msg);
 const frame = $("#app");
@@ -33,21 +36,21 @@ async function refresh(msg = {}) { paint(await ask({ ...msg, windowId: winId }))
 async function sendTab() {
   if (winId == null) return;
   const [t] = await chrome.tabs.query({ active: true, windowId: winId });
-  if (!t || !frame.contentWindow) return;
-  frame.contentWindow.postMessage({ type: "albatross-tab", tab: { title: t.title || "", url: t.url || "", follow: !!(state && state.follow) } }, "https://albatrossassistent.github.io");
+  if (!t || !frame.contentWindow || !appReady) return;     // only once the app has loaded (before that the frame is still empty)
+  try { frame.contentWindow.postMessage({ type: "albatross-tab", tab: { title: t.title || "", url: t.url || "", follow: !!(state && state.follow) } }, APP_ORIGIN); } catch {}
 }
 chrome.tabs.onActivated.addListener((i) => { if (i.windowId === winId) { sendTab(); setTimeout(refresh, 300); } });
 chrome.tabs.onUpdated.addListener((id, info, t) => { if (t.windowId === winId && t.active && (info.title || info.url || info.status === "complete")) sendTab(); });
-frame.addEventListener("load", () => setTimeout(sendTab, 1500));
+frame.addEventListener("load", () => { appReady = !!frame.src; setTimeout(sendTab, 1500); });
 // the app asks for the tab again when it needs it (a new chat, the page reloaded)
-addEventListener("message", (e) => { if (e.source === frame.contentWindow && e.data && e.data.type === "albatross-tab?") sendTab(); });
+addEventListener("message", (e) => { if (e.source === frame.contentWindow && e.origin === APP_ORIGIN && e.data && e.data.type === "albatross-tab?") { appReady = true; sendTab(); } });
 
 $("#moreBtn").onclick = () => { const m = $("#more"); m.hidden = !m.hidden; $("#moreBtn").setAttribute("aria-expanded", String(!m.hidden)); };
 $("#pause").onclick = () => refresh({ action: state && state.paused ? "resume" : "pause" });
 $("#follow").onclick = async () => { await refresh({ action: "follow", on: !(state && state.follow) }); sendTab(); };
 $("#show").onclick = () => refresh({ action: "show" });
 $("#closeTab").onclick = () => refresh({ action: "closetab" });
-$("#reload").onclick = () => { frame.src = APP; };
+$("#reload").onclick = () => { appReady = false; frame.src = APP; };
 $("#openApp").onclick = () => chrome.tabs.create({ url: "https://albatrossassistent.github.io/public/" });
 $("#pairGo").onclick = async () => {
   const code = $("#code").value.replace(/\D/g, "");
