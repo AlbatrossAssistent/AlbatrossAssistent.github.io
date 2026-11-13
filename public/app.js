@@ -4714,7 +4714,8 @@ function renderDevices() {
     card.className = "dev" + (d.online ? " on" : "") + (self ? " self" : "");
     if (!self) card.type = "button";
     card.innerHTML = `<span class="dev-ic">${DEV_ICON[d.kind] || DEV_ICON.computer}<i></i></span><span class="nm"><b></b><small></small></span>`;
-    card.querySelector("b").textContent = d.name;
+    // two devices with the same name (older versions shared it through the account): tell them apart by a short id
+    card.querySelector("b").textContent = list.filter(x => x.name === d.name).length > 1 ? `${d.name} · ${d.id.slice(0, 4)}` : d.name;
     card.querySelector("small").textContent = self ? "This device" : d.online ? "Online now" : "Last seen " + ago(d.last);
     if (!self) {
       card.title = "Send files to " + d.name;
@@ -4885,7 +4886,7 @@ function keyFor(pub) {
 }
 function pubText() {
   if (!S.files.name) return "Choose a name to start";
-  if (peer.status === "on") { const n = contacts.filter(c => peer.online.has(c.cid)).length; return peer.nameTaken ? `“${S.files.name}” is taken · people can add you by code` : `Reachable as ${S.files.name}` + (contacts.length ? ` · ${n} contact${n === 1 ? "" : "s"} online` : ""); }
+  if (peer.status === "on") { const n = contacts.filter(c => peer.online.has(c.cid)).length; return peer.nameTaken ? `“${S.files.name}” is taken · pick another name` : `Reachable as ${S.files.name}` + (contacts.length ? ` · ${n} contact${n === 1 ? "" : "s"} online` : ""); }
   return peer.status === "connecting" ? "Connecting…" : peer.err || "Offline · reconnecting";
 }
 function setPeerStatus(st) { peer.status = st; renderPeople(); }
@@ -4933,7 +4934,7 @@ function answerRequest(cid, yes) {
 async function onPeerMessage(m) {
   if (m.type === "welcome") {
     peer.id = m.id; peer.cid = m.cid; peer.retry = 0; peer.err = ""; peer.nameTaken = !!m.nameTaken; setPeerStatus("on"); sendWatch();
-    if (m.nameTaken) toast(`The name “${S.files.name}” is already taken. People can still add you by your code, or pick another name.`);
+    if (m.nameTaken) toast(`The name “${S.files.name}” is already used by another device or person. Pick a different name for this device in Beam → People (people can still add you by your code).`);
     return;
   }
   if (m.type === "error") { peer.err = m.error; toast(m.error); renderPeople(); return; }
@@ -5588,8 +5589,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.1";
+const APP_VERSION = "2026-11-13.2";
 const WHATS_NEW = [
+  ["2026-11-13.2", ["Your Beam name and this device's name now stay on the device: they are no longer shared through your account, so your own devices can send files to each other"]],
   ["2026-11-13.1", ["Light mode shapes on iPhone and iPad: gravity now follows the tilt correctly instead of piling up on the left edge"]],
   ["2026-11-12.4", ["The version is shown under Settings (click it to see what changed); it turns orange when a newer one is out","If the site you're on is older than the newest version, Albatross tells you and offers to reload"]],
   ["2026-11-12.3", ["Home: the Agent sits right next to the Do-it-yourself tools; ask it, or do it yourself","Mail: the Mail Agent next to your inbox reads, writes and sends mail for you (you OK every send); manual Reply, Reply all and Forward stay","The AI knows tools can fail now and then, and tries again or another way","Dark mode: a quieter, darker starfield with a faint blue horizon; Max thinking: gold sparks","A closed sidebar now shows just its icons"]],

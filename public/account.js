@@ -16,7 +16,7 @@ const app = initializeApp({
 const auth = getAuth(app), db = getFirestore(app);
 let user = null, cloud = null, vaultKey = null, pushTimer = 0, applying = false;
 // for the main page: the signed-in account's ID token (Firebase renews it every hour), so the PC keeps chats and lists per account
-window.albAcct = { token: () => (user ? user.getIdToken() : Promise.resolve("")) };
+window.albAcct = { token: () => (user ? user.getIdToken() : Promise.resolve("")), publicSettings: () => publicSettings(), applyCloud: (s) => applyCloud(s) };
 
 const msg = (t, bad) => { const m = $("#accMsg"); m.hidden = !t; m.textContent = t || ""; m.style.color = bad ? "var(--danger)" : ""; };
 const nice = (e) => ({
@@ -33,9 +33,15 @@ async function deriveVault(pass, salt) {
   return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 600000 }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
 const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl", ""), wakeHost: store.get("wakeHost", ""), wakePort: store.get("wakePort", ""), wakeMac: store.get("wakeMac", ""), connSecrets: store.get("connSecrets", {}) });
+// What belongs to one device and never travels with the account: the name you go by in Beam and this device's own name. If they
+// were shared, all your devices would have the same name, the server would refuse the second one (a Beam name belongs to one
+// device), and the devices could not be told apart in Beam → My PC.
+const DEVICE_ONLY = () => ({ name: S.files && S.files.name || "", deviceName: S.deviceName || "" });
 function publicSettings() {
   const c = structuredClone(S);
   c.conn = { ...c.conn, code: "" };           // the code only travels inside the vault
+  if (c.files) delete c.files.name;
+  delete c.deviceName;
   return c;
 }
 
@@ -56,9 +62,11 @@ store.set = function (k, v) { const r = _set.call(store, k, v); if (/^(powerUrl|
 
 function applyCloud(settings) {
   applying = true;
-  const keepCode = S.conn.code;
+  const keepCode = S.conn.code, mine = DEVICE_ONLY();
   S = deepMerge(structuredClone(DEFAULTS), settings || {});
   if (!S.conn.code) S.conn.code = keepCode;
+  S.files = { ...(S.files || {}), name: mine.name };           // names stay on this device (older saves in the account may still hold one: ignored)
+  S.deviceName = mine.deviceName;
   _save(); applyAppearance(); loadImgFields(); renderAll(); if (isHome()) renderHome();
   applying = false;
 }
