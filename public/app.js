@@ -2567,6 +2567,9 @@ async function runMediaTool(name, args, block) {
 // the PC searches (DuckDuckGo from your home connection) or reads the page itself. No credits needed either way.
 async function webTool(name, args, signal) {
   let err = "";
+  // you can watch it: the search runs in a tab of its own in the browser (your page stays); falls back to the quiet search
+  const vis = name === "web_search" && connected && !guestMode && window.visibleSearchVia && window.visibleSearchVia();
+  if (vis) { try { const j = await pcCall("/browser/search", { query: args.query, ...(vis === "ext" ? { via: "ext" } : {}) }); if (j.results && j.results.length) return j; } catch (e) { if (e.name === "AbortError") throw e; } }
   try {
     const r = await fetch(toolsBase() + "/tools/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args), signal });
     const j = await r.json().catch(() => ({}));
@@ -5990,8 +5993,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.19";
+const APP_VERSION = "2026-11-13.20";
 const WHATS_NEW = [
+  ["2026-11-13.20", ["Web searches can be watched: the AI searches in a tab of its own in your Chrome or the PC browser (your page stays)"]],
   ["2026-11-13.19", ["Nothing keeps loading forever when the PC doesn't answer; the Browser view mirrors your own Chrome when the AI uses it; collapsed sidebar shows Home, Chat, Tools and Settings"]],
   ["2026-11-13.18", ["Windows app: control center inside the app (Home → This PC), start at boot from the app, automatic updates; download link in Settings → Appearance"]],
   ["2026-11-13.17", ["Albatross as a Windows app: an installer (desktop/) that starts everything by itself"]],

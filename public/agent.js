@@ -136,7 +136,9 @@ const agS = () => (S.agent = S.agent || { tools: {}, model: "" });
 // which browser the Agent uses: the hidden one on the PC (watch it live in the side panel), or your own Chrome through the extension
 const inChrome = () => agS().browser === "ext" || !!window.EMBED_CHROME;   // the Chrome sidebar always uses that Chrome
 const via = () => (inChrome() ? { via: "ext" } : {});
-window.browserInChrome = inChrome;     // the Browser view (browser.js) mirrors your Chrome then
+window.browserInChrome = inChrome;
+// web searches are done in the browser, where you can watch (your Chrome or the PC browser), when the AI may use the browser
+window.visibleSearchVia = () => (agOn("browser") ? (inChrome() ? "ext" : "pc") : null);     // the Browser view (browser.js) mirrors your Chrome then
 const agOn = (k) => agS().tools[k] !== false;
 const P = (type, description, extra) => ({ type, description, ...(extra || {}) });
 const T = (name, description, properties, required) => ({ type: "function", function: { name, description, parameters: { type: "object", properties: properties || {}, required: required || [] } } });

@@ -102,10 +102,32 @@ chrome.debugger.onDetach.addListener((src, reason) => {
 chrome.tabs.onRemoved.addListener((id) => { if (id === st.tab) { st.tab = null; if (attached === id) attached = null; save(); sendState(); } });
 chrome.tabs.onUpdated.addListener((id, info) => { if (id === st.tab && info.title) sendState(); });
 
+// a new tab for the AI (its web searches): in front, in the "Albatross Agent" group; the AI works there from now on
+let searchTab = null;
+async function intoGroup(tabId) {
+  try {
+    const [g] = await chrome.tabGroups.query({ title: "Albatross Agent" });
+    if (g) await chrome.tabs.group({ tabIds: [tabId], groupId: g.id });
+    else { const id = await chrome.tabs.group({ tabIds: [tabId] }); await chrome.tabGroups.update(id, { title: "Albatross Agent", color: "blue" }); }
+  } catch {}
+}
+async function newTab(url) {
+  await detach();
+  let t = null;
+  if (searchTab != null) { try { t = await chrome.tabs.update(searchTab, { url, active: true }); } catch { t = null; } }
+  if (!t) { t = await chrome.tabs.create({ url, active: true, ...(panelWin != null ? { windowId: panelWin } : {}) }); await intoGroup(t.id); }
+  searchTab = t.id; st.tab = t.id; save();
+  await sleep(300); await loaded(t.id); await attach(t.id);
+  sendState();
+  return { tab: await tabInfo(), vp: await viewport(t.id) };
+}
+chrome.tabs.onRemoved.addListener((id) => { if (id === searchTab) searchTab = null; });
+
 // ---------- what the PC asks for ----------
 async function run(m) {
   if (m.type === "control") return control(m.action);
   if (st.paused) throw new Error("The Agent is paused in Chrome (Albatross extension). Resume it there or in the app.");
+  if (m.type === "newtab") return newTab(m.url);
   if (m.type === "open") {
     const fresh = !(await tabInfo());
     const t = await agentTab(true, m.url);

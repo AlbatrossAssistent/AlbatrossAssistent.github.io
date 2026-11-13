@@ -110,7 +110,7 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
       return;
     }
     // The browser on this PC (see browser.js), for the website on this PC.
-    const bx = req.url.match(/^(\/browser\/(?:start|viewport|state|input|nav|tab|dialog|stop|stream|open|read|act|private|clearhistory|ext))$/);
+    const bx = req.url.match(/^(\/browser\/(?:start|viewport|state|input|nav|tab|dialog|stop|stream|open|read|act|private|clearhistory|ext|search))$/);
     if (bx && browser) {
       const origin = req.headers.origin || "";
       if (origin && !ORIGINS.test(origin)) { res.writeHead(403); return res.end(); }

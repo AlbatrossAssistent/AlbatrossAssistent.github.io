@@ -97,6 +97,7 @@ const driver = {
   loading: () => X.loading,
   vp: () => X.vp,
   open: async (url) => { const r = await call({ type: "open", url }, 40000); if (r.vp) X.vp = r.vp; return r; },
+  newTab: async (url) => { const r = await call({ type: "newtab", url }, 40000); if (r.vp) X.vp = r.vp; return r; },
 };
 
 function status() {

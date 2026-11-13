@@ -334,8 +334,38 @@ async function extState() {
   try { const h = await ext.driver.send("Page.getNavigationHistory", {}); const e = h.entries[h.currentIndex] || {}; nav = { url: e.url, title: e.title, back: h.currentIndex > 0, fwd: h.currentIndex < h.entries.length - 1 }; } catch {}
   return { private: false, chrome: true, follow: !!s.follow, url: nav.url || t.url || "", title: nav.title || t.title || "", back: !!nav.back, fwd: !!nav.fwd, loading: ext.driver.loading(), dialog: s.dialog, download: "", active: t.id, tabs: t.id ? [{ id: t.id, title: t.title || t.url, url: t.url }] : [] };
 }
+// The AI's web search you can watch: it opens a search page in a tab of its own and reads the results there. Bing first
+// (DuckDuckGo asks remote-controlled browsers to solve a captcha), DuckDuckGo if Bing shows nothing.
+const ENGINES = [
+  { url: (q) => "https://www.bing.com/search?q=" + encodeURIComponent(q) + "&setlang=de", js: `(() => [...document.querySelectorAll("li.b_algo")].slice(0, 8).map((r) => {
+    const a = r.querySelector("h2 a"); if (!a) return null;
+    let u = a.href;
+    try { const x = new URL(u); const enc = x.hostname.endsWith("bing.com") && x.searchParams.get("u"); if (enc && enc.startsWith("a1")) u = atob(enc.slice(2).replace(/-/g, "+").replace(/_/g, "/")); } catch {}
+    const sn = r.querySelector(".b_caption p, .b_lineclamp2, .b_lineclamp3, .b_paractl");
+    return { title: a.textContent.trim(), url: u, content: sn ? sn.textContent.trim().slice(0, 600) : "" };
+  }).filter(Boolean))()` },
+  { url: (q) => "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q), js: `(() => [...document.querySelectorAll(".result")].filter((r) => !r.className.includes("result--ad")).slice(0, 8).map((r) => {
+    const a = r.querySelector("a.result__a"); if (!a) return null;
+    let u = a.href; try { const q = new URL(u).searchParams.get("uddg"); if (q) u = q; } catch {}
+    const sn = r.querySelector(".result__snippet");
+    return { title: a.textContent.trim(), url: u, content: sn ? sn.textContent.trim().slice(0, 600) : "" };
+  }).filter(Boolean))()` },
+];
+async function searchIn(D, openTab, query) {
+  const q = String(query || "").slice(0, 300);
+  for (const e of ENGINES) {
+    try {
+      await openTab(e.url(q));
+      await settle(10000, D);
+      const results = (await evalJs(e.js, D)) || [];
+      if (results.length) return { results, via: "browser" };
+    } catch {}
+  }
+  throw new Error("The search pages showed no results (they may have asked for a captcha).");
+}
 async function extHandle(p, j) {
   const D = ext.driver;
+  if (p === "/browser/search") { if (!ext.status().connected) throw new Error("Your Chrome isn't connected."); return searchIn(D, (u) => D.newTab(u), j.query); }
   if (p === "/browser/start" || p === "/browser/viewport" || p === "/browser/state") return extState();
   if (p === "/browser/input") { await input(j, D); return { ok: true }; }
   if (p === "/browser/nav") {
@@ -447,6 +477,7 @@ async function handle(method, p, body, note) {
       return [200, state()];
     }
     if (p === "/browser/private") { await setPrivate(!!j.on); return [200, state()]; }
+    if (p === "/browser/search") return [200, await searchIn(pcD, (u) => newTab(u), j.query)];
     if (p === "/browser/open") { const u = fixUrl(j.url); if (!u) return [400, { error: "That address can't be opened here." }]; await send("Page.navigate", { url: u }, cur()); await settle(); return [200, await readPage()]; }
     if (p === "/browser/read") return [200, await readPage()];
     if (p === "/browser/act") { const r = await act(j); return [200, { ...r, page: await readPage() }]; }
