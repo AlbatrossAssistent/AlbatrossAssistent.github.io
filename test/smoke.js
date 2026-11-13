@@ -65,9 +65,11 @@ f.onload = () => setTimeout(async () => {
     const tile = tiles[tiles.length - 1], [x, y] = mid(tile);
     tile.dispatchEvent(new w.PointerEvent("pointerdown", { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, pointerId: 7 }));
     const held = tile.classList.contains("dragging");
-    w.dispatchEvent(new w.PointerEvent("pointermove", { bubbles: true, clientX: x + 160, clientY: y + 60, pointerId: 7 }));
+    // shapes land at random places: drag towards the side with room, so a shape resting against a wall can still move
+    const dir = x > w.innerWidth / 2 ? -1 : 1;
+    w.dispatchEvent(new w.PointerEvent("pointermove", { bubbles: true, clientX: x + 160 * dir, clientY: y - 60, pointerId: 7 }));
     ev("polygonField.advance(.6)");
-    const [x2] = mid(tile), dragged = held && x2 > x + 40;
+    const [x2] = mid(tile), dragged = held && (x2 - x) * dir > 40;
     w.dispatchEvent(new w.PointerEvent("pointerup", { bubbles: true, pointerId: 7 }));
     const ok = w.getComputedStyle(d.body).backgroundColor === "rgb(255, 255, 255)"
       && w.getComputedStyle(d.querySelector("#orbs")).display === "block"
