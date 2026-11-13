@@ -274,7 +274,7 @@
       el.dataset.index = String(i); el.style.width = el.style.height = S * 2 + "px"; el.style.transformOrigin = `${S}px ${S}px`;
       const d = o.circle ? `M${-m.cx - o.circle} ${-m.cy}a${o.circle} ${o.circle} 0 1 0 ${o.circle * 2} 0a${o.circle} ${o.circle} 0 1 0 ${-o.circle * 2} 0Z`
         : "M" + o.draw.map(([x, y]) => (x - m.cx).toFixed(1) + " " + (y - m.cy).toFixed(1)).join("L") + "Z";
-      el.innerHTML = `<svg viewBox="${-S} ${-S} ${S * 2} ${S * 2}" width="${S * 2}" height="${S * 2}"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><path d="${d}" fill="url(#${id})"/><path class="rim" d="${d}"/></svg>`;
+      el.innerHTML = `<svg viewBox="${-S} ${-S} ${S * 2} ${S * 2}" width="${S * 2}" height="${S * 2}"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><path d="${d}" fill="${c2}"/><path d="${d}" fill="url(#${id}) ${c2}"/><path class="rim" d="${d}"/></svg>`;
       b.el = el; b.S = S;
       return b;
     }

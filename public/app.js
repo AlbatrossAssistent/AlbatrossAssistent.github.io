@@ -2181,10 +2181,12 @@ async function send(textOverride, opts = {}) {
   finally { finishRun(); }
 }
 
-// A job on the user's PC (mail, files, printing, a website, a program): the chat model does it itself with the matching Agent tools,
-// in this chat, without starting the Agent. Only a model that can't use tools hands it to the Agent (which picks one that can).
+// A job on the user's PC (mail, files, printing, a website, a program): a model that can use tools gets the matching Agent tools in
+// chat() and does it itself, without starting the Agent (the router never picks "agent" for it). Only a model that can't use tools
+// is routed here and hands the job to the Agent (which picks one that can).
+async function chatDoesPcJobs(model) { return !guestMode && !!window.agentChatTools && (await getCaps(model)).includes("tools"); }
 async function agentJob(model, text, task) {
-  if (!guestMode && window.agentChatTools && (await getCaps(model)).includes("tools")) return chat(model, { agentTask: task || text });
+  if (await chatDoesPcJobs(model)) return chat(model, { agentTask: task || text });
   return window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model);
 }
 
@@ -2364,7 +2366,15 @@ async function chat(model, opts = {}) {
     if (system) msgs.unshift({ role: "system", content: system });
 
     // a job on the PC (the router said so): the Agent's tools for it, in this chat; a job takes more rounds than a search
-    const agentKit = opts.agentTask && toolsOk && !guestMode && window.agentChatTools ? window.agentChatTools(opts.agentTask + "\n" + (conv.messages.filter(m => m.role === "user").at(-1)?.content || ""), { all: true, ownSearch: useTools }) : null;
+    // Offered only when the message is about mail, files, printing, a website or a program (or follows up on a PC job just done);
+    // the model itself decides whether to use them, so nothing switches into an "Agent mode".
+    let agentKit = null;
+    if (toolsOk && !guestMode && window.agentChatTools) {
+      const users = conv.messages.filter(m => m.role === "user" && !m.isEvent), lastUser = users.at(-1)?.content || "";
+      const lastBot = conv.messages.filter(m => m.role === "assistant" && !m.isEvent && !m.isError).at(-1);
+      const followUp = (lastBot?.blocks || []).some(b => b.type === "agent") && users.length > 1 ? "\n" + users.at(-2).content : "";
+      agentKit = window.agentChatTools((opts.agentTask ? opts.agentTask + "\n" : "") + lastUser + followUp, { all: !!opts.agentTask, ownSearch: useTools });
+    }
     let agentBlock = null;
     if (agentKit) msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + agentKit.system) : msgs.unshift({ role: "system", content: agentKit.system });
     const rounds = agentKit ? 16 : 6;
@@ -2564,11 +2574,14 @@ const ROUTE_ABOUT = {
 // which tool made an answer ("" for a plain one); a follow-up to a tool's answer ("make it faster", "add bread too") has no
 // keyword of its own, so it always goes to the router, which is told what the earlier answer was
 const BLOCK_TOOL = { docs: "docs", music: "music", notes: "notes", deck: "slides", chart: "graph", chances: "chances", agent: "agent", challenge: "challenge" };
-const toolOfMsg = (m) => ((m && m.blocks) || []).map((b) => BLOCK_TOOL[b.type]).find(Boolean) || "";
+const toolOfMsg = (m) => ((m && m.blocks) || []).map((b) => !b.inline && BLOCK_TOOL[b.type]).find(Boolean) || "";
 async function routeTool(model, text) {
+  // a model that can use tools does PC jobs itself in the chat (the Agent's tools are offered to it directly), so "agent" isn't routed
+  const direct = await chatDoesPcJobs(model);
+  const on = (k) => routeOn(k) && !(direct && k === "agent");
   const lastBot = current.messages.slice(0, -1).filter(m => m.role === "assistant" && !m.isEvent).at(-1), lastTool = toolOfMsg(lastBot);
-  const hit = Object.keys(TOOLISH).some(k => routeOn(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text)) || (!!lastTool && routeOn(lastTool));
-  const enabled = Object.keys(ROUTE_ABOUT).filter(routeOn);
+  const hit = Object.keys(TOOLISH).some(k => on(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text)) || (!!lastTool && on(lastTool));
+  const enabled = Object.keys(ROUTE_ABOUT).filter(on);
   if (!hit || !enabled.length) return { tool: "" };
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
   const bubble = botBubble(reply, -1); $("#inner").appendChild(bubble); fillBot(bubble, reply, -1, true); scrollDown(true);
@@ -5612,8 +5625,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.3";
+const APP_VERSION = "2026-11-13.4";
 const WHATS_NEW = [
+  ["2026-11-13.4", ["The chat uses the PC tools itself only when a message is clearly about mail, files, printing, a website or a program, and no longer gets stuck sending every follow-up to the Agent; shapes always draw filled"]],
   ["2026-11-13.3", ["The chat AI can now use the Agent's tools itself (mail, files, printing, websites, programs) right in the chat, without starting the Agent, and only for messages about those things"]],
   ["2026-11-13.2", ["Your Beam name and this device's name now stay on the device: they are no longer shared through your account, so your own devices can send files to each other"]],
   ["2026-11-13.1", ["Light mode shapes on iPhone and iPad: gravity now follows the tilt correctly instead of piling up on the left edge"]],

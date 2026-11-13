@@ -667,18 +667,19 @@ window.agentCard = function (b) {
 // For a message that is about mail, files, printing, a website or a program, the chat model gets the matching Agent tools itself:
 // no Agent run, no plan, no side panel. Only the groups the message is about are offered, and the same rules apply (sending mail
 // and printing wait for "Allow" in the answer). The steps show in the answer as one card.
+// Only clear words count, so an ordinary question ("send me a poem", "what game should I play") gets no PC tools at all.
 const GROUP_HINT = {
-  mail: /(?<![\p{L}\p{N}])(?:e-?mails?|mails?|inbox|mailbox|posteingang|postfach|nachricht\p{L}*|reply|antwort\p{L}*|beantwort\p{L}*|send(?:e|en)?|schick\p{L}*)(?![\p{L}\p{N}])/iu,
-  files: /(?<![\p{L}\p{N}])(?:files?|folders?|datei\p{L}*|ordner|workspace|pc files|sort\p{L}*|move|verschieb\p{L}*|rename|umbenenn\p{L}*|save|speicher\p{L}*|received|empfangen\p{L}*)(?![\p{L}\p{N}])/iu,
-  print: /(?<![\p{L}\p{N}])(?:print\p{L}*|druck\p{L}*|printer)(?![\p{L}\p{N}])/iu,
-  browser: /(?<![\p{L}\p{N}])(?:browse|browser|web ?page|website|webseite|url|https?|site|seite|google|amazon|youtube|log ?in|anmeld\p{L}*|form|formular)(?![\p{L}\p{N}])/iu,
-  code: /(?<![\p{L}\p{N}])(?:program\p{L}*|script|skript|app|game|spiel|html|javascript|python|code|website|webseite|bot)(?![\p{L}\p{N}])/iu,
+  mail: /(?<![\p{L}\p{N}])(?:e-?mails?|mails?|inbox|mailbox|posteingang|postfach|unread|ungelesen\p{L}*)(?![\p{L}\p{N}])/iu,
+  files: /(?<![\p{L}\p{N}])(?:files?|folders?|datei\p{L}*|ordner|workspace|downloads?|desktop|pc files|albatross folder)(?![\p{L}\p{N}])/iu,
+  print: /(?<![\p{L}\p{N}])(?:print(?:s|ed|ing|er|out)?|ausdruck\p{L}*|drucke\p{L}*|druck|drucker)(?![\p{L}\p{N}])/iu,
+  browser: /(?<![\p{L}\p{N}])(?:browse|browser|web ?page|website|webseite|url|https?:\/\/\S+|www\.\S+|amazon|youtube|log ?in|einloggen|anmelden|formular)(?![\p{L}\p{N}])/iu,
+  code: /(?<![\p{L}\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|change|fix|improve|schreib\p{L}*|erstell\p{L}*|programmier\p{L}*|bau\p{L}*|änder\p{L}*|verbesser\p{L}*)(?![\p{L}\p{N}])[^.?!]{0,60}(?<![\p{L}\p{N}])(?:program|script|app|application|website|web ?page|game|bot|html|python|javascript|programm|skript|webseite|spiel|code project)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(?:code projects?|run (?:this|the|my) code)(?![\p{L}\p{N}])/iu,
 };
 // the Agent's instructions, line by line, for the groups that are offered
 function chatToolsSystem(groups) {
   const lines = SYSTEM().split("\n");
   const pick = (start) => lines.find((l) => l.startsWith(start)) || "";
-  return ["You can use tools on the user's own PC for this request. Use them to actually do it rather than describing it, then answer briefly with what you did.",
+  return ["You also have tools that work on the user's own PC (their mail, files, printer, browser and code projects). When the user asks you to do something there, use them to actually do it rather than describing it, then answer briefly with what you did. When the message is just a question or a normal chat request (explaining, writing a text for them to read, advice), answer normally and don't use these tools.",
     (groups.has("files") || groups.has("print") || groups.has("code")) && pick("Files:"),
     (groups.has("files") || groups.has("print")) && "When the user means their files on the PC (\"my Albatross folder\", \"my PC files\", \"what I sent to the PC\", \"my files\"), look in all: first. all: itself IS the Albatross folder (list all: to see what's in it, never all:Albatross); agent: is only your own workspace.",
     groups.has("code") && pick("Programs, websites and games:"),
