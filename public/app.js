@@ -5625,8 +5625,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.4";
+const APP_VERSION = "2026-11-13.5";
 const WHATS_NEW = [
+  ["2026-11-13.5", ["Agent action drawings are solid again (they showed as outlines over each other); the tab title is just Albatross"]],
   ["2026-11-13.4", ["The chat uses the PC tools itself only when a message is clearly about mail, files, printing, a website or a program, and no longer gets stuck sending every follow-up to the Agent; shapes always draw filled"]],
   ["2026-11-13.3", ["The chat AI can now use the Agent's tools itself (mail, files, printing, websites, programs) right in the chat, without starting the Agent, and only for messages about those things"]],
   ["2026-11-13.2", ["Your Beam name and this device's name now stay on the device: they are no longer shared through your account, so your own devices can send files to each other"]],

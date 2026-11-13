@@ -639,30 +639,30 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 .act-detail { grid-column: 1 / -1; margin: 0; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--t1, var(--fg)) 5%, transparent); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; }
 /* the drawings: paper, ink lines and blue highlights; they move only while the step runs, and stop where they look finished */
 .art { width: 64px; height: 64px; overflow: visible; fill: none; stroke: var(--ink, var(--fg)); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.art .a-pa, .art .a-env, .art .a-bd { fill: var(-.a-paper, #fff); }
-.art .a-bd { fill: color-mix(in srgb, var(--ink, var(--fg)) 10%, var(-.a-paper, #fff)); }
+.art .a-pa, .art .a-env, .art .a-bd { fill: var(--paper, #fff); }
+.art .a-bd { fill: color-mix(in srgb, var(--ink, var(--fg)) 10%, var(--paper, #fff)); }
 .art .a-ln { stroke: var(--dim, var(--muted)); stroke-width: 1.8; }
 .art .a-sl { fill: var(--ink, var(--fg)); stroke: none; }
 .art .a-led, .art .a-dot { fill: var(--accent); stroke: none; }
-.art .a-envf { fill: color-mix(in srgb, var(--accent) 16%, var(-.a-paper, #fff)); }
+.art .a-envf { fill: color-mix(in srgb, var(--accent) 16%, var(--paper, #fff)); }
 .art .a-pen { fill: var(--accent); stroke: var(--accent); stroke-width: 1.2; }
-.art .a-scan { fill: color-mix(in srgb, var(--accent) 30%, tran.a-parent); stroke: none; }
-.art .a-fold { fill: color-mix(in srgb, var(--accent) 22%, var(-.a-paper, #fff)); stroke: var(--accent); }
+.art .a-scan { fill: color-mix(in srgb, var(--accent) 30%, transparent); stroke: none; }
+.art .a-fold { fill: color-mix(in srgb, var(--accent) 22%, var(--paper, #fff)); stroke: var(--accent); }
 .art .a-load { fill: var(--accent); stroke: none; transform-origin: 6px 0; }
-.art .a-blk { fill: color-mix(in srgb, var(--ink, var(--fg)) 12%, tran.a-parent); stroke: none; }
-.art .a-ripple { stroke: var(--accent); fill: none; transform-box: fill-box; transform-origin: center; .a-pacity: 0; }
-.art .a-cursor { fill: var(-.a-paper, #fff); stroke: var(--ink, var(--fg)); stroke-width: 1.6; }
-.art .a-typed { fill: color-mix(in srgb, var(--accent) 35%, tran.a-parent); stroke: none; transform-origin: 12px 0; }
+.art .a-blk { fill: color-mix(in srgb, var(--ink, var(--fg)) 12%, transparent); stroke: none; }
+.art .a-ripple { stroke: var(--accent); fill: none; transform-box: fill-box; transform-origin: center; opacity: 0; }
+.art .a-cursor { fill: var(--paper, #fff); stroke: var(--ink, var(--fg)); stroke-width: 1.6; }
+.art .a-typed { fill: color-mix(in srgb, var(--accent) 35%, transparent); stroke: none; transform-origin: 12px 0; }
 .art .a-caret { fill: var(--accent); stroke: none; }
-.art .a-glass { fill: color-mix(in srgb, var(--accent) 14%, var(-.a-paper, #fff)); stroke: var(--accent); stroke-width: 2.4; }
+.art .a-glass { fill: color-mix(in srgb, var(--accent) 14%, var(--paper, #fff)); stroke: var(--accent); stroke-width: 2.4; }
 .art .a-handle { stroke: var(--accent); stroke-width: 3.2; }
 .art .a-code1 { stroke: var(--accent); stroke-width: 2.2; }
 .art .a-play { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; }
 .art .a-wave { stroke: var(--accent); }
 .art .a-tray { stroke: var(--ink, var(--fg)); }
-.art * { animation-delay: var(--ago, 0s); animation-iteration-count: infinite; animation-timing-function: ease-in-out; animation-play-state:.a-paused; }
-:is(.act, .print.a-pop).doing .art * { animation-play-state: running; }
-:is(.act, .print.a-pop):not(.doing) .art * { animation: none !important; }
+.art * { animation-delay: var(--ago, 0s); animation-iteration-count: infinite; animation-timing-function: ease-in-out; animation-play-state: paused; }
+:is(.act, .print-pop).doing .art * { animation-play-state: running; }
+:is(.act, .print-pop):not(.doing) .art * { animation: none !important; }
 .art-print .a-sheet { animation-name: aPrint; animation-duration: 2.4s; }
 @keyframes aPrint { 0% { transform: translateY(-14px); } 70%, 100% { transform: translateY(14px); } }
 .art-print .a-led { animation-name: aBlink; animation-duration: .8s; }
@@ -692,7 +692,7 @@ input.masked { -webkit-text-security: disc; text-security: disc; }
 @keyframes aPencil { 0% { transform: translate(-24px, 0); } 20% { transform: translate(0, 0); } 22% { transform: translate(-24px, 7px); } 42% { transform: translate(0, 7px); } 44% { transform: translate(-24px, 14px); } 64% { transform: translate(0, 14px); } 66% { transform: translate(-24px, 21px); } 80% { transform: translate(-9px, 21px); } 100% { transform: translate(-9px, 21px); } }
 .art-move .a-fly { animation-name: aFly; animation-duration: 1.8s; }
 @keyframes aFly { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: 1; } 50% { transform: translate(17px, -16px) rotate(8deg); } 88% { opacity: 1; } 100% { transform: translate(33px, 0); opacity: 0; } }
-.art.a-folder .a-pop { animation-name: aPop; animation-duration: 2.4s; } .art.a-folder .a-p2 { animation-delay: calc(var(--ago, 0s) + .25s); } .art.a-folder .a-p3 { animation-delay: calc(var(--ago, 0s) + .5s); }
+.art-folder .a-pop { animation-name: aPop; animation-duration: 2.4s; } .art-folder .a-p2 { animation-delay: calc(var(--ago, 0s) + .25s); } .art-folder .a-p3 { animation-delay: calc(var(--ago, 0s) + .5s); }
 @keyframes aPop { 0%, 100% { transform: translateY(10px); } 40%, 70% { transform: translateY(0); } }
 .art-web .a-load { animation-name: aLoad; animation-duration: 2s; }
 @keyframes aLoad { 0% { transform: scaleX(0); opacity: 1; } 80% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
