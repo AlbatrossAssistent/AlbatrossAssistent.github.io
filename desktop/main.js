@@ -4,7 +4,11 @@
 //  - installs Ollama by itself the first time if it's missing (models are Ollama's and stay in its folder; you pick them in the app)
 //  - shows the app from the host on this PC (http://localhost:4747/app/): works offline, and needs no browser permissions
 //  - lives in the tray next to the clock; can start with Windows (then it starts hidden, so the host is ready for your phone)
-const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, dialog } = require("electron");
+//  - can make the host start when the PC boots, before anyone signs in (control center → Start at boot)
+//  - updates itself: new versions come from GitHub, download in the background and install when the app restarts
+const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, dialog, ipcMain, Notification } = require("electron");
+const { execFile } = require("child_process");
+let autoUpdater = null; try { autoUpdater = require("electron-updater").autoUpdater; } catch {}
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -17,7 +21,7 @@ const FILES = app.isPackaged ? path.join(process.resourcesPath, "albatross") : p
 const DATA = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "host");
 const ICON = path.join(__dirname, "icon.png");
 const hidden = process.argv.includes("--hidden");
-let win = null, splash = null, tray = null, quitting = false;
+let win = null, splash = null, tray = null, quitting = false, update = null;     // update: { version, ready }
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.on("second-instance", () => show());
@@ -56,6 +60,29 @@ async function ensureOllama() {
 }
 
 // ---------- the host ----------
+// start-host.cmd: how the boot task (and anyone) starts the host with this app's Node; rewritten at every start so it follows
+// the app after updates
+const START_CMD = path.join(DATA, "start-host.cmd");
+function writeStartCmd() {
+  fs.mkdirSync(DATA, { recursive: true });
+  fs.writeFileSync(START_CMD, ["@echo off", "set ELECTRON_RUN_AS_NODE=1", `set "ALBATROSS_DATA=${DATA}"`, `cd /d "${FILES}"`, `"${process.execPath}" "${path.join(FILES, "host", "background.js")}"`, ""].join("\r\n"));
+}
+const taskExists = () => new Promise((r) => execFile("schtasks", ["/Query", "/TN", "Burrow host"], { windowsHide: true }, (err) => r(!err)));
+// control center → Start at boot: the scheduled task is made with admin rights (Windows asks) and your password (Windows asks)
+async function setBootStart(on) {
+  if (!app.isPackaged) return { error: "Only in the installed app." };
+  writeStartCmd();
+  const ps1 = path.join(FILES, "host", "autostart-app.ps1");
+  const inner = `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${ps1}" ${on ? "install" : "uninstall"} -Cmd "${START_CMD}" -WorkDir "${FILES}"`;
+  const code = await new Promise((r) => execFile("powershell.exe", ["-NoProfile", "-Command", `try { $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '${inner.replace(/'/g, "''")}'; exit $p.ExitCode } catch { exit 3 }`], { windowsHide: true }, (err) => r(err ? (err.code ?? 1) : 0)));
+  const now = await taskExists();
+  if (on && !now) {
+    let why = code === 3 ? "Windows' admin question was declined." : code === 2 ? "The password was cancelled." : "";
+    try { why = why || fs.readFileSync(path.join(os.tmpdir(), "albatross-autostart-error.txt"), "utf8").trim(); } catch {}
+    return { error: "Start at boot wasn't turned on" + (why ? ": " + why : ".") };
+  }
+  return { on: now };
+}
 async function ensureHost() {
   if (await reachable(PANEL + "/")) return;            // already running (started at boot, or by an older install)
   status("Starting Albatross on this PC…", null);
@@ -78,7 +105,7 @@ function show() {
 function openMain() {
   win = new BrowserWindow({
     width: 1280, height: 860, minWidth: 380, minHeight: 520, title: "Albatross", icon: ICON, show: false, backgroundColor: "#ffffff", autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true },
+    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, preload: path.join(__dirname, "preload.js") },
   });
   win.removeMenu();
   win.loadURL(APP_URL);
@@ -99,13 +126,35 @@ function makeTray() {
     { label: "Open Albatross", click: () => show() },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin, click: (i) => { app.setLoginItemSettings({ openAtLogin: i.checked, args: ["--hidden"] }); tray.setContextMenu(menu()); } },
-    { label: "Control center", click: () => shell.openExternal(PANEL + "/") },
+    { label: "Control center", click: () => { show(); setTimeout(() => win && win.webContents.executeJavaScript("window.openControlCenter && openControlCenter()").catch(() => {}), 400); } },
+    ...(update && update.ready ? [{ label: "Restart to update (" + update.version + ")", click: () => installUpdate() }] : []),
     { type: "separator" },
     { label: "Quit Albatross", click: () => { quitting = true; app.quit(); } },
   ]);
   tray.setContextMenu(menu());
   tray.on("click", () => show());
+  makeTray.refresh = () => tray.setContextMenu(menu());
 }
+
+// ---------- updates (GitHub releases of AlbatrossAssistent.github.io) ----------
+function installUpdate() { if (!autoUpdater || !(update && update.ready)) return; quitting = true; autoUpdater.quitAndInstall(true, true); }
+function startUpdates() {
+  if (!autoUpdater || !app.isPackaged || /win-unpacked/i.test(process.execPath)) return;
+  autoUpdater.autoDownload = true; autoUpdater.autoInstallOnAppQuit = true;
+  const tell = () => { if (win && !win.isDestroyed()) win.webContents.send("update", update); makeTray.refresh && makeTray.refresh(); };
+  autoUpdater.on("update-available", (i) => { update = { version: i.version, ready: false }; tell(); });
+  autoUpdater.on("update-downloaded", (i) => {
+    update = { version: i.version, ready: true }; tell();
+    if (Notification.isSupported()) { const n = new Notification({ title: "Albatross " + i.version + " is ready", body: "Click to restart Albatross now, or it updates the next time it starts." }); n.on("click", installUpdate); n.show(); }
+  });
+  autoUpdater.on("error", () => {});
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  setTimeout(check, 20000); setInterval(check, 4 * 3600e3);
+}
+ipcMain.handle("version", () => ({ app: app.getVersion(), update }));
+ipcMain.handle("boot", (_e, on) => setBootStart(on));
+ipcMain.handle("update-check", async () => { if (!autoUpdater || !app.isPackaged) return { error: "Updates work in the installed app." }; try { const r = await autoUpdater.checkForUpdates(); return { latest: r && r.updateInfo && r.updateInfo.version, current: app.getVersion(), update }; } catch (e) { return { error: e.message }; } });
+ipcMain.handle("update-install", () => { installUpdate(); return { ok: !!(update && update.ready) }; });
 
 app.whenReady().then(async () => {
   // the microphone (voice) and notifications for the app from this PC; nothing for other sites
@@ -117,6 +166,8 @@ app.whenReady().then(async () => {
     fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(path.join(DATA, ".asked-autostart"), "1");
   }
   if (!hidden) openSplash();
+  if (app.isPackaged) writeStartCmd();
+  startUpdates();
   try {
     await ensureOllama();
     await ensureHost();

@@ -16,10 +16,25 @@
   "build": {
     "appId": "app.albatross.desktop",
     "productName": "Albatross",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "splash.html", "icon.png"],
-    "extraResources": [{ "from": "bundle", "to": "albatross" }],
-    "win": { "target": "nsis", "icon": "icon.png" },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "splash.html",
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "bundle",
+        "to": "albatross"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
@@ -27,6 +42,17 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Albatross",
       "runAfterFinish": true
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "AlbatrossAssistent",
+        "repo": "AlbatrossAssistent.github.io",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
   }
 }

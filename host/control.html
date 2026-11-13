@@ -522,9 +522,14 @@ $("#boot").onchange = async (e) => {
   bootPending = { want, at: Date.now() };
   render();
   try {
-    const r = await fetch("/action/autostart-" + (want ? "on" : "off"), { method: "POST", headers: { "X-Burrow": "1" } });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+    // inside the Albatross Windows app: the app sets the boot task up itself (Windows asks for admin rights and your password)
+    const desk = window.albatrossDesktop || (window.parent !== window && window.parent.albatrossDesktop);
+    if (desk) { const j = await desk.setBootStart(want); if (j && j.error) throw new Error(j.error); }
+    else {
+      const r = await fetch("/action/autostart-" + (want ? "on" : "off"), { method: "POST", headers: { "X-Burrow": "1" } });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+    }
   } catch (err) { bootPending = null; bootError = err.message; }
   render();
 };

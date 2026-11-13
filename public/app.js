@@ -2225,6 +2225,39 @@ function md(src) {
   });
   return picTokens(out);
 }
+// ---------- the Windows app (desktop/): control center inside the app, version and updates ----------
+// The control center (the host's own page on this PC) opens over the app instead of in a browser.
+function openControlCenter() {
+  if (document.querySelector(".cc-overlay")) return;
+  const o = document.createElement("div"); o.className = "cc-overlay"; o.setAttribute("role", "dialog"); o.setAttribute("aria-label", "Control center");
+  o.innerHTML = `<div class="cc-box"><div class="cc-head"><b>Control center</b><span>This PC: host, Ollama, codes, start at boot</span><button class="icon-btn" type="button" aria-label="Close" title="Close">✕</button></div><iframe src="${location.origin}/" title="Control center"></iframe></div>`;
+  const close = () => { o.remove(); removeEventListener("keydown", esc); };
+  const esc = (e) => { if (e.key === "Escape") close(); };
+  o.querySelector("button").onclick = close; o.onclick = (e) => { if (e.target === o) close(); };
+  addEventListener("keydown", esc);
+  document.body.appendChild(o);
+}
+window.openControlCenter = openControlCenter;
+async function paintDeskVer() {
+  const el = document.getElementById("deskVer"); if (!el || !window.albatrossDesktop) return;
+  try { const v = await window.albatrossDesktop.version(); el.textContent = "App " + v.app + (v.update ? (v.update.ready ? " · update " + v.update.version + " ready, restart to install" : " · downloading update " + v.update.version + "…") : ""); } catch {}
+}
+function wireDeskCard(root) {
+  root.querySelector('[data-desk="cc"]').onclick = openControlCenter;
+  const up = root.querySelector('[data-desk="upd"]');
+  up.onclick = async () => {
+    const v = await window.albatrossDesktop.version().catch(() => ({}));
+    if (v.update && v.update.ready) return window.albatrossDesktop.installUpdate();
+    up.disabled = true; up.textContent = "Checking…";
+    const r = await window.albatrossDesktop.checkUpdate();
+    up.disabled = false; up.textContent = "Check for updates";
+    toast(r.error ? "Couldn't check: " + r.error : r.latest && r.latest !== r.current ? "Albatross " + r.latest + " is downloading, it installs when the app restarts" : "Albatross is up to date (" + r.current + ")");
+    paintDeskVer();
+  };
+  paintDeskVer();
+}
+if (window.albatrossDesktop) window.albatrossDesktop.onUpdate((u) => { if (u && u.ready) toast("Albatross " + u.version + " is ready: it installs the next time the app starts (or Home → This PC)"); paintDeskVer(); });
+
 // ---------- pictures and files in answers ----------
 // Every picture in a chat has a number, oldest first: the ones the user attached and the ones made here. The model shows one in its
 // answer with [[pic:N]] ("this banana is ripe: [[pic:2]]"), and attaches a file from the PC with [[file:all:Pictures/x.png]].
@@ -4434,6 +4467,7 @@ function renderHome() {
       </div>
     </section>
     <div class="home-grid">
+      ${window.albatrossDesktop ? `<div class="home-card desk-card"><h3>This PC</h3><p>Albatross runs on this PC: the host, Ollama and the control center are part of this app.</p><div class="row"><button class="btn primary small" type="button" data-desk="cc">Control center</button><button class="btn small" type="button" data-desk="upd">Check for updates</button></div><small class="desk-ver" id="deskVer"></small></div>` : ""}
       <div class="home-card"><h3>At a glance</h3><div id="homeStatus"></div></div>
       <div class="home-card"><h3>Recent conversations</h3><div class="recent" id="homeRecent"></div></div>
     </div>
@@ -4450,6 +4484,7 @@ function renderHome() {
   }
   home.querySelector("[data-scroll='homeManual']").onclick = () => $("#homeManual").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   const jvTile = home.querySelector('[data-go="jarvis"]'); if (jvTile) jvTile.dataset.needsPc = "1";
+  if (window.albatrossDesktop) wireDeskCard(home);
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
     const g = b.dataset.go;
     if (g === "chat") { newChat("chat", "", false); setView("chat"); }
@@ -5927,8 +5962,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.17";
+const APP_VERSION = "2026-11-13.18";
 const WHATS_NEW = [
+  ["2026-11-13.18", ["Windows app: control center inside the app (Home → This PC), start at boot from the app, automatic updates; download link in Settings → Appearance"]],
   ["2026-11-13.17", ["Albatross as a Windows app: an installer (desktop/) that starts everything by itself"]],
   ["2026-11-13.16", ["Install and remove AI models right in the app (Settings → Installed models): suggestions, progress bar, keeps going on the PC; models stay with Ollama, not in the app"]],
   ["2026-11-13.15", ["Chrome sidebar works without extra permissions (the app comes from your PC); the AI can show your pictures in its answer and attach PC files; Appearance: background, accent colour, and each device keeps its own look; answers in German when you write German"]],
