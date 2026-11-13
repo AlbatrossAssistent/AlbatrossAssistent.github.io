@@ -20,7 +20,8 @@ const PORT = Number(process.env.ALBATROSS_EXT_PORT) || 4749;
 const FILE = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "extension.json");
 const FOLDER = path.join(__dirname, "..", "extension");
 
-const X = { ws: null, info: null, id: 0, pend: new Map(), loading: false, paused: false, tab: null, dialog: null, pair: null, note: () => {}, vp: { w: 1280, h: 800 } };
+const X = { ws: null, info: null, id: 0, pend: new Map(), loading: false, paused: false, tab: null, dialog: null, pair: null, note: () => {}, vp: { w: 1280, h: 800 }, frame: null, seq: 0, waiters: [] };
+const wakeFrames = () => { for (const w of X.waiters.splice(0)) w(); };
 const keys = () => { try { return JSON.parse(fs.readFileSync(FILE, "utf8")).keys || []; } catch { return []; } };
 function saveKeys(list) { fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.writeFileSync(FILE, JSON.stringify({ keys: list }, null, 2)); }
 const hash = (k) => crypto.createHash("sha256").update(String(k)).digest("hex");
@@ -58,13 +59,19 @@ function listen(note) {
         return;
       }
       if (!ok) return;
-      if (m.type === "state") { X.paused = !!m.paused; X.tab = m.tab || null; X.follow = !!m.follow; if (m.vp) X.vp = m.vp; return; }
+      if (m.type === "state") { const tabChanged = (X.tab && X.tab.id) !== (m.tab && m.tab.id); X.paused = !!m.paused; X.tab = m.tab || null; X.follow = !!m.follow; if (m.vp) X.vp = m.vp; if (tabChanged) X.frame = null; wakeFrames(); return; }
       if (m.type === "event") {
         const p = m.params || {};
         if (m.method === "Page.frameStartedLoading") X.loading = true;
         else if (m.method === "Page.frameStoppedLoading" || m.method === "Page.loadEventFired") X.loading = false;
         else if (m.method === "Page.javascriptDialogOpening") X.dialog = { type: p.type, message: String(p.message || "").slice(0, 1000) };
         else if (m.method === "Page.javascriptDialogClosed") X.dialog = null;
+        else if (m.method === "Page.screencastFrame") {
+          // the app's Browser view mirrors this tab: keep the newest picture, and tell Chrome we got it so it sends the next
+          X.frame = { data: p.data, w: p.metadata && p.metadata.deviceWidth, h: p.metadata && p.metadata.deviceHeight }; X.seq++;
+          call({ type: "cdp", method: "Page.screencastFrameAck", params: { sessionId: p.sessionId } }, 5000).catch(() => {});
+        }
+        wakeFrames();
         return;
       }
       if (m.id && X.pend.has(m.id)) { const q = X.pend.get(m.id); X.pend.delete(m.id); m.ok ? q.res(m.result || {}) : q.rej(new Error(m.error || "Chrome didn't do it")); }
@@ -112,4 +119,9 @@ async function handle(j) {
   throw new Error("Unknown extension request");
 }
 
-module.exports = { listen, driver, status, handle };
+// for browser.js' mirror: the newest picture, and waiting for the next one (or anything else that changed)
+const mirror = {
+  frame: () => ({ frame: X.frame, seq: X.seq }),
+  wait: (ms, signal) => new Promise((res) => { const t = setTimeout(res, ms); const w = () => { clearTimeout(t); res(); }; X.waiters.push(w); if (signal) signal.addEventListener("abort", w, { once: true }); }),
+};
+module.exports = { listen, driver, status, handle, mirror };

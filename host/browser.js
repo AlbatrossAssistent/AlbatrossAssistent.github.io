@@ -320,7 +320,62 @@ function state() {
 }
 
 // The live picture: a line per new frame (only the newest, never a backlog) plus the address bar, tabs and dialogs when they change.
+// ---------- the Browser view mirroring your own Chrome (Agent browser = My Chrome) ----------
+// The same view as for the hidden browser, but the picture is the tab the AI uses in your Chrome (or the one you're on when the
+// sidebar follows your tab), and clicks, typing and the address bar go there. It's one browser: what you see in the app is what
+// the Chrome extension sees.
+async function extState() {
+  const s = ext.status();
+  if (!s.connected) throw new Error("Your Chrome isn't connected. Open Chrome on the PC (the Albatross extension connects by itself), or switch to the PC browser in Settings → Tools → Work on your PC.");
+  if (s.paused) throw new Error("The AI is paused in your Chrome. Resume it in the Chrome sidebar or in Settings → Tools.");
+  if (!s.tab) await ext.driver.open("https://www.google.com/");
+  const t = ext.status().tab || {};
+  let nav = {};
+  try { const h = await ext.driver.send("Page.getNavigationHistory", {}); const e = h.entries[h.currentIndex] || {}; nav = { url: e.url, title: e.title, back: h.currentIndex > 0, fwd: h.currentIndex < h.entries.length - 1 }; } catch {}
+  return { private: false, chrome: true, follow: !!s.follow, url: nav.url || t.url || "", title: nav.title || t.title || "", back: !!nav.back, fwd: !!nav.fwd, loading: ext.driver.loading(), dialog: s.dialog, download: "", active: t.id, tabs: t.id ? [{ id: t.id, title: t.title || t.url, url: t.url }] : [] };
+}
+async function extHandle(p, j) {
+  const D = ext.driver;
+  if (p === "/browser/start" || p === "/browser/viewport" || p === "/browser/state") return extState();
+  if (p === "/browser/input") { await input(j, D); return { ok: true }; }
+  if (p === "/browser/nav") {
+    if (j.action === "back" || j.action === "forward") { const h = await D.send("Page.getNavigationHistory", {}), e = h.entries[h.currentIndex + (j.action === "back" ? -1 : 1)]; if (e) await D.send("Page.navigateToHistoryEntry", { entryId: e.id }); }
+    else if (j.action === "reload") await D.send("Page.reload", {});
+    else if (j.action === "stop") await D.send("Page.stopLoading", {});
+    else { const u = fixUrl(j.url); if (!u) throw new Error("That address can't be opened here."); await D.open(u); }
+    await sleep(300); return extState();
+  }
+  if (p === "/browser/tab") {
+    if (j.action === "new") await D.open(fixUrl(j.url) || "https://www.google.com/");
+    else if (j.action === "close") await ext.handle({ action: "closetab" });
+    return extState();
+  }
+  if (p === "/browser/dialog") { await D.send("Page.handleJavaScriptDialog", { accept: !!j.accept, promptText: j.text != null ? String(j.text) : undefined }); return extState(); }
+  if (p === "/browser/stop") return { closed: true };
+  if (p === "/browser/private" || p === "/browser/clearhistory") throw new Error("That's for the PC browser. In your own Chrome use Chrome's own private window and history.");
+  return null;
+}
+async function extStream(j, write, signal, busy) {
+  const fps = Math.max(1, Math.min(30, Number(j.fps) || 10)), gap = 1000 / fps;
+  let seq = -1, st = "", last = 0, castAt = 0, stTick = 0;
+  const cast = async () => { castAt = Date.now(); try { await ext.driver.send("Page.startScreencast", { format: "jpeg", quality: Math.max(30, Math.min(80, Number(j.quality) || 60)), maxWidth: 1920, maxHeight: 1600, everyNthFrame: 1 }); } catch {} };
+  try {
+    write(JSON.stringify({ st: await extState() }) + "\n");
+    await cast();
+    for (;;) {
+      if (signal && signal.aborted) return;
+      const { frame, seq: s } = ext.mirror.frame(), now = Date.now();
+      // no picture for a while: the tab changed (follow) or Chrome stopped sending (a background tab doesn't paint): ask again
+      if ((!frame || s === seq) && now - castAt > 3000) await cast();
+      if (now - stTick > 1500) { stTick = now; try { const n = JSON.stringify(await extState()); if (n !== st) { st = n; write(JSON.stringify({ st: JSON.parse(n) }) + "\n"); } } catch (e) { write(JSON.stringify({ error: e.message }) + "\n"); } }
+      if (frame && s !== seq && now - last >= gap && !(busy && busy())) { write(JSON.stringify({ img: frame.data, w: frame.w, h: frame.h }) + "\n"); seq = s; last = now; continue; }
+      await ext.mirror.wait(frame && s !== seq ? Math.max(20, gap - (now - last)) : 1500, signal);
+    }
+  } finally { ext.driver.send("Page.stopScreencast", {}).catch(() => {}); }
+}
+
 async function stream(j, write, signal, busy) {
+  if (j.via === "ext") return extStream(j, write, signal, busy);
   await start();
   B.watchers++; B.lastUse = Date.now();
   const fps = Math.max(1, Math.min(30, Number(j.fps) || 10)), gap = 1000 / fps;
@@ -355,6 +410,8 @@ async function handle(method, p, body, note) {
   B.note = note || B.note;
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   try {
+    // the Browser view on your own Chrome (mirror): handled before anything starts the hidden browser
+    if (j.via === "ext" && !["/browser/open", "/browser/read", "/browser/act"].includes(p)) { const r = await extHandle(p, j); if (r) return [200, r]; }
     if (p === "/browser/start" || p === "/browser/viewport") {
       if (j.w) B.vp = { w: Math.max(240, Math.min(2560, Math.round(j.w))), h: Math.max(240, Math.min(2000, Math.round(j.h))), dpr: Math.max(1, Math.min(2, Number(j.dpr) || 1)), mobile: !!j.mobile };
       if (j.quality) B.quality = Math.max(30, Math.min(90, Math.round(j.quality)));

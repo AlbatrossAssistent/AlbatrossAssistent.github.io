@@ -91,7 +91,7 @@ async function viewport(tabId) {
   try { const r = await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", { expression: "({ w: innerWidth, h: innerHeight })", returnByValue: true }); return r.result.value; } catch { return null; }
 }
 chrome.debugger.onEvent.addListener((src, method, params) => {
-  if (src.tabId === attached && /^Page\.(frameStartedLoading|frameStoppedLoading|loadEventFired|javascriptDialogOpening|javascriptDialogClosed)$/.test(method)) out({ type: "event", method, params });
+  if (src.tabId === attached && /^Page\.(frameStartedLoading|frameStoppedLoading|loadEventFired|javascriptDialogOpening|javascriptDialogClosed|screencastFrame)$/.test(method)) out({ type: "event", method, params });
 });
 chrome.debugger.onDetach.addListener((src, reason) => {
   if (src.tabId !== attached) return;

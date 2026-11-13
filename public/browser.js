@@ -3,7 +3,9 @@
 // go back to it. Uses the main page's helpers: $, pcCall, pcStream, remotePC, connected, sleepMs, toast.
 (() => {
 const BV = { open: false, ctrl: null, st: null, frame: { w: 0, h: 0 }, vp: null, queue: Promise.resolve(), moveT: 0, wheel: { dx: 0, dy: 0, x: 0, y: 0, timer: 0 }, text: "", textT: 0, resizeT: 0 };
-const call = (p, body) => pcCall(p, body || {});
+// "My Chrome" (Settings → Tools → Work on your PC → Browser): this view mirrors your own Chrome instead of the PC's hidden one
+const mine = () => !!(window.browserInChrome && window.browserInChrome());
+const call = (p, body) => pcCall(p, { ...(body || {}), ...(mine() ? { via: "ext" } : {}) });
 const KEYS = new Set(["Enter", "Backspace", "Tab", "Escape", "Delete", "ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown", "Home", "End", "PageUp", "PageDown", "F5"]);
 
 // inputs go to the PC one after another, in order
@@ -27,7 +29,7 @@ async function open() {
   BV.open = true;
   const msg = $("#bvMsg");
   if (!connected) { msg.hidden = false; msg.textContent = "Connect to your PC first (Home → Connect)."; return; }
-  msg.hidden = false; msg.textContent = "Starting Chrome on your PC…";
+  msg.hidden = false; msg.textContent = mine() ? "Connecting to your Chrome…" : "Starting Chrome on your PC…";
   await new Promise((r) => requestAnimationFrame(r));
   try { BV.vp = viewSize(); paint(await call("/browser/start", BV.vp)); }
   catch (e) { msg.textContent = "Couldn't start the browser: " + e.message + (/Unknown|404/.test(e.message) ? " (restart the Albatross host on your PC to update it)" : ""); return; }
@@ -40,7 +42,7 @@ async function watch() {
   let fails = 0;
   while (BV.open && !ctrl.signal.aborted) {
     try {
-      const res = await pcStream("/browser/stream", { fps: remotePC() ? 12 : 25 }, ctrl.signal);
+      const res = await pcStream("/browser/stream", { fps: remotePC() ? 12 : 25, ...(mine() ? { via: "ext" } : {}) }, ctrl.signal);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const rd = res.body.getReader(); let buf = ""; fails = 0;
       for (;;) {

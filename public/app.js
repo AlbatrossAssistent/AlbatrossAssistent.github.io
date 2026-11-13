@@ -223,7 +223,7 @@ async function jobApi(path, body, signal, chatId) {
     // Words flow in as the PC writes them. If the connection breaks (the phone went to sleep, the network changed),
     // attach again from the last line received: the PC kept the model working.
     async start(c) {
-      let fails = 0;
+      let fails = 0, lastReal = Date.now();     // nothing but "still alive" for 6 minutes: give up instead of loading forever
       try {
         while (!finished) {
           if (signal && signal.aborted) throw abort();
@@ -243,8 +243,9 @@ async function jobApi(path, body, signal, chatId) {
                 if (line === '{"_end":true}') { finished = true; break; }
                 out += line + "\n"; next++;
               }
-              if (out) c.enqueue(enc.encode(out));
+              if (out) { c.enqueue(enc.encode(out)); lastReal = Date.now(); }
               if (finished) break;
+              if (Date.now() - lastReal > 360e3) { const err = new Error("No answer from your PC for 6 minutes (the model may be stuck, or the PC is overloaded). Try again, or pick a smaller model."); err.fatal = true; pcCall("/jobs/cancel", { id }).catch(() => {}); throw err; }
             }
           } catch (e) {
             if (signal && signal.aborted) throw abort();
@@ -834,13 +835,20 @@ window.moveSharedChats = async () => {
   } catch (e) { toast("Couldn't move them: " + e.message); }
 };
 // shared: without the account (only for moving the shared chats into it)
+// How long a request to the PC may take before we give up (so nothing keeps "loading" forever when the PC is busy, asleep or
+// offline). Jobs that are slow by nature get longer.
+const PC_SLOW = /^\/agent\/(docs\/(pull|index)|run|print|upload|mail\/send)|^\/browser\/(open|act|start)|^\/pc\/(shutdown|sleep)/;
 async function pcCall(path, body, method = "POST", shared = false) {
   if (ACCT_PATHS.test(path) && !shared) {
     const t = await acctToken();
     if (t) { method = "POST"; body = { ...(body || {}), _acct: t }; }
   }
   const opts = method === "GET" ? { method } : { method, body: JSON.stringify(body || {}) };
-  const r = remotePC() ? await e2eFetch(path, { ...opts, base: hostBase() }) : await fetch("http://127.0.0.1:4747" + path, { ...opts, headers: { "Content-Type": "application/json" } });
+  const limit = /^\/agent\/docs\/(pull|index)/.test(path) ? 1800e3 : PC_SLOW.test(path) ? 300e3 : 120e3;
+  opts.signal = AbortSignal.timeout(limit);
+  let r;
+  try { r = remotePC() ? await e2eFetch(path, { ...opts, base: hostBase() }) : await fetch("http://127.0.0.1:4747" + path, { ...opts, headers: { "Content-Type": "application/json" } }); }
+  catch (e) { if (e.name === "TimeoutError" || e.name === "AbortError") throw new Error("Your PC didn't answer in time (it may be busy, asleep or offline). Try again."); throw /fetch/i.test(e.message) ? new Error("Your PC can't be reached right now (" + e.message + ")") : e; }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
   return j;
@@ -4332,6 +4340,26 @@ function applyRail() {
   for (const b of $$("#sidebar .side-btn")) if (!b.title) b.title = b.textContent.replace(/Ctrl\+.*$/, "").trim();   // names on the icons
 }
 $("#railBtn").onclick = () => { S.sideRail = !S.sideRail; saveSettings(); applyRail(); };
+// the collapsed sidebar's Tools button: a menu with everything that isn't Home, Chat or Settings
+$("#goTools").onclick = (e) => {
+  e.stopPropagation();
+  const old = document.querySelector(".tools-pop"); if (old) { old.remove(); $("#goTools").setAttribute("aria-expanded", "false"); return; }
+  const pop = document.createElement("div"); pop.className = "tools-pop"; pop.setAttribute("role", "menu");
+  for (const id of ["goJarvis", "goNotes", "goMail", "goHub", "goMonitor", "goList"]) {
+    const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Jarvis|Notes|Mail|Hub|Monitor|List/.test(id))) continue;
+    const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
+    b.innerHTML = (src.querySelector("svg") || {}).outerHTML || ""; b.append(src.textContent.trim());
+    b.onclick = () => { pop.remove(); $("#goTools").setAttribute("aria-expanded", "false"); src.click(); };
+    pop.appendChild(b);
+  }
+  const r = $("#goTools").getBoundingClientRect();
+  pop.style.left = (r.right + 8) + "px"; pop.style.top = Math.min(r.top, innerHeight - 320) + "px";
+  document.body.appendChild(pop); $("#goTools").setAttribute("aria-expanded", "true");
+  pop.querySelector("button")?.focus();
+  const off = (ev) => { if (!pop.contains(ev.target)) { pop.remove(); $("#goTools").setAttribute("aria-expanded", "false"); removeEventListener("pointerdown", off, true); } };
+  addEventListener("pointerdown", off, true);
+  pop.onkeydown = (ev) => { if (ev.key === "Escape") { pop.remove(); $("#goTools").focus(); } };
+};
 addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); $("#railBtn").click(); } });   // Ctrl+\
 // Closing the sidebar always leaves its icons (the rail). On wide screens the chevron next to "Albatross" does that too; only in the
 // phone's slide-out menu does it still fold the menu away.
@@ -5962,8 +5990,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.18";
+const APP_VERSION = "2026-11-13.19";
 const WHATS_NEW = [
+  ["2026-11-13.19", ["Nothing keeps loading forever when the PC doesn't answer; the Browser view mirrors your own Chrome when the AI uses it; collapsed sidebar shows Home, Chat, Tools and Settings"]],
   ["2026-11-13.18", ["Windows app: control center inside the app (Home → This PC), start at boot from the app, automatic updates; download link in Settings → Appearance"]],
   ["2026-11-13.17", ["Albatross as a Windows app: an installer (desktop/) that starts everything by itself"]],
   ["2026-11-13.16", ["Install and remove AI models right in the app (Settings → Installed models): suggestions, progress bar, keeps going on the PC; models stay with Ollama, not in the app"]],
