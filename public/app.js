@@ -4294,6 +4294,8 @@ async function loadOwnerGuestInfo(forceRender) {
       ownerGuestState.sig = sig;
       renderOwnerGuestRecaps();
     }
+    clearTimeout(ownerGuestState.poll);
+    if (ownerGuestState.recaps.some(r => r.recapBusy)) ownerGuestState.poll = setTimeout(() => loadOwnerGuestInfo(), 3000);
   } catch {
     if ($("#connGuestOwnerBox")) $("#connGuestOwnerBox").hidden = true;
   }
@@ -4305,7 +4307,7 @@ function renderOwnerGuestRecaps() {
   const list = ownerGuestState.recaps || [];
   if ($("#pcClearRecaps")) $("#pcClearRecaps").hidden = !list.length;
   if (!list.length) {
-    box.innerHTML = '<div class="empty-note">No guest chats yet. When someone uses the guest code, an AI recap and every file made by the PC will appear here.</div>';
+    box.innerHTML = '<div class="empty-note">No guest chats yet. When someone uses the guest code, their chat is saved on your PC and shows here with every file the PC made; press Describe to have your selected model check it.</div>';
     return;
   }
   box.innerHTML = "";
@@ -4317,16 +4319,31 @@ function renderOwnerGuestRecaps() {
     const files = Array.isArray(r.files) ? r.files : [];
     card.innerHTML = `<div class="pc-recap-top">
       <div><div class="pc-recap-title"></div><div class="pc-recap-meta"></div></div>
-      <button class="btn small" data-a="del" type="button">Delete</button>
+      <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn small primary" data-a="describe" type="button"></button><button class="btn small" data-a="del" type="button">Delete</button></div>
     </div>
     <div class="pc-recap-summary"></div>
+    <div class="pc-recap-ai"></div>
     <div class="pc-recap-files">
       <div class="pc-recap-files-label"></div>
       <div class="pc-recap-flist"></div>
     </div>`;
     card.querySelector(".pc-recap-title").textContent = r.title || "Guest chat";
     card.querySelector(".pc-recap-meta").textContent = `${dt} · ${turns} message${turns === 1 ? "" : "s"}${r.model ? " · " + r.model : ""}`;
-    card.querySelector(".pc-recap-summary").textContent = (r.recapBusy ? "Writing AI recap… " : "") + (r.recap || r.summary || "(Generating recap…)");
+    card.querySelector(".pc-recap-summary").textContent = r.recap || r.summary || "";
+    // the AI description is written on request, on the PC, from the chat saved there (also when the guest has left)
+    const dBtn = card.querySelector('[data-a="describe"]'), aiLine = card.querySelector(".pc-recap-ai");
+    dBtn.textContent = r.recapBusy ? "Describing…" : r.described ? (r.stale ? "Describe again (new messages)" : "Describe again") : "Describe";
+    dBtn.disabled = !!r.recapBusy || r.canDescribe === false;
+    if (r.canDescribe === false) dBtn.title = "This chat's messages weren't saved on the PC (it's from before this feature)";
+    aiLine.textContent = r.recapBusy ? `Checking with ${r.busyModel || "the model"} on your PC… (loading it first can take a while; you can close this page)`
+      : r.aiError ? "Couldn't describe it: " + r.aiError
+      : r.described ? `AI description by ${r.describedWith}${r.describedAt ? " · " + new Date(r.describedAt).toLocaleString() : ""}${r.stale ? " · the guest wrote more since" : ""}`
+      : r.canDescribe === false ? "" : "Quick summary. Press Describe to have the selected model check the chat.";
+    dBtn.onclick = async () => {
+      const sel = $("#model")?.value || S.model || "";
+      try { await pcCall("/pc/guest", { action: "describe", id: r.id, model: sel }); toast("Describing on your PC with " + (sel || "a text model") + "…"); loadOwnerGuestInfo(true); }
+      catch (e) { toast("Couldn't start it: " + e.message); }
+    };
     card.querySelector('[data-a="del"]').onclick = async () => {
       try { await pcCall("/pc/guest", { action: "delete-recap", id: r.id }); loadOwnerGuestInfo(true); toast("Recap deleted"); }
       catch (e) { toast("Couldn't delete recap: " + e.message); }
@@ -5636,8 +5653,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.6";
+const APP_VERSION = "2026-11-13.7";
 const WHATS_NEW = [
+  ["2026-11-13.7", ["Guest chats are saved on your PC; in PC → Guest mode press Describe to have your selected model check one (it runs on the PC, also after the guest left); the guest chat list is styled properly"]],
   ["2026-11-13.6", ["Settings → Connection: switch off the server's 10-minute block for your own PC's codes, so your devices aren't locked out while the PC is asleep or restarting"]],
   ["2026-11-13.5", ["Agent action drawings are solid again (they showed as outlines over each other); the tab title is just Albatross"]],
   ["2026-11-13.4", ["The chat uses the PC tools itself only when a message is clearly about mail, files, printing, a website or a program, and no longer gets stuck sending every follow-up to the Agent; shapes always draw filled"]],

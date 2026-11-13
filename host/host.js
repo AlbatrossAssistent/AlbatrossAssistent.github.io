@@ -151,6 +151,7 @@ const pcPower = {
       if (j.action === "toggle") return [200, toggleGuest(j.enabled !== false)];
       if (j.action === "new-code" || j.action === "reset-guest-code") return [200, rollGuestCode()];
       if (j.action === "new-admin-code" || j.action === "reset-admin-code") return [200, rollAdminCode()];
+      if (j.action === "describe") { const r = guestTool.describe(String(j.id || ""), String(j.model || ""), { ollama: OLLAMA, comfy, changed }); changed(); return r; }
       if (j.action === "delete-recap") { guestTool.deleteRecap(String(j.id || "")); changed(); return [200, { ok: true, recaps: guestTool.listForOwner() }]; }
       if (j.action === "clear-recaps") { guestTool.clearRecaps(); changed(); return [200, { ok: true, recaps: [] }]; }
       if (j.action === "file") return guestTool.readFileData(String(j.recapId || ""), String(j.fileId || ""));

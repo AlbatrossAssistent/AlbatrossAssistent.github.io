@@ -22,6 +22,7 @@ function load() {
   try {
     const raw = JSON.parse(fs.readFileSync(STORE_FILE, "utf8"));
     recaps = Array.isArray(raw) ? raw : [];
+    for (const r of recaps) { r.recapBusy = false; delete r.busyModel; }   // a description cut off by a restart isn't running anymore
   } catch {
     recaps = [];
   }
@@ -161,64 +162,81 @@ function buildFallbackRecap(messages, files) {
   return parts.join(" ") || "Guest session on this PC.";
 }
 
-async function pickRecapModel(preferredModel, ollamaUrl, isComfy) {
+async function pickRecapModel(preferredModel, ollamaUrl, isComfy, allowLoad) {
+  const text = (n) => n && !isComfy(n) && !/embed/i.test(n);
   try {
     const ps = await (await fetch(ollamaUrl + "/api/ps", { signal: AbortSignal.timeout(2000) })).json();
-    const loaded = (ps.models || []).map((m) => m.name).filter((n) => !isComfy(n) && !/embed/i.test(n));
+    const loaded = (ps.models || []).map((m) => m.name).filter(text);
     if (preferredModel && loaded.includes(preferredModel)) return preferredModel;
-    if (loaded.length) return loaded[0];
+    if (!allowLoad) return loaded[0] || "";
+    // asked for by the owner: the model they picked may be loaded for it (or, if that's a picture model, a warm text model, else any)
+    const tags = await (await fetch(ollamaUrl + "/api/tags", { signal: AbortSignal.timeout(4000) })).json();
+    const all = (tags.models || []).map((m) => m.name).filter(text);
+    if (preferredModel && all.includes(preferredModel)) return preferredModel;
+    return loaded[0] || all[0] || "";
   } catch {}
   return "";
 }
 
-async function generateAiRecap(entry, messages, ctx) {
+// The owner's "Describe" button (PC tab → Guest chats): reads the chat saved on this PC, so it works after the guest has left,
+// and keeps running here even if the owner closes the page. Loads the owner's chosen model if it isn't in memory yet.
+async function generateAiRecap(entry, ctx, opts = {}) {
   const ollamaUrl = ctx?.ollama || "http://127.0.0.1:11434";
   const isComfy = ctx?.comfy ? (n) => ctx.comfy.isComfy(n) : () => false;
-  // Never load a new model from disk or unload ComfyUI just to write a recap:
-  // only use a text model that is already warm in Ollama's GPU memory right now.
-  if (entry.model && isComfy(entry.model)) return;
-  const model = await pickRecapModel(entry.model, ollamaUrl, isComfy);
-  if (!model) return;
-  entry.recapBusy = true;
+  const messages = Array.isArray(entry.messages) ? entry.messages : [];
+  if (!messages.length) { entry.aiError = "This chat's messages weren't saved on the PC (it's from before this feature)."; save(); ctx?.changed?.(); return; }
+  const model = await pickRecapModel(opts.model, ollamaUrl, isComfy, !!opts.allowLoad);
+  if (!model) { entry.aiError = "No text model is available on this PC."; save(); ctx?.changed?.(); return; }
+  entry.recapBusy = true; entry.busyModel = model; delete entry.aiError;
   ctx?.changed?.();
   try {
-    const transcript = messages.slice(-12).map((m) => {
-      if (m.role === "user") return `Guest: ${cleanUserText(m.text || m.content || "(message)")}`;
+    const transcript = messages.slice(-24).map((m) => {
+      if (m.role === "user") return `Guest: ${cleanUserText(m.text || "(message)")}`;
       const extra = m.genImage ? ` [Generated picture: ${m.prompt || ""}]` : "";
-      return `AI: ${String(m.text || m.content || "").slice(0, 1200)}${extra}`;
+      return `AI: ${String(m.text || "").slice(0, 1200)}${extra}`;
     }).join("\n\n");
     const fileLines = (entry.files || []).map((f) => `- ${f.name} (${f.kind === "image" ? "generated picture" + (f.prompt ? ": " + f.prompt : "") : "file made by PC"})`).join("\n");
-    const prompt = `Write a short, plain-English recap (2 to 4 sentences) for the PC owner about this guest chat on their PC. State what the guest asked or worked on and how the AI answered.${fileLines ? "\n\nFiles made by the PC during this chat:\n" + fileLines : ""}\n\nChat transcript:\n${transcript}`;
+    const prompt = `Write a short, plain-English description (2 to 4 sentences) for the PC owner of this guest chat on their PC. State what the guest asked for or worked on and how the AI answered. Mention anything the owner should know about (inappropriate, harmful or unusual requests) plainly.${fileLines ? "\n\nFiles made by the PC during this chat:\n" + fileLines : ""}\n\nChat transcript:\n${transcript}`;
     const res = await fetch(ollamaUrl + "/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model,
-        stream: false,
-        think: false,
-        options: { draft_num_predict: 0, temperature: 0.3, num_predict: 220 },
+        model, stream: false, think: false,
+        options: { draft_num_predict: 0, temperature: 0.3, num_predict: 260 },
         messages: [
-          { role: "system", content: "You write brief, factual recaps of guest chats for the PC owner. 2 to 4 sentences, plain text, no markdown headings." },
+          { role: "system", content: "You write brief, factual descriptions of guest chats for the PC owner. 2 to 4 sentences, plain text, no markdown headings." },
           { role: "user", content: prompt },
         ],
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(opts.allowLoad ? 300000 : 45000),   // loading a big model from disk can take minutes
     });
-    if (res.ok) {
-      const j = await res.json();
-      const text = String(j?.message?.content || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-      if (text) {
-        entry.recap = text;
-        entry.updatedAt = Date.now();
-        save();
-      }
-    }
-  } catch {}
+    const j = await res.json().catch(() => ({}));
+    const text = String(j?.message?.content || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    if (text) { entry.aiRecap = text; entry.aiModel = model; entry.aiAt = Date.now(); entry.recap = text; }
+    else entry.aiError = j.error ? String(j.error).slice(0, 200) : "The model gave no answer.";
+  } catch (e) { entry.aiError = e.name === "TimeoutError" ? "It took too long (the model may still be loading). Try again." : String(e.message || e).slice(0, 200); }
   finally {
-    entry.recapBusy = false;
+    entry.recapBusy = false; delete entry.busyModel;
     save();
     ctx?.changed?.();
   }
+}
+function describe(id, model, ctx) {
+  const entry = load().find((r) => r.id === id);
+  if (!entry) return [404, { error: "That guest chat isn't on this PC anymore." }];
+  if (entry.recapBusy) return [200, { ok: true, busy: true }];
+  generateAiRecap(entry, ctx, { model: String(model || "").slice(0, 120), allowLoad: true }).catch(() => {});
+  return [200, { ok: true, busy: true }];
+}
+
+// the guest's messages, kept on this PC (newest 40; text only, never files the guest attached). A full copy from the guest's page
+// replaces what's there; the PC's own shorter copy (made when the guest left mid-answer) only adds what's new.
+function mergeMessages(old, neu) {
+  old = Array.isArray(old) ? old : [];
+  if (neu.length >= old.length) return neu.slice(-40);
+  const same = (a, b) => a && b && a.role === b.role && a.text === b.text;
+  const add = neu.filter((m) => !old.slice(-neu.length - 2).some((o) => same(o, m)));
+  return old.concat(add).slice(-40);
 }
 
 // Upsert a recap entry after a guest chat turn and kick off the AI summary
@@ -289,16 +307,17 @@ function upsertRecap(payload, ctx) {
     if (firstU) entry.title = firstU.text.slice(0, 48);
   }
 
-  // Always set an immediate readable recap before the AI summary finishes
-  if (!entry.recap || payload.refreshRecap !== false) {
-    entry.recap = buildFallbackRecap(messages, entry.files);
+  // the chat is kept on this PC, so the owner can have it described later even when the guest is gone
+  if (messages.length) {
+    const before = JSON.stringify(entry.messages || []);
+    entry.messages = mergeMessages(entry.messages, messages.map((m) => ({ ...m, text: String(m.text || "").slice(0, 2000) })));
+    if (JSON.stringify(entry.messages) !== before) entry.lastMsgAt = now;
   }
+  // a quick summary right away; the AI description only when the owner asks for it (Describe)
+  entry.quick = buildFallbackRecap(entry.messages || messages, entry.files);
+  entry.recap = entry.aiRecap || entry.quick;
   save();
   ctx?.changed?.();
-
-  if (messages.length && payload.aiSummary !== false) {
-    generateAiRecap(entry, messages, ctx).catch(() => {});
-  }
   return entry;
 }
 
@@ -322,9 +341,16 @@ function listForOwner() {
     updatedAt: r.updatedAt,
     turns: r.turns,
     model: r.model,
-    recap: r.recap,
-    summary: r.recap,
+    recap: r.aiRecap || r.quick || r.recap,
+    summary: r.aiRecap || r.quick || r.recap,
     recapBusy: !!r.recapBusy,
+    busyModel: r.busyModel || "",
+    described: !!r.aiRecap,
+    describedWith: r.aiModel || "",
+    describedAt: r.aiAt || 0,
+    stale: !!(r.aiRecap && r.lastMsgAt && r.aiAt < r.lastMsgAt),
+    canDescribe: Array.isArray(r.messages) && r.messages.length > 0,
+    aiError: r.aiError || "",
     files: (r.files || []).filter((f) => isPcMadePath(f.path)).map((f) => ({
       id: f.id,
       kind: f.kind,
@@ -384,4 +410,5 @@ module.exports = {
   readFileData,
   deleteRecap,
   clearRecaps,
+  describe,
 };
