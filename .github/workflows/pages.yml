@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.retry.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Collect the site files
@@ -40,5 +40,23 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      # GitHub sometimes still counts the previous deployment as running, or leaves one stuck at "purging CDN", and refuses the new
+      # one. Then: wait, cancel a stuck deployment of this commit, and try once more.
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+        with:
+          timeout: 300000
+      - name: Wait, then clear a stuck deployment of this commit
+        if: steps.deployment.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 90
+          gh api -X POST "repos/${{ github.repository }}/pages/deployments/${{ github.sha }}/cancel" || true
+          sleep 10
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 300000
