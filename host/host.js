@@ -643,7 +643,13 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
           upstream,
           note: (t) => note("Guest: " + t),
           uid: "guest",
-          onGuestDone: ({ chatId, model, body: jBody, content }) => {
+          onGuestDone: ({ chatId, model, body: jBody, content, kind, prompt, pcFile }) => {
+            // a picture made for a guest is listed for the owner right away (with its file), even if the guest is gone
+            if (kind === "image") {
+              const f = pcFile ? guestTool.recordPcFile(chatId || "_last", pcFile) : null;
+              guestTool.upsertRecap({ chatId: chatId || "guest-" + Date.now().toString(36), model, messages: [{ role: "user", content: prompt }, { role: "assistant", content: `[Generated picture: ${prompt}]`, genImage: true, prompt }], pcFiles: f ? [f] : [] }, { ollama: OLLAMA, comfy, note, changed });
+              return;
+            }
             // Fallback recap if the guest closed their tab while the job was running
             setTimeout(() => {
               const all = guestTool.listForOwner();

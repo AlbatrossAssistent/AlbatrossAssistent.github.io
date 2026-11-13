@@ -192,11 +192,14 @@ async function pcStream(path, body, signal) {
   return remotePC() ? e2eFetch(path, { method: "POST", body: JSON.stringify(body), base: hostBase(), signal })
     : fetch("http://127.0.0.1:4747" + path, { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" }, signal });
 }
-async function chatApi(body, signal, chatId) {
-  const direct = () => api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
+const chatApi = (body, signal, chatId) => jobApi("/api/chat", body, signal, chatId);
+const myJobs = new Set();   // jobs this page is reading itself (pickupJobs leaves them alone)
+// path: /api/chat (an answer) or /api/generate (a picture)
+async function jobApi(path, body, signal, chatId) {
+  const direct = () => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
   if (S.bgJobs === false || Date.now() < jobsBadUntil) return direct();
   let id;
-  try { id = (await pcCall("/jobs/start", { body: JSON.stringify(body), chatId: chatId === undefined ? current && current.id : chatId })).id; }
+  try { id = (await pcCall("/jobs/start", { path, body: JSON.stringify(body), chatId: chatId === undefined ? current && current.id : chatId })).id; myJobs.add(id); }
   catch (e) { if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError"); jobsBadUntil = Date.now() + 120e3; return direct(); }   // no host with jobs (older host, or direct Ollama)
   let next = 0, finished = false;
   const stop = () => { if (!finished) pcCall("/jobs/cancel", { id }).catch(() => {}); };
@@ -238,11 +241,55 @@ async function chatApi(body, signal, chatId) {
           if (!finished) await sleepMs(Math.min(3000, 400 * (fails + 1)));
         }
         c.close();
-      } catch (e) { try { c.error(e); } catch {} }
+      } catch (e) { if (!(signal && signal.aborted)) myJobs.delete(id); try { c.error(e); } catch {} }   // lost it: pickupJobs collects the result later
     },
     cancel() { stop(); },
   }), { status: 200, headers: { "Content-Type": "application/x-ndjson" } });
 }
+
+// After the page comes back (reloaded, the phone dropped the tab, the connection was gone for long): a picture (or, for a guest, an
+// answer) that the PC finished meanwhile is put into its chat. Your own answers the PC saves into the chat on the PC itself.
+const pickingUp = new Set();
+let pickupToldRunning = false;
+async function pickupJobs() {
+  if (!connected || document.hidden || S.bgJobs === false) return;
+  let list;
+  try { list = (await pcCall("/jobs/list", { chatIds: chats.map(c => c.id) })).jobs || []; } catch { return; }
+  for (const j of list) {
+    if (myJobs.has(j.id) || pickingUp.has(j.id) || j.taken || j.failed) continue;
+    if (j.kind !== "image" && !guestMode) continue;
+    const conv = chats.find(c => c.id === j.chatId);
+    if (!conv) continue;
+    if (!j.done) {
+      if (!pickupToldRunning) { pickupToldRunning = true; toast(j.kind === "image" ? "A picture is still being made on your PC. It shows up in its chat when it's ready." : "An answer is still being written on your PC. It shows up in its chat when it's ready."); }
+      continue;
+    }
+    pickingUp.add(j.id);    // never twice, even if this goes wrong
+    try {
+      const res = await pcStream("/jobs/stream", { id: j.id, from: 0 });
+      let img = "", pcFile = null, text = "";
+      await readNdjson(res, o => {
+        if (o._ka || o._end) return;
+        if (o.error) throw new Error(o.error);
+        if (o.image || o.images?.[0]) img = o.image || o.images[0];
+        if (o.pcFile) pcFile = o.pcFile;
+        if (o.message?.content) text += o.message.content;
+      });
+      const msg = j.kind === "image"
+        ? img && { role: "assistant", content: "", genImage: img, genAt: Date.now(), prompt: j.prompt || "", model: j.model, stats: j.model + " · made on the PC while you were away" }
+        : text && { role: "assistant", content: text, model: j.model, stats: j.model + " · finished on the PC while you were away" };
+      if (!msg) continue;
+      const into = chats.find(c => c.id === j.chatId) || conv;     // the list may have been reloaded meanwhile
+      into.messages.push(msg); into.updated = Date.now(); saveChats();
+      if (current && current.id === into.id) renderMessages();
+      renderSidebar();
+      toast(j.kind === "image" ? "Your picture arrived from the PC" : "An answer arrived from the PC");
+      if (guestMode) sendGuestRecap(into, j.model, pcFile ? [pcFile] : []);
+    } catch (e) { console.warn("Couldn't collect a finished job from the PC:", e); }
+  }
+}
+setInterval(pickupJobs, 15000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(pickupJobs, 1500); });
 
 // ======================================================================
 // Is the PC locked? (Jarvis and anything that drives the mouse and keyboard need an unlocked desktop)
@@ -446,6 +493,7 @@ async function connect(quiet) {
       chatSyncSoon(400); pollLock(); syncLoadTimes(); window.listRefresh && window.listRefresh();
       loadOwnerGuestInfo();
     }
+    setTimeout(pickupJobs, 2000);      // a picture the PC finished while this device was away
     return true;
   } catch (e) {
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
@@ -3620,7 +3668,8 @@ async function generateImage(model, prompt, refs = []) {
     };
     show(label, 0);
     const stopWatch = watchLoading(model, pct => show(/from disk|engine/.test(label) ? label : "Loading " + model + " into memory…", pct), () => drawing || !controller);
-    const res = await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+    // a job on the PC: if this device loses the connection (a phone locks), the picture is still made and arrives when it's back
+    const res = await jobApi("/api/generate", body, controller.signal);
     if (reply.phase === "sent") { ph(reply, "received"); fillBot(bubble, reply, -1, true); setTimeout(() => { if (reply.phase === "received") { ph(reply, "working"); fillBot(bubble, reply, -1, true); } }, 700); }
     await readNdjson(res, j => {
       if (j.error) throw new Error(j.error);
@@ -5653,8 +5702,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.7";
+const APP_VERSION = "2026-11-13.8";
 const WHATS_NEW = [
+  ["2026-11-13.8", ["Pictures keep being made on the PC when your device loses the connection or the page closes, and arrive in their chat as soon as you're back (also in guest mode)"]],
   ["2026-11-13.7", ["Guest chats are saved on your PC; in PC → Guest mode press Describe to have your selected model check one (it runs on the PC, also after the guest left); the guest chat list is styled properly"]],
   ["2026-11-13.6", ["Settings → Connection: switch off the server's 10-minute block for your own PC's codes, so your devices aren't locked out while the PC is asleep or restarting"]],
   ["2026-11-13.5", ["Agent action drawings are solid again (they showed as outlines over each other); the tab title is just Albatross"]],

@@ -1,4 +1,4 @@
-// Chat requests that keep running on this PC when the device that sent them goes to the background (a phone locks, a tab sleeps).
+// Chat requests and pictures that keep running on this PC when the device that sent them goes to the background (a phone locks, a tab sleeps).
 // The website starts a job here instead of holding one long connection open, then picks up the answer in pieces ("poll") from
 // wherever it left off. The model keeps working either way, and the finished answer is saved into the chat on this PC even if
 // nobody picks it up (the app was closed), so the next device that opens the chat finds it.
@@ -10,17 +10,18 @@ const jobs = new Map();       // id -> job
 const KEEP_MS = 30 * 60e3;    // how long a finished answer waits to be picked up
 const MAX_CHARS = 24e6;       // per job; a longer answer is cut, never the whole PC's memory
 
-function start({ body, chatId, upstream, note, uid, onGuestDone }) {
+function start({ body, chatId, upstream, note, uid, onGuestDone, path = "/api/chat" }) {
+  if (path !== "/api/chat" && path !== "/api/generate") return [400, { error: "Bad job" }];
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   const id = crypto.randomBytes(9).toString("base64url");
   const ctrl = new AbortController();
-  const job = { id, uid: uid || "", chatId: /^[A-Za-z0-9_-]{1,64}$/.test(String(chatId || "")) ? chatId : "", model: j.model || "", ctrl, lines: [], chars: 0, done: false, error: "", started: Date.now(), polled: Date.now(), content: "", thinking: "", stats: "", waiters: [] };
+  const job = { id, uid: uid || "", chatId: /^[A-Za-z0-9_-]{1,64}$/.test(String(chatId || "")) ? chatId : "", model: j.model || "", kind: path === "/api/generate" ? "image" : "chat", prompt: String(j.prompt || "").slice(0, 400), image: "", pcFile: null, ctrl, lines: [], chars: 0, done: false, error: "", started: Date.now(), polled: Date.now(), content: "", thinking: "", stats: "", waiters: [] };
   jobs.set(id, job);
   const wake = () => { for (const w of job.waiters.splice(0)) w(); };
   const push = (line) => { job.lines.push(line); job.chars += line.length; wake(); };
   (async () => {
     try {
-      const res = await upstream("POST", "/api/chat", body, ctrl.signal);
+      const res = await upstream("POST", path, body, ctrl.signal);
       if (!res.ok) {
         let msg = ""; try { const t = await res.text(); msg = (JSON.parse(t).error) || t; } catch {}
         throw new Error(msg || "HTTP " + res.status);
@@ -35,6 +36,8 @@ function start({ body, chatId, upstream, note, uid, onGuestDone }) {
           try {
             const o = JSON.parse(line);
             if (o.message?.content) job.content += o.message.content;
+            if (o.image || o.images?.[0]) job.image = o.image || o.images[0];   // a picture: kept for a device that comes back later
+            if (o.pcFile) job.pcFile = o.pcFile;
             if (o.done && o.eval_count && o.eval_duration) job.stats = `${job.model} · ${(o.eval_count / (o.eval_duration / 1e9)).toFixed(1)} tok/s · ${o.eval_count} tokens`;
           } catch {}
           if (job.chars < MAX_CHARS) push(line);
@@ -47,8 +50,8 @@ function start({ body, chatId, upstream, note, uid, onGuestDone }) {
     } finally {
       job.done = true; wake();
       if (job.uid === "guest") {
-        if (!job.cancelled && !job.error && job.content && typeof onGuestDone === "function") {
-          try { onGuestDone({ chatId: job.chatId, model: job.model, body, content: job.content }); } catch {}
+        if (!job.cancelled && !job.error && (job.content || job.image) && typeof onGuestDone === "function") {
+          try { onGuestDone({ chatId: job.chatId, model: job.model, body, content: job.content, kind: job.kind, prompt: job.prompt, pcFile: job.pcFile }); } catch {}
         }
       } else {
         // Nobody has been looking for a minute (the app was closed or killed in the background): keep the answer in the chat on this PC.
@@ -60,14 +63,16 @@ function start({ body, chatId, upstream, note, uid, onGuestDone }) {
 }
 
 function saveOrphan(job, note) {
-  if (job.saved || job.cancelled || job.error || !job.chatId || !job.content) return;
+  if (job.saved || job.cancelled || job.error || !job.chatId || !(job.content || job.image)) return;
   if (Date.now() - job.polled < 60e3 && !job.taken) return;      // someone is still reading it
   if (job.taken) return;                                          // the device that asked got the whole answer
   try {
     const [st, r] = chatStore.handle("POST", "/chats/get", JSON.stringify({ id: job.chatId }), () => {}, job.uid);
     if (st !== 200) return;
     const chat = r.chat;
-    chat.messages.push({ role: "assistant", content: job.content, model: job.model, stats: job.stats + " · finished on the PC while you were away" });
+    chat.messages.push(job.kind === "image"
+      ? { role: "assistant", content: "", genImage: job.image, prompt: job.prompt, model: job.model, genAt: Date.now(), stats: job.model + " · made on the PC while you were away" }
+      : { role: "assistant", content: job.content, model: job.model, stats: job.stats + " · finished on the PC while you were away" });
     chat.updated = Date.now();
     chatStore.handle("POST", "/chats/put", JSON.stringify({ chat, force: true }), () => {}, job.uid);
     job.saved = true;
@@ -116,16 +121,17 @@ async function stream({ id, from }, write, signal, uid) {
   }
 }
 // What is running now (the page shows "still working on the PC" after a reopen), for the account that asks
-function list(uid) {
-  return [200, { jobs: [...jobs.values()].filter((j) => j.uid === (uid || "")).map((j) => ({ id: j.id, chatId: j.chatId, model: j.model, done: j.done, started: j.started, chars: j.content.length })) }];
+function list(uid, chatIds) {
+  const mine = uid === "guest" ? new Set(Array.isArray(chatIds) ? chatIds.slice(0, 500).map(String) : []) : null;
+  return [200, { jobs: [...jobs.values()].filter((j) => j.uid === (uid || "") && (!mine || (j.chatId && mine.has(j.chatId)))).map((j) => ({ id: j.id, chatId: j.chatId, model: j.model, kind: j.kind, prompt: j.prompt, done: j.done, taken: !!(j.taken || j.saved), failed: !!(j.error || j.cancelled), started: j.started, chars: j.content.length })) }];
 }
 
 async function handle(method, p, body, ctx) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
-  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note, uid: ctx.uid, onGuestDone: ctx.onGuestDone });
+  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note, uid: ctx.uid, onGuestDone: ctx.onGuestDone, path: j.path || "/api/chat" });
   if (p === "/jobs/poll") return poll(j, ctx.uid);
   if (p === "/jobs/cancel") return cancel(j, ctx.uid);
-  if (p === "/jobs/list") return list(ctx.uid);
+  if (p === "/jobs/list") return list(ctx.uid, j.chatIds);
   return [404, { error: "Unknown jobs request" }];
 }
 const active = () => [...jobs.values()].filter((j) => !j.done).length;
