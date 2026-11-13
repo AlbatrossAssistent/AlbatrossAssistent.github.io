@@ -5,3 +5,6 @@ host/background.log*
 host/ollama-background.log
 host/comfyui.log
 host/schedule.json
+extension.pem
+extension.crx
+*.pem
