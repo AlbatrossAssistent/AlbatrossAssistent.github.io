@@ -40,6 +40,7 @@ if (window.EMBED_CHROME) {
     if (e.source !== window.parent || !/^chrome-extension:\/\/[a-p]{32}$/.test(e.origin) || !e.data || e.data.type !== "albatross-tab") return;
     const t = e.data.tab || {};
     window.chromeTab = { title: String(t.title || "").slice(0, 200), url: String(t.url || "").slice(0, 500), follow: !!t.follow };
+    if (typeof current !== "undefined" && current && !current.messages.length && typeof renderMessages === "function") renderMessages();   // the start screen names the page
   });
   try { window.parent.postMessage({ type: "albatross-tab?" }, "*"); } catch {}
 }
@@ -506,6 +507,7 @@ async function connect(quiet) {
       loadOwnerGuestInfo();
     }
     setTimeout(pickupJobs, 2000);      // a picture the PC finished while this device was away
+    if (window.EMBED_CHROME) sidebarModel();
     return true;
   } catch (e) {
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
@@ -892,7 +894,7 @@ function newChat(type, context, reuse) {
   if (current && !current.messages.length && (reuse || !arguments.length)) {
     current.type = type; current.context = context || ""; saveChats(); renderAll(); $("#prompt").focus(); return;
   }
-  current = { id: uid(), title: "New chat", ...(S.chatsDeviceOnly ? { deviceOnly: true } : {}), type, context: context || "", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
+  current = { id: uid(), title: "New chat", ...(window.EMBED_CHROME ? { src: "chrome" } : {}), ...(S.chatsDeviceOnly ? { deviceOnly: true } : {}), type, context: context || "", system: "", created: Date.now(), updated: Date.now(), pinned: false, messages: [] };
   chats.unshift(current);
   noteVisit(current);
   saveChats(); renderAll();
@@ -926,7 +928,7 @@ function renderSidebar() {
   const list = $("#chatList");
   const q = $("#search").value.trim().toLowerCase();
   list.innerHTML = "";
-  const filtered = chats.filter(c => !q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content || "").toLowerCase().includes(q)));
+  const filtered = chats.filter(c => (!window.EMBED_CHROME || c.src === "chrome") && (!q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content || "").toLowerCase().includes(q))));
   const groups = [["Pinned", c => c.pinned], ["Today", c => !c.pinned && Date.now() - c.updated < 864e5], ["Earlier", c => !c.pinned && Date.now() - c.updated >= 864e5]];
   for (const [label, test] of groups) {
     const items = filtered.filter(test).sort((a, b) => b.updated - a.updated);
@@ -1046,6 +1048,7 @@ paintEffort();
 function renderAll() { stick = true; applyType(); renderSidebar(); renderMessages(); }
 
 function renderEmpty() {
+  if (window.EMBED_CHROME) return renderEmptySidebar();
   const imageMode = false;
   const sugg = imageMode
     ? [["A lighthouse in a storm", "oil painting, dramatic light"], ["Isometric tiny city", "pastel colors, 3D render"], ["Portrait of a fox astronaut", "studio lighting"], ["Minimal navy logo", "for a coffee shop"]]
@@ -1058,6 +1061,30 @@ function renderEmpty() {
     btn.innerHTML = "<strong></strong><small></small>";
     btn.querySelector("strong").textContent = a; btn.querySelector("small").textContent = b;
     btn.onclick = () => { const p = $("#prompt"); p.value = imageMode ? `${a}, ${b}` : `${a} ${b}: `; autosize(); p.focus(); };
+    d.querySelector(".suggestions").appendChild(btn);
+  }
+  $("#inner").appendChild(d);
+}
+
+// the Chrome sidebar needs a model that can use tools (to read and work in the page): switch to one if the chosen model can't
+async function sidebarModel() {
+  const sel = $("#model"), now = sel && sel.value;
+  if (!now || (await getCaps(now)).includes("tools")) return;
+  for (const m of models.filter((x) => x.kind !== "image" && x.kind !== "embed")) {
+    if ((await getCaps(m.name)).includes("tools")) { sel.value = m.name; S.model = m.name; saveSettings(); sel.dispatchEvent(new Event("change")); return; }
+  }
+}
+// the Chrome sidebar's start: things to do with the page you're on
+function renderEmptySidebar() {
+  const t = window.chromeTab, d = document.createElement("div");
+  d.className = "empty embed-empty";
+  d.innerHTML = `<h1>Ask about this page</h1><p class="embed-page"></p><div class="suggestions"></div>`;
+  d.querySelector(".embed-page").textContent = t && t.title ? t.title : "Open a page in Chrome, then ask about it.";
+  for (const [a, b] of [["Summarize this page", ""], ["What matters here?", "key facts, prices, dates"], ["Save this page", "as notes in my AI folder on the PC"], ["Fill in this form", "with what I tell you"], ["Find related files", "on my PC"]]) {
+    const btn = document.createElement("button");
+    btn.innerHTML = "<strong></strong><small></small>";
+    btn.querySelector("strong").textContent = a; btn.querySelector("small").textContent = b;
+    btn.onclick = () => { const p = $("#prompt"); p.value = b ? `${a} (${b})` : a; autosize(); p.focus(); };
     d.querySelector(".suggestions").appendChild(btn);
   }
   $("#inner").appendChild(d);
@@ -2448,12 +2475,13 @@ async function chat(model, opts = {}) {
     // the PC tools (files, mail, browser, code, printing, its own folder): always there for a model that can use tools, and the
     // model decides when to use them (Settings → Tools → Work on your PC switches them off). A job takes more rounds than a search.
     let agentKit = null;
-    if (toolsOk && !guestMode && window.agentChatTools && toolOn("agent")) agentKit = window.agentChatTools("", { every: true, ownSearch: useTools });
+    if (toolsOk && !guestMode && window.agentChatTools && toolOn("agent")) agentKit = window.agentChatTools("", { every: true, only: window.EMBED_CHROME ? ["browser", "files"] : null, ownSearch: useTools });
     let agentBlock = null;
     if (agentKit) {
       let sys = agentKit.system;
       // in the Chrome sidebar: the page the user is looking at
       const t = window.EMBED_CHROME && window.chromeTab;
+      if (window.EMBED_CHROME) sys += "\nYou are Albatross in the user's Chrome sidebar: help with the web page they're on and with browsing. You can also use their files on the PC and your own folder (agent:): keep useful things there, like page summaries or notes, when they ask or it clearly helps. The sidebar is narrow: answer short.";
       if (t && t.url && agentKit.groups.includes("browser")) sys += `\nThe user is chatting in the Albatross sidebar of their Chrome and is looking at this page right now: "${t.title}" (${t.url}). "This page", "this tab", "here" or "this" mean that page. ` +
         (t.follow ? "Your browser tools work in exactly that tab: use browser_read to read it, browser_click / browser_type to act there. Don't open another page unless asked." : "To read it, use browser_open with that address (your browser tools work in a tab of your own).");
       msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + sys) : msgs.unshift({ role: "system", content: sys });
@@ -2623,7 +2651,9 @@ async function sendGuestRecap(conv, model, extraPcFiles) {
 // ---------- Slides mode: plan first, then write slide by slide (any model, no tool support needed) ----------
 // ---------- tools: the AI picks them by itself (Settings → Tools switches single ones off) ----------
 let toolMode = "";   // older code paths still look at it; nothing sets it anymore
-const toolOn = (k) => S.tools?.[k] !== false;
+// in the Chrome sidebar only what helps with the page and your PC's files and info is on (no pictures, music, slides, charts, Jarvis)
+const EMBED_OFF = new Set(["image", "slides", "graph", "chances", "music", "challenge", "jarvis"]);
+const toolOn = (k) => S.tools?.[k] !== false && !(window.EMBED_CHROME && EMBED_OFF.has(k));
 // Documents only takes part once the PC has some indexed (docsReady, from the PC's status); the other tools whenever they are on
 let docsReady = false;
 const routeOn = (k) => toolOn(k) && (!guestMode || !["agent", "docs", "notes", "jarvis"].includes(k)) && (k !== "docs" || docsReady);
@@ -4133,6 +4163,7 @@ loadImgFields();
 // ======================================================================
 function setView(v, opt) {
   if (v === "agent") v = "chat";     // the Agent mode is gone: the chat itself works on the PC now
+  if (window.EMBED_CHROME && v !== "chat") v = "chat";     // the Chrome sidebar is only the chat
   if (guestMode && ["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor"].includes(v)) {
     toast("Not available in guest mode");
     return;
@@ -5725,8 +5756,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.11";
+const APP_VERSION = "2026-11-13.12";
 const WHATS_NEW = [
+  ["2026-11-13.12", ["Chrome sidebar is a browser assistant now: one chat about the page you're on, with your PC files, its AI folder, documents and notes (no pictures, music, slides or other pages); it follows your tab by default"]],
   ["2026-11-13.11", ["Chrome sidebar: the app inside it may reach your PC (Chrome asks once to allow local network access)"]],
   ["2026-11-13.10", ["No more Agent mode: the normal chat has all the PC tools (files, mail, browser, code, printing) and its own folder (Downloads → Albatross → AI), set up in Settings → Tools → Work on your PC; Albatross opens as a sidebar in Chrome and can work in the tab you're on; light-mode shapes grow with the chat"]],
   ["2026-11-13.9", ["Agent → Browser: choose the PC's hidden browser or your own Chrome (new Albatross Agent extension in the extension folder): pair it with a code, then pause, resume, show or close the Agent's tab from the app or the extension"]],
@@ -5879,6 +5911,8 @@ if (store.get("termsAccepted", "") !== TERMS_VERSION) {
   setTimeout(() => d.showModal(), S.intro ? 3400 : 300);
 }
 setView("home");
+// the Chrome sidebar starts in a sidebar chat (never in one of the normal app's chats)
+if (window.EMBED_CHROME && (!current || current.src !== "chrome")) newChat("chat");
 { const go = new URLSearchParams(location.search).get("go");
   if (go === "chat") { newChat("chat", "", false); setView("chat"); } else if (go === "pc") setView("pc", { tab: "status" }); else if (go === "jarvis") setView("jarvis"); }
 if (S.files.name) peerConnect();

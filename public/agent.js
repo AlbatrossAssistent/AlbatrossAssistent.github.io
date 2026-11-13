@@ -696,7 +696,7 @@ function chatToolsSystem(groups) {
 }
 window.agentChatTools = function (text, opts = {}) {
   if (!text && !opts.every) return null;
-  const groups = new Set(Object.keys(GROUP_HINT).filter((g) => agOn(g) && (opts.every || GROUP_HINT[g].test(text))));
+  const groups = new Set(Object.keys(GROUP_HINT).filter((g) => agOn(g) && (!opts.only || opts.only.includes(g)) && (opts.every || GROUP_HINT[g].test(text))));
   if (opts.all && !groups.size) for (const g of Object.keys(GROUP_HINT)) if (agOn(g)) groups.add(g);   // the router said it's a PC job, but no word matched
   if (!groups.size) return null;
   if ((groups.has("code") || groups.has("print")) && agOn("files")) groups.add("files");   // projects are files; printing picks a file

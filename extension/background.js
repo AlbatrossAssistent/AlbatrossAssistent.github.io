@@ -5,11 +5,11 @@
 // Nothing leaves this PC: the host is on 127.0.0.1, and only after pairing with a code from the app.
 
 const HOST = "ws://127.0.0.1:4749";
-const st = { key: "", paused: false, tab: null, follow: false };     // kept in chrome.storage.local
+const st = { key: "", paused: false, tab: null, follow: true };     // kept in chrome.storage.local
 let panelWin = null;    // the window whose sidebar is open (follow mode works there)
 let ws = null, ready = false, attached = null, pairWait = null;
 
-const load = async () => Object.assign(st, await chrome.storage.local.get({ key: "", paused: false, tab: null, follow: false }));
+const load = async () => Object.assign(st, await chrome.storage.local.get({ key: "", paused: false, tab: null, follow: true }));
 const save = () => chrome.storage.local.set({ key: st.key, paused: st.paused, tab: st.tab, follow: st.follow });
 const out = (o) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
