@@ -1070,7 +1070,7 @@ function renderEmpty() {
 // Chrome when it follows the tab, else fetched by the PC), so it never has to guess or remember to look.
 async function sidebarContext() {
   const t = window.chromeTab;
-  let s = "You are Albatross, running in the sidebar of the user's Chrome browser, right next to the web page they're looking at. Help with that page and with browsing. Answer short: the sidebar is narrow.";
+  let s = "You are Albatross, running in the sidebar of the user's Chrome browser, right next to the web page they're looking at. Help with that page and with browsing. Answer short (the sidebar is narrow) and in the language the user writes in.";
   if (!t || !t.url) return s + " Right now no page is known (the user may be on an empty tab).";
   s += `\nThe user is looking at: "${t.title}" (${t.url}). "This page", "here", "this" or "the site" mean that page.`;
   if (!/^https?:/i.test(t.url)) return s + " It is a browser page that can't be read (like chrome:// pages).";
@@ -5785,8 +5785,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.13";
+const APP_VERSION = "2026-11-13.14";
 const WHATS_NEW = [
+  ["2026-11-13.14", ["Chrome sidebar answers in your language"]],
   ["2026-11-13.13", ["Web search works without Ollama credits (a free search, from your PC when needed); in the Chrome sidebar the AI always knows it's in your browser and sees the page you're on"]],
   ["2026-11-13.12", ["Chrome sidebar is a browser assistant now: one chat about the page you're on, with your PC files, its AI folder, documents and notes (no pictures, music, slides or other pages); it follows your tab by default"]],
   ["2026-11-13.11", ["Chrome sidebar: the app inside it may reach your PC (Chrome asks once to allow local network access)"]],
