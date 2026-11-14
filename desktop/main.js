@@ -26,7 +26,9 @@ let hidden = process.argv.includes("--hidden");
 try { if (fs.existsSync(HIDDEN_MARK)) { fs.unlinkSync(HIDDEN_MARK); hidden = true; } } catch {}
 let win = null, splash = null, splashReady = null, tray = null, quitting = false, update = null, starting = true;     // update: { version, ready }
 
-if (!app.requestSingleInstanceLock()) { app.quit(); }
+// "Albatross.exe --selftest": only runs the self-check against the host on this PC, prints the result and exits (1 = problems)
+const SELFTEST_ONLY = process.argv.includes("--selftest");
+if (!SELFTEST_ONLY && !app.requestSingleInstanceLock()) { app.quit(); }
 app.on("second-instance", () => show());
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -152,6 +154,7 @@ function makeTray() {
     { label: "Open Albatross", click: () => show() },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin, click: (i) => { app.setLoginItemSettings({ openAtLogin: i.checked, args: ["--hidden"] }); tray.setContextMenu(menu()); } },
+    { label: "Run self-check", click: () => runSelfTest("tray") },
     { label: "Control center", click: () => { show(); setTimeout(() => win && win.webContents.executeJavaScript("window.openControlCenter && openControlCenter()").catch(() => {}), 400); } },
     ...(update && update.ready ? [{ label: "Restart to update (" + update.version + ")", click: () => installUpdate() }] : []),
     { type: "separator" },
@@ -211,14 +214,65 @@ function startUpdates() {
   autoUpdater.on("error", () => {});
   setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 3600e3);
 }
+// ---------- the self-check after every update ----------
+// The first time a new version starts, Albatross runs its self-check (public/selftest.js, the same checks as the developer smoke
+// test) in a hidden window with a throwaway in-memory profile: the user's chats, settings and connection are never touched.
+// The result goes into selftest.log next to the host's data; if something is broken, a notification says so (click: the log).
+// The tray menu can run it any time.
+const SELFTEST_LOG = path.join(DATA, "selftest.log");
+async function runSelfTest(reason) {
+  if (runSelfTest.busy) return null;
+  runSelfTest.busy = true;
+  const w = new BrowserWindow({
+    show: false, width: 1280, height: 800, useContentSize: true,
+    webPreferences: { partition: "selftest-" + Date.now(), contextIsolation: false, sandbox: true, backgroundThrottling: false, preload: path.join(__dirname, "selftest-preload.js") },
+  });
+  w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  let r;
+  try {
+    await w.loadURL(APP_URL);
+    await sleep(2500);
+    r = await Promise.race([
+      w.webContents.executeJavaScript(`new Promise((ok, no) => { const s = document.createElement("script"); s.src = "selftest.js?t=" + Date.now();
+        s.onload = () => window.albatrossSelfTest(window).then(ok, no); s.onerror = () => no(new Error("selftest.js is missing")); document.head.appendChild(s); })`),
+      sleep(120e3).then(() => { throw new Error("the self-check didn't finish within 2 minutes"); }),
+    ]);
+  } catch (e) { r = { checks: [{ name: "self-check ran", ok: false, info: e.message || String(e) }], errors: [] }; }
+  finally { if (!w.isDestroyed()) w.destroy(); runSelfTest.busy = false; }
+  const bad = r.checks.filter((c) => !c.ok).length + r.errors.length;
+  const lines = [`=== ${new Date().toISOString()} · version ${app.getVersion()} · ${reason} · ${bad ? bad + " problem(s)" : "all " + r.checks.length + " checks passed"}`,
+    ...r.checks.map((c) => `${c.ok ? "  ok  " : "  FAIL"} ${c.name}${c.ok || !c.info ? "" : " — " + c.info}`), ...r.errors.map((e) => "  ERROR " + e), ""];
+  try {
+    fs.mkdirSync(DATA, { recursive: true });
+    let old = ""; try { old = fs.readFileSync(SELFTEST_LOG, "utf8"); } catch {}
+    fs.writeFileSync(SELFTEST_LOG, (old + lines.join("\r\n") + "\r\n").slice(-200e3));   // keeps the newest runs
+  } catch {}
+  if ((bad || reason === "tray") && Notification.isSupported()) {
+    const n = new Notification({ title: bad ? `Albatross ${app.getVersion()}: the self-check found ${bad} problem${bad > 1 ? "s" : ""}` : "Albatross self-check: all good",
+      body: bad ? "Something may not work right. Click to see what failed." : `All ${r.checks.length} checks passed.` });
+    n.on("click", () => shell.openPath(SELFTEST_LOG));
+    n.show();
+  }
+  return { bad, total: r.checks.length };
+}
+
 ipcMain.handle("version", () => ({ app: app.getVersion(), update }));
 ipcMain.handle("boot", (_e, on) => setBootStart(on));
 ipcMain.handle("update-check", async () => { if (!autoUpdater || !app.isPackaged) return { error: "Updates work in the installed app." }; try { const r = await autoUpdater.checkForUpdates(); return { latest: r && r.updateInfo && r.updateInfo.version, current: app.getVersion(), update }; } catch (e) { return { error: e.message }; } });
 ipcMain.handle("update-install", () => { installUpdate(); return { ok: !!(update && update.ready) }; });
 
 app.whenReady().then(async () => {
+  if (SELFTEST_ONLY) {
+    const r = (await reachable(PANEL + "/")) ? await runSelfTest("command line") : null;
+    if (!r) console.log("selftest: Albatross isn't running on this PC (" + PANEL + ")");
+    else { try { console.log(fs.readFileSync(SELFTEST_LOG, "utf8").split(/\r?\n=== /).pop()); } catch {} }
+    return app.exit(r && !r.bad ? 0 : 1);
+  }
   // the microphone (voice) and notifications for the app from this PC; nothing for other sites
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb, d) => cb(String(d.requestingUrl || wc.getURL()).startsWith(PANEL) && ["media", "notifications", "clipboard-read", "clipboard-sanitized-write", "fullscreen"].includes(perm)));
+  // the version that ran last time (read before the splash writes the new one): different means this start follows an update
+  let prevVer = ""; try { prevVer = fs.readFileSync(LAST_VER, "utf8").trim(); } catch {}
+  const justUpdated = !!prevVer && prevVer !== app.getVersion();
   makeTray();
   if (app.isPackaged && !/win-unpacked/i.test(process.execPath) && !app.getLoginItemSettings().openAtLogin && !fs.existsSync(path.join(DATA, ".asked-autostart"))) {
     // first start: start with Windows by default (the host is then ready for your phone); can be switched off in the tray menu
@@ -240,6 +294,9 @@ app.whenReady().then(async () => {
     await ensureHost();
     step("host", "done");
     if (!hidden) { step("open", "active"); status("Opening…"); openMain(); }
+    // after an update (also a quiet one in the tray): check the new version once, in the background
+    try { fs.writeFileSync(LAST_VER, app.getVersion()); } catch {}
+    if (justUpdated) setTimeout(() => runSelfTest("after update from " + prevVer), 8000);
   } catch (e) {
     if (splash && !splash.isDestroyed()) splash.close();
     dialog.showErrorBox("Albatross", e.message || String(e));
