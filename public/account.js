@@ -2,17 +2,18 @@
 // Secrets (the PC code, the turn-on link) are encrypted in the browser with a passphrase before upload,
 // so the database only ever holds ciphertext for them. No analytics.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const app = initializeApp({
+const FIREBASE = {
   apiKey: "AIzaSyAuAODa8DAj8nAgdllfYYqCcS_Syt4-q6Y",
   authDomain: "albatross-63e62.firebaseapp.com",
   projectId: "albatross-63e62",
   storageBucket: "albatross-63e62.firebasestorage.app",
   messagingSenderId: "413247408292",
   appId: "1:413247408292:web:2f6af55a73ca422cc43e31",
-});
+};
+const app = initializeApp(FIREBASE);
 const auth = getAuth(app), db = getFirestore(app);
 let user = null, cloud = null, vaultKey = null, pushTimer = 0, applying = false;
 // for the main page: the signed-in account's ID token (Firebase renews it every hour), so the PC keeps chats and lists per account
@@ -130,7 +131,18 @@ onAuthStateChanged(auth, async (u) => {
 });
 
 $("#accMove").onclick = () => window.moveSharedChats();
-$("#accGoogle").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(e => msg(nice(e), true));
+// In the Windows app, Google sign-in runs in your normal browser (Google refuses app windows, and the pop-up can't reach the app);
+// the app gets Google's token back and signs in with it here.
+$("#accGoogle").onclick = async () => {
+  const d = window.albatrossDesktop;
+  if (!d) return signInWithPopup(auth, new GoogleAuthProvider()).catch(e => msg(nice(e), true));
+  if (!d.googleSignIn) return msg("Update the Albatross app to sign in with Google (it updates by itself; restart it), or use email for now.", true);
+  msg("Continue in your browser: sign in with Google there, then come back here.");
+  const r = await d.googleSignIn(FIREBASE);
+  if (!r || r.error) return msg(r ? r.error : "Sign-in didn't finish.", true);
+  try { await signInWithCredential(auth, GoogleAuthProvider.credential(r.idToken, r.accessToken)); msg(""); toast("Signed in with Google"); }
+  catch (e) { msg(nice(e), true); }
+};
 const creds = () => [$("#accEmail").value.trim(), $("#accPass").value];
 $("#accSignIn").onclick = () => signInWithEmailAndPassword(auth, ...creds()).catch(e => msg(nice(e), true));
 $("#accSignUp").onclick = () => createUserWithEmailAndPassword(auth, ...creds()).then(() => toast("Account created")).catch(e => msg(nice(e), true));

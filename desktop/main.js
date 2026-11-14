@@ -151,6 +151,68 @@ function startUpdates() {
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 20000); setInterval(check, 4 * 3600e3);
 }
+// ---------- Google sign-in ----------
+// Google refuses sign-in inside app windows, and the pop-up can't talk back to the app from the normal browser. So the app opens
+// a small one-time page on http://localhost:<port> in your normal browser (localhost is allowed to sign in with Firebase); you sign
+// in with Google there and the page hands Google's token back to this app only (a random state, the page's own origin), then the
+// app signs in with it. The page keeps nothing: in-memory sign-in, and the little server closes right after.
+let googleWait = null;
+function googleSignIn(config) {
+  if (googleWait) { shell.openExternal(googleWait.url); return googleWait.promise; }
+  const http = require("http");
+  const state = require("crypto").randomBytes(24).toString("hex");
+  const page = (port) => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Albatross · Sign in</title>
+<style>body{font:16px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f6f6f8;color:#111}main{text-align:center;max-width:360px;padding:24px}
+button{font:inherit;font-weight:600;padding:12px 22px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer}p{color:#555}
+@media(prefers-color-scheme:dark){body{background:#111;color:#eee}button{background:#222;color:#eee;border-color:#444}p{color:#aaa}}</style></head>
+<body><main><h2>Sign in to Albatross</h2><p id="t">Continue with Google here; Albatross on this PC signs in by itself.</p><button id="b">Continue with Google</button></main>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeAuth, inMemoryPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+const auth = initializeAuth(initializeApp(${JSON.stringify(config)}), { persistence: inMemoryPersistence, popupRedirectResolver: browserPopupRedirectResolver });
+const t = document.getElementById("t"), b = document.getElementById("b");
+b.onclick = async () => {
+  b.disabled = true; t.textContent = "Signing in…";
+  try {
+    const r = await signInWithPopup(auth, new GoogleAuthProvider());
+    const c = GoogleAuthProvider.credentialFromResult(r);
+    const res = await fetch("/done", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: ${JSON.stringify(state)}, idToken: c.idToken, accessToken: c.accessToken }) });
+    if (!res.ok) throw new Error("Albatross didn't take it (" + res.status + "). Start the sign-in again in the app.");
+    b.hidden = true; t.textContent = "Done: you're signed in to Albatross. You can close this tab.";
+  } catch (e) { b.disabled = false; t.textContent = e.code === "auth/popup-closed-by-user" ? "The Google window was closed. Try again." : (e.message || String(e)); }
+};
+</script></body></html>`;
+  let done, fail;
+  const promise = new Promise((res, rej) => { done = res; fail = rej; });
+  const server = http.createServer((req, res) => {
+    const origin = "http://localhost:" + server.address().port;
+    if (req.method === "GET" && req.url.split("?")[0] === "/") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      return res.end(page(server.address().port));
+    }
+    if (req.method === "POST" && req.url === "/done" && req.headers.origin === origin) {
+      let body = ""; req.on("data", (c) => { body += c; if (body.length > 64e3) req.destroy(); });
+      return req.on("end", () => {
+        let j = {}; try { j = JSON.parse(body); } catch {}
+        if (j.state !== state || !j.idToken) { res.writeHead(403); return res.end(); }
+        res.writeHead(204); res.end();
+        finish(); done({ idToken: j.idToken, accessToken: j.accessToken || null });
+        show();
+      });
+    }
+    res.writeHead(404); res.end();
+  });
+  const timer = setTimeout(() => { finish(); fail(new Error("Sign-in timed out. Try again.")); }, 10 * 60e3);
+  function finish() { clearTimeout(timer); googleWait = null; setTimeout(() => server.close(), 1000); }
+  server.on("error", (e) => { finish(); fail(e); });
+  server.listen(0, "127.0.0.1", () => {
+    const url = "http://localhost:" + server.address().port + "/";
+    googleWait = { url, promise }; shell.openExternal(url);
+  });
+  return promise;
+}
+ipcMain.handle("google-signin", async (_e, config) => { try { return await googleSignIn(config); } catch (e) { return { error: e.message || String(e) }; } });
+
 ipcMain.handle("version", () => ({ app: app.getVersion(), update }));
 ipcMain.handle("boot", (_e, on) => setBootStart(on));
 ipcMain.handle("update-check", async () => { if (!autoUpdater || !app.isPackaged) return { error: "Updates work in the installed app." }; try { const r = await autoUpdater.checkForUpdates(); return { latest: r && r.updateInfo && r.updateInfo.version, current: app.getVersion(), update }; } catch (e) { return { error: e.message }; } });

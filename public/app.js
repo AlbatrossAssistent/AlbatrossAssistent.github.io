@@ -6041,8 +6041,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.2";
+const APP_VERSION = "2026-11-14.3";
 const WHATS_NEW = [
+  ["2026-11-14.3", ["Google sign-in works in the Windows app"]],
   ["2026-11-14.2", ["Chrome sidebar: open the chats you started in the app and continue them there"]],
   ["2026-11-14.1", ["Host tab (sidebar → Host): go online or offline, guests, start at boot, Ollama, live activity, restart, control center"]],
   ["2026-11-13.20", ["Web searches can be watched: the AI searches in a tab of its own in your Chrome or the PC browser (your page stays)"]],
