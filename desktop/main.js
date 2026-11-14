@@ -128,7 +128,7 @@ function openMain() {
   win.on("hide", () => { if (update && update.ready && !quitting) setTimeout(() => { if (update && update.ready && !quitting && win && !win.isDestroyed() && !win.isVisible()) installUpdate({ hidden: true }); }, 60e3); });
 }
 function openSplash() {
-  splash = new BrowserWindow({ width: 480, height: 340, frame: false, resizable: false, maximizable: false, show: true, center: true, icon: ICON, title: "Albatross", backgroundColor: nativeTheme.shouldUseDarkColors ? "#16171b" : "#ffffff", webPreferences: { contextIsolation: true, sandbox: true } });
+  splash = new BrowserWindow({ width: 480, height: 340, frame: false, resizable: false, maximizable: false, show: true, center: true, icon: ICON, title: "Albatross", backgroundColor: nativeTheme.shouldUseDarkColors ? "#000000" : "#ffffff", webPreferences: { contextIsolation: true, sandbox: true } });
   splashReady = new Promise((r) => splash.webContents.once("did-finish-load", r));
   splash.loadFile(path.join(__dirname, "splash.html"));
   // the version at the bottom; "just updated" the first time a new version starts

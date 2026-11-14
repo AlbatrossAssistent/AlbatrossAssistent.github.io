@@ -4,40 +4,41 @@
 <meta charset="utf-8">
 <title>Albatross</title>
 <style>
-  :root { --fg: #1d1d1f; --muted: #6e6e73; --line: rgba(0,0,0,.08); --bg1: #ffffff; --bg2: #eef3ff; --accent: #007aff; --ok: #34c759; }
-  @media (prefers-color-scheme: dark) { :root { --fg: #f5f5f7; --muted: #a1a1a6; --line: rgba(255,255,255,.1); --bg1: #16171b; --bg2: #1d2433; --accent: #0a84ff; --ok: #30d158; } }
-  html, body { margin: 0; height: 100%; font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--fg); -webkit-app-region: drag; user-select: none; overflow: hidden; }
-  body { background: radial-gradient(120% 90% at 50% 0%, var(--bg2), var(--bg1) 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 32px 22px; box-sizing: border-box; }
-  .logo { position: relative; width: 84px; height: 84px; margin-bottom: 16px; }
-  .logo img { position: relative; width: 84px; height: 84px; border-radius: 22px; box-shadow: 0 10px 30px rgba(0,0,0,.18); animation: float 3.2s ease-in-out infinite; }
-  .logo::before { content: ""; position: absolute; inset: -14px; border-radius: 34px; background: var(--accent); opacity: .18; filter: blur(18px); animation: glow 2.4s ease-in-out infinite; }
-  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-  @keyframes glow { 0%, 100% { opacity: .12; transform: scale(.94); } 50% { opacity: .3; transform: scale(1.04); } }
-  h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
-  #st { margin: 6px 0 14px; color: var(--muted); min-height: 1.45em; text-align: center; max-width: 360px; }
-  .bar { width: 280px; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
-  .bar div { height: 100%; width: 30%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #5e5ce6); animation: slide 1.3s ease-in-out infinite; }
+  /* the same look as the opening animation of the app (public/app.css #splash): space in dark mode, a bright sky in light mode */
+  :root { --fg: #fff; --muted: rgba(255,255,255,.55); --line: rgba(255,255,255,.12); --bg: linear-gradient(180deg, #000 0%, #0b0d10 60%, #12161b 100%); --accent: #0A84FF; --ok: #30d158; --glow: .45; }
+  @media (prefers-color-scheme: light) { :root { --fg: #1d1d1f; --muted: rgba(0,0,0,.5); --line: rgba(0,0,0,.08); --bg: linear-gradient(180deg, #ffffff 0%, #f3f6fc 55%, #e6edfb 100%); --accent: #007AFF; --ok: #34c759; --glow: .22; } }
+  html, body { margin: 0; height: 100%; font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--fg); -webkit-app-region: drag; user-select: none; overflow: hidden; }
+  body { background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 28px 22px; box-sizing: border-box; }
+  .logo { position: relative; width: 64px; height: 64px; margin-bottom: 14px; }
+  .logo::before { content: ""; position: absolute; left: 50%; top: 50%; width: 170px; height: 170px; margin: -85px 0 0 -85px; border-radius: 50%; background: radial-gradient(circle, var(--accent) 0%, transparent 62%); opacity: var(--glow); filter: blur(18px); animation: glow 3.2s ease-in-out infinite; }
+  .logo svg { position: relative; width: 64px; height: 64px; overflow: visible; fill: var(--fg); animation: hover 1.6s ease-in-out infinite; }
+  .logo .flame { fill: var(--accent); transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; }
+  @keyframes hover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  @keyframes flick { from { transform: scaleY(.65); } to { transform: scaleY(1.25); } }
+  @keyframes glow { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+  h1 { margin: 0 0 0 8px; font-size: 26px; font-weight: 300; letter-spacing: 8px; text-transform: uppercase; }
+  #st { margin: 12px 0 10px; color: var(--muted); min-height: 1.45em; text-align: center; max-width: 380px; }
+  .bar { width: 220px; height: 3px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .bar div { height: 100%; width: 30%; border-radius: 999px; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: slide 1.3s ease-in-out infinite; }
   .bar.pct div { animation: none; transition: width .3s; }
   @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
   ol { list-style: none; margin: 18px 0 0; padding: 0; display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
   li { display: flex; align-items: center; gap: 6px; transition: color .2s; }
-  li i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line); box-sizing: border-box; display: grid; place-items: center; flex: none; }
+  li i { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--line); box-sizing: border-box; display: grid; place-items: center; flex: none; }
   li.active { color: var(--fg); }
   li.active i { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
   li.done i { border: 0; background: var(--ok); }
   li.done i::after { content: ""; width: 6px; height: 3px; border: 1.6px solid #fff; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
   li.skip { opacity: .45; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  #ver { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--muted); opacity: .8; }
+  #ver { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; letter-spacing: .5px; color: var(--muted); opacity: .75; }
   /* updating */
   body.update ol { display: none; }
-  body.update .logo img { animation: none; }
-  body.update .logo::before { animation: glow 1.2s ease-in-out infinite; }
-  #pct { font-variant-numeric: tabular-nums; }
+  body.update h1 { font-size: 22px; }
 </style>
 </head>
 <body>
-  <div class="logo"><img src="icon.png" alt=""></div>
+  <div class="logo"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg></div>
   <h1 id="title">Albatross</h1>
   <div id="st">Starting…</div>
   <div class="bar" id="bar"><div></div></div>

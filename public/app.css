@@ -119,6 +119,39 @@ aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-car
 @keyframes rkhover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
 @keyframes flick { from { transform: scaleY(.65); } to { transform: scaleY(1.25); } }
 @keyframes blast { from { opacity: 1; } to { opacity: 1; transform: translateY(-85vh) scale(.85); } }
+/* a soft glow in your accent colour behind the rocket; what's happening (and how far) under the name; the version at the bottom */
+#splash { --sp-accent: #0A84FF; }
+#splash .halo { position: absolute; top: -60px; left: 50%; width: 240px; height: 240px; margin-left: -120px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, var(--sp-accent) 0%, transparent 62%); opacity: 0; filter: blur(26px); animation: halo-in 1.4s ease .3s forwards, halo 3.2s ease-in-out 1.7s infinite; }
+#splash.done .halo { animation: none; opacity: 0; transition: opacity .4s; }
+#splash .sload { width: 220px; margin-top: 4px; opacity: 0; animation: fade .6s ease 1.4s forwards; }
+#splash .sbar { height: 3px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
+#splash .sbar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--sp-accent); box-shadow: 0 0 10px var(--sp-accent); transition: width .5s cubic-bezier(.3,.7,.3,1); }
+#splash .sstat { margin-top: 10px; min-height: 1.4em; font-size: 13px; text-align: center; color: rgba(255,255,255,.62); transition: opacity .25s; }
+#splash .sver { position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); text-align: center; font-size: 11.5px; letter-spacing: 1px; color: rgba(255,255,255,.38); opacity: 0; animation: fade 1s ease 1.6s forwards; }
+@keyframes halo-in { to { opacity: .42; } }
+@keyframes halo { 0%, 100% { opacity: .42; transform: scale(1); } 50% { opacity: .62; transform: scale(1.08); } }
+/* light theme: a bright morning sky instead of space */
+#splash.light { background: linear-gradient(180deg, #ffffff 0%, #f3f6fc 55%, #e6edfb 100%); color: #1d1d1f; }
+#splash.light .logo { fill: #1d1d1f; filter: drop-shadow(0 6px 18px rgba(20,40,90,.18)); }
+#splash.light .logo .flame { fill: var(--sp-accent); }
+#splash.light .tag { color: rgba(0,0,0,.45); }
+#splash.light .sbar { background: rgba(0,0,0,.08); }
+#splash.light .sstat { color: rgba(0,0,0,.55); }
+#splash.light .sver { color: rgba(0,0,0,.35); }
+#splash.light .halo { animation-name: halo-in-l, halo-l; }
+@keyframes halo-in-l { to { opacity: .22; } }
+@keyframes halo-l { 0%, 100% { opacity: .22; transform: scale(1); } 50% { opacity: .34; transform: scale(1.08); } }
+/* steady: already on screen (the Windows app showed its own opening screen first): no build-up, just the way out */
+#splash.steady .logo { opacity: 1; animation: rkhover 1.6s ease-in-out infinite; }
+#splash.steady .word { animation: none; letter-spacing: 12px; }
+#splash.steady .word span { animation-duration: .01s !important; animation-delay: 0s !important; }
+#splash.steady .tag, #splash.steady .sload, #splash.steady .sver, #splash.steady .halo { animation-delay: 0s; animation-duration: .25s; }
+#splash.steady.done .logo { animation: blast .8s cubic-bezier(.6,0,.9,.4) forwards; }
+/* updating: the same screen while a new version is fetched */
+#splash.updating .sload, #splash.updating .sver, #splash.updating .tag { animation-delay: .3s; }
+#splash.updating .word { font-size: 40px; }
+@media (max-width: 480px) { #splash .word { font-size: 36px; } #splash.updating .word { font-size: 30px; } #splash .tag { letter-spacing: 4px; } }
 body.intro aside, body.intro main { opacity: 0; transform: translateY(14px); }
 aside, main { transition: opacity .6s ease .2s, transform .6s cubic-bezier(.2,.8,.2,1) .2s; }
 @media (prefers-reduced-motion: reduce) { #splash { display: none; } body.intro aside, body.intro main { opacity: 1; transform: none; } body::before, body::after { animation: none; } }

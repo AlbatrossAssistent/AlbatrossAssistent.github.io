@@ -337,20 +337,35 @@ function ensureUnlocked(what) {
 // ======================================================================
 // Intro animation
 // ======================================================================
+// The opening screen: the rocket, the name, and underneath what's happening right now (connecting to your PC …) with a bar. It
+// leaves as soon as Albatross is ready (at least ~2.6 s for the animation, at most ~4 s), or when you click or press a key.
+// Light theme: a bright sky; dark: space. The glow is your accent colour. In the Windows app, which showed its own opening
+// screen while it started, it's already "steady" and just leaves. playIntro({ update: "version" }) is the updating screen.
 let introSky = null;
-function playIntro() {
-  const sp = $("#splash");
-  const word = $("#splashWord");
+function playIntro(mode = {}) {
+  const sp = $("#splash"), word = $("#splashWord");
+  const light = (S.theme === "system" ? !matchMedia("(prefers-color-scheme: dark)").matches : S.theme === "light" || S.theme === "lagoon");
+  const steady = !mode.update && (mode.steady || !!window.albatrossDesktop && !playIntro.played);
+  playIntro.played = true;
+  sp.classList.toggle("light", light); sp.classList.toggle("steady", steady); sp.classList.toggle("updating", !!mode.update);
+  sp.style.setProperty("--sp-accent", S.accent || (light ? "#007AFF" : "#0A84FF"));
   word.innerHTML = "";
-  [..."Albatross"].forEach((ch, i) => { const s = document.createElement("span"); s.textContent = ch; s.style.animationDelay = (0.9 + i * 0.08) + "s"; word.appendChild(s); });
+  [...(mode.update ? "Updating" : "Albatross")].forEach((ch, i) => { const s = document.createElement("span"); s.textContent = ch; s.style.animationDelay = (0.9 + i * 0.08) + "s"; word.appendChild(s); });
+  $("#splashTag").textContent = mode.update ? "To version " + mode.update : "Your AI · Your computer";
+  const seen = store.get("seenVersion", "");
+  // APP_VERSION is set further down this file: fill the version in once the script has run
+  setTimeout(() => { $("#splashVer").textContent = mode.update ? "You have " + APP_VERSION : "Version " + APP_VERSION + (seen && seen !== APP_VERSION ? " · just updated" : ""); }, 0);
+  const bar = $("#splashBar"), stat = $("#splashStat");
+  const say = (text, pct) => { if (stat.textContent !== text) stat.textContent = text; if (pct != null) bar.style.width = Math.max(3, Math.min(100, pct)) + "%"; };
+  bar.style.transition = "none"; bar.style.width = "0"; void bar.offsetWidth; bar.style.transition = ""; say(mode.update ? "Getting the new version…" : "Starting…", 4);
   // the sky streams down past the rocket, so it looks like it's flying up
-  sp._stop?.();
+  sp._stop?.(); clearInterval(sp._tick);
   sp.style.display = "flex"; sp.classList.remove("done");
   if (window.createStarfield) {
     introSky = introSky || createStarfield($("#stars"), { count: 560, drift: 0 });
     introSky.resize();
     let on = true; sp._stop = () => { on = false; };
-    const loop = (t) => { if (!on) return; introSky.draw(t, { dark: true, flow: 1.3 }); requestAnimationFrame(loop); };
+    const loop = (t) => { if (!on) return; introSky.draw(t, { dark: !light, flow: 1.3 }); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
   // restart CSS animations
@@ -359,13 +374,44 @@ function playIntro() {
   const paint = $("#paintwave");
   const end = () => {
     if (sp.classList.contains("done")) return;
+    clearInterval(sp._tick); removeEventListener("keydown", end);
     paint.style.display = "block"; void paint.offsetWidth;
     sp.classList.add("done"); paint.classList.add("done");
     document.body.classList.remove("intro");
     setTimeout(() => { sp.style.display = "none"; paint.style.display = "none"; paint.classList.remove("done"); sp._stop?.(); }, 1900);
   };
-  sp.onclick = end;
-  setTimeout(end, 3300);
+  if (mode.update) { sp.onclick = null; return { say, end }; }      // the updating screen stays until the page reloads
+  sp.onclick = end; addEventListener("keydown", end, { once: true });
+  const t0 = performance.now(), minT = steady ? 700 : 2600, maxT = steady ? 2500 : 4000;
+  sp._tick = setInterval(() => {
+    const el = performance.now() - t0, grow = Math.min(88, 8 + el / maxT * 80);
+    let ready = false;
+    if (guestMode) { say(el < 700 ? "Starting…" : "Opening as a guest…", grow); ready = el > 900; }
+    else if (connected) { say("Connected to your PC", 100); ready = true; }
+    else if (S.conn && S.conn.code && el > 500) say("Connecting to your PC…", grow);
+    else if (el > 900) { say("Ready", 100); ready = true; }
+    else say("Starting…", grow);
+    if ((ready && el >= minT) || el >= maxT) { if (!ready) say("Opening…", 100); setTimeout(end, ready ? 250 : 150); clearInterval(sp._tick); }
+  }, 120);
+}
+// a new version: the updating screen, the new files fetched ahead (with the bar), then the reload
+async function updateNow(version) {
+  for (const d of $$("dialog[open]")) d.close();          // open windows would sit above the updating screen
+  const ui = playIntro({ update: version || "the newest" });
+  try {
+    const html = await (await fetch(new URL("./?fresh=" + Date.now(), location.href), { cache: "no-store" })).text();
+    const files = [...new Set([...html.matchAll(/(?:src|href)="([^"]+\?v=[^"]+)"/g)].map((m) => m[1]))];
+    let done = 0;
+    ui.say("Getting the new version…", 8);
+    await Promise.race([
+      Promise.all(files.map((u) => fetch(new URL(u, location.href), { cache: "reload" }).catch(() => {}).then(() => { done++; ui.say("Getting the new version… " + done + " of " + files.length, 8 + done / files.length * 80); }))),
+      new Promise((r) => setTimeout(r, 15000)),
+    ]);
+    ui.say("Installing…", 94);
+    await Promise.race([navigator.serviceWorker?.getRegistration().then((r) => r && r.update()).catch(() => {}), new Promise((r) => setTimeout(r, 2500))]);
+  } catch {}
+  ui.say("Starting the new version…", 100);
+  setTimeout(() => location.reload(), 500);
 }
 if (S.intro && !matchMedia("(prefers-reduced-motion: reduce)").matches) playIntro();
 else { $("#splash").style.display = "none"; document.body.classList.remove("intro"); }
@@ -6041,8 +6087,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.4";
+const APP_VERSION = "2026-11-14.5";
 const WHATS_NEW = [
+  ["2026-11-14.5", ["New opening screen: shows what's happening (connecting to your PC) with a bar, light and dark, in your accent colour; an updating screen when you update"]],
   ["2026-11-14.4", ["Google sign-in through the browser; new opening and updating screens"]],
   ["2026-11-14.3", ["Google sign-in works in the Windows app"]],
   ["2026-11-14.2", ["Chrome sidebar: open the chats you started in the app and continue them there"]],
@@ -6136,7 +6183,7 @@ async function checkForUpdate() {
   try {
     const html = await (await fetch(new URL("app.js?v=" + Date.now(), location.href), { cache: "no-store" })).text();   // the version lives in app.js
     const v = (/const APP_VERSION = "([^"]+)"/.exec(html) || [])[1];
-    if (v && newerVersion(v, APP_VERSION)) { updateOffered = true; updatePop("A new version of Albatross is ready", [], [["Later", null, false], ["Reload now", () => location.reload(), true]]); }
+    if (v && newerVersion(v, APP_VERSION)) { updateOffered = true; updatePop("A new version of Albatross is ready", ["Version " + v + ". Updating takes a few seconds."], [["Later", null, false], ["Update now", () => updateNow(v), true]]); }
   } catch {}
 }
 setInterval(checkForUpdate, 10 * 60 * 1000);
@@ -6170,7 +6217,7 @@ async function checkLive() {
   if ((tooOld || behind) && !updateOffered) {
     updateOffered = true;
     updatePop(tooOld ? "Please update Albatross" : "A newer version of Albatross is out", [`You have ${APP_VERSION}, the newest is ${j.version || cfg.minVersion}.`, "If nothing changes after reloading, this website is still being published. Try again in a few minutes."],
-      [["Later", null, false], ["Reload", () => location.reload(), true]]);
+      [["Later", null, false], ["Update now", () => updateNow(j.version || cfg.minVersion), true]]);
   }
 }
 setTimeout(checkLive, 5000); setInterval(checkLive, 10 * 60 * 1000);
