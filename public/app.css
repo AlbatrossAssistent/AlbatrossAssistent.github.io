@@ -2396,3 +2396,16 @@ html.effort-max #sky { display: block; }
 .help-topic:hover { border-color: var(--accent); }
 .help-topic small { color: var(--muted); }
 .help-topic span { color: var(--accent); font-size: 13px; margin-top: 4px; }
+
+/* Settings → Input & Output */
+.snd-sec { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 6px; border-top: 1px solid var(--line); }
+.snd-sec:first-child { border-top: 0; }
+.snd-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.snd-row > span { display: flex; flex-direction: column; min-width: 0; }
+.snd-row > span small { color: var(--muted); }
+.snd-row select { flex: 0 1 310px; width: 310px; max-width: 100%; min-width: 0; font: inherit; font-size: 14px; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; }
+.snd-meter { display: flex; align-items: center; gap: 10px; }
+.snd-bar { --lv: 0; flex: 1; height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; position: relative; }
+.snd-bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--lv) * 100%); background: linear-gradient(90deg, #34c759, #ffd60a 70%, #ff453a); border-radius: inherit; transition: width .06s linear; }
+.snd-note { color: var(--muted); }
+.snd-note.warn { color: #ff9f0a; }

@@ -6647,8 +6647,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.16";
+const APP_VERSION = "2026-11-14.17";
 const WHATS_NEW = [
+  ["2026-11-14.17", ["Settings → Input & Output: pick the microphone and speakers Albatross uses (with a live level meter and a test sound), and the ones Jarvis uses on your PC"]],
   ["2026-11-14.16", ["Add-ons in Settings → Tools, open source and on your PC, one click each: a Sharper button on pictures (Real-ESRGAN), a natural voice for answers read aloud (Kokoro), and better web search that asks many search engines at once (SearXNG)","Documents: scanned PDFs and photos of pages are read too, with the text reader built into Windows"]],
   ["2026-11-14.15", ["Thinking no longer shows up as the answer: reasoning a model writes into its reply (<think> tags and similar) goes into the thinking box, and Max's final check can't replace your answer with a remark"]],
   ["2026-11-14.14", ["Help tab in Settings: guided tours of Albatross and a What's this? mode that explains whatever you click","Help with my screen: the AI looks at the app you were using, describes it, and points at the important parts with glowing frames on your real screen (Windows app)","A warning card in front of your other apps when something slows Albatross down or stops it, with a fix when there is one"]],

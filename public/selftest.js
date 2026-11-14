@@ -302,6 +302,50 @@ window.albatrossSelfTest = async function (w) {
     })()`));
     return (o.via === "searxng" && o.calls[0] === "/agent/search:rtx 5070" && o.calls[1] === "--" && o.calls.slice(2).includes("server")) || "calls " + JSON.stringify(o);
   });
+  await tryIt("Input & Output: the page, Jarvis's devices, and sound following the chosen speakers", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const out = {}, S = window.AlbatrossSound, keepJ = window.jarvisCall, keepCfg = S.settings(), sent = [];
+      // sound follows the chosen speakers: new Audio elements and AudioContexts are pointed at it
+      const mp = HTMLMediaElement.prototype, keepSink = mp.setSinkId, sinks = [];
+      mp.setSinkId = function (id) { sinks.push("el:" + id); return Promise.resolve(); };
+      const base = Object.getPrototypeOf(window.AudioContext.prototype), keepCtxSink = base.setSinkId;
+      base.setSinkId = function (id) { sinks.push("ctx:" + id); return Promise.resolve(); };
+      S._set({ out: { id: "spk1", label: "Desk speakers" } });
+      new Audio(); const ctx = new AudioContext(); ctx.close();
+      S._set({}); new Audio();
+      out.sinks = sinks; out.isAudio = new Audio() instanceof HTMLAudioElement;
+      mp.setSinkId = keepSink; if (keepCtxSink) base.setSinkId = keepCtxSink; else delete base.setSinkId;
+      // the page with Jarvis running
+      window.jarvisCall = async (method, path, body) => {
+        if (method === "POST") { sent.push(body); return { status: 200, j: {} }; }
+        return { status: 200, j: { inputs: ["Mikrofon (USB Audio)", "Kopfhörer (Deine Airpods - Find My)"], outputs: ["Lautsprecher (Realtek)", "Kopfhörer (Deine Airpods - Find My)"], input: "", output: "Lautsprecher (Realtek)" } };
+      };
+      S._set({ in: { id: "m1", label: "Default - Mikrofon (USB Audio)" } });
+      openSettings("sound"); document.querySelector('#settings .tabs [data-tab="sound"]').click();
+      await new Promise((r) => setTimeout(r, 600));
+      const box = document.querySelector("#soundBox");
+      out.text = box.textContent; out.hasIn = !!box.querySelector("#sndIn"); out.hasOut = !!box.querySelector("#sndOut");
+      out.jvOut = box.querySelector("#jvOut")?.value; out.jvInOpts = [...(box.querySelector("#jvIn")?.options || [])].map((x) => x.value);
+      const jin = box.querySelector("#jvIn"); jin.value = "Kopfhörer (Deine Airpods - Find My)"; jin.dispatchEvent(new Event("change"));
+      out.btNote = box.querySelector("#jvInNote").textContent;
+      const same = box.querySelector("#jvSame"); out.sameShown = !same.hidden; same.click(); await new Promise((r) => setTimeout(r, 50));
+      out.sent = sent;
+      // Jarvis not running
+      window.jarvisCall = async () => ({ status: 503, j: { offline: true, canStart: true } });
+      await S.paint(); await new Promise((r) => setTimeout(r, 100));
+      out.offline = box.querySelector("#sndJarvis").textContent;
+      window.jarvisCall = keepJ; S._set(keepCfg); S.stopMeter(); document.querySelector("#settings").close();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.sinks.join() !== "el:spk1,ctx:spk1" || !o.isAudio) bad.push("speakers hook " + JSON.stringify([o.sinks, o.isAudio]));
+    if (!o.hasIn || !o.hasOut || !/Here, in Albatross/.test(o.text) || !/Jarvis on your PC/.test(o.text)) bad.push("page " + o.text.slice(0, 160));
+    if (o.jvOut !== "Lautsprecher (Realtek)" || o.jvInOpts.join("|") !== "|Mikrofon (USB Audio)|Kopfhörer (Deine Airpods - Find My)") bad.push("jarvis lists " + JSON.stringify([o.jvOut, o.jvInOpts]));
+    if (!/Bluetooth headset/.test(o.btNote)) bad.push("headset warning " + o.btNote);
+    if (!o.sameShown || JSON.stringify(o.sent) !== JSON.stringify([{ input: "Kopfhörer (Deine Airpods - Find My)" }, { input: "Mikrofon (USB Audio)" }])) bad.push("sent " + JSON.stringify([o.sameShown, o.sent]));
+    if (!/isn't running/.test(o.offline) || !/Start Jarvis/.test(o.offline)) bad.push("offline " + o.offline);
+    return bad.length ? bad.join(" | ") : true;
+  });
   await tryIt("help: every tour step points at something that exists", async () => {
     const T = w.AlbatrossTour;
     if (!T || !T.TOPICS.length) return "no tours";

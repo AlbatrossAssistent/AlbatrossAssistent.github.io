@@ -16,7 +16,7 @@ const ROOT = path.dirname(path.dirname(path.dirname(__dirname)));
 const EXE = process.env.JARVIS_EXE || [path.join(ROOT, "Jarvis", "dist", "Jarvis", "Jarvis.exe"), "D:\\Jarvis\\dist\\Jarvis\\Jarvis.exe"].find((f) => fs.existsSync(f)) || "";
 
 const token = () => { try { return fs.readFileSync(TOKEN_FILE, "utf8").trim(); } catch { return ""; } };
-const ALLOWED = new Set(["GET /state", "POST /ask", "POST /stop", "POST /settings", "POST /confirm", "GET /screen"]);
+const ALLOWED = new Set(["GET /state", "POST /ask", "POST /stop", "POST /settings", "POST /confirm", "GET /screen", "GET /audio", "POST /audio"]);
 
 async function call(method, p, body, query = "") {
   const r = await fetch(`http://127.0.0.1:${PORT}${p}${query}`, {
