@@ -7,7 +7,4 @@ contextBridge.exposeInMainWorld("albatrossDesktop", {
   setBootStart: (on) => ipcRenderer.invoke("boot", !!on),
   checkUpdate: () => ipcRenderer.invoke("update-check"),
   installUpdate: () => ipcRenderer.invoke("update-install"),
-  onUpdate: (fn) => ipcRenderer.on("update", (_e, info) => fn(info)),
-  // Google sign-in happens in your normal browser (Google refuses app windows); this returns Google's token for Firebase
-  googleSignIn: (config) => ipcRenderer.invoke("google-signin", config),
-});
+  onUpdate: (fn) => ipcRenderer.on("update", (_e, info) => fn(info)),});

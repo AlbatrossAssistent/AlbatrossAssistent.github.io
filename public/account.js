@@ -131,18 +131,32 @@ onAuthStateChanged(auth, async (u) => {
 });
 
 $("#accMove").onclick = () => window.moveSharedChats();
-// In the Windows app, Google sign-in runs in your normal browser (Google refuses app windows, and the pop-up can't reach the app);
-// the app gets Google's token back and signs in with it here.
-$("#accGoogle").onclick = async () => {
-  const d = window.albatrossDesktop;
-  if (!d) return signInWithPopup(auth, new GoogleAuthProvider()).catch(e => msg(nice(e), true));
-  if (!d.googleSignIn) return msg("Update the Albatross app to sign in with Google (it updates by itself; restart it), or use email for now.", true);
-  msg("Continue in your browser: sign in with Google there, then come back here.");
-  const r = await d.googleSignIn(FIREBASE);
-  if (!r || r.error) return msg(r ? r.error : "Sign-in didn't finish.", true);
-  try { await signInWithCredential(auth, GoogleAuthProvider.credential(r.idToken, r.accessToken)); msg(""); toast("Signed in with Google"); }
-  catch (e) { msg(nice(e), true); }
-};
+// In the Windows app and the Chrome sidebar, Google sign-in runs in your normal browser: Google refuses app windows and side panels,
+// and their pop-up can't report back. The host on this PC passes Google's token back (host/panel.js /signin), the app signs in here.
+const viaBrowser = () => !!window.albatrossDesktop || (!!window.EMBED_CHROME && /:4747$/.test(location.host));
+let signinRun = 0;
+async function googleViaBrowser() {
+  const run = ++signinRun;
+  const state = [...crypto.getRandomValues(new Uint8Array(24))].map((x) => x.toString(16).padStart(2, "0")).join("");
+  const start = await fetch("/signin/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state }) }).catch(() => null);
+  if (!start || !start.ok) return msg("Albatross on this PC needs a restart for Google sign-in (Control center → Restart), or use email.", true);
+  // the 127.0.0.1 address: the Windows app opens it in the normal browser, which then lands on the localhost sign-in page
+  window.open("http://127.0.0.1:" + location.port + "/signin?s=" + state, "_blank");
+  msg("Continue in your browser: a page \"Sign in to Albatross\" opened there. Sign in with Google, then come back here.");
+  const until = Date.now() + 15 * 60e3;
+  while (run === signinRun && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const r = await fetch("/signin/take?s=" + state, { cache: "no-store" }).catch(() => null);
+    if (!r || r.status === 204) continue;
+    if (r.status !== 200) return msg("The sign-in expired. Try again.", true);
+    const c = await r.json();
+    try { await signInWithCredential(auth, GoogleAuthProvider.credential(c.idToken, c.accessToken)); msg(""); toast("Signed in with Google"); }
+    catch (e) { msg(nice(e), true); }
+    return;
+  }
+  if (run === signinRun) msg("The sign-in took too long. Try again.", true);
+}
+$("#accGoogle").onclick = () => viaBrowser() ? googleViaBrowser() : signInWithPopup(auth, new GoogleAuthProvider()).catch(e => msg(nice(e), true));
 const creds = () => [$("#accEmail").value.trim(), $("#accPass").value];
 $("#accSignIn").onclick = () => signInWithEmailAndPassword(auth, ...creds()).catch(e => msg(nice(e), true));
 $("#accSignUp").onclick = () => createUserWithEmailAndPassword(auth, ...creds()).then(() => toast("Account created")).catch(e => msg(nice(e), true));

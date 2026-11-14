@@ -15,6 +15,40 @@ const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.githu
 
 function startPanel({ port, getState, actions, files, guestFile, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, monitor, onListening, onBusy }) {
   const clients = new Set();
+  const signins = new Map();          // one-time code → { at, cred }   (see /signin below)
+  function signin(req, res, host) {
+    const [p, q = ""] = req.url.split("?");
+    const s = new URLSearchParams(q).get("s") || "";
+    const json = (status, obj) => { res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(obj ? JSON.stringify(obj) : ""); };
+    const sameSite = () => { const o = req.headers.origin || ""; return /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(o) && Number(o.split(":")[2]) === port; };
+    for (const [k, v] of signins) if (Date.now() - v.at > 15 * 60e3) signins.delete(k);
+    if (req.method === "GET" && p === "/signin") {
+      if (host !== "localhost") { res.writeHead(302, { Location: `http://localhost:${port}/signin?${q}` }); return res.end(); }
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      return fs.createReadStream(path.join(__dirname, "signin.html")).pipe(res);
+    }
+    if (req.method === "GET" && p === "/signin/take") {            // the app, every second or two: 204 = not yet
+      const e = signins.get(s);
+      if (!e) return json(410);
+      if (!e.cred) return json(204);
+      signins.delete(s); return json(200, e.cred);
+    }
+    if (req.method !== "POST" || !sameSite()) return json(403);
+    let body = "";
+    req.on("data", (c) => { body += c; if (body.length > 64e3) req.destroy(); });
+    req.on("end", () => {
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      if (!/^[0-9a-f]{32,64}$/.test(j.state || "")) return json(400);
+      if (p === "/signin/start") { signins.set(j.state, { at: Date.now(), cred: null }); return json(204); }
+      if (p === "/signin/done") {
+        const e = signins.get(j.state);
+        if (!e || e.cred) return json(410);
+        if (typeof j.idToken !== "string" || !j.idToken) return json(400);
+        e.cred = { idToken: j.idToken, accessToken: typeof j.accessToken === "string" ? j.accessToken : null }; return json(204);
+      }
+      json(404);
+    });
+  }
 
   const server = http.createServer((req, res) => {
     // Block other hostnames (DNS rebinding) so only pages on this PC can talk to the panel.
@@ -36,6 +70,11 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
       res.writeHead(200, { "Content-Type": type, "Cache-Control": /\.(html|webmanifest)$|sw\.js$/.test(file) ? "no-cache" : "max-age=300" });
       return fs.createReadStream(file).pipe(res);
     }
+    // Google sign-in for the Windows app and the Chrome sidebar: Google refuses sign-in inside app windows and side panels, so the
+    // app registers a one-time code here (/signin/start), opens /signin?s=… in the normal browser (signin.html), that page posts
+    // Google's token back (/signin/done) and the app picks it up once (/signin/take). The app opens the 127.0.0.1 address (the
+    // Windows app sends that to the normal browser); the page itself runs on localhost, which Firebase allows to sign in.
+    if (/^\/signin(\/|\?|$)/.test(req.url)) return signin(req, res, host);
     // The Monitor's full-screen window on this PC (see monitor.js)
     if (monitor && /^\/monitor(\/|\?|$)/.test(req.url) && monitor.serve(req, res)) return;
     if (req.method === "GET" && req.url === "/events") {

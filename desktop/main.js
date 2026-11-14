@@ -6,7 +6,7 @@
 //  - lives in the tray next to the clock; can start with Windows (then it starts hidden, so the host is ready for your phone)
 //  - can make the host start when the PC boots, before anyone signs in (control center → Start at boot)
 //  - updates itself: new versions come from GitHub, download in the background and install when the app restarts
-const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, dialog, ipcMain, Notification } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, nativeTheme, dialog, ipcMain, Notification } = require("electron");
 const { execFile } = require("child_process");
 let autoUpdater = null; try { autoUpdater = require("electron-updater").autoUpdater; } catch {}
 const path = require("path");
@@ -20,8 +20,11 @@ const APP_URL = PANEL + "/app/";
 const FILES = app.isPackaged ? path.join(process.resourcesPath, "albatross") : path.resolve(__dirname, "..");
 const DATA = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "host");
 const ICON = path.join(__dirname, "icon.png");
-const hidden = process.argv.includes("--hidden");
-let win = null, splash = null, tray = null, quitting = false, update = null;     // update: { version, ready }
+// hidden: started with Windows (or came back from a quiet update in the tray): no window, only the tray
+const HIDDEN_MARK = path.join(DATA, ".relaunch-hidden");
+let hidden = process.argv.includes("--hidden");
+try { if (fs.existsSync(HIDDEN_MARK)) { fs.unlinkSync(HIDDEN_MARK); hidden = true; } } catch {}
+let win = null, splash = null, splashReady = null, tray = null, quitting = false, update = null, starting = true;     // update: { version, ready }
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.on("second-instance", () => show());
@@ -31,7 +34,14 @@ const reachable = (url, ms = 1500) => fetch(url, { signal: AbortSignal.timeout(m
 const ollamaUp = () => reachable("http://127.0.0.1:11434/api/version");
 const ollamaExe = () => [path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama.exe")].find((f) => fs.existsSync(f));
 
-function status(text, pct) { if (splash && !splash.isDestroyed()) splash.webContents.executeJavaScript(`window.setStatus(${JSON.stringify(text)}, ${pct == null ? "null" : Number(pct)})`).catch(() => {}); }
+// the opening / updating screen (splash.html): calls wait until it has loaded, and keep their order
+function splashJs(code) {
+  if (!splash || splash.isDestroyed()) return;
+  const w = splash;
+  splashReady.then(() => { if (!w.isDestroyed()) w.webContents.executeJavaScript(code).catch(() => {}); });
+}
+const status = (text, pct) => splashJs(`setStatus(${JSON.stringify(text)}, ${pct == null ? "null" : Number(pct)})`);
+const step = (id, state) => splashJs(`setStep(${JSON.stringify(id)}, ${JSON.stringify(state)})`);
 
 // ---------- Ollama: installed the first time, from ollama.com ----------
 function download(url, file, onPct) {
@@ -114,10 +124,26 @@ function openMain() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (!url.startsWith(PANEL)) shell.openExternal(url); return { action: "deny" }; });
   win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith(PANEL)) { e.preventDefault(); shell.openExternal(url); } });
   win.on("close", (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });     // closing keeps it in the tray
+  // an update that's ready installs quietly once the window has been in the tray for a minute
+  win.on("hide", () => { if (update && update.ready && !quitting) setTimeout(() => { if (update && update.ready && !quitting && win && !win.isDestroyed() && !win.isVisible()) installUpdate({ hidden: true }); }, 60e3); });
 }
 function openSplash() {
-  splash = new BrowserWindow({ width: 420, height: 300, frame: false, resizable: false, show: true, icon: ICON, backgroundColor: "#ffffff", webPreferences: { contextIsolation: true } });
+  splash = new BrowserWindow({ width: 480, height: 340, frame: false, resizable: false, maximizable: false, show: true, center: true, icon: ICON, title: "Albatross", backgroundColor: nativeTheme.shouldUseDarkColors ? "#16171b" : "#ffffff", webPreferences: { contextIsolation: true, sandbox: true } });
+  splashReady = new Promise((r) => splash.webContents.once("did-finish-load", r));
   splash.loadFile(path.join(__dirname, "splash.html"));
+  // the version at the bottom; "just updated" the first time a new version starts
+  let last = ""; try { last = fs.readFileSync(LAST_VER, "utf8").trim(); } catch {}
+  splashJs(`setVersion(${JSON.stringify("Version " + app.getVersion() + (last && last !== app.getVersion() ? " · just updated" : ""))})`);
+  try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(LAST_VER, app.getVersion()); } catch {}
+}
+// the updating screen: the same window, in its "update" look; the main window steps aside
+function showUpdating(text, pct) {
+  if (!splash || splash.isDestroyed()) openSplash();
+  if (win && !win.isDestroyed()) win.hide();
+  splash.show();
+  splashJs(`setMode("update", "Updating Albatross")`);
+  splashJs(`setVersion(${JSON.stringify("Version " + app.getVersion() + (update ? " → " + update.version : ""))})`);
+  status(text, pct);
 }
 function makeTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
@@ -137,82 +163,54 @@ function makeTray() {
 }
 
 // ---------- updates (GitHub releases of AlbatrossAssistent.github.io) ----------
-function installUpdate() { if (!autoUpdater || !(update && update.ready)) return; quitting = true; autoUpdater.quitAndInstall(true, true); }
+// - at every start Albatross first looks for a new version (a few seconds at most); if there is one, it downloads and installs right
+//   there on the updating screen, and opens again by itself
+// - while it runs, it looks every 4 hours; a new version downloads in the background. In the tray it installs quietly (and comes back
+//   in the tray); with the window open it waits for "Restart to update", or until the window is closed to the tray
+const LAST_VER = path.join(DATA, ".last-version");
+const canUpdate = () => !!autoUpdater && app.isPackaged && !/win-unpacked/i.test(process.execPath);
+function installUpdate(opts = {}) {
+  if (!canUpdate() || !(update && update.ready) || installUpdate.busy) return;
+  installUpdate.busy = true; quitting = true;
+  if (opts.hidden) { try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(HIDDEN_MARK, "1"); } catch {} }
+  else showUpdating("Installing version " + update.version + "… Albatross opens again by itself.", null);
+  setTimeout(() => autoUpdater.quitAndInstall(true, true), opts.hidden ? 0 : 1200);
+}
+function updateAtStart() {
+  if (!canUpdate()) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let found = false, timer = 0;
+    const end = (v) => { clearTimeout(timer); for (const [e, fn] of on) autoUpdater.removeListener(e, fn); resolve(v); };
+    const on = [
+      ["update-not-available", () => end(false)],
+      ["error", () => end(false)],
+      ["update-available", (i) => {
+        found = true; clearTimeout(timer); update = { version: i.version, ready: false };
+        if (!hidden) showUpdating("A new version (" + i.version + ") is here. Downloading…", 0);
+        timer = setTimeout(() => end(false), 10 * 60e3);
+      }],
+      ["download-progress", (p) => { if (!hidden && update) status("Downloading version " + update.version + "… " + Math.round(p.percent) + "%", p.percent); }],
+      ["update-downloaded", (i) => { update = { version: i.version, ready: true }; end(true); }],
+    ];
+    for (const [e, fn] of on) autoUpdater.on(e, fn);
+    timer = setTimeout(() => { if (!found) end(false); }, 8000);
+    autoUpdater.checkForUpdates().catch(() => end(false));
+  });
+}
 function startUpdates() {
-  if (!autoUpdater || !app.isPackaged || /win-unpacked/i.test(process.execPath)) return;
+  if (!canUpdate()) return;
   autoUpdater.autoDownload = true; autoUpdater.autoInstallOnAppQuit = true;
   const tell = () => { if (win && !win.isDestroyed()) win.webContents.send("update", update); makeTray.refresh && makeTray.refresh(); };
-  autoUpdater.on("update-available", (i) => { update = { version: i.version, ready: false }; tell(); });
+  autoUpdater.on("update-available", (i) => { if (!update || update.version !== i.version) update = { version: i.version, ready: false }; tell(); });
   autoUpdater.on("update-downloaded", (i) => {
     update = { version: i.version, ready: true }; tell();
-    if (Notification.isSupported()) { const n = new Notification({ title: "Albatross " + i.version + " is ready", body: "Click to restart Albatross now, or it updates the next time it starts." }); n.on("click", installUpdate); n.show(); }
+    if (starting) return;                                   // the start takes care of it (updating screen)
+    if (!win || win.isDestroyed() || !win.isVisible()) return installUpdate({ hidden: true });    // in the tray: right away, quietly
+    if (Notification.isSupported()) { const n = new Notification({ title: "Albatross " + i.version + " is ready", body: "Click to update now (takes a few seconds), or it updates when you close the window." }); n.on("click", () => installUpdate()); n.show(); }
   });
   autoUpdater.on("error", () => {});
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
-  setTimeout(check, 20000); setInterval(check, 4 * 3600e3);
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 3600e3);
 }
-// ---------- Google sign-in ----------
-// Google refuses sign-in inside app windows, and the pop-up can't talk back to the app from the normal browser. So the app opens
-// a small one-time page on http://localhost:<port> in your normal browser (localhost is allowed to sign in with Firebase); you sign
-// in with Google there and the page hands Google's token back to this app only (a random state, the page's own origin), then the
-// app signs in with it. The page keeps nothing: in-memory sign-in, and the little server closes right after.
-let googleWait = null;
-function googleSignIn(config) {
-  if (googleWait) { shell.openExternal(googleWait.url); return googleWait.promise; }
-  const http = require("http");
-  const state = require("crypto").randomBytes(24).toString("hex");
-  const page = (port) => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Albatross · Sign in</title>
-<style>body{font:16px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f6f6f8;color:#111}main{text-align:center;max-width:360px;padding:24px}
-button{font:inherit;font-weight:600;padding:12px 22px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer}p{color:#555}
-@media(prefers-color-scheme:dark){body{background:#111;color:#eee}button{background:#222;color:#eee;border-color:#444}p{color:#aaa}}</style></head>
-<body><main><h2>Sign in to Albatross</h2><p id="t">Continue with Google here; Albatross on this PC signs in by itself.</p><button id="b">Continue with Google</button></main>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAuth, inMemoryPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-const auth = initializeAuth(initializeApp(${JSON.stringify(config)}), { persistence: inMemoryPersistence, popupRedirectResolver: browserPopupRedirectResolver });
-const t = document.getElementById("t"), b = document.getElementById("b");
-b.onclick = async () => {
-  b.disabled = true; t.textContent = "Signing in…";
-  try {
-    const r = await signInWithPopup(auth, new GoogleAuthProvider());
-    const c = GoogleAuthProvider.credentialFromResult(r);
-    const res = await fetch("/done", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: ${JSON.stringify(state)}, idToken: c.idToken, accessToken: c.accessToken }) });
-    if (!res.ok) throw new Error("Albatross didn't take it (" + res.status + "). Start the sign-in again in the app.");
-    b.hidden = true; t.textContent = "Done: you're signed in to Albatross. You can close this tab.";
-  } catch (e) { b.disabled = false; t.textContent = e.code === "auth/popup-closed-by-user" ? "The Google window was closed. Try again." : (e.message || String(e)); }
-};
-</script></body></html>`;
-  let done, fail;
-  const promise = new Promise((res, rej) => { done = res; fail = rej; });
-  const server = http.createServer((req, res) => {
-    const origin = "http://localhost:" + server.address().port;
-    if (req.method === "GET" && req.url.split("?")[0] === "/") {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-      return res.end(page(server.address().port));
-    }
-    if (req.method === "POST" && req.url === "/done" && req.headers.origin === origin) {
-      let body = ""; req.on("data", (c) => { body += c; if (body.length > 64e3) req.destroy(); });
-      return req.on("end", () => {
-        let j = {}; try { j = JSON.parse(body); } catch {}
-        if (j.state !== state || !j.idToken) { res.writeHead(403); return res.end(); }
-        res.writeHead(204); res.end();
-        finish(); done({ idToken: j.idToken, accessToken: j.accessToken || null });
-        show();
-      });
-    }
-    res.writeHead(404); res.end();
-  });
-  const timer = setTimeout(() => { finish(); fail(new Error("Sign-in timed out. Try again.")); }, 10 * 60e3);
-  function finish() { clearTimeout(timer); googleWait = null; setTimeout(() => server.close(), 1000); }
-  server.on("error", (e) => { finish(); fail(e); });
-  server.listen(0, "127.0.0.1", () => {
-    const url = "http://localhost:" + server.address().port + "/";
-    googleWait = { url, promise }; shell.openExternal(url);
-  });
-  return promise;
-}
-ipcMain.handle("google-signin", async (_e, config) => { try { return await googleSignIn(config); } catch (e) { return { error: e.message || String(e) }; } });
-
 ipcMain.handle("version", () => ({ app: app.getVersion(), update }));
 ipcMain.handle("boot", (_e, on) => setBootStart(on));
 ipcMain.handle("update-check", async () => { if (!autoUpdater || !app.isPackaged) return { error: "Updates work in the installed app." }; try { const r = await autoUpdater.checkForUpdates(); return { latest: r && r.updateInfo && r.updateInfo.version, current: app.getVersion(), update }; } catch (e) { return { error: e.message }; } });
@@ -230,10 +228,18 @@ app.whenReady().then(async () => {
   if (!hidden) openSplash();
   if (app.isPackaged) writeStartCmd();
   startUpdates();
+  step("update", "active"); status("Looking for a new version…");
+  const fresh = await updateAtStart();
+  starting = false;
+  if (fresh) return installUpdate({ hidden });
+  step("update", canUpdate() ? "done" : "skip");
   try {
+    step("ollama", "active"); status("Checking Ollama…");
     await ensureOllama();
+    step("ollama", "done"); step("host", "active"); status("Connecting to Albatross on this PC…");
     await ensureHost();
-    if (!hidden) openMain();
+    step("host", "done");
+    if (!hidden) { step("open", "active"); status("Opening…"); openMain(); }
   } catch (e) {
     if (splash && !splash.isDestroyed()) splash.close();
     dialog.showErrorBox("Albatross", e.message || String(e));

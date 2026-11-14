@@ -4,28 +4,67 @@
 <meta charset="utf-8">
 <title>Albatross</title>
 <style>
-  html, body { margin: 0; height: 100%; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; color: #1d1d1f; background: #fff; -webkit-app-region: drag; user-select: none; }
-  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px; box-sizing: border-box; }
-  img { width: 72px; height: 72px; border-radius: 18px; }
-  h1 { margin: 0; font-size: 20px; font-weight: 650; }
-  p { margin: 0; color: #6e6e73; min-height: 2.9em; }
-  .bar { width: 240px; height: 6px; border-radius: 999px; background: rgba(0,0,0,.08); overflow: hidden; }
-  .bar div { height: 100%; width: 30%; border-radius: 999px; background: #007aff; animation: slide 1.2s ease-in-out infinite; }
+  :root { --fg: #1d1d1f; --muted: #6e6e73; --line: rgba(0,0,0,.08); --bg1: #ffffff; --bg2: #eef3ff; --accent: #007aff; --ok: #34c759; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #f5f5f7; --muted: #a1a1a6; --line: rgba(255,255,255,.1); --bg1: #16171b; --bg2: #1d2433; --accent: #0a84ff; --ok: #30d158; } }
+  html, body { margin: 0; height: 100%; font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--fg); -webkit-app-region: drag; user-select: none; overflow: hidden; }
+  body { background: radial-gradient(120% 90% at 50% 0%, var(--bg2), var(--bg1) 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 32px 22px; box-sizing: border-box; }
+  .logo { position: relative; width: 84px; height: 84px; margin-bottom: 16px; }
+  .logo img { position: relative; width: 84px; height: 84px; border-radius: 22px; box-shadow: 0 10px 30px rgba(0,0,0,.18); animation: float 3.2s ease-in-out infinite; }
+  .logo::before { content: ""; position: absolute; inset: -14px; border-radius: 34px; background: var(--accent); opacity: .18; filter: blur(18px); animation: glow 2.4s ease-in-out infinite; }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  @keyframes glow { 0%, 100% { opacity: .12; transform: scale(.94); } 50% { opacity: .3; transform: scale(1.04); } }
+  h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+  #st { margin: 6px 0 14px; color: var(--muted); min-height: 1.45em; text-align: center; max-width: 360px; }
+  .bar { width: 280px; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .bar div { height: 100%; width: 30%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #5e5ce6); animation: slide 1.3s ease-in-out infinite; }
   .bar.pct div { animation: none; transition: width .3s; }
-  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(330%); } }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+  ol { list-style: none; margin: 18px 0 0; padding: 0; display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  li { display: flex; align-items: center; gap: 6px; transition: color .2s; }
+  li i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line); box-sizing: border-box; display: grid; place-items: center; flex: none; }
+  li.active { color: var(--fg); }
+  li.active i { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+  li.done i { border: 0; background: var(--ok); }
+  li.done i::after { content: ""; width: 6px; height: 3px; border: 1.6px solid #fff; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+  li.skip { opacity: .45; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #ver { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--muted); opacity: .8; }
+  /* updating */
+  body.update ol { display: none; }
+  body.update .logo img { animation: none; }
+  body.update .logo::before { animation: glow 1.2s ease-in-out infinite; }
+  #pct { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
-  <img src="icon.png" alt="">
-  <h1>Albatross</h1>
-  <p id="st">Starting…</p>
+  <div class="logo"><img src="icon.png" alt=""></div>
+  <h1 id="title">Albatross</h1>
+  <div id="st">Starting…</div>
   <div class="bar" id="bar"><div></div></div>
+  <ol id="steps">
+    <li id="s-update"><i></i>Updates</li>
+    <li id="s-ollama"><i></i>Ollama</li>
+    <li id="s-host"><i></i>Host</li>
+    <li id="s-open"><i></i>Opening</li>
+  </ol>
+  <div id="ver"></div>
 <script>
+  const $ = (id) => document.getElementById(id);
+  // what the app (main.js) calls while it starts or updates
   window.setStatus = (text, pct) => {
-    document.getElementById("st").textContent = text;
-    const bar = document.getElementById("bar");
+    $("st").textContent = text;
+    const bar = $("bar");
     bar.classList.toggle("pct", pct != null);
-    bar.firstElementChild.style.width = pct != null ? pct + "%" : "30%";
+    bar.firstElementChild.style.width = pct != null ? Math.max(2, pct) + "%" : "30%";
+  };
+  window.setStep = (id, state) => {           // state: active | done | skip
+    const li = $("s-" + id); if (!li) return;
+    li.className = state || "";
+  };
+  window.setVersion = (text) => { $("ver").textContent = text; };
+  window.setMode = (mode, title) => {          // "update": the updating screen
+    document.body.classList.toggle("update", mode === "update");
+    $("title").textContent = title || "Albatross";
   };
 </script>
 </body>
