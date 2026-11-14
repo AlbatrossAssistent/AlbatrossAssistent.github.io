@@ -555,6 +555,8 @@ async function agentLoop(model, goal, signal) {
   const caps = await getCaps(model);
   const msgs = [{ role: "system", content: SYSTEM() }, { role: "user", content: goal }];
   const tools = enabledTools();
+  if (effortNow() === "max") msgs[0].content += "\n" + MAX_WORKFLOW;
+  let reviewed = false;
   for (let round = 0; round < 30; round++) {
     const effort = effortNow();
     const body = { model, messages: msgs, stream: true, tools, options: buildOptions(model) };
@@ -565,7 +567,15 @@ async function agentLoop(model, goal, signal) {
       const res = await chatApi(body, signal, "");
       await readNdjson(res, (j) => { if (j.error) throw new Error(j.error); const m = j.message || {}; if (m.content) text += m.content; if (m.tool_calls) calls.push(...m.tool_calls); });
     } finally { ui.drop(waiting); }
-    if (!calls.length) return text.trim();
+    if (!calls.length) {
+      // Max: before finishing, look back once and check the work (it may fix things with more tool calls)
+      if (effortNow() === "max" && !reviewed && round < 27 && text.trim()) {
+        reviewed = true; step("say", "Checking its work", "Looking back over the goal and the results before finishing…");
+        msgs.push({ role: "assistant", content: text }, { role: "user", content: MAX_REVIEW });
+        continue;
+      }
+      return text.trim();
+    }
     if (text.trim()) step("say", "The Agent says", text.trim());
     msgs.push({ role: "assistant", content: text, tool_calls: calls });
     for (const tc of calls) {
@@ -699,17 +709,18 @@ function chatToolsSystem(groups) {
     pick("Tools can fail")].filter(Boolean).join("\n");
 }
 window.agentChatTools = function (text, opts = {}) {
-  if (!text && !opts.every) return null;
+  if (!text && !opts.every && !opts.planning) return null;
   const groups = new Set(Object.keys(GROUP_HINT).filter((g) => agOn(g) && (!opts.only || opts.only.includes(g)) && (opts.every || GROUP_HINT[g].test(text))));
   if (opts.all && !groups.size) for (const g of Object.keys(GROUP_HINT)) if (agOn(g)) groups.add(g);   // the router said it's a PC job, but no word matched
-  if (!groups.size) return null;
+  if (!groups.size && !opts.planning) return null;
   if ((groups.has("code") || groups.has("print")) && agOn("files")) groups.add("files");   // projects are files; printing picks a file
   const tools = ALL_TOOLS.filter((t) => {
     const n = t.function.name, g = TOOL_GROUP[n];
     if (n === "web_search" && opts.ownSearch) return false;      // the chat's own web search is offered already
-    return g ? groups.has(g) : n === "ask_user";
+    return g ? groups.has(g) : n === "ask_user" || (opts.planning && n === "update_plan");
   });
-  return { groups: [...groups], tools, names: new Set(tools.map((t) => t.function.name)), system: chatToolsSystem(groups) };
+  // Max effort: plan and ask tools only, without PC tools, need no PC-tools instructions
+  return { groups: [...groups], tools, names: new Set(tools.map((t) => t.function.name)), system: groups.size ? chatToolsSystem(groups) : "" };
 };
 // runs one of those tools for the chat; the steps and any "Allow" go into block (a card drawn by agentCard)
 window.agentChatRun = async function (name, args, signal, block, redraw) {

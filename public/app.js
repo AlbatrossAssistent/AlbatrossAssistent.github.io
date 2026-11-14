@@ -1202,6 +1202,15 @@ const EFFORT_HINT = {
   high: "Think carefully and check your work before you answer.",
   max: "Take your time. Work through the problem step by step, consider alternatives and edge cases, check your result, and only then give a clear final answer.",
 };
+// Max: the AI works like a careful person: plan, do, check, think it over, ask when it must, and look back before it's done
+const MAX_WORKFLOW = `You are on Max effort: work thoroughly, in this order.
+1. Plan: for anything more than a quick question, first call update_plan with the steps you will take.
+2. Do: work through the steps one at a time, really using your tools (search, read pages, files and so on), and mark each step doing and then done with update_plan.
+3. Check: after each step, look hard at what you got. Is it correct, complete and from a trustworthy source? If not, fix it or try another way. When you find more work, add steps to the plan.
+4. Consider: before you answer, think about what the user really needs, other options, edge cases and anything still missing.
+5. Ask: if a real decision or a missing detail matters for the result, call ask_user (2 to 4 short options), then carry on with the answer.
+For a short, simple question, skip the plan and just answer carefully.`;
+const MAX_REVIEW = "(A note from the app, not from the user: check before you finish.) Read the user's request again and look critically at your answer above. Check the facts, numbers, calculations and code, and that every part of the request is covered. If it is correct and complete, reply with exactly: OK. If anything is wrong or missing, fix it (use tools if you need to) and then write the complete corrected answer, which replaces the old one.";
 function paintEffort() {
   const e = effortNow(), row = EFFORTS.find(x => x[0] === e);
   $("#effortName").textContent = row[1]; $("#effortBtn").dataset.e = e;
@@ -1712,29 +1721,35 @@ function renderBlock(b, active) {
 // ---------- presentations: designs, layouts, viewer, presenting, PowerPoint ----------
 // The AI picks a theme, a font pairing, a transition, an animation and a layout per slide.
 const DECK_THEMES = {
-  midnight: { about: "dark navy, calm and modern, blue accent", bg: "0B0F1A", fg: "F4F6FB", muted: "98A2B8", accent: "6E8BFF", card: "161C2C", fonts: "modern", deco: "line" },
-  paper:    { about: "warm cream paper, editorial, burnt orange", bg: "FAF6EE", fg: "221E19", muted: "6E665B", accent: "C2410C", card: "F0E8DA", fonts: "editorial", deco: "bar" },
-  nordic:   { about: "clean white and slate, minimal, teal", bg: "F7F8FA", fg: "1D2433", muted: "667085", accent: "0E9384", card: "E9EDF2", fonts: "geometric", deco: "circle" },
-  forest:   { about: "deep green with gold, nature and outdoors", bg: "12291F", fg: "F1EEE2", muted: "A9B8AA", accent: "D9B45A", card: "1B392C", fonts: "classic", deco: "frame" },
-  sunset:   { about: "dark plum with coral, warm and lively", bg: "24122F", fg: "FFF1EA", muted: "C9A9C2", accent: "FF7A59", card: "33203F", fonts: "friendly", deco: "circle" },
-  bold:     { about: "bright yellow and black, loud and punchy", bg: "FFD43B", fg: "111111", muted: "4A4426", accent: "111111", card: "FFE27A", fonts: "bold", deco: "bar" },
-  swiss:    { about: "white, black and red, strict and graphic", bg: "FFFFFF", fg: "111111", muted: "6B6B6B", accent: "E11D2E", card: "F2F2F2", fonts: "tech", deco: "line" },
-  ocean:    { about: "deep blue with cyan, science and water", bg: "0A2540", fg: "EAF6FF", muted: "8FB3CF", accent: "38D2E5", card: "123459", fonts: "geometric", deco: "circle" },
-  blush:    { about: "soft pink, elegant, fashion and lifestyle", bg: "FBEFF1", fg: "2B1B22", muted: "7D6370", accent: "C2416B", card: "F5DDE3", fonts: "elegant", deco: "frame" },
-  terminal: { about: "black with neon green, code and technology", bg: "0D1117", fg: "E6EDF3", muted: "8B949E", accent: "3FB950", card: "161B22", fonts: "mono", deco: "line" },
-  royal:    { about: "navy with gold, formal, history and business", bg: "1B2A4A", fg: "F6F1E7", muted: "AEB7C9", accent: "D4A64A", card: "243660", fonts: "classic", deco: "bar" },
-  lavender: { about: "light lilac with indigo, friendly, school", bg: "F3F0FF", fg: "1F1640", muted: "6B6290", accent: "5B4BDB", card: "E6E0FF", fonts: "friendly", deco: "circle" },
-  sand:     { about: "sand and brown, earth, travel and ancient history", bg: "EDE3D1", fg: "33291F", muted: "7A6A55", accent: "8A5A2B", card: "E2D4BC", fonts: "condensed", deco: "bar" },
-  graphite: { about: "dark graphite with amber, serious and modern, business", bg: "1C1D21", fg: "F2F2F0", muted: "A0A2A8", accent: "F5A524", card: "2A2B31", fonts: "tech", deco: "line" },
-  mint:     { about: "fresh white with mint green, health, food and wellbeing", bg: "F4FBF7", fg: "13261D", muted: "5E7A6C", accent: "12A37A", card: "DDF3E8", fonts: "rounded", deco: "circle" },
-  coral:    { about: "light peach with coral, warm, friendly and personal", bg: "FFF4EE", fg: "3A1F16", muted: "8A6556", accent: "F25C3D", card: "FFE2D5", fonts: "friendly", deco: "circle" },
-  neon:     { about: "black with neon magenta and cyan, gaming, music and nightlife", bg: "0A0612", fg: "F5F0FF", muted: "A99BC4", accent: "FF3BD4", card: "1A1030", fonts: "condensed", deco: "frame" },
-  northern: { about: "deep night teal with aurora green, space, nature at night and science", bg: "06141A", fg: "E7FBF4", muted: "8DB5AA", accent: "38E0A0", card: "0F2630", fonts: "geometric", deco: "line" },
+  midnight: { about: "dark navy, calm and modern, blue accent", bg: "0B0F1A", fg: "F4F6FB", muted: "98A2B8", accent: "6E8BFF", card: "161C2C", fonts: "modern", deco: "line", art: "mesh" },
+  paper:    { about: "warm cream paper, editorial, burnt orange", bg: "FAF6EE", fg: "221E19", muted: "6E665B", accent: "C2410C", card: "F0E8DA", fonts: "editorial", deco: "bar", art: "band" },
+  nordic:   { about: "clean white and slate, minimal, teal", bg: "F7F8FA", fg: "1D2433", muted: "667085", accent: "0E9384", card: "E9EDF2", fonts: "geometric", deco: "circle", art: "geo" },
+  forest:   { about: "deep green with gold, nature and outdoors", bg: "12291F", fg: "F1EEE2", muted: "A9B8AA", accent: "D9B45A", card: "1B392C", fonts: "classic", deco: "frame", art: "waves" },
+  sunset:   { about: "dark plum with coral, warm and lively", bg: "24122F", fg: "FFF1EA", muted: "C9A9C2", accent: "FF7A59", card: "33203F", fonts: "friendly", deco: "circle", art: "mesh" },
+  bold:     { about: "bright yellow and black, loud and punchy", bg: "FFD43B", fg: "111111", muted: "4A4426", accent: "111111", card: "FFE27A", fonts: "bold", deco: "bar", art: "geo" },
+  swiss:    { about: "white, black and red, strict and graphic", bg: "FFFFFF", fg: "111111", muted: "6B6B6B", accent: "E11D2E", card: "F2F2F2", fonts: "tech", deco: "line", art: "band" },
+  ocean:    { about: "deep blue with cyan, science and water", bg: "0A2540", fg: "EAF6FF", muted: "8FB3CF", accent: "38D2E5", card: "123459", fonts: "geometric", deco: "circle", art: "waves" },
+  blush:    { about: "soft pink, elegant, fashion and lifestyle", bg: "FBEFF1", fg: "2B1B22", muted: "7D6370", accent: "C2416B", card: "F5DDE3", fonts: "elegant", deco: "frame", art: "rings" },
+  terminal: { about: "black with neon green, code and technology", bg: "0D1117", fg: "E6EDF3", muted: "8B949E", accent: "3FB950", card: "161B22", fonts: "mono", deco: "line", art: "dots" },
+  royal:    { about: "navy with gold, formal, history and business", bg: "1B2A4A", fg: "F6F1E7", muted: "AEB7C9", accent: "D4A64A", card: "243660", fonts: "classic", deco: "bar", art: "band" },
+  lavender: { about: "light lilac with indigo, friendly, school", bg: "F3F0FF", fg: "1F1640", muted: "6B6290", accent: "5B4BDB", card: "E6E0FF", fonts: "friendly", deco: "circle", art: "mesh" },
+  sand:     { about: "sand and brown, earth, travel and ancient history", bg: "EDE3D1", fg: "33291F", muted: "7A6A55", accent: "8A5A2B", card: "E2D4BC", fonts: "condensed", deco: "bar", art: "waves" },
+  graphite: { about: "dark graphite with amber, serious and modern, business", bg: "1C1D21", fg: "F2F2F0", muted: "A0A2A8", accent: "F5A524", card: "2A2B31", fonts: "tech", deco: "line", art: "geo" },
+  mint:     { about: "fresh white with mint green, health, food and wellbeing", bg: "F4FBF7", fg: "13261D", muted: "5E7A6C", accent: "12A37A", card: "DDF3E8", fonts: "rounded", deco: "circle", art: "rings" },
+  coral:    { about: "light peach with coral, warm, friendly and personal", bg: "FFF4EE", fg: "3A1F16", muted: "8A6556", accent: "F25C3D", card: "FFE2D5", fonts: "friendly", deco: "circle", art: "mesh" },
+  neon:     { about: "black with neon magenta and cyan, gaming, music and nightlife", bg: "0A0612", fg: "F5F0FF", muted: "A99BC4", accent: "FF3BD4", card: "1A1030", fonts: "condensed", deco: "frame", art: "mesh" },
+  northern: { about: "deep night teal with aurora green, space, nature at night and science", bg: "06141A", fg: "E7FBF4", muted: "8DB5AA", accent: "38E0A0", card: "0F2630", fonts: "geometric", deco: "line", art: "waves" },
   chalk:    { about: "dark green chalkboard with white chalk, school and teaching", bg: "1F3A2E", fg: "F3F1E6", muted: "B9C4B6", accent: "FFE27A", card: "2A4A3B", fonts: "handwritten", deco: "frame" },
   kraft:    { about: "brown kraft paper with black ink, craft, handmade and DIY", bg: "D8BF98", fg: "1F1A14", muted: "5C4C38", accent: "1F1A14", card: "CDB187", fonts: "slab", deco: "bar" },
-  glacier:  { about: "icy white-blue with navy, winter, clean tech and research", bg: "EEF5FB", fg: "0F2742", muted: "5A7088", accent: "2F6FD6", card: "DCE9F6", fonts: "modern", deco: "line" },
-  crimson:  { about: "dark wine red with gold, drama, history, film and literature", bg: "2A0A10", fg: "FBEFE9", muted: "C9A6A3", accent: "E8B04A", card: "3D131B", fonts: "elegant", deco: "frame" },
-  pastel:   { about: "soft butter yellow with purple, playful, kids and creative topics", bg: "FFF8DC", fg: "2D2140", muted: "7A6E8E", accent: "8B5CF6", card: "FBEFC0", fonts: "rounded", deco: "circle" },
+  glacier:  { about: "icy white-blue with navy, winter, clean tech and research", bg: "EEF5FB", fg: "0F2742", muted: "5A7088", accent: "2F6FD6", card: "DCE9F6", fonts: "modern", deco: "line", art: "geo" },
+  crimson:  { about: "dark wine red with gold, drama, history, film and literature", bg: "2A0A10", fg: "FBEFE9", muted: "C9A6A3", accent: "E8B04A", card: "3D131B", fonts: "elegant", deco: "frame", art: "rings" },
+  pastel:   { about: "soft butter yellow with purple, playful, kids and creative topics", bg: "FFF8DC", fg: "2D2140", muted: "7A6E8E", accent: "8B5CF6", card: "FBEFC0", fonts: "rounded", deco: "circle", art: "dots" },
+  aurora:   { about: "near-black with violet and teal glow, futuristic, AI and startups", bg: "0B0A14", fg: "F3F1FF", muted: "A39FC2", accent: "8B7CFF", accent2: "2DD4BF", card: "17152A", fonts: "tech", deco: "line", art: "mesh" },
+  corporate:{ about: "crisp white with confident blue, business reports and pitches", bg: "FFFFFF", fg: "0F1B2D", muted: "5B6B80", accent: "1D5BD8", accent2: "0EA5E9", card: "EEF3FB", fonts: "modern", deco: "line", art: "band" },
+  obsidian: { about: "black with warm gold lines, premium, luxury and awards", bg: "0E0E10", fg: "F5EFE3", muted: "A69E8E", accent: "C9A45C", card: "1A1A1D", fonts: "elegant", deco: "frame", art: "rings" },
+  citrus:   { about: "white with orange and lime, energetic, sports and food", bg: "FFFDF7", fg: "1E1B13", muted: "6B6555", accent: "F97316", accent2: "84CC16", card: "FFF1DE", fonts: "bold", deco: "bar", art: "geo" },
+  sakura:   { about: "soft white with cherry pink and ink, Japan, spring and art", bg: "FFF9FA", fg: "2A1A20", muted: "86707A", accent: "E26D8E", accent2: "F4B6C6", card: "FCE8EE", fonts: "editorial", deco: "line", art: "waves" },
+  steel:    { about: "cool grey-blue with electric blue, engineering and data", bg: "1A2230", fg: "EDF2F8", muted: "93A1B5", accent: "3B9EFF", card: "243044", fonts: "geometric", deco: "line", art: "dots" },
 };
 const DECK_FONTS = {
   modern:    { about: "clean sans serif", web: ["Inter", "Inter"], ppt: ["Segoe UI Semibold", "Segoe UI"] },
@@ -1788,6 +1803,78 @@ const LAYOUT_OK = {
 };
 function layoutOf(sl) { const l = sl.layout || (sl.photo ? "image-right" : "bullets"); return !LAYOUT_OK[l] || LAYOUT_OK[l](sl) ? l : "bullets"; }
 const photoCredit = (p) => [p.creator, p.license].filter(Boolean).join(" · ");
+// Designer backgrounds: each theme has an "art" style, painted once per theme and slide kind into a 1920x1080 picture.
+// The same picture is the slide's background in the app and in the PowerPoint file, so both look the same.
+// Kinds: "cover" (title slide: boldest), "section" (dividers, statements, quotes) and "content" (quiet, at the edges only).
+const deckArtCache = new Map();
+const slideKind = (i, L) => i === 0 ? "cover" : ["section", "statement", "quote"].includes(L) ? "section" : "content";
+function deckArt(t, kind) {
+  if (!t.art) return null;
+  const key = [t.bg, t.accent, t.accent2, t.art, kind].join("|");
+  if (deckArtCache.has(key)) return deckArtCache.get(key);
+  const W = 1920, H = 1080, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const rgb = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const col = (h, a) => `rgba(${rgb(h).join(",")},${a})`;
+  const [br, bg_, bb] = rgb(t.bg), dark = br * .3 + bg_ * .59 + bb * .11 < 128;
+  const A = t.accent, B = t.accent2 || t.accent, C = t.muted;
+  const k = kind === "cover" ? 1 : kind === "section" ? .8 : .45;   // how strong the art is
+  g.fillStyle = "#" + t.bg; g.fillRect(0, 0, W, H);
+  const blob = (x, y, r, h, a) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col(h, a)); gr.addColorStop(1, col(h, 0)); g.fillStyle = gr; g.fillRect(0, 0, W, H); };
+  switch (t.art) {
+    case "mesh": {   // soft glowing colour clouds
+      const a = (dark ? .55 : .35) * k;
+      blob(W * .92, H * .05, W * .55, A, a); blob(W * .05, H * 1.02, W * .5, B, a * .9);
+      if (kind !== "content") blob(W * .55, H * .7, W * .35, A, a * .45);
+      break;
+    }
+    case "waves": {  // layered waves along the bottom
+      const n = kind === "content" ? 2 : 4, top = kind === "content" ? H * .86 : H * .7;
+      for (let w = 0; w < n; w++) {
+        const y0 = top + w * (H - top) / (n + 1), amp = 26 + w * 10, ph = w * 1.7;
+        g.beginPath(); g.moveTo(0, H);
+        for (let x = 0; x <= W; x += 16) g.lineTo(x, y0 + Math.sin(x / 310 + ph) * amp + Math.sin(x / 120 + ph * 2) * amp * .25);
+        g.lineTo(W, H); g.closePath(); g.fillStyle = col(w % 2 ? B : A, (dark ? .22 : .16) * (k + .3)); g.fill();
+      }
+      break;
+    }
+    case "geo": {    // overlapping triangles on the right edge
+      const s = kind === "content" ? .32 : 1, x0 = W - W * .38 * s;
+      const tri = (pts, h, a) => { g.beginPath(); g.moveTo(...pts[0]); for (const p of pts.slice(1)) g.lineTo(...p); g.closePath(); g.fillStyle = col(h, a); g.fill(); };
+      tri([[W, 0], [W, H * .9 * s + H * .1], [x0, 0]], A, kind === "content" ? .35 : .9 * Math.min(1, k + .2));
+      tri([[W, H * .25 * s], [W, H], [W - W * .26 * s, H]], B === A ? C : B, .45 * k + .1);
+      tri([[x0 + W * .05 * s, 0], [W - W * .12 * s, 0], [W - W * .2 * s, H * .5 * s]], dark ? "FFFFFF" : "000000", .07);
+      break;
+    }
+    case "band": {   // one strong diagonal band (cover) or a thin top bar (content)
+      if (kind === "content") { g.fillStyle = col(A, 1); g.fillRect(0, 0, W, 14); g.fillStyle = col(B, .5); g.fillRect(0, 14, W * .3, 6); break; }
+      g.save(); g.translate(W * .9, H * .5); g.rotate(-.32);
+      g.fillStyle = col(A, kind === "cover" ? 1 : .85); g.fillRect(-90, -H, kind === "cover" ? 520 : 300, H * 2);
+      g.fillStyle = col(B === A ? C : B, .35); g.fillRect(470, -H, 70, H * 2);
+      g.restore();
+      break;
+    }
+    case "rings": {  // fine concentric circles off a corner
+      g.lineWidth = dark ? 2.5 : 3.5;
+      const cx = W * .96, cy = kind === "content" ? -H * .1 : H * .2, n = kind === "content" ? 6 : 12;
+      for (let r = 0; r < n; r++) { g.beginPath(); g.arc(cx, cy, 120 + r * 58, 0, Math.PI * 2); g.strokeStyle = col(r % 3 ? A : B, (.75 - r * .04) * k + .12); g.stroke(); }
+      if (kind !== "content") blob(W * .1, H * .95, W * .3, A, (dark ? .3 : .18) * k);
+      break;
+    }
+    case "dots": {   // a dot grid fading out from a corner, plus an accent block
+      const step = 38, R = kind === "content" ? W * .28 : W * .55;
+      for (let y = 0; y < H; y += step) for (let x = 0; x < W; x += step) {
+        const d = Math.hypot(W - x, H - y); if (d > R) continue;
+        g.beginPath(); g.arc(x, y, 4.6, 0, Math.PI * 2); g.fillStyle = col(A, Math.min(1, (1 - d / R) * 1.1 * (k + .35))); g.fill();
+      }
+      if (kind !== "content") { g.fillStyle = col(B, .9); g.fillRect(0, H - 22, W * .34, 22); }
+      break;
+    }
+  }
+  const url = c.toDataURL("image/png");
+  deckArtCache.set(key, url);
+  return url;
+}
 
 function slideEl(d, i, build) {
   const { t, f } = deckLook(d);
@@ -1805,7 +1892,9 @@ function slideEl(d, i, build) {
     return el;
   };
   const list = (parent, items, bld = true) => { const ul = add(parent, "ul"); for (const x of items || []) add(ul, "li", bld ? "bld" : "", x); return ul; };
-  add(el, "i", "deco " + t.deco);
+  const kind = slideKind(i, i === 0 ? "title" : layoutOf(d.slides[i - 1])), art = deckArt(t, kind);
+  if (art) { el.style.backgroundImage = `url(${art})`; el.style.backgroundSize = "cover"; el.classList.add("has-art"); }
+  else add(el, "i", "deco " + t.deco);
   if (i === 0) {
     el.classList.add("L-title");
     if (d.coverPhoto) { el.classList.add("on-photo"); photo(d.coverPhoto, "bgph"); }
@@ -2045,8 +2134,9 @@ async function makePptx(d) {
   const head = (s, text, o = {}) => s.addText(text, { x: X, y: .75, w: CW, h: 1.05, fontSize: 32, bold: hb, color: t.fg, fontFace: HF, valign: "top", fit: "shrink", objectName: "anim-title", ...o });
   const bullets = (s, items, o = {}) => items.length && s.addText(items.map(x => ({ text: x, options: { bullet: { indent: 18 }, breakLine: true } })),
     { x: X, y: 2.0, w: CW, h: 4.7, fontSize: 21, color: t.fg, fontFace: BF, valign: "top", paraSpaceAfter: 12, objectName: "anim-list", ...o });
-  const deco = (s, onPhoto) => {
-    if (onPhoto) return;
+  const paint = (s, kind) => { const a = deckArt(t, kind); s.background = a ? { data: a.replace(/^data:/, "") } : { color: t.bg }; return !!a; };
+  const deco = (s, onPhoto, hasArt) => {
+    if (onPhoto || hasArt) return;
     if (t.deco === "bar") s.addShape("rect", { x: 0, y: 0, w: .19, h: H, fill: { color: t.accent } });
     if (t.deco === "line") s.addShape("rect", { x: X, y: .5, w: .8, h: .07, fill: { color: t.accent } });
     if (t.deco === "circle") s.addShape("ellipse", { x: W - 4, y: -1.9, w: 5.6, h: 5.6, fill: { color: t.accent, transparency: 87 } });
@@ -2064,9 +2154,9 @@ async function makePptx(d) {
 
   // title slide
   {
-    const s = pptx.addSlide(); s.background = { color: t.bg };
+    const s = pptx.addSlide(); const art = paint(s, "cover");
     const photo = d.coverPhoto && await fullPhoto(s, d.coverPhoto);
-    deco(s, photo);
+    deco(s, photo, art);
     const c = photo ? "FFFFFF" : t.fg;
     s.addText(d.title, { x: X, y: photo ? 3.6 : 2.0, w: CW, h: 2.0, fontSize: 50, bold: hb, color: c, fontFace: HF, valign: "bottom", fit: "shrink", objectName: "anim-title" });
     if (d.subtitle) s.addText(d.subtitle, { x: X, y: photo ? 5.65 : 4.1, w: CW, h: .8, fontSize: 22, color: photo ? "E6E6E6" : t.muted, fontFace: BF, valign: "top", objectName: "anim-sub" });
@@ -2074,11 +2164,11 @@ async function makePptx(d) {
     anims.push([]);
   }
   for (const [n, sl] of d.slides.entries()) {
-    const s = pptx.addSlide(); s.background = { color: t.bg };
-    const L = layoutOf(sl), targets = [];
+    const s = pptx.addSlide();
+    const L = layoutOf(sl), targets = [], art = paint(s, slideKind(n + 1, L));
     let photoOk = false;
     if (L === "image-full") photoOk = await fullPhoto(s, sl.photo);
-    deco(s, photoOk);
+    deco(s, photoOk, art);
     const list = (sl.bullets || []);
     if (L === "section") {
       s.addText(String(n + 1).padStart(2, "0"), { x: X, y: 1.3, w: 4, h: 1.7, fontSize: 96, bold: hb, color: t.accent, fontFace: HF, valign: "bottom", objectName: "anim-pre" });
@@ -2712,7 +2802,8 @@ async function chat(model, opts = {}) {
     system = (system ? system + "\n\n" : "") + whatYouCanDo();
     system += "\n\nWhen a program needs more than one file (for example a game with index.html, style.css and game.js), write every file in full in its own code block and put its file name in bold on the line right before the block, like **game.js**. Link the files to each other with relative paths (<link rel=\"stylesheet\" href=\"style.css\">, <script src=\"game.js\"><\/script>, import ... from \"./util.js\"), so they run together in the built-in player.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
-    if (EFFORT_HINT[effort]) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
+    const maxPlan = effort === "max" && toolsOk && !guestMode && !!window.agentChatTools;
+    if (EFFORT_HINT[effort] && !maxPlan) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
     { const mem = memoryForAI(); if (mem) system = (system ? system + "\n\n" : "") + mem; }
     if (opts.docs) {
       const block = { type: "docs", query: opts.docs, active: true, results: [] };
@@ -2762,10 +2853,11 @@ async function chat(model, opts = {}) {
     // the PC tools (files, mail, browser, code, printing, its own folder): always there for a model that can use tools, and the
     // model decides when to use them (Settings → Tools → Work on your PC switches them off). A job takes more rounds than a search.
     let agentKit = null;
-    if (toolsOk && !guestMode && window.agentChatTools && toolOn("agent")) agentKit = window.agentChatTools("", { every: true, only: window.EMBED_CHROME ? ["browser", "files"] : null, ownSearch: useTools });
+    // on Max, the plan and ask tools are there even when the PC tools aren't
+    if (toolsOk && !guestMode && window.agentChatTools && (toolOn("agent") || maxPlan)) agentKit = window.agentChatTools("", { every: toolOn("agent"), planning: maxPlan, only: window.EMBED_CHROME ? ["browser", "files"] : null, ownSearch: useTools });
     let agentBlock = null;
     if (agentKit) {
-      let sys = agentKit.system;
+      let sys = [agentKit.system, maxPlan && MAX_WORKFLOW].filter(Boolean).join("\n");
       // in the Chrome sidebar: the page the user is looking at
       const t = window.EMBED_CHROME && window.chromeTab;
       if (window.EMBED_CHROME) sys += "\nYou are Albatross in the user's Chrome sidebar: help with the web page they're on and with browsing. You can also use their files on the PC and your own folder (agent:): keep useful things there, like page summaries or notes, when they ask or it clearly helps. The sidebar is narrow: answer short.";
@@ -2773,7 +2865,8 @@ async function chat(model, opts = {}) {
         (t.follow ? "Your browser tools work in exactly that tab: use browser_read to read it, browser_click / browser_type to act there. Don't open another page unless asked." : "To read it, use browser_open with that address (your browser tools work in a tab of your own).");
       msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + sys) : msgs.unshift({ role: "system", content: sys });
     }
-    const rounds = agentKit ? 16 : 6;
+    const rounds = effort === "max" ? 30 : agentKit ? 16 : 6;
+    let reviewing = false, reviewed = false, revised = "";
     for (let round = 0; round < rounds; round++) {
       const body = { model, messages: msgs, stream: true, options: buildOptions(model) };
       if (guestMode && conv?.id) body.chatId = conv.id;
@@ -2797,14 +2890,25 @@ async function chat(model, opts = {}) {
         }
         if (m.content) {
           if (think && !think.done) { think.done = true; think.secs = (performance.now() - think.start) / 1000; }
-          roundText += m.content; reply.content += m.content;
+          roundText += m.content;
+          if (reviewing) revised += m.content; else reply.content += m.content;
         }
         if (m.tool_calls) calls.push(...m.tool_calls);
         if (j.done) { totalTokens += j.eval_count || 0; totalNs += j.eval_duration || 0; }
         redraw();
       });
       if (think && !think.done) { think.done = true; think.secs = (performance.now() - think.start) / 1000; }
-      if (!calls.length) { finished = true; break; }
+      if (!calls.length) {
+        // Max: look back once before finishing; "OK" keeps the answer, anything else is the corrected answer and replaces it
+        if (effort === "max" && !reviewed && round < rounds - 3 && roundText.trim() && !/\[\[ask:/i.test(roundText)) {
+          reviewed = reviewing = true;
+          msgs.push({ role: "assistant", content: roundText }, { role: "user", content: MAX_REVIEW });
+          ph(reply, "working"); reply.phaseText = "Checking its work…"; redraw();
+          continue;
+        }
+        if (reviewing) { const r = revised.trim(); if (r && !/^ok\W{0,3}$/i.test(r)) reply.content = r; delete reply.phaseText; }
+        finished = true; break;
+      }
 
       msgs.push({ role: "assistant", content: roundText, tool_calls: calls });
       ph(reply, "working"); reply.phaseText = "Using a tool…";
