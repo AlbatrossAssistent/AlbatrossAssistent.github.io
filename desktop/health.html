@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Albatross warning</title>
+<style>
+  html, body { margin: 0; background: transparent; font-family: "Segoe UI", system-ui, sans-serif; color: #f3f4f7; -webkit-user-select: none; user-select: none; overflow: hidden; }
+  .card { margin: 8px; background: rgba(24, 25, 30, .97); border: 1px solid rgba(255, 255, 255, .12); border-radius: 18px; padding: 14px 16px 12px; box-shadow: 0 14px 40px rgba(0, 0, 0, .55); animation: in .35s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .head { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 15px; margin-bottom: 8px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #ffb020; box-shadow: 0 0 0 4px rgba(255, 176, 32, .22); flex: none; }
+  .error .dot { background: #ff4d4d; box-shadow: 0 0 0 4px rgba(255, 77, 77, .22); }
+  .issue { padding: 9px 0; border-top: 1px solid rgba(255, 255, 255, .08); }
+  .issue b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .issue p { margin: 0; font-size: 12.5px; line-height: 1.4; color: #b9bdc9; }
+  button { font: inherit; font-size: 12.5px; border: 0; border-radius: 999px; padding: 6px 13px; cursor: pointer; background: rgba(255, 255, 255, .1); color: #f3f4f7; }
+  button:hover { background: rgba(255, 255, 255, .18); }
+  button.fix { background: #0a84ff; color: #fff; margin-top: 8px; }
+  button.fix:hover { background: #3b9bff; }
+  .foot { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .08); }
+  .foot .sp { flex: 1; }
+</style>
+<div class="card" id="card"></div>
+<script>
+  const card = document.getElementById("card");
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  window.albatrossHealth.onIssues((issues) => {
+    card.innerHTML = ""; card.className = "card" + (issues.some((i) => i.level === "error") ? " error" : "");
+    const head = el("div", "head"); head.append(el("span", "dot"), el("span", "", issues.some((i) => i.level === "error") ? "Albatross has stopped" : "Albatross is running slowly"));
+    card.appendChild(head);
+    for (const i of issues) {
+      const row = el("div", "issue"); row.append(el("b", "", i.title), el("p", "", i.detail));
+      if (i.fix) { const b = el("button", "fix", i.fix.label); b.onclick = () => { b.disabled = true; b.textContent = "Working…"; window.albatrossHealth.action("fix", i.fix.id); }; row.appendChild(b); }
+      card.appendChild(row);
+    }
+    const foot = el("div", "foot");
+    const snooze = el("button", "", "Snooze 1 hour"); snooze.onclick = () => issues.forEach((i) => window.albatrossHealth.action("snooze", i.id));
+    const open = el("button", "", "Open Albatross"); open.onclick = () => window.albatrossHealth.action("open");
+    const off = el("button", "", "Turn off warnings"); off.onclick = () => window.albatrossHealth.action("off");
+    foot.append(snooze, open, el("span", "sp"), off); card.appendChild(foot);
+    requestAnimationFrame(() => window.albatrossHealth.size(card.offsetHeight + 16));
+  });
+</script>

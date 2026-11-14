@@ -6,7 +6,7 @@
 //  - lives in the tray next to the clock; can start with Windows (then it starts hidden, so the host is ready for your phone)
 //  - can make the host start when the PC boots, before anyone signs in (control center → Start at boot)
 //  - updates itself: new versions come from GitHub, download in the background and install when the app restarts
-const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, nativeTheme, dialog, ipcMain, Notification } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, nativeTheme, dialog, ipcMain, Notification, screen } = require("electron");
 const { execFile } = require("child_process");
 let autoUpdater = null; try { autoUpdater = require("electron-updater").autoUpdater; } catch {}
 const path = require("path");
@@ -25,6 +25,7 @@ const HIDDEN_MARK = path.join(DATA, ".relaunch-hidden");
 let hidden = process.argv.includes("--hidden");
 try { if (fs.existsSync(HIDDEN_MARK)) { fs.unlinkSync(HIDDEN_MARK); hidden = true; } } catch {}
 let win = null, splash = null, splashReady = null, tray = null, quitting = false, update = null, starting = true;     // update: { version, ready }
+let screenHelp = null, health = null;     // screen help (looks at the desktop, draws the frames) and the slowdown warning: set up once the app is ready
 
 // "Albatross.exe --selftest": only runs the self-check against the host on this PC, prints the result and exits (1 = problems)
 const SELFTEST_ONLY = process.argv.includes("--selftest");
@@ -154,6 +155,8 @@ function makeTray() {
     { label: "Open Albatross", click: () => show() },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin, click: (i) => { app.setLoginItemSettings({ openAtLogin: i.checked, args: ["--hidden"] }); tray.setContextMenu(menu()); } },
+    { label: "Slowdown warnings", type: "checkbox", checked: !health || health.enabled(), click: (i) => { if (health) health.setEnabled(i.checked); } },
+    { label: "Clear highlights", click: () => { if (screenHelp) screenHelp.clear(); } },
     { label: "Run self-check", click: () => runSelfTest("tray") },
     { label: "Control center", click: () => { show(); setTimeout(() => win && win.webContents.executeJavaScript("window.openControlCenter && openControlCenter()").catch(() => {}), 400); } },
     ...(update && update.ready ? [{ label: "Restart to update (" + update.version + ")", click: () => installUpdate() }] : []),
@@ -261,6 +264,20 @@ ipcMain.handle("boot", (_e, on) => setBootStart(on));
 ipcMain.handle("update-check", async () => { if (!autoUpdater || !app.isPackaged) return { error: "Updates work in the installed app." }; try { const r = await autoUpdater.checkForUpdates(); return { latest: r && r.updateInfo && r.updateInfo.version, current: app.getVersion(), update }; } catch (e) { return { error: e.message }; } });
 ipcMain.handle("update-install", () => { installUpdate(); return { ok: !!(update && update.ready) }; });
 
+// ---------- help with my screen, and the slowdown warning ----------
+// Both are windows in front of every other app, so they live here. Screen help also reads the desktop, which only this app (in
+// your signed-in session) can do: the host may run in the background session at boot, where it would see nothing.
+function setUpHelpers() {
+  const log = (t) => console.log("[albatross] " + t);
+  screenHelp = require("./screenhelp").create({ BrowserWindow, screen, scriptDir: path.join(FILES, "host"), assetsDir: __dirname, log });
+  ipcMain.handle("screen-available", () => screenHelp.available());
+  ipcMain.handle("screen-look", (_e, opts) => screenHelp.look(opts || {}));
+  ipcMain.handle("screen-show", (_e, items, seconds) => screenHelp.show(items, seconds));
+  ipcMain.handle("screen-clear", () => { screenHelp.clear(); return true; });
+  health = require("./health").create({ BrowserWindow, screen, ipcMain, assetsDir: __dirname, panel: PANEL, dataDir: DATA, showMain: () => show(), log });
+  health.start();
+  makeTray.refresh && makeTray.refresh();
+}
 app.whenReady().then(async () => {
   if (SELFTEST_ONLY) {
     const r = (await reachable(PANEL + "/")) ? await runSelfTest("command line") : null;
@@ -274,6 +291,7 @@ app.whenReady().then(async () => {
   let prevVer = ""; try { prevVer = fs.readFileSync(LAST_VER, "utf8").trim(); } catch {}
   const justUpdated = !!prevVer && prevVer !== app.getVersion();
   makeTray();
+  setUpHelpers();
   if (app.isPackaged && !/win-unpacked/i.test(process.execPath) && !app.getLoginItemSettings().openAtLogin && !fs.existsSync(path.join(DATA, ".asked-autostart"))) {
     // first start: start with Windows by default (the host is then ready for your phone); can be switched off in the tray menu
     app.setLoginItemSettings({ openAtLogin: true, args: ["--hidden"] });

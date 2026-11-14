@@ -237,6 +237,77 @@ window.albatrossSelfTest = async function (w) {
     if (!/Connect to your PC/.test(o.offline)) bad.push("offline " + o.offline);
     return bad.length ? bad.join(" | ") : true;
   });
+  await tryIt("help: every tour step points at something that exists", async () => {
+    const T = w.AlbatrossTour;
+    if (!T || !T.TOPICS.length) return "no tours";
+    const bad = await T.check();
+    if (bad.length) return "missing: " + bad.join(" | ");
+    // a tour really opens: spotlight and card appear above the page, Next moves on, Esc ends it
+    await T.start("start"); await sleep(500);
+    const root = d.querySelector("#tour"), card = root && root.querySelector(".tour-card");
+    const shown = !!root && root.matches(":popover-open") && /1 of/.test(card.querySelector(".tour-step").textContent) && !!card.querySelector("h3").textContent;
+    const hole = root.querySelector(".tour-hole").getBoundingClientRect();
+    card.querySelector('[data-a="next"]').click(); await sleep(450);
+    const moved = /2 of/.test(card.querySelector(".tour-step").textContent);
+    T.stop();
+    const closed = !root.matches(":popover-open");
+    d.querySelector("#settings").close();
+    return (shown && hole.width > 10 && moved && closed) || JSON.stringify({ shown, hole: hole.width, moved, closed });
+  });
+  await tryIt("help: the Settings tab lists the tours and What's this? explains a click", async () => {
+    w.openSettings("help"); await sleep(150);
+    const topics = d.querySelectorAll("#helpTopics .help-topic").length, tab = d.querySelector('#settings .tabs [data-tab="help"]').classList.contains("on");
+    d.querySelector("#settings").close();
+    w.AlbatrossTour.whatsThis(); await sleep(150);
+    const root = d.querySelector("#tour"), rect = d.querySelector("#effortBtn").getBoundingClientRect();
+    d.querySelector("#effortBtn").dispatchEvent(new w.MouseEvent("click", { bubbles: true, cancelable: true, clientX: rect.left + 8, clientY: rect.top + 8 }));
+    await sleep(300);
+    const said = root.querySelector("h3").textContent + " | " + root.querySelector("p").textContent;
+    w.AlbatrossTour.stop();
+    return (topics >= 6 && tab && /thinks/i.test(said)) || JSON.stringify({ topics, tab, said });
+  });
+  await tryIt("screen help: look, point, clear; the button and the Settings switch follow the Windows app", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const calls = [], out = {};
+      // without the Windows app the button explains itself
+      document.querySelector("#screenBtn").click(); await new Promise(r => setTimeout(r, 200)); out.noApp = document.querySelector("#toast").textContent;
+      window.albatrossDesktop = {
+        screenAvailable: async () => true,
+        screenLook: async (opts) => { calls.push(["look", opts]); return { ok: true, title: "Demo app", proc: "demo", rect: {}, image: { b64: "QUJD", w: 10, h: 10 }, elements: [{ n: 1, kind: "button", name: "Save", src: "ui" }, { n: 2, kind: "text", name: "Welcome", src: "ocr" }], list: "1 button 'Save'; 2 text 'Welcome' (read from the screen)" }; },
+        screenShow: async (items, s) => { calls.push(["show", items, s]); return { shown: items.length }; },
+        screenClear: async () => { calls.push(["clear"]); return true; },
+        healthPopup: async () => true, setHealthPopup: async (on) => { calls.push(["health", on]); return on; },
+      };
+      await refreshScreenOk(); out.ok = window.screenOk;
+      const by = (n) => CHAT_TOOLS.find(t => t.name === n), reply = { blocks: [] }, images = [], ctx = { reply, redraw() {}, images };
+      const look = await by("look_at_screen").run({}, ctx);
+      const show = await by("show_on_screen").run({ items: [{ n: 1, label: "Click here to save" }], seconds: 12 }, ctx);
+      const clear = await by("show_on_screen").run({ items: [] }, ctx);
+      out.look = look.out; out.images = images.length; out.block = reply.blocks[0] && [reply.blocks[0].type, reply.blocks[0].title, reply.blocks[0].count];
+      out.show = show.out; out.clear = clear.out; out.calls = calls.map((c) => c[0]).join(","); out.showArgs = JSON.stringify(calls[1].slice(1)); out.card = screenCard(reply.blocks[0]).textContent;
+      openSettings("help"); await new Promise(r => setTimeout(r, 250)); await paintHealthToggle();
+      const sw = document.querySelector("#healthPopupOn"); out.toggle = sw.checked + "/" + sw.disabled;
+      sw.checked = false; sw.dispatchEvent(new Event("change")); await new Promise(r => setTimeout(r, 200)); out.toggled = JSON.stringify(calls.filter((c) => c[0] === "health"));
+      document.querySelector("#settings").close();
+      delete window.albatrossDesktop; await refreshScreenOk(); out.after = window.screenOk;
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (!/Windows/.test(o.noApp)) bad.push("button without the app said: " + o.noApp);
+    if (o.ok !== true || o.after !== false) bad.push("availability " + o.ok + "/" + o.after);
+    if (!/Demo app/.test(o.look) || !/1 button 'Save'/.test(o.look) || !/never invent/.test(o.look) || !/read from the screen/.test(o.look) || o.images !== 1) bad.push("look: " + o.look.slice(0, 120));
+    if (!o.block || o.block[0] !== "screen" || o.block[2] !== 2 || !/Demo app/.test(o.card) || !/2 things/.test(o.card)) bad.push("card " + JSON.stringify(o.block) + " " + o.card);
+    if (!/Pointing at 1 thing/.test(o.show) || !/12/.test(o.showArgs) || !/Click here to save/.test(o.showArgs)) bad.push("show: " + o.show + " " + o.showArgs);
+    if (!/gone/.test(o.clear) || o.calls !== "look,show,clear") bad.push("clear/calls: " + o.clear + " " + o.calls);
+    if (o.toggle !== "true/false" || !/false/.test(o.toggled)) bad.push("switch " + o.toggle + " " + o.toggled);
+    return bad.length ? bad.join(" | ") : true;
+  });
+  await tryIt("the screen tools have proper forms", () => {
+    const names = ev("CHAT_TOOLS.map(t => t.name)");
+    for (const n of ["look_at_screen", "show_on_screen"]) if (!names.includes(n)) return "missing " + n;
+    const f = JSON.parse(ev("JSON.stringify(CHAT_TOOLS.find(t => t.name === 'show_on_screen').def)")).function.parameters;
+    return (f.required.includes("items") && f.properties.items.items.properties.n && f.properties.items.items.required.includes("n")) || "show_on_screen form incomplete";
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;

@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Albatross overlay</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; font-family: "Segoe UI", system-ui, sans-serif; }
+  .mark { position: absolute; box-sizing: border-box; border: 4px solid #ffd60a; border-radius: 12px; animation: appear .35s cubic-bezier(.2, .8, .2, 1) both, glow 1.6s ease-in-out .35s infinite;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, .6), 0 0 22px 5px rgba(255, 214, 10, .55); }
+  .label { position: absolute; left: -4px; top: -40px; background: #ffd60a; color: #111; font-weight: 600; font-size: 15px; line-height: 1; padding: 8px 12px; border-radius: 10px; white-space: nowrap; max-width: 460px;
+    overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 10px rgba(0, 0, 0, .45); }
+  .mark.below .label { top: auto; bottom: -40px; }
+  .num { display: inline-block; background: #111; color: #ffd60a; border-radius: 999px; min-width: 20px; padding: 3px 6px; margin-right: 8px; text-align: center; font-size: 13px; }
+  body.fade .mark { transition: opacity 1.4s ease; opacity: 0; }
+  @keyframes appear { from { opacity: 0; transform: scale(1.12); } to { opacity: 1; transform: scale(1); } }
+  @keyframes glow { 50% { box-shadow: 0 0 0 2px rgba(0, 0, 0, .6), 0 0 34px 10px rgba(255, 214, 10, .8); } }
+</style>
+<body>
+<script>
+  window.albatrossOverlay.onShapes((shapes) => {
+    document.body.classList.remove("fade"); document.body.innerHTML = "";
+    for (const s of shapes) {
+      const m = document.createElement("div"); m.className = "mark" + (s.y < 56 ? " below" : "");
+      m.style.left = s.x + "px"; m.style.top = s.y + "px"; m.style.width = s.w + "px"; m.style.height = s.h + "px";
+      if (s.label || s.n != null) {
+        const l = document.createElement("div"); l.className = "label";
+        if (s.n != null) { const n = document.createElement("span"); n.className = "num"; n.textContent = s.n; l.appendChild(n); }
+        l.appendChild(document.createTextNode(s.label || "")); m.appendChild(l);
+      }
+      document.body.appendChild(m);
+    }
+  });
+  window.albatrossOverlay.onFade(() => document.body.classList.add("fade"));
+</script>

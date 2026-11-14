@@ -7,4 +7,12 @@ contextBridge.exposeInMainWorld("albatrossDesktop", {
   setBootStart: (on) => ipcRenderer.invoke("boot", !!on),
   checkUpdate: () => ipcRenderer.invoke("update-check"),
   installUpdate: () => ipcRenderer.invoke("update-install"),
-  onUpdate: (fn) => ipcRenderer.on("update", (_e, info) => fn(info)),});
+  onUpdate: (fn) => ipcRenderer.on("update", (_e, info) => fn(info)),
+  // help with my screen: look at the window the user was using, point at things on the real screen
+  screenAvailable: () => ipcRenderer.invoke("screen-available"),
+  screenLook: (opts) => ipcRenderer.invoke("screen-look", opts),
+  screenShow: (items, seconds) => ipcRenderer.invoke("screen-show", items, seconds),
+  screenClear: () => ipcRenderer.invoke("screen-clear"),
+  // the slowdown warning in front of other apps
+  healthPopup: () => ipcRenderer.invoke("health-get"),
+  setHealthPopup: (on) => ipcRenderer.invoke("health-set", !!on),});

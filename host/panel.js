@@ -61,6 +61,8 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
     }
     // The sound banks the Music tool plays with (host/soundfont.js), downloaded on request and served from this PC
     if (req.method === "GET" && /^\/soundfont\/[a-z0-9_-]+(\?.*)?$/.test(req.url)) return require("./soundfont").serve(req, res, req.url.split("?")[0].slice(11));
+    // What is slowing Albatross down or stopping it (host/health.js): the desktop app asks, and shows a card when something stays wrong
+    if (req.method === "GET" && req.url === "/health") { require("./health").handle("GET", "/health", "", null, {}).then(([code, j]) => { res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(JSON.stringify(j)); }); return; }
     // The songs the song model made (host/comfy.js), played in the app
     if (req.method === "GET" && /^\/song\/[0-9a-z.-]+$/.test(req.url)) return require("./comfy").serveSong(req, res, req.url.slice(6));
     // The Albatross app itself, from this PC (..\public): the Chrome sidebar loads it from here, because a page from this PC may

@@ -1707,7 +1707,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
-  if (b.type === "chart" || b.type === "chances" || b.type === "song" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes" || b.type === "music") return renderToolBlock(b);
+  if (b.type === "chart" || b.type === "chances" || b.type === "song" || b.type === "screen" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes" || b.type === "music") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -2966,9 +2966,30 @@ const CHAT_TOOLS = (() => {
         finally { clearInterval(poll); Object.assign(block, { active: false, done: true, doneAt: Date.now() }); ctx.redraw(); }
         return { out: block.error ? "Error: " + block.error : `The song (${block.song.seconds} s, made in ${block.song.took} s) is playing in the chat with a download button. Answer in one or two sentences; don't repeat the lyrics.` };
       } },
+    { key: "screen", name: "look_at_screen", need: "screenOk", def: T("look_at_screen", "Look at the user's screen: the app they were using before this chat (never Albatross itself), or one by name. You get a numbered list of the things in it that can be clicked, typed into or read, with their names, and, if you can see pictures, a picture of the window. Use it when the user asks what is on their screen, what they are looking at, or needs help with something in another app. Then describe it in plain words and call show_on_screen to point at the parts that matter.", {
+      window: { type: "string", description: "Optional: part of the window's title or the program's name, to look at a particular app instead of the one just used" } }),
+      async run(args, ctx) {
+        const r = await window.albatrossDesktop.screenLook({ window: args.window });
+        const block = { type: "screen", active: false, done: true, doneAt: Date.now(), title: r.title || "", proc: r.proc || "", count: (r.elements || []).length, error: r.error || "" };
+        ctx.reply.blocks.push(block); ctx.redraw();
+        if (r.error) return { out: "Error: " + r.error };
+        if (r.image && r.image.b64) ctx.images.push({ b64: r.image.b64 });
+        const ocr = r.elements.some((e) => e.src === "ocr");
+        return { out: `Looked at "${r.title}" (${r.proc}). Things you can point at, by number (use these numbers with show_on_screen, never invent one): ${r.list || "(nothing found: describe from the picture)"}.` + (ocr ? " Items marked (read from the screen) are text found by reading the window, not buttons." : "") + " If you can see pictures, the picture follows in the next message." };
+      } },
+    { key: "screen", name: "show_on_screen", need: "screenOk", def: T("show_on_screen", "Show the user where something is: draws a glowing frame with a short label on their real screen around the things you name, on top of every app, for about 25 seconds (it fades by itself). Call look_at_screen first and use its numbers. Point at the few things that matter (at most 6), with a label that says what to do there, like \"Click here to save\". With an empty list it removes the frames.", {
+      items: { type: "array", description: "What to point at", items: { type: "object", properties: { n: { type: "integer", description: "The number from look_at_screen" }, label: { type: "string", description: "A few words: what it is or what to do there" } }, required: ["n"] } },
+      seconds: { type: "number", description: "How long the frames stay (default 25, at most 120)" } }, ["items"]),
+      async run(args) {
+        const items = Array.isArray(args.items) ? args.items : [];
+        if (!items.length) { await window.albatrossDesktop.screenClear(); return { out: "The frames are gone." }; }
+        const r = await window.albatrossDesktop.screenShow(items, args.seconds);
+        return { out: r && r.shown ? `Pointing at ${r.shown} thing${r.shown === 1 ? "" : "s"} on the user's screen. Tell them in a sentence or two what to look at and do; the frames fade by themselves.` : "Nothing was shown: the numbers didn't match anything from the last look. Look again, then use the numbers it gives." };
+      } },
   ];
 })();
 const CHAT_TOOLS_HINT = {
+  screen: "Screen help: when the user asks what is on their screen, what they are looking at, or needs help with something in another app, call look_at_screen first (you get the app they were using, not Albatross). Describe what you see in plain words, then call show_on_screen with the numbers of the few things that matter and a short label for each, so the user sees them lit up on their real screen. Never invent a number. You point; you do not click for them (Jarvis does that).",
   song: "Songs: when the user wants a real song (with singing) or an AI-made track, call make_song with style tags and lyrics with [verse]/[chorus] markers (or [instrumental]); it takes a minute or two. Quick editable music without singing is make_music.",
   graph: "Charts: when the user wants a graph or chart, call make_chart (look the numbers up first if you don't know them).",
   chances: "Chances: when the user asks how likely something is or wants a prediction, call estimate_chances.",
@@ -3020,6 +3041,7 @@ async function chat(model, opts = {}) {
 
   let totalTokens = 0, totalNs = 0, finished = false, stopped = false;
   // the presentation the model builds with the deck tools (created on its first deck tool call; an earlier one from this chat is changed in place)
+  const toolImages = [];   // pictures a tool wants the model to look at (the screen): sent after the round of tool calls
   const deckCtx = { block: null, pool: new Map(), seq: 0, checked: false, checks: 0, issues: 0, nudged: 0, attach: [], vision: false,
     touch: () => { if (deckCtx.block) { deckCtx.block.progress = (deckCtx.block.progress || 0) + 1; redraw(); drawDeckSide(); } },
     ensure: () => {
@@ -3194,7 +3216,7 @@ async function chat(model, opts = {}) {
         const xt = extraTools.find(t => t.name === name);
         if (xt) {
           let out;
-          try { const r = await xt.run(args, { text: String(conv.messages.filter(m => m.role === "user").at(-1)?.content || ""), researched: reply.blocks.some(b => b.type === "search" || b.type === "fetch"), reply, redraw }); if (r.block) { reply.blocks.push(r.block); redraw(); } out = r.out; }
+          try { const r = await xt.run(args, { text: String(conv.messages.filter(m => m.role === "user").at(-1)?.content || ""), researched: reply.blocks.some(b => b.type === "search" || b.type === "fetch"), reply, redraw, images: toolImages }); if (r.block) { reply.blocks.push(r.block); redraw(); } out = r.out; }
           catch (e) { if (e.name === "AbortError") throw e; out = "Error: " + e.message + (window.TOOL_FAIL_HINT || ""); }
           msgs.push({ role: "tool", content: String(out).slice(0, 4000), tool_name: name });
           continue;
@@ -3229,6 +3251,10 @@ async function chat(model, opts = {}) {
         block.active = false; block.done = true; redraw();
         if (block.error || /^(Error|Unknown tool)/.test(String(out || "").trim())) out = String(out) + (window.TOOL_FAIL_HINT || "");   // it may try again
         msgs.push({ role: "tool", content: out, tool_name: name });
+      }
+      if (toolImages.length) {
+        const imgs = toolImages.splice(0);
+        if (caps.includes("vision")) msgs.push({ role: "user", content: "(From the app) The picture of the window you just looked at, as it is on the screen.", images: imgs.map((i) => i.b64) });
       }
       // photos the model can look at (vision models): they follow the search result as a message with the pictures
       if (deckCtx.attach.length) {
@@ -4027,6 +4053,14 @@ function songCard(b) {
   else { card.querySelector("audio").src = url; const a = card.querySelector("a"); a.href = url; a.download = b.song.file; }
   w.appendChild(card); return w;
 }
+// what the AI looked at on the screen (the picture itself isn't kept: it would fill your chat storage)
+function screenCard(b) {
+  const w = document.createElement("div"); w.className = "tool-block";
+  if (b.error) { w.innerHTML = '<div class="tool-err"></div>'; w.firstChild.textContent = "Couldn't look at the screen: " + b.error; return w; }
+  w.innerHTML = '<div class="fetch-line"><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span></span></div>';
+  w.querySelector("span").textContent = `Looked at ${b.title ? "“" + b.title.slice(0, 70) + "”" : "your screen"}${b.proc ? " (" + b.proc + ")" : ""}: ${b.count} thing${b.count === 1 ? "" : "s"} it can point at`;
+  return w;
+}
 function renderToolBlock(b) {
   if (b.type === "jarvis") return jarvisCard(b);
   if (b.type === "agent") return window.agentCard ? window.agentCard(b) : document.createElement("div");
@@ -4035,6 +4069,7 @@ function renderToolBlock(b) {
   if (b.type === "notes") return window.notesCard ? window.notesCard(b) : document.createElement("div");
   if (b.type === "music") return window.musicCard ? window.musicCard(b) : document.createElement("div");
   if (b.type === "song") return songCard(b);
+  if (b.type === "screen") return screenCard(b);
   const wrap = document.createElement("div"); wrap.className = "tool-block";
   if (b.active) {
     wrap.innerHTML = `<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>`;
@@ -6576,8 +6611,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.13";
+const APP_VERSION = "2026-11-14.14";
 const WHATS_NEW = [
+  ["2026-11-14.14", ["Help tab in Settings: guided tours of Albatross and a What's this? mode that explains whatever you click","Help with my screen: the AI looks at the app you were using, describes it, and points at the important parts with glowing frames on your real screen (Windows app)","A warning card in front of your other apps when something slows Albatross down or stops it, with a fix when there is one"]],
   ["2026-11-14.13", ["Settings → Tools → Music: download the AI song model and the better sound banks with one click on any PC (a download that stops carries on where it left off)"]],
   ["2026-11-14.12", ["Music: choose between the classic sounds and better SoundFont banks (MuseScore General, GeneralUser GS) with a recorded drum kit, and compare them side by side; ask for a real AI song with singing (ACE-Step, runs on your PC)","Image models: only Qwen Image remains"]],
   ["2026-11-14.11", ["Music has more character: better instrument recordings (violin, cello, sax, horn, vibraphone, guitars...), a balanced mix where the instruments are no longer drowned out by the drums, phrased melodies, and the AI can write the whole tune"]],
@@ -6744,7 +6780,7 @@ showWhatsNew();
 window.notesOnStart && window.notesOnStart();
 // the terms have to be accepted once (again when they change: bump TERMS_VERSION)
 const TERMS_VERSION = "2026-11-12";
-if (store.get("termsAccepted", "") !== TERMS_VERSION) {
+if (!(store.get("termsAccepted", "") >= TERMS_VERSION)) {   // ISO dates: accepted on or after this version of the terms
   const d = $("#termsDlg");
   d.addEventListener("cancel", (e) => e.preventDefault());           // Esc doesn't skip it
   $("#termsOk").onchange = (e) => ($("#termsGo").disabled = !e.target.checked);
@@ -6760,3 +6796,29 @@ if (S.files.name) peerConnect();
 checkHost();
 connect();
 checkSearch();
+
+// ---------- Help with my screen (the button) and the slowdown warning (Settings → Help) ----------
+// Both belong to the Windows app: it can see the desktop and draw in front of other programs.
+const desktopApi = () => window.albatrossDesktop || null;
+async function refreshScreenOk() { try { window.screenOk = !!(desktopApi() && desktopApi().screenLook && await desktopApi().screenAvailable()); } catch { window.screenOk = false; } }
+refreshScreenOk();
+$("#screenBtn").onclick = async () => {
+  if (!desktopApi() || !desktopApi().screenLook) return toast("Screen help needs the Albatross app for Windows.");
+  await refreshScreenOk();
+  if (!window.screenOk) return toast("Screen help isn't available on this PC.");
+  const model = ($("#model") && $("#model").value) || S.model;
+  let caps = []; try { caps = await getCaps(model); } catch {}
+  if (!caps.includes("tools")) return toast("Pick a model that can use tools (the AI has to look and point by itself).");
+  const typed = $("#prompt").value.trim();
+  $("#prompt").value = typed ? typed + "\n(Look at my screen for this and point at what matters.)" : "Look at my screen: tell me what you see and what I can do here, and point at the important parts.";
+  $("#send").click();
+};
+async function paintHealthToggle() {
+  const on = $("#healthPopupOn"), note = $("#healthNote"); if (!on) return;
+  const api = desktopApi();
+  if (!api || !api.healthPopup) { on.disabled = true; on.checked = false; return; }
+  try { on.checked = !!(await api.healthPopup()); on.disabled = false; } catch { on.disabled = true; }
+  on.onchange = async () => { try { on.checked = !!(await api.setHealthPopup(on.checked)); toast(on.checked ? "Slowdown warnings are on" : "Slowdown warnings are off"); } catch { on.checked = !on.checked; } };
+}
+document.querySelector('#settings .tabs [data-tab="help"]')?.addEventListener("click", paintHealthToggle);
+paintHealthToggle();
