@@ -1202,6 +1202,29 @@ const EFFORT_HINT = {
   high: "Think carefully and check your work before you answer.",
   max: "Take your time. Work through the problem step by step, consider alternatives and edge cases, check your result, and only then give a clear final answer.",
 };
+// Some models (and the templates of imported ones) write their reasoning into the answer itself instead of Ollama's separate thinking
+// field: <think>…</think>, a lone </think> after reasoning the template already opened, or gpt-oss's "analysis" channel. Whatever
+// the form, it belongs in the thinking block, not in the answer. Works on text that is still streaming in (open = still thinking).
+function splitThinking(raw) {
+  let s = String(raw || ""), think = "", open = false;
+  if (/<\|(channel|start|message)\|>/.test(s)) {
+    s = s.replace(/<\|channel\|>\s*analysis\s*<\|message\|>([\s\S]*?)(<\|end\|>|$)/g, (m, t, end) => { think += t; if (!end) open = true; return ""; })
+      .replace(/<\|channel\|>\s*(final|commentary)[^<]*<\|message\|>/g, "").replace(/<\|(start|end|return|message|channel|constrain|call)\|>(assistant)?/g, "");
+  }
+  s = s.replace(/<think>([\s\S]*?)(<\/think>|$)/gi, (m, t, end) => { think += t; if (!end) open = true; return ""; });
+  const lone = s.search(/<\/think>/i);
+  if (lone >= 0) { think = s.slice(0, lone) + think; s = s.slice(lone + 8); }
+  s = s.replace(/<\/?(t(h(i(n(k)?)?)?)?)?$/i, "");   // a tag that is only half here yet
+  return { think: think.trim(), answer: s.replace(/^\s+/, ""), open };
+}
+// Max's last look at its own answer: "OK" keeps the answer and a corrected answer replaces it, but a remark about the answer
+// ("I checked it again, it is all correct. OK") is not an answer and must never take its place
+function reviewResult(original, revised) {
+  const r = splitThinking(revised).answer.trim();
+  if (!r || /^ok\b/i.test(r) || /(^|\n|[.!])\s*ok\W{0,3}$/i.test(r)) return original;
+  if (original && r.length < Math.min(120, original.length * 0.35)) return original;   // too short to be the whole corrected answer
+  return r;
+}
 // Max: the AI works like a careful person: plan, do, check, think it over, ask when it must, and look back before it's done
 const MAX_WORKFLOW = `You are on Max effort: work thoroughly, in this order.
 1. Plan: for anything more than a quick question, first call update_plan with the steps you will take.
@@ -3161,26 +3184,36 @@ async function chat(model, opts = {}) {
       const res = await chatApi(body, controller.signal, conv?.id);
       // the PC has the request (remote: its first answer frame is here; this PC: the first bytes)
       if (round === 0 && reply.phase === "sent") { ph(reply, "received"); redraw(); setTimeout(() => { if (reply.phase === "received") { ph(reply, "working"); redraw(); } }, 700); }
-      let think = null, roundText = "", calls = [];
+      let think = null, roundText = "", calls = [], rawText = "", textThink = null;
+      const before = reply.content;   // the answer so far: this round's text is added to it
       await readNdjson(res, j => {
         if (j.error) throw new Error(j.error);
         loaded();
         const m = j.message || {};
-        if (m.content) ph(reply, "answering"); else if (m.thinking && reply.phase !== "answering") ph(reply, "thinking");
+        if (m.thinking && reply.phase !== "answering") ph(reply, "thinking");
         if (m.thinking) {
           if (!think) { think = { type: "thinking", text: "", start: performance.now() }; reply.blocks.push(think); }
           think.text += m.thinking;
         }
         if (m.content) {
-          if (think && !think.done) { think.done = true; think.secs = (performance.now() - think.start) / 1000; }
-          roundText += m.content;
-          if (reviewing) revised += m.content; else reply.content += m.content;
+          rawText += m.content;
+          const sp = splitThinking(rawText);
+          if (sp.think) {
+            if (!textThink) { textThink = { type: "thinking", text: "", start: performance.now() }; reply.blocks.push(textThink); }
+            textThink.text = sp.think;
+          }
+          if (sp.answer) {
+            ph(reply, "answering");
+            for (const t of [think, textThink]) if (t && !t.done && !(t === textThink && sp.open)) { t.done = true; t.secs = (performance.now() - t.start) / 1000; }
+          } else if (sp.think && reply.phase !== "answering") ph(reply, "thinking");
+          roundText = sp.answer;
+          if (reviewing) revised = sp.answer; else reply.content = before + sp.answer;
         }
         if (m.tool_calls) calls.push(...m.tool_calls);
         if (j.done) { totalTokens += j.eval_count || 0; totalNs += j.eval_duration || 0; }
         redraw();
       });
-      if (think && !think.done) { think.done = true; think.secs = (performance.now() - think.start) / 1000; }
+      for (const t of [think, textThink]) if (t && !t.done) { t.done = true; t.secs = (performance.now() - t.start) / 1000; }
       if (!calls.length) {
         // a presentation must be checked before it is done; on Max, problems must be fixed and checked again
         if (deckCtx.block && effort !== "low" && round < rounds - 4 && deckCtx.nudged < 2) {
@@ -3202,7 +3235,7 @@ async function chat(model, opts = {}) {
           ph(reply, "working"); reply.phaseText = "Checking its work…"; redraw();
           continue;
         }
-        if (reviewing) { const r = revised.trim(); if (r && !/^ok\W{0,3}$/i.test(r)) reply.content = r; delete reply.phaseText; }
+        if (reviewing) { reply.content = reviewResult(reply.content, revised); delete reply.phaseText; }
         finished = true; break;
       }
 
@@ -4123,7 +4156,7 @@ async function askJSON(model, caps, messages, schema) {
   const res = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
   let txt = "", tokens = 0, ns = 0;
   await readNdjson(res, j => { if (j.error) throw new Error(j.error); txt += j.message?.content || ""; if (j.done) { tokens = j.eval_count || 0; ns = j.eval_duration || 0; } });
-  txt = txt.trim();
+  txt = splitThinking(txt).answer.trim();
   try { return { data: JSON.parse(txt), tokens, ns }; }
   catch { const m = txt.match(/\{[\s\S]*\}/); if (m) return { data: JSON.parse(m[0]), tokens, ns }; throw new Error("the model didn't answer in the right format"); }
 }
@@ -6611,8 +6644,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.14";
+const APP_VERSION = "2026-11-14.15";
 const WHATS_NEW = [
+  ["2026-11-14.15", ["Thinking no longer shows up as the answer: reasoning a model writes into its reply (<think> tags and similar) goes into the thinking box, and Max's final check can't replace your answer with a remark"]],
   ["2026-11-14.14", ["Help tab in Settings: guided tours of Albatross and a What's this? mode that explains whatever you click","Help with my screen: the AI looks at the app you were using, describes it, and points at the important parts with glowing frames on your real screen (Windows app)","A warning card in front of your other apps when something slows Albatross down or stops it, with a fix when there is one"]],
   ["2026-11-14.13", ["Settings → Tools → Music: download the AI song model and the better sound banks with one click on any PC (a download that stops carries on where it left off)"]],
   ["2026-11-14.12", ["Music: choose between the classic sounds and better SoundFont banks (MuseScore General, GeneralUser GS) with a recorded drum kit, and compare them side by side; ask for a real AI song with singing (ACE-Step, runs on your PC)","Image models: only Qwen Image remains"]],

@@ -567,6 +567,7 @@ async function agentLoop(model, goal, signal) {
       const res = await chatApi(body, signal, "");
       await readNdjson(res, (j) => { if (j.error) throw new Error(j.error); const m = j.message || {}; if (m.content) text += m.content; if (m.tool_calls) calls.push(...m.tool_calls); });
     } finally { ui.drop(waiting); }
+    if (window.splitThinking) text = window.splitThinking(text).answer;   // reasoning written into the text isn't something the Agent "says"
     if (!calls.length) {
       // Max: before finishing, look back once and check the work (it may fix things with more tool calls)
       if (effortNow() === "max" && !reviewed && round < 27 && text.trim()) {

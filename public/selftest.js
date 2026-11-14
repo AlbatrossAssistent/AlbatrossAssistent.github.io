@@ -308,6 +308,65 @@ window.albatrossSelfTest = async function (w) {
     const f = JSON.parse(ev("JSON.stringify(CHAT_TOOLS.find(t => t.name === 'show_on_screen').def)")).function.parameters;
     return (f.required.includes("items") && f.properties.items.items.properties.n && f.properties.items.items.required.includes("n")) || "show_on_screen form incomplete";
   });
+  await tryIt("reasoning a model writes into its answer goes to the thinking block, never into the answer", () => {
+    const sp = (x) => w.splitThinking(x), bad = [];
+    const cases = [
+      ["<think>plan the reply</think>Hello there", "plan the reply", "Hello there"],
+      ["<think>still working it out", "still working it out", ""],
+      ["The user wants a greeting.\n</think>\n\nHi!", "The user wants a greeting.", "Hi!"],
+      ["<|channel|>analysis<|message|>check the sum<|end|><|start|>assistant<|channel|>final<|message|>391", "check the sum", "391"],
+      ["Just a normal answer with x < y in it.", "", "Just a normal answer with x < y in it."],
+    ];
+    for (const [raw, think, answer] of cases) { const r = sp(raw); if (r.think !== think || r.answer !== answer) bad.push(JSON.stringify(raw).slice(0, 40) + " -> " + JSON.stringify(r)); }
+    if (!sp("<think>a").open || sp("<think>a</think>b").open) bad.push("open flag");
+    // streamed in small pieces, with the tags split across pieces: the answer may never show reasoning or half a tag
+    for (const chunks of [["<thi", "nk>pla", "n the re", "ply</th", "ink>Hel", "lo"], ["<|chan", "nel|>analysis<|mes", "sage|>sum it", "<|end|><|start|>assistant<|channel|>final<|message|>39", "1"]]) {
+      let acc = "";
+      for (const ch of chunks) { acc += ch; const a = sp(acc).answer; if (/plan|sum it|<\/?t|<\|/.test(a)) { bad.push("leak while streaming: " + JSON.stringify(a)); break; } }
+      const end = sp(acc); if (!/^(Hello|391)$/.test(end.answer)) bad.push("final answer " + JSON.stringify(end.answer));
+    }
+    // Max's review: OK or a remark keeps the answer; a real corrected answer replaces it
+    const orig = "Here are three tips for sleeping better: keep the room cool and dark, go to bed at the same time every day, and put the phone away an hour before.";
+    const rv = (x) => w.reviewResult(orig, x);
+    if (rv("OK") !== orig || rv("OK.") !== orig) bad.push("plain OK");
+    if (rv("I read the request again and checked every tip. Everything is correct and complete. OK") !== orig) bad.push("a remark replaced the answer");
+    if (rv("Looks good.") !== orig) bad.push("a short remark replaced the answer");
+    if (rv("<think>checking</think>OK") !== orig) bad.push("OK after thinking");
+    const fixed = "Three tips for sleeping better: keep the bedroom cool (about 18 °C) and dark, keep the same bedtime every day, and stop screens an hour before bed.";
+    if (rv(fixed) !== fixed) bad.push("a real correction was not taken");
+    return bad.length ? bad.join(" | ") : true;
+  });
+  await tryIt("the real chat path: leaked reasoning lands in the thinking block, and Max's review remark doesn't replace the answer", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const NL = String.fromCharCode(10), origApi = chatApi, origCaps = getCaps, origEffort = S.effort, origThink = S.think, out = {};
+      const stream = (parts) => new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); for (const p of parts) c.enqueue(e.encode(JSON.stringify(p) + NL)); c.close(); } }));
+      const piece = (content) => ({ message: { role: "assistant", content } });
+      let calls = 0, script = [];
+      window.chatApi = async () => stream(script[calls++] || [piece("?"), { done: true }]);
+      window.getCaps = async () => ["completion", "thinking"];
+      setView("chat"); await new Promise(r => setTimeout(r, 150));
+      const run = async (effort, scripts) => {
+        S.effort = effort; S.think = true; calls = 0; script = scripts;
+        current.messages.push({ role: "user", content: "Is pizza good?" });
+        await chat("fake-model");
+        const m = current.messages[current.messages.length - 1];
+        const r = { content: m.content, thinking: (m.blocks || []).filter(b => b.type === "thinking").map(b => b.text).join(" / "), calls };
+        current.messages.splice(-2, 2);
+        return r;
+      };
+      out.leak = await run("medium", [[piece("<thi"), piece("nk>The user asks about pizza. I should "), piece("say yes.</th"), piece("ink>Pizza is "), piece("great."), { done: true, eval_count: 9, eval_duration: 1e9 }]]);
+      out.lone = await run("medium", [[piece("Okay, the user wants to know about pizza." + NL), piece("</think>" + NL + NL + "Yes, pizza is good."), { done: true }]]);
+      const answer = "Yes: pizza is good. A thin crust, ripe tomatoes, real mozzarella and a very hot oven make the difference between average and great.";
+      out.review = await run("max", [[piece(answer), { done: true }], [piece("I read the question again and checked the answer: it is correct and complete. OK"), { done: true }]]);
+      window.chatApi = origApi; window.getCaps = origCaps; S.effort = origEffort; S.think = origThink; saveChats();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.leak.content !== "Pizza is great." || !/user asks about pizza/.test(o.leak.thinking)) bad.push("leak " + JSON.stringify(o.leak));
+    if (o.lone.content !== "Yes, pizza is good." || !/wants to know about pizza/.test(o.lone.thinking)) bad.push("lone " + JSON.stringify(o.lone));
+    if (o.review.calls !== 2 || !/^Yes: pizza is good\./.test(o.review.content)) bad.push("review " + JSON.stringify(o.review));
+    return bad.length ? bad.join(" | ") : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;
