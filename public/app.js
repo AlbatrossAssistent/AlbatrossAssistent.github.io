@@ -6511,8 +6511,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.10";
+const APP_VERSION = "2026-11-14.11";
 const WHATS_NEW = [
+  ["2026-11-14.11", ["Music has more character: better instrument recordings (violin, cello, sax, horn, vibraphone, guitars...), a balanced mix where the instruments are no longer drowned out by the drums, phrased melodies, and the AI can write the whole tune"]],
   ["2026-11-14.10", ["Music sounds better: accents and soft/loud notes, a human feel, a room reverb, a balanced mix, a proper drum kit sound, and no more falling back to the plain synth when one note is missing"]],
   ["2026-11-14.9", ["Slides are built step by step by the AI itself: it plans, researches, picks photos, writes each slide, checks them and can add a sources slide","Better music: the AI picks style, key, chords and a motif and Albatross writes in-key melodies, basslines and drums","Max effort plans, checks its work and asks questions; charts, chances, notes and music are tools the AI picks itself; 6 new slide designs; after every update the app checks itself"]],
   ["2026-11-14.8", ["Jarvis is the new logo: in the sidebar, on the home page, the app icon, the Windows app and the Chrome extension"]],
