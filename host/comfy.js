@@ -43,7 +43,7 @@ const MODELS = {
     details: { family: "omnigen2", parameter_size: "4B", format: "comfyui", edit: true },   // edit: takes reference pictures
   },
 };
-const MODEL = "z-image-turbo:comfyui";
+const MODEL = "qwen-image-2.1:comfyui";   // the default when a request names no (or an unknown) picture model
 const hasPython = () => fs.existsSync(path.join(COMFY_DIR, "python_embeded", "python.exe"));
 const hasFiles = (name) => Object.values(MODELS[name].files).every(([dir, f]) => fs.existsSync(M(dir, f)));
 const installed = () => hasPython() && Object.keys(MODELS).some(hasFiles);
