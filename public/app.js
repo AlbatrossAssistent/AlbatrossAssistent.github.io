@@ -337,11 +337,37 @@ function ensureUnlocked(what) {
 // ======================================================================
 // Intro animation
 // ======================================================================
-// The opening screen: the rocket, the name, and underneath what's happening right now (connecting to your PC …) with a bar. It
+// The opening screen: this device pinging your PC and the PC pinging Ollama (paintNet), the name, and underneath what's happening
+// right now with a bar. It
 // leaves as soon as Albatross is ready (at least ~2.6 s for the animation, at most ~4 s), or when you click or press a key.
 // Light theme: a bright sky; dark: space. The glow is your accent colour. In the Windows app, which showed its own opening
 // screen while it started, it's already "steady" and just leaves. playIntro({ update: "version" }) is the updating screen.
 let introSky = null;
+const NET_IC = {
+  laptop: '<rect x="4" y="5" width="16" height="11" rx="1.6"/><path d="M2 19h20"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M11 18.5h2"/>',
+  pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  ollama: '<rect x="6" y="6" width="12" height="12" rx="2.2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9.5 2.5V6M14.5 2.5V6M9.5 18v3.5M14.5 18v3.5M2.5 9.5H6M2.5 14.5H6M18 9.5h3.5M18 14.5h3.5"/>',
+  web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9M12 3C9.4 5.6 8.2 8.6 8.2 12s1.2 6.4 3.8 9"/>',
+};
+// the network on the opening screen. Reached through the code: this device → your PC → Ollama; on the PC itself: this PC → Ollama;
+// updating: Albatross online → this device. set(hop, idle | wait | ok | bad): hop "pc" is the first line and node, "ollama" the second.
+function paintNet(mode, light) {
+  const box = $("#splashNet");
+  const phone = matchMedia("(pointer: coarse)").matches && innerWidth < 820;
+  const remote = !mode.update && S.conn && S.conn.mode === "remote";
+  const me = phone ? ["phone", "This phone"] : ["laptop", "This device"];
+  const nodes = mode.update ? [["web", "Albatross"], me] : remote ? [me, ["pc", guestMode ? "The PC" : "Your PC"], ["ollama", "Ollama"]] : [["pc", "This PC"], ["ollama", "Ollama"]];
+  box.innerHTML = nodes.map(([ic, label], i) => (i ? '<div class="link"><i></i><i></i></div>' : "") + `<div class="node"><div class="ic"><svg viewBox="0 0 24 24">${NET_IC[ic]}</svg><b></b></div><div class="lbl">${label}</div></div>`).join("");
+  const links = [...box.querySelectorAll(".link")], els = [...box.querySelectorAll(".node")];
+  // which line and node a hop is: with three nodes "pc" is the first line, "ollama" the second; with two, both mean the one line
+  const at = (hop) => nodes.length === 3 ? (hop === "pc" ? 0 : 1) : 0;
+  return { remote, set(hop, st) {
+    const i = at(hop), l = links[i], n = els[i + 1];
+    if (!l || l.dataset.st === st) return;
+    l.dataset.st = st; l.className = "link" + (st === "idle" ? "" : " " + st); n.className = "node" + (st === "idle" ? "" : " " + st);
+  } };
+}
 function playIntro(mode = {}) {
   const sp = $("#splash"), word = $("#splashWord");
   const light = (S.theme === "system" ? !matchMedia("(prefers-color-scheme: dark)").matches : S.theme === "light" || S.theme === "lagoon");
@@ -355,6 +381,7 @@ function playIntro(mode = {}) {
   const seen = store.get("seenVersion", "");
   // APP_VERSION is set further down this file: fill the version in once the script has run
   setTimeout(() => { $("#splashVer").textContent = mode.update ? "You have " + APP_VERSION : "Version " + APP_VERSION + (seen && seen !== APP_VERSION ? " · just updated" : ""); }, 0);
+  const net = paintNet(mode, light);
   const bar = $("#splashBar"), stat = $("#splashStat");
   const say = (text, pct) => { if (stat.textContent !== text) stat.textContent = text; if (pct != null) bar.style.width = Math.max(3, Math.min(100, pct)) + "%"; };
   bar.style.transition = "none"; bar.style.width = "0"; void bar.offsetWidth; bar.style.transition = ""; say(mode.update ? "Getting the new version…" : "Starting…", 4);
@@ -380,19 +407,33 @@ function playIntro(mode = {}) {
     document.body.classList.remove("intro");
     setTimeout(() => { sp.style.display = "none"; paint.style.display = "none"; paint.classList.remove("done"); sp._stop?.(); }, 1900);
   };
-  if (mode.update) { sp.onclick = null; return { say, end }; }      // the updating screen stays until the page reloads
+  if (mode.update) { sp.onclick = null; net.set("pc", "wait"); return { say, end }; }      // the updating screen stays until the page reloads
   sp.onclick = end; addEventListener("keydown", end, { once: true });
-  const t0 = performance.now(), minT = steady ? 700 : 2600, maxT = steady ? 2500 : 4000;
+  // the hops answer one after the other, each after at least one ping has run, so you see what's happening
+  const t0 = performance.now(), minT = steady ? 900 : 2800, maxT = steady ? 3000 : 4500;
+  const remote = net.remote, noPc = remote && !(S.conn && S.conn.code);
+  let pcAt = 0, olAt = 0;                       // when each hop was shown as answered
   sp._tick = setInterval(() => {
-    const el = performance.now() - t0, grow = Math.min(88, 8 + el / maxT * 80);
+    const now = performance.now(), el = now - t0, grow = Math.min(88, 8 + el / maxT * 80);
+    const fail = window.netFail || "", olFail = /ollama/i.test(fail);
     let ready = false;
-    if (guestMode) { say(el < 700 ? "Starting…" : "Opening as a guest…", grow); ready = el > 900; }
-    else if (connected) { say("Connected to your PC", 100); ready = true; }
-    else if (S.conn && S.conn.code && el > 500) say("Connecting to your PC…", grow);
-    else if (el > 900) { say("Ready", 100); ready = true; }
-    else say("Starting…", grow);
-    if ((ready && el >= minT) || el >= maxT) { if (!ready) say("Opening…", 100); setTimeout(end, ready ? 250 : 150); clearInterval(sp._tick); }
-  }, 120);
+    if (noPc) { net.set("pc", "idle"); say("No PC linked yet. Add yours in Settings → Connection.", 100); ready = el > 900; }
+    else if (remote && !pcAt) {
+      net.set("pc", "wait");
+      if ((connected || (fail && olFail)) && el > 1300) { pcAt = now; net.set("pc", "ok"); }
+      else if (fail && el > 1300) { net.set("pc", "bad"); say("Your PC didn't answer", 100); ready = true; }
+      else say(guestMode ? "Pinging the PC…" : "Pinging your PC…", grow);
+    }
+    if (!noPc && (!remote || pcAt) && !olAt && !ready) {
+      net.set("ollama", "wait");
+      const since = remote ? now - pcAt : el, need = remote ? 1000 : 1400;
+      if (connected && since > need) { olAt = now; net.set("ollama", "ok"); }
+      else if (fail && since > need) { net.set("ollama", "bad"); say(remote ? "Your PC answered, but Ollama isn't running there" : "Ollama isn't running on this PC", 100); ready = true; }
+      else say(remote ? "PC reached · pinging Ollama…" : "Pinging Ollama on this PC…", grow);
+    }
+    if (olAt) { say("Connected · " + models.length + " model" + (models.length === 1 ? "" : "s") + " ready", 100); ready = now - olAt > 450; }
+    if ((ready && el >= minT) || el >= maxT) { if (!ready) say("Opening…", 100); setTimeout(end, ready ? 350 : 150); clearInterval(sp._tick); }
+  }, 100);
 }
 // a new version: the updating screen, the new files fetched ahead (with the bar), then the reload
 async function updateNow(version) {
@@ -514,6 +555,7 @@ function setStatus(kind, text) { $("#dot").className = "dot " + kind; $("#status
 let launcher = "Ollama";
 async function connect(quiet) {
   setStatus("wait", "Connecting…");
+  window.netFail = "";            // the opening screen shows which hop failed (see playIntro)
   try {
     if (S.conn.mode === "remote") {
       if (!CODE_RE.test(S.conn.code)) throw new Error(S.conn.code.length === 9
@@ -557,6 +599,7 @@ async function connect(quiet) {
     if (window.EMBED_CHROME) sidebarModel();
     return true;
   } catch (e) {
+    window.netFail = e.message || "failed";
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
     fillModelSelect(); renderModelTable();
     setStatus("bad", S.conn.mode === "remote" ? "Remote device not reachable" : "Can't reach Ollama");
@@ -6087,8 +6130,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.6";
+const APP_VERSION = "2026-11-14.7";
 const WHATS_NEW = [
+  ["2026-11-14.7", ["The opening screen shows your device pinging your PC and the PC pinging Ollama, live, instead of the rocket"]],
   ["2026-11-14.6", ["Google sign-in no longer hangs after you pick your account"]],
   ["2026-11-14.5", ["New opening screen: shows what's happening (connecting to your PC) with a bar, light and dark, in your accent colour; an updating screen when you update"]],
   ["2026-11-14.4", ["Google sign-in through the browser; new opening and updating screens"]],

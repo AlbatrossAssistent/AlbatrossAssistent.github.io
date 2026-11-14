@@ -101,10 +101,6 @@ aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-car
 #paintwave.done { -webkit-mask-position: 0 100%; mask-position: 0 100%; }
 #splash .wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px; transition: transform .9s cubic-bezier(.6,0,.2,1), opacity .6s ease; }
 #splash.done .wrap { transform: translateY(-140px) scale(1.2); opacity: 0; }
-#splash .logo { width: 120px; height: 120px; overflow: visible; fill: #fff; opacity: 0; filter: drop-shadow(0 0 18px rgba(200,215,255,.35));
-  animation: launch 1.2s cubic-bezier(.2,.9,.25,1) .1s forwards, rkhover 1.6s ease-in-out 1.3s infinite; }
-#splash .logo .flame { fill: #cfdcff; transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; }
-#splash.done .logo { animation: blast .8s cubic-bezier(.6,0,.9,.4) forwards; }
 #splash .word { display: flex; overflow: visible; font-size: 52px; font-weight: 300; line-height: 1.15; text-transform: uppercase; animation: spread 1.8s cubic-bezier(.2,.8,.2,1) .7s both; }
 #splash .word span { display: inline-block; opacity: 0; filter: blur(10px); transform: translateX(-14px); animation: settle .9s cubic-bezier(.2,.8,.2,1) forwards; }
 #splash .tag { font-size: 12px; letter-spacing: 6px; text-transform: uppercase; color: rgba(255,255,255,.5); opacity: 0; animation: fade 1s ease 1.8s forwards; }
@@ -115,39 +111,53 @@ aside, .topbar, .box, dialog, .toast, .suggestions button, .mode-card, .type-car
 @keyframes fade { to { opacity: 1; } }
 @keyframes grow { to { transform: scaleX(1); } }
 @keyframes fall { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: var(--o); } 100% { transform: translateY(calc(100vh + 24px)); opacity: 0; } }
-@keyframes launch { from { opacity: 0; transform: translateY(120px) scale(.7); } 60% { opacity: 1; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
-@keyframes rkhover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
-@keyframes flick { from { transform: scaleY(.65); } to { transform: scaleY(1.25); } }
-@keyframes blast { from { opacity: 1; } to { opacity: 1; transform: translateY(-85vh) scale(.85); } }
-/* a soft glow in your accent colour behind the rocket; what's happening (and how far) under the name; the version at the bottom */
-#splash { --sp-accent: #0A84FF; }
-#splash .halo { position: absolute; top: -60px; left: 50%; width: 240px; height: 240px; margin-left: -120px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(circle, var(--sp-accent) 0%, transparent 62%); opacity: 0; filter: blur(26px); animation: halo-in 1.4s ease .3s forwards, halo 3.2s ease-in-out 1.7s infinite; }
-#splash.done .halo { animation: none; opacity: 0; transition: opacity .4s; }
+/* what's happening (and how far) under the name; the version at the bottom */
+#splash { --sp-accent: #0A84FF; --sp-ok: #30d158; --sp-bad: #ff453a; --sp-node: rgba(255,255,255,.06); --sp-edge: rgba(255,255,255,.16); --sp-dim: rgba(255,255,255,.6); --sp-dash: rgba(255,255,255,.22); }
+#splash.light { --sp-ok: #34c759; --sp-bad: #ff3b30; --sp-node: rgba(255,255,255,.7); --sp-edge: rgba(0,0,0,.12); --sp-dim: rgba(0,0,0,.55); --sp-dash: rgba(0,0,0,.2); }
+/* the network instead of a logo: this device → your PC → Ollama. A dashed line with pings running along it while it's being
+   reached; solid green with a ripple on the node once it answers; red if it doesn't. */
+#splash .net { display: flex; align-items: flex-start; justify-content: center; margin-bottom: 6px; opacity: 0; animation: fade .7s ease .15s forwards; }
+#splash .node { display: flex; flex-direction: column; align-items: center; gap: 9px; width: 86px; flex: none; }
+#splash .node .ic { position: relative; width: 60px; height: 60px; border-radius: 19px; display: grid; place-items: center; color: inherit; background: var(--sp-node); border: 1px solid var(--sp-edge);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: border-color .35s, box-shadow .35s, transform .35s; }
+#splash .node .ic svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#splash .node .ic::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; border: 2px solid var(--sp-ok); opacity: 0; pointer-events: none; }
+#splash .node .lbl { font-size: 12px; letter-spacing: .4px; color: var(--sp-dim); white-space: nowrap; }
+#splash .node.wait .ic { border-color: color-mix(in srgb, var(--sp-accent) 70%, transparent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--sp-accent) 40%, transparent); animation: nodewait 1.1s ease-out infinite; }
+#splash .node.ok .ic { border-color: var(--sp-ok); box-shadow: 0 0 22px color-mix(in srgb, var(--sp-ok) 40%, transparent); }
+#splash .node.ok .ic::after { animation: ripple 1s ease-out forwards; }
+#splash .node.bad .ic { border-color: var(--sp-bad); box-shadow: 0 0 22px color-mix(in srgb, var(--sp-bad) 35%, transparent); }
+#splash .node .ic b { position: absolute; right: -5px; top: -5px; width: 18px; height: 18px; border-radius: 50%; display: none; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+#splash .node.ok .ic b { display: grid; background: var(--sp-ok); }
+#splash .node.ok .ic b::before { content: "✓"; }
+#splash .node.bad .ic b { display: grid; background: var(--sp-bad); }
+#splash .node.bad .ic b::before { content: "!"; }
+#splash .link { position: relative; width: clamp(40px, 9vw, 120px); height: 60px; flex: none; }
+#splash .link::before { content: ""; position: absolute; left: 6px; right: 6px; top: 50%; border-top: 2px dashed var(--sp-dash); transition: border-color .35s; }
+#splash .link i { position: absolute; top: 50%; left: 6px; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; background: var(--sp-accent); box-shadow: 0 0 12px var(--sp-accent); opacity: 0; }
+#splash .link.wait i { animation: ping 1.1s cubic-bezier(.5,0,.5,1) infinite; }
+#splash .link.wait i:nth-child(2) { animation-delay: .55s; }
+#splash .link.ok::before { border-top-style: solid; border-color: var(--sp-ok); }
+#splash .link.bad::before { border-color: var(--sp-bad); }
+@keyframes ping { 0% { left: 6px; opacity: 0; } 15%, 80% { opacity: 1; } 100% { left: calc(100% - 15px); opacity: 0; } }
+@keyframes ripple { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.45); } }
+@keyframes nodewait { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sp-accent) 45%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+@media (max-width: 480px) { #splash .node { width: 74px; } #splash .node .ic { width: 52px; height: 52px; border-radius: 16px; } #splash .link { height: 52px; } }
 #splash .sload { width: 220px; margin-top: 4px; opacity: 0; animation: fade .6s ease 1.4s forwards; }
 #splash .sbar { height: 3px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
 #splash .sbar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--sp-accent); box-shadow: 0 0 10px var(--sp-accent); transition: width .5s cubic-bezier(.3,.7,.3,1); }
 #splash .sstat { margin-top: 10px; min-height: 1.4em; font-size: 13px; text-align: center; color: rgba(255,255,255,.62); transition: opacity .25s; }
 #splash .sver { position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); text-align: center; font-size: 11.5px; letter-spacing: 1px; color: rgba(255,255,255,.38); opacity: 0; animation: fade 1s ease 1.6s forwards; }
-@keyframes halo-in { to { opacity: .42; } }
-@keyframes halo { 0%, 100% { opacity: .42; transform: scale(1); } 50% { opacity: .62; transform: scale(1.08); } }
 /* light theme: a bright morning sky instead of space */
 #splash.light { background: linear-gradient(180deg, #ffffff 0%, #f3f6fc 55%, #e6edfb 100%); color: #1d1d1f; }
-#splash.light .logo { fill: #1d1d1f; filter: drop-shadow(0 6px 18px rgba(20,40,90,.18)); }
-#splash.light .logo .flame { fill: var(--sp-accent); }
 #splash.light .tag { color: rgba(0,0,0,.45); }
 #splash.light .sbar { background: rgba(0,0,0,.08); }
 #splash.light .sstat { color: rgba(0,0,0,.55); }
 #splash.light .sver { color: rgba(0,0,0,.35); }
-#splash.light .halo { animation-name: halo-in-l, halo-l; }
-@keyframes halo-in-l { to { opacity: .22; } }
-@keyframes halo-l { 0%, 100% { opacity: .22; transform: scale(1); } 50% { opacity: .34; transform: scale(1.08); } }
 /* steady: already on screen (the Windows app showed its own opening screen first): no build-up, just the way out */
-#splash.steady .logo { opacity: 1; animation: rkhover 1.6s ease-in-out infinite; }
 #splash.steady .word { animation: none; letter-spacing: 12px; }
 #splash.steady .word span { animation-duration: .01s !important; animation-delay: 0s !important; }
-#splash.steady .tag, #splash.steady .sload, #splash.steady .sver, #splash.steady .halo { animation-delay: 0s; animation-duration: .25s; }
-#splash.steady.done .logo { animation: blast .8s cubic-bezier(.6,0,.9,.4) forwards; }
+#splash.steady .tag, #splash.steady .sload, #splash.steady .sver, #splash.steady .net { animation-delay: 0s; animation-duration: .25s; }
 /* updating: the same screen while a new version is fetched */
 #splash.updating .sload, #splash.updating .sver, #splash.updating .tag { animation-delay: .3s; }
 #splash.updating .word { font-size: 40px; }

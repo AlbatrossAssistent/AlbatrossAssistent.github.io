@@ -5,17 +5,28 @@
 <title>Albatross</title>
 <style>
   /* the same look as the opening animation of the app (public/app.css #splash): space in dark mode, a bright sky in light mode */
-  :root { --fg: #fff; --muted: rgba(255,255,255,.55); --line: rgba(255,255,255,.12); --bg: linear-gradient(180deg, #000 0%, #0b0d10 60%, #12161b 100%); --accent: #0A84FF; --ok: #30d158; --glow: .45; }
-  @media (prefers-color-scheme: light) { :root { --fg: #1d1d1f; --muted: rgba(0,0,0,.5); --line: rgba(0,0,0,.08); --bg: linear-gradient(180deg, #ffffff 0%, #f3f6fc 55%, #e6edfb 100%); --accent: #007AFF; --ok: #34c759; --glow: .22; } }
+  :root { --fg: #fff; --muted: rgba(255,255,255,.55); --line: rgba(255,255,255,.12); --bg: linear-gradient(180deg, #000 0%, #0b0d10 60%, #12161b 100%); --accent: #0A84FF; --ok: #30d158; --node: rgba(255,255,255,.06); --line2: rgba(255,255,255,.18); }
+  @media (prefers-color-scheme: light) { :root { --fg: #1d1d1f; --muted: rgba(0,0,0,.5); --line: rgba(0,0,0,.08); --bg: linear-gradient(180deg, #ffffff 0%, #f3f6fc 55%, #e6edfb 100%); --accent: #007AFF; --ok: #34c759; --node: rgba(255,255,255,.8); --line2: rgba(0,0,0,.14); } }
   html, body { margin: 0; height: 100%; font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--fg); -webkit-app-region: drag; user-select: none; overflow: hidden; }
   body { background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 28px 22px; box-sizing: border-box; }
-  .logo { position: relative; width: 64px; height: 64px; margin-bottom: 14px; }
-  .logo::before { content: ""; position: absolute; left: 50%; top: 50%; width: 170px; height: 170px; margin: -85px 0 0 -85px; border-radius: 50%; background: radial-gradient(circle, var(--accent) 0%, transparent 62%); opacity: var(--glow); filter: blur(18px); animation: glow 3.2s ease-in-out infinite; }
-  .logo svg { position: relative; width: 64px; height: 64px; overflow: visible; fill: var(--fg); animation: hover 1.6s ease-in-out infinite; }
-  .logo .flame { fill: var(--accent); transform-box: fill-box; transform-origin: 50% 0; animation: flick .12s ease-in-out infinite alternate; }
-  @keyframes hover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-  @keyframes flick { from { transform: scaleY(.65); } to { transform: scaleY(1.25); } }
-  @keyframes glow { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+  /* this PC → Ollama, like the opening screen of the app: pings run along the line while it is reached, green once it answers */
+  .net { display: flex; align-items: flex-start; margin-bottom: 14px; }
+  .node { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 76px; }
+  .ic { position: relative; width: 50px; height: 50px; border-radius: 16px; display: grid; place-items: center; background: var(--node); border: 1px solid var(--line2); transition: border-color .35s, box-shadow .35s; }
+  .ic svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .ic b { position: absolute; right: -5px; top: -5px; width: 16px; height: 16px; border-radius: 50%; display: none; place-items: center; font-size: 10px; font-weight: 700; color: #fff; }
+  .lbl { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .node.wait .ic { border-color: var(--accent); animation: nodewait 1.1s ease-out infinite; }
+  .node.ok .ic { border-color: var(--ok); box-shadow: 0 0 18px color-mix(in srgb, var(--ok) 40%, transparent); }
+  .node.ok .ic b { display: grid; background: var(--ok); } .node.ok .ic b::before { content: "✓"; }
+  .node.bad .ic { border-color: #ff453a; } .node.bad .ic b { display: grid; background: #ff453a; } .node.bad .ic b::before { content: "!"; }
+  .link { position: relative; width: 96px; height: 50px; }
+  .link::before { content: ""; position: absolute; left: 6px; right: 6px; top: 50%; border-top: 2px dashed var(--line2); transition: border-color .35s; }
+  .link i { position: absolute; top: 50%; left: 6px; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); opacity: 0; }
+  .link.wait i { animation: ping 1.1s cubic-bezier(.5,0,.5,1) infinite; } .link.wait i + i { animation-delay: .55s; }
+  .link.ok::before { border-top-style: solid; border-color: var(--ok); }
+  @keyframes ping { 0% { left: 6px; opacity: 0; } 15%, 80% { opacity: 1; } 100% { left: calc(100% - 14px); opacity: 0; } }
+  @keyframes nodewait { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
   h1 { margin: 0 0 0 8px; font-size: 26px; font-weight: 300; letter-spacing: 8px; text-transform: uppercase; }
   #st { margin: 12px 0 10px; color: var(--muted); min-height: 1.45em; text-align: center; max-width: 380px; }
   .bar { width: 220px; height: 3px; border-radius: 999px; background: var(--line); overflow: hidden; }
@@ -38,7 +49,11 @@
 </style>
 </head>
 <body>
-  <div class="logo"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg></div>
+  <div class="net">
+    <div class="node" id="n-a"><div class="ic"><svg viewBox="0 0 24 24" id="ic-a"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><b></b></div><div class="lbl" id="l-a">This PC</div></div>
+    <div class="link" id="link"><i></i><i></i></div>
+    <div class="node" id="n-b"><div class="ic"><svg viewBox="0 0 24 24" id="ic-b"><rect x="6" y="6" width="12" height="12" rx="2.2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9.5 2.5V6M14.5 2.5V6M9.5 18v3.5M14.5 18v3.5M2.5 9.5H6M2.5 14.5H6M18 9.5h3.5M18 14.5h3.5"/></svg><b></b></div><div class="lbl" id="l-b">Ollama</div></div>
+  </div>
   <h1 id="title">Albatross</h1>
   <div id="st">Starting…</div>
   <div class="bar" id="bar"><div></div></div>
@@ -58,13 +73,23 @@
     bar.classList.toggle("pct", pct != null);
     bar.firstElementChild.style.width = pct != null ? Math.max(2, pct) + "%" : "30%";
   };
+  // the picture follows the steps: Ollama being started = pings to Ollama; the host = this PC
+  const mark = (el, st) => { el.className = el.className.split(" ")[0] + (st ? " " + st : ""); };
   window.setStep = (id, state) => {           // state: active | done | skip
     const li = $("s-" + id); if (!li) return;
     li.className = state || "";
+    const st = state === "active" ? "wait" : state === "done" ? "ok" : "";
+    if (id === "ollama") { mark($("link"), st); mark($("n-b"), st); }
+    if (id === "host") mark($("n-a"), st);
   };
   window.setVersion = (text) => { $("ver").textContent = text; };
   window.setMode = (mode, title) => {          // "update": the updating screen
     document.body.classList.toggle("update", mode === "update");
+    if (mode === "update") {            // updating: Albatross online → this PC
+      $("ic-a").innerHTML = '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9M12 3C9.4 5.6 8.2 8.6 8.2 12s1.2 6.4 3.8 9"/>'; $("l-a").textContent = "Albatross";
+      $("ic-b").innerHTML = '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'; $("l-b").textContent = "This PC";
+      mark($("n-a"), ""); mark($("link"), "wait"); mark($("n-b"), "wait");
+    }
     $("title").textContent = title || "Albatross";
   };
 </script>
