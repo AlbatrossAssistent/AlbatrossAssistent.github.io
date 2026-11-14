@@ -933,7 +933,7 @@ async function pcCall(path, body, method = "POST", shared = false) {
     if (t) { method = "POST"; body = { ...(body || {}), _acct: t }; }
   }
   const opts = method === "GET" ? { method } : { method, body: JSON.stringify(body || {}) };
-  const limit = /^\/agent\/docs\/(pull|index)/.test(path) ? 1800e3 : PC_SLOW.test(path) ? 300e3 : 120e3;
+  const limit = /^\/agent\/docs\/(pull|index)/.test(path) ? 1800e3 : /^\/agent\/music\/song/.test(path) ? 900e3 : PC_SLOW.test(path) ? 300e3 : 120e3;
   opts.signal = AbortSignal.timeout(limit);
   let r;
   try { r = remotePC() ? await e2eFetch(path, { ...opts, base: hostBase() }) : await fetch("http://127.0.0.1:4747" + path, { ...opts, headers: { "Content-Type": "application/json" } }); }
@@ -1707,7 +1707,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
-  if (b.type === "chart" || b.type === "chances" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes" || b.type === "music") return renderToolBlock(b);
+  if (b.type === "chart" || b.type === "chances" || b.type === "song" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes" || b.type === "music") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -2916,6 +2916,13 @@ async function runDeckTool(name, args, ctx) {
   fin(step(`${n}. ${sl.title}`, { slide: n }), LAYOUT_NAMES[layout] + (sl.photo ? " · photo" : ""));
   return `Slide ${n} saved (${layout}).` + (miss.length ? ` It still needs ${miss.join(", ")}: until then it shows as plain points.` : "");
 }
+// is the song model (ACE-Step) installed on the PC? asked at most once a minute
+let songChecked = 0;
+async function refreshSong() {
+  if (guestMode || !window.agentChatTools || Date.now() - songChecked < 60e3) return;
+  songChecked = Date.now();
+  try { window.songOk = !!(await pcCall("/agent/music/status", {})).installed; } catch { window.songOk = false; }
+}
 // ---------- More independent tools ----------
 // Charts, chances, notes and music are tools the model calls itself while it answers, with the same "form" it used to fill in a
 // separate step. It decides when, with what, and can combine them (look something up, then chart it, then explain). Models that can't
@@ -2946,9 +2953,23 @@ const CHAT_TOOLS = (() => {
       run(args) { const ids = window.notesApply(args.changes); return { block: done({ type: "notes", ids }), out: ids.length ? `Done: ${ids.length} note${ids.length > 1 ? "s" : ""} changed and shown to the user. Say briefly what you did.` : "Nothing matched: no note was changed. Tell the user, or check the titles with notes_show." }; } },
     { key: "music", name: "make_music", need: "musicCompose", def: T("make_music", "Compose a piece of music that plays in the chat and downloads as a MIDI file. You only provide the musical idea; the app writes out the notes with real music rules, so choose carefully: the style, a key that fits the mood (sad: minor; happy: major; dark: phrygian; dreamy: lydian), chords that belong together, and a memorable motif. Build the piece up (calm start, full chorus).", window.MUSIC_PROPS || {}, ["title", "style", "key", "bpm", "progression", "motif", "structure"]),
       run(args) { const song = window.musicCompose(args); return { block: done({ type: "music", song }), out: `The piece "${song.title}" (${song.key}, ${song.bpm} bpm) is shown with play and download buttons. Answer in one or two sentences; don't describe every note.` }; } },
+    { key: "song", name: "make_song", need: "songOk", def: T("make_song", "Make a real song with the AI song model on the user's PC (ACE-Step): music with singing, in any style, from style tags and lyrics. It takes one to three minutes and plays in the chat. Use it when the user wants a song, a track with vocals, or an AI-made piece; for quick editable music without singing use make_music.", {
+      tags: { type: "string", description: "Comma-separated style tags in English: genre, mood, instruments, voice and tempo, like \"indie pop, upbeat, female vocals, acoustic guitar, 110 bpm, summer\"" },
+      lyrics: { type: "string", description: "The lyrics with structure markers on their own lines: [verse], [chorus], [verse], [bridge], [chorus]; in the language of the song. Use [instrumental] (or leave empty) for no singing. Keep it to what fits the length: about 4 lines per section." },
+      seconds: { type: "number", description: "Length in seconds, 30 to 180 (default 60). Longer takes longer." } }, ["tags"]),
+      async run(args, ctx) {
+        const block = { type: "song", active: true, status: "Starting…", tags: String(args.tags || "").slice(0, 600), lyrics: String(args.lyrics || "").slice(0, 4000), completed: 0, total: 0 };
+        ctx.reply.blocks.push(block); ctx.redraw();
+        const poll = setInterval(async () => { try { const st = await pcCall("/agent/music/status", {}); if (st.running) { block.status = st.status; block.completed = st.completed; block.total = st.total; ctx.redraw(); } } catch {} }, 1500);
+        try { block.song = await pcCall("/agent/music/song", { tags: args.tags, lyrics: args.lyrics, seconds: args.seconds }); }
+        catch (e) { block.error = e.message; }
+        finally { clearInterval(poll); Object.assign(block, { active: false, done: true, doneAt: Date.now() }); ctx.redraw(); }
+        return { out: block.error ? "Error: " + block.error : `The song (${block.song.seconds} s, made in ${block.song.took} s) is playing in the chat with a download button. Answer in one or two sentences; don't repeat the lyrics.` };
+      } },
   ];
 })();
 const CHAT_TOOLS_HINT = {
+  song: "Songs: when the user wants a real song (with singing) or an AI-made track, call make_song with style tags and lyrics with [verse]/[chorus] markers (or [instrumental]); it takes a minute or two. Quick editable music without singing is make_music.",
   graph: "Charts: when the user wants a graph or chart, call make_chart (look the numbers up first if you don't know them).",
   chances: "Chances: when the user asks how likely something is or wants a prediction, call estimate_chances.",
   notes: "Notes: when the user talks about their notes, lists or to-dos, call notes_show first, then notes_edit to change them.",
@@ -3035,7 +3056,8 @@ async function chat(model, opts = {}) {
       const prevDeck = [...conv.messages].reverse().find(m => m.role === "assistant" && m.blocks?.some(x => x.type === "deck" && x.deck?.slides?.length))?.blocks.find(x => x.type === "deck").deck;
       system = (system ? system + "\n\n" : "") + DECK_WORKFLOW + (prevDeck ? `\n\nThis chat already has the presentation "${prevDeck.title}" (look: ${prevDeck.theme}). Its slides after the title slide:\n${prevDeck.slides.map((x, i) => `${i + 1}. ${deckSummary(x).slice(0, 110)}`).join("\n")}\nTo change it, edit these slides by number with deck_set_slide / deck_delete_slide (keep the rest) and call deck_check; to make a new one, start over with deck_design and renumber from 1.` : "");
     }
-    // charts, chances, notes and music: tools the model picks itself
+    // charts, chances, notes, music and songs: tools the model picks itself
+    await refreshSong();
     const extraTools = !guestMode && toolsOk && window.agentChatTools ? CHAT_TOOLS.filter(t => routeOn(t.key) && (!t.need || window[t.need])) : [];
     if (extraTools.length) {
       const prevSong = [...conv.messages].reverse().map((m) => (m.blocks || []).find((b) => b.type === "music" && b.song?.spec)).find(Boolean)?.song;
@@ -3172,7 +3194,7 @@ async function chat(model, opts = {}) {
         const xt = extraTools.find(t => t.name === name);
         if (xt) {
           let out;
-          try { const r = await xt.run(args, { text: String(conv.messages.filter(m => m.role === "user").at(-1)?.content || ""), researched: reply.blocks.some(b => b.type === "search" || b.type === "fetch") }); if (r.block) { reply.blocks.push(r.block); redraw(); } out = r.out; }
+          try { const r = await xt.run(args, { text: String(conv.messages.filter(m => m.role === "user").at(-1)?.content || ""), researched: reply.blocks.some(b => b.type === "search" || b.type === "fetch"), reply, redraw }); if (r.block) { reply.blocks.push(r.block); redraw(); } out = r.out; }
           catch (e) { if (e.name === "AbortError") throw e; out = "Error: " + e.message + (window.TOOL_FAIL_HINT || ""); }
           msgs.push({ role: "tool", content: String(out).slice(0, 4000), tool_name: name });
           continue;
@@ -3986,6 +4008,25 @@ function challengeCard(b) {
   return w;
 }
 
+// a finished AI song: player, style, lyrics, download (the file is on the PC: /song/<file> from the host)
+function songCard(b) {
+  const w = document.createElement("div"); w.className = "tool-block";
+  if (b.active) {
+    const pct = b.total ? Math.round(b.completed / b.total * 100) : 0;
+    w.innerHTML = '<div class="search-bar active"><span class="spin"></span><span class="q"></span><span class="bar"><i></i></span></div>';
+    w.querySelector(".q").textContent = b.status || "Making the song…"; w.querySelector(".bar i").style.width = Math.max(3, pct) + "%";
+    return w;
+  }
+  if (b.error || !b.song) { w.innerHTML = '<div class="tool-err"></div>'; w.firstChild.textContent = "Couldn't make the song: " + (b.error || "no song"); return w; }
+  const url = "http://127.0.0.1:4747" + b.song.url;
+  const card = document.createElement("div"); card.className = "music-card song-card";
+  card.innerHTML = '<div class="mu-ti"><b>AI song</b> <small></small></div><audio controls preload="metadata"></audio><details class="song-lyrics"><summary>Lyrics</summary><pre></pre></details><div class="mu-acts"><a class="btn small primary" download>Download MP3</a></div>';
+  card.querySelector("small").textContent = b.tags + " · " + b.song.seconds + " s";
+  card.querySelector("pre").textContent = b.lyrics || "[instrumental]";
+  if (remotePC()) { card.querySelector("audio").replaceWith(Object.assign(document.createElement("p"), { className: "mu-about", textContent: "The song is saved on your PC (Albatross → songs). Open it there to listen." })); card.querySelector(".mu-acts").remove(); }
+  else { card.querySelector("audio").src = url; const a = card.querySelector("a"); a.href = url; a.download = b.song.file; }
+  w.appendChild(card); return w;
+}
 function renderToolBlock(b) {
   if (b.type === "jarvis") return jarvisCard(b);
   if (b.type === "agent") return window.agentCard ? window.agentCard(b) : document.createElement("div");
@@ -3993,6 +4034,7 @@ function renderToolBlock(b) {
   if (b.type === "challenge") return challengeCard(b);
   if (b.type === "notes") return window.notesCard ? window.notesCard(b) : document.createElement("div");
   if (b.type === "music") return window.musicCard ? window.musicCard(b) : document.createElement("div");
+  if (b.type === "song") return songCard(b);
   const wrap = document.createElement("div"); wrap.className = "tool-block";
   if (b.active) {
     wrap.innerHTML = `<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>`;

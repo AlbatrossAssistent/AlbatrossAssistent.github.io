@@ -180,6 +180,35 @@ window.albatrossSelfTest = async function (w) {
     if (o.notes.join() !== "1,1,true") bad.push("notes " + o.notes);
     return bad.length ? bad.join(" | ") : true;
   });
+  await tryIt("song and sound-choice cards draw", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const out = {};
+      const act = songCard({ type: "song", active: true, status: "Composing and singing… 5 of 50", completed: 5, total: 50 });
+      out.active = [act.querySelector(".q").textContent, act.querySelector(".bar i").style.width];
+      const done = songCard({ type: "song", active: false, tags: "pop, upbeat", lyrics: "[verse] la la", song: { url: "/song/20260101120000-pop.mp3", file: "20260101120000-pop.mp3", seconds: 60, took: 40 } });
+      out.done = [done.querySelector("audio")?.getAttribute("src"), done.querySelector("pre").textContent, done.querySelector("a[download]")?.getAttribute("download"), done.querySelector("small").textContent];
+      out.err = songCard({ type: "song", active: false, error: "no GPU" }).textContent;
+      const song = musicTest.composeSong({ title: "card", style: "pop", key: "C major", bpm: 100, progression: ["I","V","vi","IV"], motif: "3/1 5/1 6/1 5/1", structure: [{ name: "A", bars: 4, energy: 2, melody: "A" }] });
+      const card = musicCard({ type: "music", song }); document.body.appendChild(card); await new Promise(r => setTimeout(r, 400));
+      out.sel = [...card.querySelectorAll('[data-a="engine"] option')].map(x => x.value).join(",");
+      out.has = ["play", "midi", "wav", "compare"].map(a => !!card.querySelector('[data-a="' + a + '"]'));
+      card.remove();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (!/Composing/.test(o.active[0]) || o.active[1] !== "10%") bad.push("active song card " + o.active);
+    if (!/\/song\/20260101120000-pop\.mp3$/.test(o.done[0]) || !/la la/.test(o.done[1]) || o.done[2] !== "20260101120000-pop.mp3" || !/60 s/.test(o.done[3])) bad.push("song card " + o.done);
+    if (!/no GPU/.test(o.err)) bad.push("song error card");
+    if (!/^classic/.test(o.sel)) bad.push("sound choices " + o.sel);
+    if (o.has.join() !== "true,true,true,true") bad.push("music card parts " + o.has);
+    return bad.length ? bad.join(" | ") : true;
+  });
+  await tryIt("the song tool is offered with a proper form", () => {
+    const t = ev("JSON.stringify(CHAT_TOOLS.find(t => t.name === 'make_song')?.def)");
+    if (!t) return "make_song missing";
+    const d = JSON.parse(t).function;
+    return (d.parameters.required.includes("tags") && d.parameters.properties.lyrics && d.parameters.properties.seconds && /ACE-Step/.test(d.description)) || "form incomplete";
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;

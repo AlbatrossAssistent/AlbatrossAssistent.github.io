@@ -465,8 +465,80 @@ window.runMusicTool = async function (model, text) {
 };
 
 // ---------- the card: piano roll, play, mute tracks, downloads ----------
-let playing = null;                                       // { ctx, card, t0, dur, raf }
-function stopPlaying() { if (!playing) return; try { playing.ctx.close(); } catch {} cancelAnimationFrame(playing.raf); playing.card.querySelector('[data-a="play"]').textContent = "▶ Play"; playing.card.querySelector(".mu-head .pos").style.width = "0"; playing = null; }
+let playing = null;                                       // { ctx, card, raf, loading, onEnd }
+let cmp = null;                                           // a running "compare sounds": { cancelled }
+function stopPlaying(keepCompare) {
+  if (!keepCompare && cmp) { cmp.cancelled = true; cmp = null; }
+  if (!playing) return;
+  const t = playing; playing = null;
+  try { t.ctx.close(); } catch {} cancelAnimationFrame(t.raf);
+  t.card.querySelector('[data-a="play"]').textContent = "▶ Play"; t.card.querySelector(".mu-head .pos").style.width = "0";
+  if (t.onEnd) t.onEnd();
+}
+// ---------- sound engines ----------
+// "classic": single-note recordings from the web (play and download work anywhere). Or a SoundFont bank on this PC (MuseScore General,
+// GeneralUser GS), played by SpessaSynth: a real sampler with its own reverb and a recorded drum kit, playing the piece as a MIDI file.
+let sfLib = null; const sfBanks = new Map();
+const sfUrl = (f) => new URL(f, document.baseURI).href;
+const sfModule = async () => sfLib || (sfLib = await import(sfUrl("vendor/spessasynth.js")));
+async function sfStatus() { try { return (await pcCall("/agent/soundfont/status", {})).banks || []; } catch { return []; } }
+async function startSF(ctx, song, bankId) {
+  const lib = await sfModule();
+  await ctx.audioWorklet.addModule(sfUrl("vendor/spessasynth_processor.min.js"));
+  if (!sfBanks.has(bankId)) {
+    if (typeof remotePC === "function" && remotePC()) throw new Error("these sounds are on your PC: use the classic sounds from here");
+    const r = await fetch("http://127.0.0.1:4747/soundfont/" + bankId);
+    if (!r.ok) throw new Error("the sound bank isn't on this PC (" + r.status + ")");
+    sfBanks.set(bankId, await r.arrayBuffer());
+  }
+  const synth = new lib.WorkletSynthesizer(ctx); synth.connect(ctx.destination);
+  await synth.soundBankManager.addSoundBank(sfBanks.get(bankId).slice(0), "main");
+  await synth.isReady;
+  const bytes = await midiFile({ ...song, tracks: song.tracks.filter((t) => !t.mute) }).arrayBuffer();
+  const seq = new lib.Sequencer(synth); seq.loadNewSongList([{ binary: bytes }]); seq.play();
+  return { seq, synth };
+}
+async function startPlay(card, song, engine, limit) {
+  stopPlaying(true);
+  const btn = card.querySelector('[data-a="play"]'), pos = card.querySelector(".mu-head .pos");
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(), token = { ctx, card, loading: true }; playing = token;
+  btn.textContent = "Loading sounds…";
+  let prog;
+  try {
+    if (engine === "classic") {
+      const smp = await preload(ctx, song); if (playing !== token) { try { ctx.close(); } catch {} return null; }
+      const t0 = ctx.currentTime + .08, dur = schedule(ctx, song, t0, smp); prog = () => (ctx.currentTime - t0) / dur;
+    } else {
+      const r = await startSF(ctx, song, engine); if (playing !== token) { try { ctx.close(); } catch {} return null; }
+      token.synth = r.synth; prog = () => (r.seq.duration > 1 ? r.seq.currentTime / r.seq.duration : 0);
+    }
+  } catch (e) {
+    try { ctx.close(); } catch {} if (playing === token) { playing = null; btn.textContent = "▶ Play"; }
+    if (engine !== "classic") { toast("Couldn't play with those sounds (" + e.message + "): using the classic ones"); return startPlay(card, song, "classic", limit); }
+    toast("Couldn't play: " + e.message); return null;
+  }
+  token.loading = false; btn.textContent = "■ Stop";
+  const began = performance.now(), st = (v) => { pos.style.width = Math.max(0, Math.min(100, v * 100)) + "%"; };
+  const tick = () => {
+    if (playing !== token) return;
+    const p = prog(), over = limit && (performance.now() - began) / 1000 >= limit;
+    if (p >= 1 || over) { stopPlaying(true); return; }
+    st(p); token.raf = requestAnimationFrame(tick);
+  };
+  tick();
+  return token;
+}
+// play the start of the piece with each sound in turn, so you can hear the difference
+async function compareSounds(card, song, engines, names, note) {
+  stopPlaying(); const me = cmp = { cancelled: false };
+  for (let i = 0; i < engines.length && !me.cancelled; i++) {
+    note.textContent = `Now playing: ${names[engines[i]]} (${i + 1} of ${engines.length})`;
+    const tok = await startPlay(card, song, engines[i], 14);
+    if (!tok || me.cancelled) break;
+    await new Promise((r) => { if (playing !== tok) return r(); tok.onEnd = r; });
+  }
+  note.textContent = ""; if (cmp === me) cmp = null;
+}
 function drawRoll(cv, song) {
   const W = cv.clientWidth, H = cv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1); cv.width = W * dpr; cv.height = H * dpr;
   const x = cv.getContext("2d"); x.scale(dpr, dpr);
@@ -487,8 +559,9 @@ window.musicCard = function (b) {
   const song = b.song, secs = Math.round(song.beats * 60 / song.bpm);
   const card = document.createElement("div"); card.className = "music-card";
   card.innerHTML = `<div class="mu-head"><button class="btn primary" data-a="play" type="button">▶ Play</button><div class="mu-ti"><b></b><small></small></div><i class="pos"></i></div>
-    <canvas class="mu-roll" aria-label="The notes of the piece"></canvas><div class="mu-tracks"></div><p class="mu-about"></p>
-    <div class="mu-acts"><button class="btn small primary" data-a="midi" type="button">Download MIDI (GarageBand)</button><button class="btn small" data-a="wav" type="button">Download WAV</button></div>`;
+    <canvas class="mu-roll" aria-label="The notes of the piece"></canvas><div class="mu-tracks"></div>
+    <div class="mu-sound"><label>Sound <select data-a="engine" aria-label="Instrument sounds"></select></label><span class="mu-get"></span><button class="btn small" data-a="compare" type="button" hidden>Compare sounds</button><small class="mu-snote"></small></div><p class="mu-about"></p>
+    <div class="mu-acts"><button class="btn small primary" data-a="midi" type="button">Download MIDI (GarageBand)</button><button class="btn small" data-a="wav" type="button" title="The WAV is recorded with the classic sounds">Download WAV (classic sounds)</button></div>`;
   card.querySelector("b").textContent = song.title;
   card.querySelector("small").textContent = [song.key, song.bpm + " bpm", Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0")].filter(Boolean).join(" · ");
   card.querySelector(".mu-about").textContent = song.about;
@@ -499,17 +572,34 @@ window.musicCard = function (b) {
     t.onclick = () => { tr.mute = !tr.mute; t.classList.toggle("off", tr.mute); drawRoll(roll, song); if (playing && playing.card === card) { stopPlaying(); card.querySelector('[data-a="play"]').click(); } };
     card.querySelector(".mu-tracks").appendChild(t);
   }
-  card.querySelector('[data-a="play"]').onclick = async (e) => {
+  // which sounds: the classic recordings, or a bank on this PC
+  const sel = card.querySelector('[data-a="engine"]'), getBox = card.querySelector(".mu-get"), cmpBtn = card.querySelector('[data-a="compare"]'), note = card.querySelector(".mu-snote");
+  const names = { classic: "Classic recordings" }; let have = ["classic"];
+  const engine = () => (have.includes(S.musicSound) ? S.musicSound : have.find((x) => x !== "classic") || "classic");
+  async function fillSounds() {
+    const banks = await sfStatus(); have = ["classic", ...banks.filter((b) => b.installed).map((b) => b.id)];
+    for (const b of banks) names[b.id] = b.name;
+    sel.innerHTML = ""; for (const id of have) { const o = document.createElement("option"); o.value = id; o.textContent = names[id]; sel.appendChild(o); }
+    sel.value = engine(); cmpBtn.hidden = have.length < 2;
+    getBox.innerHTML = "";
+    for (const b of banks.filter((x) => !x.installed)) {
+      const g = document.createElement("button"); g.type = "button"; g.className = "btn small"; g.title = b.about + " Licence: " + b.license;
+      g.textContent = b.running ? `${b.name}… ${Math.round(b.got / Math.max(1, b.total) * 100)}%` : `Get ${b.name} (${Math.round(b.size / 1048576)} MB)`; g.disabled = !!b.running;
+      g.onclick = async () => {
+        g.disabled = true; g.textContent = "Starting…";
+        try { await pcCall("/agent/soundfont/get", { id: b.id }); } catch (e) { toast("Couldn't start the download: " + e.message); return fillSounds(); }
+        const poll = async () => { const now = (await sfStatus()).find((x) => x.id === b.id); if (now && now.running && card.isConnected) { g.textContent = `${b.name}… ${Math.round(now.got / Math.max(1, now.total) * 100)}%`; return setTimeout(poll, 1000); } if (now && now.error) toast(now.error); fillSounds(); };
+        poll();
+      };
+      getBox.appendChild(g);
+    }
+  }
+  sel.onchange = () => { S.musicSound = sel.value; saveSettings(); if (playing && playing.card === card) { stopPlaying(); startPlay(card, song, sel.value); } };
+  cmpBtn.onclick = () => (cmp ? stopPlaying() : compareSounds(card, song, have, names, note));
+  fillSounds();
+  card.querySelector('[data-a="play"]').onclick = async () => {
     if (playing && playing.card === card) return stopPlaying();
-    stopPlaying();
-    const ctx = new (window.AudioContext || window.webkitAudioContext)(), btn = e.target; btn.textContent = "Loading sounds…"; btn.disabled = true;
-    const smp = await preload(ctx, song); btn.disabled = false;
-    if (playing) { try { ctx.close(); } catch {} return; }       // pressed again while loading
-    const t0 = ctx.currentTime + .08, dur = schedule(ctx, song, t0, smp);
-    playing = { ctx, card, t0, dur }; btn.textContent = "■ Stop";
-    const pos = card.querySelector(".mu-head .pos");
-    const tick = () => { if (!playing || playing.card !== card) return; const p = (ctx.currentTime - t0) / dur; if (p >= 1) { stopPlaying(); return; } pos.style.width = Math.max(0, p * 100) + "%"; playing.raf = requestAnimationFrame(tick); };
-    tick();
+    await startPlay(card, song, engine());
   };
   card.querySelector('[data-a="midi"]').onclick = () => { download(fileName(song, "mid"), midiFile(song)); toast("MIDI saved: open it in GarageBand (File → Open), each instrument is its own track"); };
   card.querySelector('[data-a="wav"]').onclick = async (e) => { const btn = e.target, old = btn.textContent; btn.disabled = true; btn.textContent = "Recording…"; try { download(fileName(song, "wav"), await wavFile(song)); } catch (err) { toast("Couldn't make the WAV: " + err.message); } finally { btn.disabled = false; btn.textContent = old; } };
@@ -517,5 +607,5 @@ window.musicCard = function (b) {
   requestAnimationFrame(() => drawRoll(roll, song));
   return w;
 };
-window.musicTest = { parseNotes, buildSong, composeSong, midiFile, wavFile, preload, renderSynth };
+window.musicTest = { parseNotes, buildSong, composeSong, midiFile, wavFile, preload, renderSynth, startSF, sfModule };
 })();

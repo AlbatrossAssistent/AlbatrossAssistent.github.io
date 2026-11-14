@@ -434,4 +434,103 @@ function bytes(model) {
   return t;
 }
 
-module.exports = { MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };
+// ---------- Songs: ACE-Step (Apache-2.0), a 3.5B model that makes whole songs, with vocals, from style tags and lyrics ----------
+// Needs one file: models/checkpoints/ace_step_v1_3.5b.safetensors (7.7 GB, Comfy-Org/ACE-Step_ComfyUI_repackaged). The song is made with
+// ComfyUI's own ACE-Step nodes and kept as an MP3 in <LocalAppData>\Albatross\songs, which the app plays from /song/<file>.
+// The graphics card holds one model family at a time, so ComfyUI restarts when you switch between pictures and songs.
+const os = require("os");
+const SONG_CKPT = ["checkpoints", "ace_step_v1_3.5b.safetensors"];
+const SONG_DIR = process.env.ALB_SONG_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "songs");
+const songInstalled = () => hasPython() && fs.existsSync(M(...SONG_CKPT)) && fs.statSync(M(...SONG_CKPT)).size > 7e9;
+const songState = { running: false, status: "", completed: 0, total: 0, error: "" };
+function songWorkflow({ tags, lyrics, seconds, seed, steps }) {
+  return {
+    1: { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: SONG_CKPT[1] } },
+    2: { class_type: "TextEncodeAceStepAudio", inputs: { clip: ["1", 1], tags, lyrics, lyrics_strength: 1.0 } },
+    3: { class_type: "ConditioningZeroOut", inputs: { conditioning: ["2", 0] } },
+    4: { class_type: "EmptyAceStepLatentAudio", inputs: { seconds, batch_size: 1 } },
+    5: { class_type: "ModelSamplingSD3", inputs: { model: ["1", 0], shift: 5.0 } },
+    6: { class_type: "KSampler", inputs: { model: ["5", 0], seed, steps, cfg: 5.0, sampler_name: "euler", scheduler: "simple", positive: ["2", 0], negative: ["3", 0], latent_image: ["4", 0], denoise: 1.0 } },
+    7: { class_type: "VAEDecodeAudio", inputs: { samples: ["6", 0], vae: ["1", 2] } },
+    8: { class_type: "SaveAudioMP3", inputs: { audio: ["7", 0], filename_prefix: "audio/albatross", quality: "320k" } },
+  };
+}
+async function makeSong(body, log = () => {}, signal) {
+  if (!songInstalled()) throw new Error("The song model (ACE-Step) isn't installed on this PC");
+  if (songState.running) throw new Error("A song is already being made: wait until it is done");
+  const tags = String(body.tags || "").trim().slice(0, 600), lyrics = String(body.lyrics || "").trim().slice(0, 4000) || "[instrumental]";
+  if (!tags) throw new Error("Describe the style first (like: pop, upbeat, female vocals, piano)");
+  const seconds = Math.min(180, Math.max(10, Math.round(Number(body.seconds) || 60))), steps = Math.min(60, Math.max(20, Math.round(Number(body.steps) || 50)));
+  const seed = body.seed === undefined ? Math.floor(Math.random() * 2 ** 31) : Number(body.seed);
+  Object.assign(songState, { running: true, status: "Starting…", completed: 0, total: steps, error: "" });
+  busy++;
+  const t0 = Date.now();
+  try {
+    if (lastModel && lastModel !== "ace-step" && loaded && (await up()) && !(await queueBusy())) {
+      songState.status = "Making room: restarting the picture engine…"; log("Switching from pictures to songs: restarting ComfyUI so the picture model leaves the memory");
+      await killComfy();
+    }
+    await ensureRunning(log, (t) => { songState.status = t; });
+    const clientId = crypto.randomUUID(), ws = new WebSocket(COMFY.replace(/^http/, "ws") + "/ws?clientId=" + clientId);
+    await new Promise((ok, fail) => { ws.once("open", ok); ws.once("error", fail); });
+    try {
+      loaded = true; lastModel = "ace-step";
+      const r = await fetch(COMFY + "/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: songWorkflow({ tags, lyrics, seconds, seed, steps }), client_id: clientId }) });
+      const j = await r.json();
+      if (!r.ok || !j.prompt_id) throw new Error(j.error?.message || JSON.stringify(j.node_errors || j).slice(0, 300));
+      const id = j.prompt_id; let drawing = false, last = Date.now(), dog;
+      const beat = setInterval(() => { if (!drawing) songState.status = `Loading the song model from disk… ${Math.round((Date.now() - t0) / 1000)} s`; }, 2000);
+      const stop = () => { fetch(COMFY + "/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: [id] }) }).catch(() => {}); fetch(COMFY + "/interrupt", { method: "POST" }).catch(() => {}); };
+      signal?.addEventListener("abort", stop);
+      try {
+        await new Promise((ok, fail) => {
+          dog = setInterval(() => { if (Date.now() - last > (drawing ? 180000 : 480000)) { stop(); fail(new Error("ComfyUI stopped responding")); } }, 5000);
+          ws.on("message", (raw, isBinary) => {
+            last = Date.now(); if (isBinary) return;
+            let m; try { m = JSON.parse(raw); } catch { return; }
+            if (m.data?.prompt_id && m.data.prompt_id !== id) return;
+            if (m.type === "progress") { drawing = true; songState.completed = m.data.value; songState.total = m.data.max; songState.status = `Composing and singing… ${m.data.value} of ${m.data.max}`; }
+            else if (m.type === "execution_error") fail(new Error(m.data.exception_message || "ComfyUI error"));
+            else if (m.type === "execution_interrupted") fail(Object.assign(new Error("Stopped"), { name: "AbortError" }));
+            else if ((m.type === "executing" && m.data.node === null) || m.type === "execution_success") ok();
+          });
+          ws.on("close", () => fail(new Error("Lost connection to ComfyUI")));
+          signal?.addEventListener("abort", () => fail(Object.assign(new Error("Stopped"), { name: "AbortError" })));
+        });
+      } finally { signal?.removeEventListener("abort", stop); clearInterval(beat); clearInterval(dog); }
+      songState.status = "Saving the song…";
+      let out = null;
+      for (let i = 0; i < 40 && !out; i++) {
+        const hist = (await (await fetch(COMFY + "/history/" + id)).json())[id];
+        out = Object.values(hist?.outputs || {}).flatMap((o) => o.audio || [])[0];
+        if (!out) await new Promise((r2) => setTimeout(r2, 250));
+      }
+      if (!out) throw new Error("ComfyUI didn't return a song");
+      const src = path.join(COMFY_DIR, "ComfyUI", out.type === "temp" ? "temp" : "output", out.subfolder || "", out.filename);
+      fs.mkdirSync(SONG_DIR, { recursive: true });
+      const slug = tags.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "song";
+      const file = `${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}-${slug}.mp3`;
+      fs.copyFileSync(src, path.join(SONG_DIR, file));
+      log(`Song made in ${Math.round((Date.now() - t0) / 1000)} s (${seconds} s of music)`);
+      return { file, url: "/song/" + file, seconds, took: Math.round((Date.now() - t0) / 1000), seed };
+    } finally { try { ws.close(); } catch {} }
+  } catch (e) { songState.error = e.message; throw e; }
+  finally { busy--; lastUsed = Date.now(); songState.running = false; songState.status = ""; }
+}
+// GET /song/<file>: the finished songs (only files this module made)
+function serveSong(req, res, file) {
+  const f = path.join(SONG_DIR, file);
+  if (!/^[0-9]{14}-[a-z0-9-]{1,30}\.mp3$/.test(file) || !fs.existsSync(f)) { res.writeHead(404); res.end(); return true; }
+  res.writeHead(200, { "Content-Type": "audio/mpeg", "Content-Length": fs.statSync(f).size, "Cache-Control": "max-age=86400" });
+  fs.createReadStream(f).pipe(res); return true;
+}
+async function songHandle(p, body) {
+  let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+  try {
+    if (p === "/agent/music/status") return [200, { installed: songInstalled(), model: "ACE-Step 3.5B", ...songState }];
+    if (p === "/agent/music/song") return [200, await makeSong(j, (t) => console.log("[song] " + t))];
+  } catch (e) { return [400, { error: e.message }]; }
+  return [404, { error: "Unknown music request" }];
+}
+
+module.exports = { songInstalled, songState, makeSong, serveSong, songHandle, MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };

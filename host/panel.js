@@ -59,6 +59,10 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       return fs.createReadStream(HTML).pipe(res);
     }
+    // The sound banks the Music tool plays with (host/soundfont.js), downloaded on request and served from this PC
+    if (req.method === "GET" && /^\/soundfont\/[a-z0-9_-]+(\?.*)?$/.test(req.url)) return require("./soundfont").serve(req, res, req.url.split("?")[0].slice(11));
+    // The songs the song model made (host/comfy.js), played in the app
+    if (req.method === "GET" && /^\/song\/[0-9a-z.-]+$/.test(req.url)) return require("./comfy").serveSong(req, res, req.url.slice(6));
     // The Albatross app itself, from this PC (..\public): the Chrome sidebar loads it from here, because a page from this PC may
     // talk to Ollama and the host on 127.0.0.1 without Chrome's "local network access" permission (which a sidebar can't ask for).
     if (req.method === "GET" && /^\/app(\/|\?|$)/.test(req.url)) {
