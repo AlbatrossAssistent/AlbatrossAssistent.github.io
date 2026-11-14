@@ -1906,6 +1906,7 @@ body.guest-mode #goMail,
 body.guest-mode #goHub,
 body.guest-mode #goMonitor,
 body.guest-mode #goList,
+body.guest-mode #goHost,
 body.guest-mode #acctBar,
 body.guest-mode #connOwnerOnly,
 body.guest-mode #connGuestOwnerBox,
@@ -1948,6 +1949,18 @@ body.guest-mode #settings .tabs button[data-tab="account"] { display: none !impo
 .pc-recap-file .finfo small { color: var(--muted); font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 560px) { .pc-recap-top { flex-direction: column; } .pc-recap-file { flex-wrap: wrap; } }
 #pcPage[data-pt="guest"] .pc-card, #pcPage[data-pt="guest"] #pcStatusCard { display: none; }
+/* Host tab: only the host card; the host card only there */
+#pcPage:not([data-pt="host"]) #pcHostCard { display: none; }
+#pcPage[data-pt="host"] .home-card:not(#pcHostCard) { display: none; }
+.host-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 12px 0; }
+.host-info > div { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.host-info small { display: block; color: var(--muted); font-size: 12px; }
+.host-info b { font-size: 15px; }
+.host-log { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.host-log div { display: flex; gap: 10px; padding: 4px 2px; border-bottom: 1px solid var(--line); }
+.host-log time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.host-log .error { color: var(--bad, #ff3b30); }
+@media (min-width: 821px) { aside.rail #goHost { display: none !important; } }
 
 /* ======================================================================
    Refined surfaces (2026-11-12): calmer glass, hairline edges, flat navigation, one shadow scale, notifications from the top.

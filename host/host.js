@@ -104,6 +104,7 @@ const pcPower = {
     if (method === "POST" && p === "/pc/devices") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} if (j.me) seeDevice(j.me); return [200, { devices: drops.list() }]; }
     if (method === "POST" && p === "/pc/forgetdevice") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, { ok: drops.forget(j.id) }]; }
     if (p.startsWith("/pc/drop")) return drops.handle(method, p, body, note);
+    if (p === "/pc/host") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, method === "POST" && j.action ? await hostAction(j) : hostStatus()]; }
     if (p === "/pc/modelpull" || p === "/pc/modeldelete") { const [st, out] = await require("./models").handle(method, p, body, OLLAMA, note); if (p === "/pc/modeldelete") pollOllama(); return [st, out]; }
     if (p === "/pc/relayban") { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return [200, method === "POST" ? setNoBan(j.noBan) : { noBan: !!state.noBan }]; }
     if (method === "GET" && p === "/pc/lock") return [200, { locked: await isLocked() }];
@@ -331,6 +332,7 @@ const stats = {
   log: [],
 };
 let panel = { push() {} };
+let panelActions = {};      // the control center's actions (also used by the Host tab for "restart")
 const changed = () => panel.push();
 function setConnection(c) { if (stats.connection !== c) { stats.connection = c; stats.connectionSince = Date.now(); } changed(); }
 function addLog(entry) {
@@ -486,6 +488,41 @@ function updateGuestStats() {
   if (!stats.guestEnabled) stats.guestConnection = "off";
   changed();
 }
+// Host tab → Online: when off, this PC drops its connection to the Albatross server, so no device can reach it from outside (the
+// website on this PC itself keeps working). Remembered across restarts.
+function setSharing(on) {
+  state.sharingOff = !on;
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  if (!on) {
+    note("Went offline: other devices can't reach this PC until you go online again");
+    for (const ws of [mainWs, guestWs]) { try { ws && ws.close(); } catch {} }
+    guestWs = null; stats.guestConnection = "off"; setConnection("off");
+  } else {
+    note("Going online");
+    retry = 1000; if (!mainWs) connect(); if (state.guestEnabled !== false && !guestWs) connectGuest();
+  }
+  return hostStatus();
+}
+function hostStatus() {
+  return {
+    name: NAME, server: SERVER, startedAt: stats.startedAt, online: !state.sharingOff, connection: stats.connection, connectionSince: stats.connectionSince,
+    guestEnabled: stats.guestEnabled, guestConnection: stats.guestConnection, ollama: { up: stats.ollama.up, version: stats.ollama.version, loaded: (stats.ollama.models || []).map((m) => ({ name: m.name, size: m.size })) },
+    awake: stats.awake, background: stats.background, autostart: stats.autostart, totals: stats.totals, active: stats.active,
+    log: stats.log.slice(0, 40).map((l) => ({ time: l.time, kind: l.kind || "info", text: String(l.text || l.desc || "").slice(0, 200) })),
+  };
+}
+// GET /pc/host → status; POST { action } → online | guest | free-gpu | autostart | restart
+async function hostAction(j) {
+  switch (j.action) {
+    case "online": return setSharing(j.on !== false);
+    case "guest": toggleGuest(j.on !== false); return hostStatus();
+    case "free-gpu": await freeGpu(); return hostStatus();
+    case "autostart": runAutostartBat(j.on !== false); return hostStatus();
+    case "restart": setTimeout(() => panelActions.restart && panelActions.restart(), 200); return { restarting: true };
+  }
+  throw new Error("Unknown host action");
+}
+
 // Settings → Connection: the relay blocks an internet address for 10 minutes after 30 requests to a code with no PC online (against
 // guessing codes). Your own devices retrying while this PC is asleep or restarting can trip it. With noBan, the relay doesn't count or
 // block requests to this PC's two codes; guessing other codes stays blocked.
@@ -797,6 +834,7 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
 }
 
 function connect() {
+  if (state.sharingOff) { setConnection("off"); return; }
   const ws = new WebSocket(wsUrl, { maxPayload: 80 * 1024 * 1024 });
   mainWs = ws;
   const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
@@ -864,6 +902,7 @@ function connect() {
     if (mainWs !== ws) return;
     mainWs = null;
     if (stats.connection === "online") note("Lost connection to the server, reconnecting…", "error");
+    if (state.sharingOff) { setConnection("off"); return; }        // switched offline in the app / control center
     setConnection("offline");
     console.log(`Disconnected from server. Reconnecting in ${retry / 1000}s…`);
     setTimeout(connect, retry);
@@ -874,7 +913,7 @@ function connect() {
 
 // Separate relay registration for the Guest connection code (XXXX-XXXX-YYYY-YYYY), so guests use a completely different 16-char code.
 function connectGuest() {
-  if (state.guestEnabled === false || guestWs) return;
+  if (state.guestEnabled === false || guestWs || state.sharingOff) return;
   const ws = new WebSocket(wsUrl, { maxPayload: 80 * 1024 * 1024 });
   guestWs = ws;
   const send = (o) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
@@ -1044,7 +1083,9 @@ panel = startPanel({
     }
     return upstream(method, p, body, signal);
   },
-  actions: {
+  actions: panelActions = {
+    "sharing-on": () => setSharing(true),
+    "sharing-off": () => setSharing(false),
     "idle-tick": () => schedule.idleTick(),
     "remove-outbox": (b) => { const r = files.removeFromOutbox(b.name); changed(); return r; },
     "free-gpu": freeGpu,

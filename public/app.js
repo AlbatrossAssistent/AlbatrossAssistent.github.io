@@ -4348,8 +4348,8 @@ $("#goTools").onclick = (e) => {
   e.stopPropagation();
   const old = document.querySelector(".tools-pop"); if (old) { old.remove(); $("#goTools").setAttribute("aria-expanded", "false"); return; }
   const pop = document.createElement("div"); pop.className = "tools-pop"; pop.setAttribute("role", "menu");
-  for (const id of ["goJarvis", "goNotes", "goMail", "goHub", "goMonitor", "goList"]) {
-    const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Jarvis|Notes|Mail|Hub|Monitor|List/.test(id))) continue;
+  for (const id of ["goHost", "goJarvis", "goNotes", "goMail", "goHub", "goMonitor", "goList"]) {
+    const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Host|Jarvis|Notes|Mail|Hub|Monitor|List/.test(id))) continue;
     const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
     b.innerHTML = (src.querySelector("svg") || {}).outerHTML || ""; b.append(src.textContent.trim());
     b.onclick = () => { pop.remove(); $("#goTools").setAttribute("aria-expanded", "false"); src.click(); };
@@ -4582,10 +4582,55 @@ function pcOpen(tab) {
   syncPcTabs();
   $("#pcSub").textContent = connected ? `${remotePC() ? "Remotely" : "Locally"} connected` : "Not connected";
   $("#pcNote").textContent = remotePC() ? "" : "Sleep and shut down work for the PC that runs the Albatross host. Turn it on from another device with Wake-on-LAN.";
-  pcStats(); loadOwnerGuestInfo(); clearInterval(pcv.timer); pcv.timer = setInterval(() => { pcStats(); if ($("#pcPage").dataset.pt === "guest") loadOwnerGuestInfo(); }, 3000);
+  pcStats(); loadOwnerGuestInfo(); loadHost(); clearInterval(pcv.timer); pcv.timer = setInterval(() => { pcStats(); if ($("#pcPage").dataset.pt === "guest") loadOwnerGuestInfo(); if ($("#pcPage").dataset.pt === "host") loadHost(); }, 3000);
 }
+// ---------- Host tab: online/offline, guests, start at boot, Ollama, activity (host.js /pc/host) ----------
+let hostSt = null;
+const hostAgo = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + " s" : s < 3600 ? Math.round(s / 60) + " min" : s < 86400 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " d"; };
+async function loadHost() {
+  if (!connected || guestMode) { $("#hostOnlineSub").textContent = "Connect to your PC first."; return; }
+  try { paintHost(await pcCall("/pc/host", null, "GET")); }
+  catch (e) { $("#hostOnlineSub").textContent = /Unknown|404/.test(e.message) ? "Restart the host on your PC once to get this (it's an older version)." : e.message; }
+}
+function paintHost(st) {
+  hostSt = st;
+  const on = $("#hostOnline"); on.disabled = false; on.checked = !!st.online;
+  $("#hostOnlineSub").textContent = !st.online ? "Offline: other devices can't reach this PC (this PC's own website still works)."
+    : st.connection === "online" ? `Online for ${hostAgo(st.connectionSince)}: your devices reach this PC with its code.` : "Connecting to the Albatross server…";
+  $("#hostGuest").disabled = !st.online; $("#hostGuest").checked = !!st.guestEnabled;
+  const boot = $("#hostBoot"); boot.disabled = st.autostart === null; boot.checked = !!st.autostart;
+  $("#hostBootSub").textContent = st.autostart === null ? "Only on Windows." : st.autostart ? "On: starts when the PC boots, even before you sign in" + (st.background ? " (running that way now)." : ".") : "Off: runs only while Albatross is started.";
+  const loaded = (st.ollama.loaded || []).map((m) => m.name).join(", ");
+  $("#hostInfo").innerHTML = "";
+  for (const [k, v] of [["Ollama", st.ollama.up ? "Running" + (st.ollama.version ? " · " + st.ollama.version : "") : "Not running"], ["In memory", loaded || "Nothing"], ["Running for", hostAgo(st.startedAt)], ["Working on", st.active ? st.active + " job" + (st.active > 1 ? "s" : "") : "Nothing"], ["Messages answered", String(st.totals.messages)], ["Errors", String(st.totals.errors)]]) {
+    const d = document.createElement("div"); d.innerHTML = "<small></small><b></b>"; d.querySelector("small").textContent = k; d.querySelector("b").textContent = v; $("#hostInfo").appendChild(d);
+  }
+  $("#hostCC").hidden = !window.albatrossDesktop && remotePC();
+  const log = $("#hostLog"); log.innerHTML = st.log.length ? "" : '<div class="empty-note">Nothing yet.</div>';
+  for (const l of st.log) { const r = document.createElement("div"); r.innerHTML = "<time></time><span></span>"; r.querySelector("time").textContent = new Date(l.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); const sp = r.querySelector("span"); sp.textContent = l.text; if (l.kind === "error") sp.className = "error"; log.appendChild(r); }
+}
+async function hostDo(action, extra = {}) {
+  try { const r = await pcCall("/pc/host", { action, ...extra }); if (r && r.online !== undefined) paintHost(r); return r; }
+  catch (e) { toast(e.message); loadHost(); }
+}
+$("#hostOnline").onchange = async (e) => {
+  const on = e.target.checked;
+  if (!on && remotePC() && !confirm("You're connected to your PC from outside. Going offline disconnects this device too, and you can only go online again on the PC itself. Go offline?")) { e.target.checked = true; return; }
+  await hostDo("online", { on }); toast(on ? "Online: your devices can reach this PC again" : "Offline: nobody can reach this PC from outside");
+};
+$("#hostGuest").onchange = (e) => hostDo("guest", { on: e.target.checked });
+$("#hostBoot").onchange = async (e) => {
+  const on = e.target.checked;
+  if (window.albatrossDesktop) { const r = await window.albatrossDesktop.setBootStart(on); if (r && r.error) toast(r.error); return loadHost(); }
+  await hostDo("autostart", { on }); toast("Windows asks on the PC for admin rights" + (on ? " and your password" : "") + ".");
+};
+$("#hostFreeGpu").onclick = () => hostDo("free-gpu").then(() => toast("GPU memory freed"));
+$("#hostCodes").onclick = () => { $("#pcPage").dataset.pt = "guest"; syncPcTabs(); loadOwnerGuestInfo(); };
+$("#hostCC").onclick = () => (window.albatrossDesktop || window.openControlCenter && location.origin.includes(":4747") ? openControlCenter() : open("http://127.0.0.1:4747/", "_blank", "noopener"));
+$("#hostRestart").onclick = async () => { if (!confirm("Restart the Albatross host on your PC? Running answers stop; it's back in a few seconds.")) return; await hostDo("restart"); toast("The host restarts…"); setTimeout(loadHost, 8000); };
+$("#goHost").onclick = () => { setView("pc", { tab: "host" }); $("#sidebar").classList.remove("open"); };
 function syncPcTabs() { for (const b of $$("#pcTabs button")) b.classList.toggle("on", b.dataset.pt === $("#pcPage").dataset.pt); }
-for (const b of $$("#pcTabs button")) b.onclick = () => { $("#pcPage").dataset.pt = b.dataset.pt; syncPcTabs(); if (b.dataset.pt === "guest") loadOwnerGuestInfo(); };
+for (const b of $$("#pcTabs button")) b.onclick = () => { $("#pcPage").dataset.pt = b.dataset.pt; syncPcTabs(); if (b.dataset.pt === "guest") loadOwnerGuestInfo(); if (b.dataset.pt === "host") loadHost(); };
 function pcClose() { clearInterval(pcv.timer); }
 $("#pcSetup").onclick = () => openSettings("connection");
 
@@ -5993,8 +6038,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-13.20";
+const APP_VERSION = "2026-11-14.1";
 const WHATS_NEW = [
+  ["2026-11-14.1", ["Host tab (sidebar → Host): go online or offline, guests, start at boot, Ollama, live activity, restart, control center"]],
   ["2026-11-13.20", ["Web searches can be watched: the AI searches in a tab of its own in your Chrome or the PC browser (your page stays)"]],
   ["2026-11-13.19", ["Nothing keeps loading forever when the PC doesn't answer; the Browser view mirrors your own Chrome when the AI uses it; collapsed sidebar shows Home, Chat, Tools and Settings"]],
   ["2026-11-13.18", ["Windows app: control center inside the app (Home → This PC), start at boot from the app, automatic updates; download link in Settings → Appearance"]],
