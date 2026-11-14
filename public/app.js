@@ -1778,6 +1778,7 @@ const DECK_LAYOUTS = {
   cards:         { use: "3 or 4 parallel ideas, types or examples", fill: '"cards": 3 or 4 items, each "title" (2 to 4 words) and "text" (at most 15 words)', need: ["cards"] },
   statement:     { use: "one big key message on its own", fill: '"statement": one strong sentence (at most 15 words)', need: ["statement"] },
   section:       { use: "a divider that starts a new part of a long presentation", fill: '"sub": one short line about what this part covers', need: ["sub"] },
+  sources:       { use: "the last slide, listing the sources: only when the user asks for sources or references", fill: '"bullets": 1 to 8 points, each "Title or site: address", only pages really used or photo credits', need: ["bullets"], toolOnly: 1 },
 };
 const DECK_TRANSITIONS = ["none", "fade", "dissolve", "push", "wipe", "zoom", "cover", "uncover", "split", "circle", "flip", "cube", "lift", "drop", "spin", "zoom-out", "box", "glitch"];
 const DECK_STYLES = ["fade", "rise", "fly", "zoom", "wipe", "blur", "pop", "drop", "slide", "tilt", "spin", "glow"];
@@ -2221,7 +2222,7 @@ async function makePptx(d) {
       });
     } else {
       head(s, sl.title);
-      bullets(s, list, { fontSize: 24, y: 2.1 });
+      bullets(s, list, L === "sources" ? { fontSize: 15, y: 2.0, paraSpaceAfter: 8 } : { fontSize: 24, y: 2.1 });
       if (list.length) targets.push({ name: "anim-list", paras: list.length });
     }
     if (sl.notes) s.addNotes(sl.notes);
@@ -2745,6 +2746,160 @@ async function runMediaTool(name, args, block) {
   }));
   return `The presentation "${block.deck.title}" with ${slides.length + 1} slides is shown to the user, who can present it or download it as PowerPoint/Keynote. Reply with one or two sentences, don't repeat the slides.`;
 }
+// ---------- Presentations as tools ----------
+// The model builds a presentation itself, like a person would: it plans, looks things up, picks a design, searches photos and
+// chooses one for each slide, writes each slide, then checks every slide and fixes what is weak. Each of these is a tool it calls
+// when it wants to (the plan and any question to the user come from the Agent's update_plan and ask_user).
+const DECK_TOOL_NAMES = new Set(["deck_design", "deck_find_photos", "deck_set_slide", "deck_delete_slide", "deck_check"]);
+const DECK_TOOLS = (() => {
+  const P = (type, description, extra = {}) => ({ type, description, ...extra });
+  const T = (name, description, properties, required = []) => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required } } });
+  const pair = (a, b) => ({ type: "array", items: { type: "object", properties: { [a]: { type: "string" }, [b]: { type: "string" } }, required: [a, b] } });
+  const layouts = Object.entries(DECK_LAYOUTS).map(([k, l]) => `- ${k}: ${l.use}. Fill in ${l.fill}.`).join("\n");
+  return [
+    T("deck_design", "Set the look and the title of the presentation. Call it once, early, and again to change the look. The look must fit the topic and mood.", {
+      title: P("string", "Title of the presentation"), subtitle: P("string", "Subtitle for the title slide"), notes: P("string", "Speaker notes for the title slide: 2 or 3 sentences to open the talk"),
+      theme: P("string", "Colour design: " + Object.entries(DECK_THEMES).map(([k, t]) => `${k} (${t.about})`).join("; "), { enum: Object.keys(DECK_THEMES) }),
+      fonts: P("string", "Font pairing", { enum: Object.keys(DECK_FONTS) }),
+      transition: P("string", "Main slide transition", { enum: DECK_TRANSITIONS }),
+      animation: P("string", "entrance: everything comes in by itself; build: points one per click; none", { enum: ["entrance", "build", "none"] }),
+      anim_style: P("string", "Animation style", { enum: DECK_STYLES }),
+      cover_photo: P("string", "Id of a photo from deck_find_photos for the title slide") }),
+    T("deck_find_photos", "Search real, freely licensed photos on the web for a slide. You get numbered candidates (id, title, credit); if you can see pictures you also get to look at them. Pass the best id to deck_set_slide as photo (or cover_photo to deck_design). Search again with another query if none fits.", {
+      query: P("string", "What the photo must show: a concrete thing, place, animal, event or person, in English (like \"Saturn V rocket launch\")"), count: P("number", "How many candidates (1 to 6, default 4)") }, ["query"]),
+    T("deck_set_slide", "Write or replace one slide. n is the slide's number, 1 = the first slide after the title slide; use the next free number to add a slide. Giving only some fields changes just those. Layouts:\n" + layouts, {
+      n: P("number", "Slide number (1 = first after the title slide)"), layout: P("string", "The layout", { enum: Object.keys(DECK_LAYOUTS) }), title: P("string", "Short slide title"),
+      bullets: { type: "array", items: { type: "string" }, description: "Points (layouts bullets, image-right, image-left, image-full, sources)" },
+      quote: P("string", "Exact words of a real quote (layout quote)"), by: P("string", "Who said it"), statement: P("string", "The key message (layouts statement, quote)"), sub: P("string", "One line (layout section)"),
+      stats: pair("value", "label"), steps: pair("title", "text"), cards: pair("title", "text"),
+      columns: { type: "array", items: { type: "object", properties: { title: { type: "string" }, bullets: { type: "array", items: { type: "string" } } }, required: ["title", "bullets"] } },
+      photo: P("string", "Photo id from deck_find_photos (photo layouts)"), notes: P("string", "Speaker notes: 2 to 4 sentences the speaker says"),
+      transition: P("string", "This slide's own transition (optional)", { enum: DECK_TRANSITIONS }) }, ["layout", "title"]),
+    T("deck_delete_slide", "Remove a slide.", { n: P("number", "Slide number (1 = first after the title slide)") }, ["n"]),
+    T("deck_check", "Look over the presentation: you get every slide as text (or one slide, with n) and a list of problems (missing parts, too much text, a photo layout without a photo, the same layout again and again, missing speaker notes). Always call it before you finish, then fix every problem and look again.", {
+      n: P("number", "Check just this slide (omit it to check all)") }),
+  ];
+})();
+const DECK_WORKFLOW = `You can build presentations yourself with the tools deck_design, deck_find_photos, deck_set_slide, deck_delete_slide and deck_check. Whenever the user wants slides, a presentation, a keynote or a deck (or changes to the one in this chat) use them. Never write the slides out as plain text.
+How to work, like a careful person:
+1. Plan: call update_plan first. Say what the presentation has to cover (the story: one line per slide), which slides get a photo, a chart-like layout or a quote, and the look. Keep updating it as steps start and finish.
+2. Research: if facts matter, look them up (web_search / web_fetch) before you write, and keep the addresses of the pages you really use.
+3. If a real choice matters (audience, language, how long, a focus) and the request doesn't say, call ask_user first with 2 to 4 short options; otherwise decide yourself.
+4. deck_design: pick the look that fits the topic.
+5. For each slide that wants a photo: deck_find_photos with a concrete English query, look at the candidates (their titles, and the pictures themselves if you can see), and pick the best id for deck_set_slide. If none fits, search again with another query or use a layout without a photo.
+6. deck_set_slide for every slide, in order: 5 to 10 slides after the title, varied layouts (never the same one three times in a row), short points (at most 12 words), concrete and correct, speaker notes for each, in the user's language. Only use a quote if you know the exact words.
+7. Sources: when the user asks for sources, references, a bibliography or "Quellen", add a last slide with the layout "sources": one point per source, as "Title or site: address". List only pages you really opened or got from a search, and photo credits if you used photos (as in the candidate list). Never invent or guess a source; if you have none, say so instead of making a slide.
+8. deck_check, then fix every problem it lists with deck_set_slide, and check again. Read each slide as the audience would: does it say one clear thing, is the text short, does the picture fit?
+When it is done, answer with one or two sentences; the app shows the slides.`;
+// every slide of the deck as one line of text, and the problems a careful person would see
+function deckSummary(sl) {
+  const L = layoutOf(sl), t = (a) => (a || []).map((x) => typeof x === "string" ? x : [x.value, x.title, x.label, x.text, (x.bullets || []).join(" / ")].filter(Boolean).join(": ")).join(" | ");
+  const body = L === "stats" ? t(sl.stats) : L === "cards" ? t(sl.cards) : L === "timeline" ? t(sl.steps) : L === "columns" ? t(sl.columns) : L === "quote" ? `"${sl.quote}" — ${sl.by}` : L === "statement" ? sl.statement : L === "section" ? sl.sub : t(sl.bullets);
+  return `[${L}] ${sl.title}${sl.photo ? " (photo: " + String(sl.photo.title || "").slice(0, 50) + ")" : ""} — ${String(body || "").slice(0, 260)}`;
+}
+function deckLint(d, only) {
+  const words = (t) => String(t || "").trim().split(/\s+/).filter(Boolean).length, lay = d.slides.map(layoutOf), seen = new Map();
+  const per = d.slides.map((sl, i) => {
+    const p = [], L = lay[i], want = sl.layout || "bullets", bl = sl.bullets || [], src = want === "sources";
+    if (!String(sl.title || "").trim()) p.push("no title");
+    else if (words(sl.title) > 9) p.push("the title is long (at most 9 words)");
+    if (DECK_LAYOUTS[want]?.photo && !sl.photo) p.push("photo layout without a photo: find one with deck_find_photos or use another layout");
+    else if (want !== L) p.push(`layout "${want}" is missing what it needs (${DECK_LAYOUTS[want].need.join(", ")}), so it shows as plain points`);
+    if (L === "bullets" && !src && (bl.length < 3 || bl.length > 6)) p.push(`${bl.length} point${bl.length === 1 ? "" : "s"} (use 3 to 5)`);
+    if (src && bl.length > 8) p.push("too many sources for one slide (at most 8)");
+    if (src && bl.some((b) => !/(https?:\/\/|www\.|\w\.\w{2,}\b)/i.test(b))) p.push("a source without an address");
+    if (!src && bl.some((b) => words(b) > 14)) p.push("a point is longer than 14 words");
+    if (!src && words(sl.notes) < 8) p.push("speaker notes missing or very short");
+    if (i >= 2 && lay[i] === lay[i - 1] && lay[i] === lay[i - 2]) p.push(`the third "${L}" slide in a row: vary the layouts`);
+    const key = String(sl.title || "").trim().toLowerCase();
+    if (key && seen.has(key)) p.push(`same title as slide ${seen.get(key)}`); else seen.set(key, i + 1);
+    return p;
+  });
+  const deckP = [];
+  if (!String(d.title || "").trim()) deckP.push("the presentation has no title: call deck_design");
+  if (d.slides.length < 4) deckP.push(`only ${d.slides.length} slide${d.slides.length === 1 ? "" : "s"} after the title (aim for 5 to 10)`);
+  if (d.slides.length > 14) deckP.push("more than 14 slides: too long");
+  if (d.slides.some((s, i) => s.layout === "sources" && i !== d.slides.length - 1)) deckP.push("the sources slide should be the last slide");
+  const idx = only ? [only - 1] : d.slides.map((_, i) => i);
+  const lines = idx.map((i) => `${i + 1}. ${deckSummary(d.slides[i])}${per[i].length ? "\n   PROBLEMS: " + per[i].join("; ") : "\n   ok"}`);
+  const n = idx.reduce((a, i) => a + per[i].length, 0) + (only ? 0 : deckP.length);
+  return { n, text: `Presentation "${d.title}" · look: ${d.theme}, ${d.fonts}\n` + lines.join("\n") + (!only && deckP.length ? "\nOVERALL: " + deckP.join("; ") : "") + `\n${n ? n + " problem" + (n === 1 ? "" : "s") + ": fix them with deck_set_slide, then call deck_check again." : "No problems found. Read the slides once more as the audience would; if they are good, you are done."}` };
+}
+async function runDeckTool(name, args, ctx) {
+  const block = ctx.ensure(), d = block.deck;
+  const step = (label, extra = {}) => { const st = { label, state: "doing", ...extra }; block.steps.push(st); if (block.steps.length > 90) block.steps.shift(); ctx.touch(); return st; };
+  const fin = (st, sub, state = "done") => { st.state = state; if (sub) st.sub = sub; ctx.touch(); };
+  const pre = S.deckPreset || {};
+  if (name === "deck_design") {
+    const st = step("Design"), fixed = [];
+    if (args.title) d.title = String(args.title).trim().slice(0, 140);
+    if (args.subtitle != null) d.subtitle = String(args.subtitle).trim().slice(0, 200);
+    if (args.notes) d.notes = String(args.notes).slice(0, 1500);
+    if (DECK_THEMES[args.theme]) { d.theme = args.theme; d.fonts = DECK_THEMES[args.theme].fonts; }
+    if (DECK_FONTS[args.fonts]) d.fonts = args.fonts;
+    if (DECK_TRANSITIONS.includes(args.transition)) d.transition = args.transition;
+    if (["entrance", "build", "none"].includes(args.animation)) d.animation = args.animation;
+    if (DECK_STYLES.includes(args.anim_style)) d.animStyle = args.anim_style;
+    // the user's own preset (Settings → Tools → Slides) wins over the model's choice
+    if (DECK_THEMES[pre.theme]) { d.theme = pre.theme; d.fonts = DECK_FONTS[pre.fonts] ? pre.fonts : DECK_THEMES[pre.theme].fonts; fixed.push("theme"); }
+    if (DECK_TRANSITIONS.includes(pre.transition)) { d.transition = pre.transition; fixed.push("transition"); }
+    if (DECK_STYLES.includes(pre.animStyle)) { d.animStyle = pre.animStyle; fixed.push("animation style"); }
+    if (["entrance", "build", "none"].includes(pre.animation)) { d.animation = pre.animation; fixed.push("animation"); }
+    if (args.cover_photo) { const im = ctx.pool.get(String(args.cover_photo)); if (im) d.coverPhoto = im; else { fin(st, "", "fail"); return `Error: unknown photo "${args.cover_photo}". Use an id from deck_find_photos.`; } }
+    fin(st, `${d.theme} · ${d.fonts}${d.coverPhoto ? " · cover photo" : ""}`);
+    return `Design set: ${d.theme} theme, ${d.fonts} fonts, ${d.transition} transitions, animation ${d.animation}. Title: "${d.title}".` + (fixed.length ? ` The user fixed the ${fixed.join(", ")} in their settings, so those were kept.` : "");
+  }
+  if (name === "deck_find_photos") {
+    const q = String(args.query || "").trim();
+    if (!q) return "Error: give a query.";
+    if (!imageSearchAvailable) return "Photo search isn't available right now. Use layouts without photos.";
+    const st = step("Photos: " + q);
+    try {
+      const r = await fetch(toolsBase() + "/tools/image_search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q, count: Math.max(1, Math.min(6, Number(args.count) || 4)) }), signal: controller.signal });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+      const ims = (j.images || []).slice(0, 6);
+      if (!ims.length) { fin(st, "nothing found"); return `No free photos were found for "${q}". Try other words, or use a layout without a photo.`; }
+      const ids = ims.map((im) => { const id = "p" + ++ctx.seq; ctx.pool.set(id, im); if (ctx.vision) ctx.attach.push({ id, url: im.thumb }); return id; });
+      fin(st, `${ims.length} found`);
+      return `Candidates for "${q}":\n` + ims.map((im, k) => `${ids[k]}: "${im.title || "untitled"}"${im.creator ? " by " + im.creator : ""}${im.license ? " (" + im.license + ")" : ""}`).join("\n") + (ctx.vision ? "\nThe pictures follow in the next message, in this order." : "\nYou can only judge by the titles.");
+    } catch (e) { if (e.name === "AbortError") throw e; fin(st, e.message, "fail"); return "Error: " + e.message; }
+  }
+  if (name === "deck_delete_slide") {
+    const n = Math.round(Number(args.n));
+    if (!(n >= 1 && n <= d.slides.length)) return `Error: there is no slide ${args.n} (the presentation has ${d.slides.length} slides after the title).`;
+    const [gone] = d.slides.splice(n - 1, 1);
+    fin(step(`Removed slide ${n}: ${gone.title}`), "");
+    return `Slide ${n} removed. The slides after it moved up by one.`;
+  }
+  if (name === "deck_check") {
+    const only = args.n != null && args.n !== "" ? Math.round(Number(args.n)) : 0;
+    if (only && !(only >= 1 && only <= d.slides.length)) return `Error: there is no slide ${args.n}.`;
+    if (!d.slides.length && !only) return "The presentation has no slides yet. Write them with deck_set_slide.";
+    const st = step(only ? `Checking slide ${only}` : "Checking every slide", only ? { slide: only } : {}), r = deckLint(d, only);
+    if (!only) { ctx.checked = true; ctx.checks++; ctx.issues = r.n; }
+    fin(st, r.n ? `${r.n} problem${r.n === 1 ? "" : "s"} found` : "all good");
+    return r.text;
+  }
+  // deck_set_slide
+  let n = Math.round(Number(args.n));
+  if (!(n >= 1)) n = d.slides.length + 1;
+  n = Math.min(n, d.slides.length + 1);
+  if (n > 20) return "Error: a presentation can have at most 20 slides after the title slide.";
+  const old = d.slides[n - 1], layout = DECK_LAYOUTS[args.layout] ? args.layout : (old?.layout || "bullets"), spec = DECK_LAYOUTS[layout];
+  const cl = cleanSlide(args); if (args.notes === undefined) delete cl.notes;
+  const sl = { ...(old && (old.layout || "bullets") === layout ? old : {}), title: String(args.title ?? old?.title ?? "").trim().slice(0, 120), layout, ...cl };
+  if (args.photo != null && args.photo !== "") { const im = ctx.pool.get(String(args.photo)); if (!im) return `Error: unknown photo "${args.photo}". Use an id from deck_find_photos.`; sl.photo = im; }
+  else if (old?.photo && spec.photo) sl.photo = old.photo;
+  if (!spec.photo) delete sl.photo;
+  if (layout === "quote" && !(sl.quote && sl.by)) return 'Error: a quote slide needs the exact words ("quote") and who said it ("by"), and only if you are sure of both. Use the statement layout otherwise.';
+  if (DECK_TRANSITIONS.includes(args.transition)) sl.transition = args.transition;
+  sl.ready = true;
+  const miss = spec.photo ? (sl.photo ? [] : ["a photo"]) : spec.need.filter((k) => !(Array.isArray(sl[k]) ? sl[k].length : sl[k]));
+  if (n > d.slides.length) d.slides.push(sl); else d.slides[n - 1] = sl;
+  fin(step(`${n}. ${sl.title}`, { slide: n }), LAYOUT_NAMES[layout] + (sl.photo ? " · photo" : ""));
+  return `Slide ${n} saved (${layout}).` + (miss.length ? ` It still needs ${miss.join(", ")}: until then it shows as plain points.` : "");
+}
 // Web search and page reading: the server first (Ollama's search, or its free fallback); if that fails and this is your PC,
 // the PC searches (DuckDuckGo from your home connection) or reads the page itself. No credits needed either way.
 async function webTool(name, args, signal) {
@@ -2789,8 +2944,25 @@ async function chat(model, opts = {}) {
   const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; fillBot(bubble, reply, -1, true); scrollDown(); }); };
 
   let totalTokens = 0, totalNs = 0, finished = false, stopped = false;
+  // the presentation the model builds with the deck tools (created on its first deck tool call; an earlier one from this chat is changed in place)
+  const deckCtx = { block: null, pool: new Map(), seq: 0, checked: false, checks: 0, issues: 0, nudged: 0, attach: [], vision: false,
+    touch: () => { if (deckCtx.block) { deckCtx.block.progress = (deckCtx.block.progress || 0) + 1; redraw(); drawDeckSide(); } },
+    ensure: () => {
+      if (deckCtx.block) return deckCtx.block;
+      const prev = [...conv.messages].reverse().find(m => m.role === "assistant" && m.blocks?.some(x => x.type === "deck" && x.deck?.slides?.length))?.blocks.find(x => x.type === "deck").deck, pre = S.deckPreset || {};
+      const deck = prev ? JSON.parse(JSON.stringify(prev)) : { title: "", subtitle: "", slides: [], theme: DECK_THEMES[pre.theme] ? pre.theme : "midnight", transition: DECK_TRANSITIONS.includes(pre.transition) ? pre.transition : "fade",
+        animation: ["entrance", "build", "none"].includes(pre.animation) ? pre.animation : "entrance", animStyle: DECK_STYLES.includes(pre.animStyle) ? pre.animStyle : "rise" };
+      if (!prev) deck.fonts = DECK_FONTS[pre.fonts] ? pre.fonts : DECK_THEMES[deck.theme].fonts;
+      for (const sl of deck.slides) sl.ready = true;
+      const block = { type: "deck", active: true, deck, idx: 0, steps: [], progress: 0 };
+      reply.blocks.push(block); deckCtx.block = block;
+      openDeckSide(block);
+      if (matchMedia("(max-width: 820px)").matches) $("#deckSide").classList.add("min");
+      return block;
+    } };
   try {
     const caps = await getCaps(model);
+    deckCtx.vision = caps.includes("vision");
     const effort = effortNow(), canThink = caps.includes("thinking"), useThink = canThink && effort !== "low", gptoss = /gpt-oss/i.test(model);
     const wantSearch = S.webSearch && searchAvailable;
     const toolsOk = caps.includes("tools");
@@ -2803,6 +2975,12 @@ async function chat(model, opts = {}) {
     system += "\n\nWhen a program needs more than one file (for example a game with index.html, style.css and game.js), write every file in full in its own code block and put its file name in bold on the line right before the block, like **game.js**. Link the files to each other with relative paths (<link rel=\"stylesheet\" href=\"style.css\">, <script src=\"game.js\"><\/script>, import ... from \"./util.js\"), so they run together in the built-in player.";
     if (useTools) system = (system ? system + "\n\n" : "") + `You can use web_search and web_fetch to look things up online. Search when the question needs current or specific facts, then answer using the results and mention the sources. Today's date is ${new Date().toDateString()}.`;
     const maxPlan = effort === "max" && toolsOk && !guestMode && !!window.agentChatTools;
+    // presentations: the model builds them itself with tools (plan, research, photos, slides, checks); the plan and ask tools come with them
+    const deckOn = toolsOk && !guestMode && !!window.agentChatTools && routeOn("slides");
+    if (deckOn) {
+      const prevDeck = [...conv.messages].reverse().find(m => m.role === "assistant" && m.blocks?.some(x => x.type === "deck" && x.deck?.slides?.length))?.blocks.find(x => x.type === "deck").deck;
+      system = (system ? system + "\n\n" : "") + DECK_WORKFLOW + (prevDeck ? `\n\nThis chat already has the presentation "${prevDeck.title}" (look: ${prevDeck.theme}). Its slides after the title slide:\n${prevDeck.slides.map((x, i) => `${i + 1}. ${deckSummary(x).slice(0, 110)}`).join("\n")}\nTo change it, edit these slides by number with deck_set_slide / deck_delete_slide (keep the rest) and call deck_check; to make a new one, start over with deck_design and renumber from 1.` : "");
+    }
     if (EFFORT_HINT[effort] && !maxPlan) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
     { const mem = memoryForAI(); if (mem) system = (system ? system + "\n\n" : "") + mem; }
     if (opts.docs) {
@@ -2854,7 +3032,7 @@ async function chat(model, opts = {}) {
     // model decides when to use them (Settings → Tools → Work on your PC switches them off). A job takes more rounds than a search.
     let agentKit = null;
     // on Max, the plan and ask tools are there even when the PC tools aren't
-    if (toolsOk && !guestMode && window.agentChatTools && (toolOn("agent") || maxPlan)) agentKit = window.agentChatTools("", { every: toolOn("agent"), planning: maxPlan, only: window.EMBED_CHROME ? ["browser", "files"] : null, ownSearch: useTools });
+    if (toolsOk && !guestMode && window.agentChatTools && (toolOn("agent") || maxPlan || deckOn)) agentKit = window.agentChatTools("", { every: toolOn("agent"), planning: maxPlan || deckOn, only: window.EMBED_CHROME ? ["browser", "files"] : null, ownSearch: useTools });
     let agentBlock = null;
     if (agentKit) {
       let sys = [agentKit.system, maxPlan && MAX_WORKFLOW].filter(Boolean).join("\n");
@@ -2865,14 +3043,14 @@ async function chat(model, opts = {}) {
         (t.follow ? "Your browser tools work in exactly that tab: use browser_read to read it, browser_click / browser_type to act there. Don't open another page unless asked." : "To read it, use browser_open with that address (your browser tools work in a tab of your own).");
       msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + sys) : msgs.unshift({ role: "system", content: sys });
     }
-    const rounds = effort === "max" ? 30 : agentKit ? 16 : 6;
+    const rounds = deckOn ? (effort === "max" ? 70 : 45) : effort === "max" ? 30 : agentKit ? 16 : 6;
     let reviewing = false, reviewed = false, revised = "";
     for (let round = 0; round < rounds; round++) {
       const body = { model, messages: msgs, stream: true, options: buildOptions(model) };
       if (guestMode && conv?.id) body.chatId = conv.id;
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
       if (canThink) body.think = useThink ? (gptoss ? (effort === "max" ? "high" : effort) : true) : (gptoss ? "low" : false);
-      const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : []), ...(agentKit ? agentKit.tools : [])];
+      const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : []), ...(agentKit ? agentKit.tools : []), ...(deckOn ? DECK_TOOLS : [])];
       if (toolsOk && round < rounds - 1 && tools.length) body.tools = tools;
 
       const res = await chatApi(body, controller.signal, conv?.id);
@@ -2899,8 +3077,21 @@ async function chat(model, opts = {}) {
       });
       if (think && !think.done) { think.done = true; think.secs = (performance.now() - think.start) / 1000; }
       if (!calls.length) {
+        // a presentation must be checked before it is done; on Max, problems must be fixed and checked again
+        if (deckCtx.block && effort !== "low" && round < rounds - 4 && deckCtx.nudged < 2) {
+          const why = !deckCtx.checked ? "You haven't checked the presentation yet. Call deck_check now, read every slide, and fix what it reports (and anything else that is weak) before you finish."
+            : effort === "max" && deckCtx.issues > 0 && deckCtx.checks < 2 ? "deck_check found problems and you haven't checked again. Fix them with deck_set_slide, then call deck_check once more and make sure every slide is good."
+            : "";
+          if (why) {
+            deckCtx.nudged++;
+            reply.content = reply.content.slice(0, Math.max(0, reply.content.length - roundText.length));
+            msgs.push({ role: "assistant", content: roundText || "(finishing)" }, { role: "user", content: "(A note from the app, not from the user.) " + why });
+            ph(reply, "working"); reply.phaseText = "Checking the slides…"; redraw();
+            continue;
+          }
+        }
         // Max: look back once before finishing; "OK" keeps the answer, anything else is the corrected answer and replaces it
-        if (effort === "max" && !reviewed && round < rounds - 3 && roundText.trim() && !/\[\[ask:/i.test(roundText)) {
+        if (effort === "max" && !reviewed && !deckCtx.block && round < rounds - 3 && roundText.trim() && !/\[\[ask:/i.test(roundText)) {
           reviewed = reviewing = true;
           msgs.push({ role: "assistant", content: roundText }, { role: "user", content: MAX_REVIEW });
           ph(reply, "working"); reply.phaseText = "Checking its work…"; redraw();
@@ -2916,6 +3107,13 @@ async function chat(model, opts = {}) {
         const name = tc.function?.name;
         let args = tc.function?.arguments || {};
         if (typeof args === "string") { try { args = JSON.parse(args); } catch { args = {}; } }
+        // the presentation tools: the deck grows in the side panel while the model works
+        if (deckOn && DECK_TOOL_NAMES.has(name)) {
+          let out; try { out = await runDeckTool(name, args, deckCtx); } catch (e) { if (e.name === "AbortError") throw e; out = "Error: " + e.message; }
+          if (/^Error/.test(out)) out += window.TOOL_FAIL_HINT || "";
+          msgs.push({ role: "tool", content: String(out).slice(0, 9000), tool_name: name });
+          continue;
+        }
         // one of the Agent's tools (mail, files, printing, browser, code): its steps go into one card in this answer
         if (agentKit && agentKit.names.has(name)) {
           if (!agentBlock) { agentBlock = { type: "agent", inline: true, active: true, goal: opts.agentTask || "", steps: [], plan: [], pending: null }; reply.blocks.push(agentBlock); }
@@ -2940,15 +3138,20 @@ async function chat(model, opts = {}) {
         if (block.error || /^(Error|Unknown tool)/.test(String(out || "").trim())) out = String(out) + (window.TOOL_FAIL_HINT || "");   // it may try again
         msgs.push({ role: "tool", content: out, tool_name: name });
       }
+      // photos the model can look at (vision models): they follow the search result as a message with the pictures
+      if (deckCtx.attach.length) {
+        const got = []; for (const a of deckCtx.attach.splice(0)) { const b64 = await smallJpeg(a.url).catch(() => null); if (b64) got.push({ id: a.id, b64 }); }
+        if (got.length) msgs.push({ role: "user", content: `(From the app) The photos just found, in this order: ${got.map(g => g.id).join(", ")}. Look at them and pick the one that really shows what the slide needs.`, images: got.map(g => g.b64) });
+      }
     }
-    if (agentBlock) { agentBlock.active = false; redraw(); }
+    if (agentBlock) { agentBlock.active = false; if (finished) agentBlock.plan = (agentBlock.plan || []).map(s => ({ ...s, status: "done" })); redraw(); }
   } catch (e) {
     for (const b of reply.blocks) if (b.type === "agent" && b.inline && b.active) { b.active = false; if (e.name === "AbortError") b.error = "Stopped. Nothing more will happen."; }
     if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message); else stopped = true;
   } finally {
     controller = null; setBusy(false);
     delete reply.loading; delete reply.phase; delete reply.phaseText; delete reply.loadPct;
-    reply.blocks.forEach(b => { b.active = false; b.done = true; delete b.fresh; delete b.start; delete b.userOpen; });
+    reply.blocks.forEach(b => { b.active = false; b.done = true; delete b.fresh; delete b.start; delete b.userOpen; if (b.type === "deck" && b.deck) for (const sl of b.deck.slides) { delete sl.ready; delete sl.about; } });
     if (reply.content || reply.blocks.length) {
       if (!reply.blocks.length) delete reply.blocks;
       reply.stats = totalTokens && totalNs ? `${model} · ${(totalTokens / (totalNs / 1e9)).toFixed(1)} tok/s · ${totalTokens} tokens` : model;
@@ -2960,6 +3163,7 @@ async function chat(model, opts = {}) {
     saveChats();
     if (guestMode && (reply.content || (reply.blocks && reply.blocks.length))) sendGuestRecap(conv, model);
     renderMessages();
+    if (deckCtx.block) { drawDeckSide(); $("#deckSide").classList.remove("min"); }
   }
 }
 
@@ -3080,7 +3284,7 @@ const toolOfMsg = (m) => ((m && m.blocks) || []).map((b) => !b.inline && BLOCK_T
 async function routeTool(model, text) {
   // a model that can use tools does PC jobs itself in the chat (the Agent's tools are offered to it directly), so "agent" isn't routed
   const direct = await chatDoesPcJobs(model);
-  const on = (k) => routeOn(k) && !(direct && k === "agent");
+  const on = (k) => routeOn(k) && !(direct && (k === "agent" || k === "slides"));   // a model with tools makes slides itself (deck tools in the chat)
   const lastBot = current.messages.slice(0, -1).filter(m => m.role === "assistant" && !m.isEvent).at(-1), lastTool = toolOfMsg(lastBot);
   const hit = Object.keys(TOOLISH).some(k => on(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text)) || (!!lastTool && on(lastTool));
   const enabled = Object.keys(ROUTE_ABOUT).filter(on);
@@ -3774,7 +3978,7 @@ async function askJSON(model, caps, messages, schema) {
   catch { const m = txt.match(/\{[\s\S]*\}/); if (m) return { data: JSON.parse(m[0]), tokens, ns }; throw new Error("the model didn't answer in the right format"); }
 }
 
-const LAYOUT_NAMES = { bullets: "points", "image-right": "photo and points", "image-left": "photo and points", "image-full": "full-screen photo", quote: "quote", stats: "key numbers", columns: "comparison", timeline: "timeline", cards: "cards", statement: "key message", section: "section start" };
+const LAYOUT_NAMES = { bullets: "points", "image-right": "photo and points", "image-left": "photo and points", "image-full": "full-screen photo", quote: "quote", stats: "key numbers", columns: "comparison", timeline: "timeline", cards: "cards", statement: "key message", section: "section start", sources: "sources" };
 function deckSlideSchema(layout) {
   const str = { type: "string" }, arr = (items) => ({ type: "array", items }), pair = (a, b) => arr({ type: "object", properties: { [a]: str, [b]: str }, required: [a, b] });
   const defs = { bullets: arr(str), quote: str, by: str, statement: str, sub: str, stats: pair("value", "label"), steps: pair("title", "text"), cards: pair("title", "text"),
@@ -3842,7 +4046,7 @@ async function buildSlides(model, text) {
 
     const themeList = Object.entries(DECK_THEMES).map(([k, v]) => `${k} (${v.about})`).join(", ");
     const fontList = Object.entries(DECK_FONTS).map(([k, v]) => `${k} (${v.about})`).join(", ");
-    const layoutList = Object.entries(DECK_LAYOUTS).map(([k, v]) => `  - ${k}: ${v.use}`).join("\n");
+    const layoutList = Object.entries(DECK_LAYOUTS).filter(([, v]) => !v.toolOnly).map(([k, v]) => `  - ${k}: ${v.use}`).join("\n");
     const planSchema = { type: "object", properties: {
       language: { type: "string" }, title: { type: "string" }, subtitle: { type: "string" },
       theme: { type: "string", enum: Object.keys(DECK_THEMES) }, fonts: { type: "string", enum: Object.keys(DECK_FONTS) },

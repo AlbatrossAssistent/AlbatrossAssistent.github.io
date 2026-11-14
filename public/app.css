@@ -1170,6 +1170,8 @@ aside:not(.rail) .brand-row .chev { margin-right: 46px; }
 .sl.L-bullets .body { gap: 3.4cqw; }
 .sl.L-bullets ul { font-size: 2.7cqw; line-height: 1.5; }
 .sl.L-bullets li { margin-bottom: 1.3cqw; }
+.sl.L-sources ul { font-size: 1.7cqw; line-height: 1.4; list-style: none; padding-left: 0; }
+.sl.L-sources li { margin-bottom: .8cqw; color: var(--mu); overflow-wrap: anywhere; }
 .sl ul { margin: 0; padding-left: 2.4cqw; font-size: 2.2cqw; line-height: 1.45; }
 .sl li { margin-bottom: .9cqw; }
 .sl li::marker { color: var(--ac); }

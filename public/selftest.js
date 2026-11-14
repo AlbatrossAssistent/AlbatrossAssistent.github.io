@@ -115,6 +115,39 @@ window.albatrossSelfTest = async function (w) {
   await tryIt("notes page draws", async () => { w.setView("notes"); await sleep(150); return !!d.querySelector("#notesPage .notes-grid"); });
   await tryIt("tool router word lists compile", () => Object.values(ev("TOOLISH")).every((re) => Object.prototype.toString.call(re) === "[object RegExp]"));   // another window's RegExp: no instanceof
   await tryIt("tool list for the AI", () => /Tools of the app/.test(ev("whatYouCanDo()")));
+  await tryIt("presentation tools: design, slides, sources slide, check and fix", async () => {
+    const r = await w.eval(`(async () => {
+      const deck = { title: "", subtitle: "", slides: [], theme: "midnight", fonts: "modern", transition: "fade", animation: "entrance", animStyle: "rise" };
+      const block = { type: "deck", active: true, deck, steps: [], progress: 0 };
+      const ctx = { ensure: () => block, touch: () => {}, pool: new Map([["p1", { thumb: "x", title: "A fox", creator: "Ann", license: "CC0" }]]), seq: 1, checked: false, checks: 0, issues: 0, attach: [], vision: false };
+      const run = (n, a) => runDeckTool(n, a, ctx), out = {};
+      out.design = await run("deck_design", { title: "Foxes", subtitle: "A short tour", theme: "forest" });
+      out.s1 = await run("deck_set_slide", { n: 1, layout: "image-right", title: "Meet the fox", bullets: ["Red fox lives almost everywhere", "Eats mice, fruit and insects", "Hunts at dusk"], photo: "p1", notes: "Start with the animal everybody knows from stories." });
+      out.bad = await run("deck_set_slide", { n: 2, layout: "quote", title: "Words", quote: "x" });
+      out.s2 = await run("deck_set_slide", { n: 2, layout: "stats", title: "Fox facts", stats: [{ value: "12 years", label: "wild lifespan" }, { value: "50 km/h", label: "top speed" }], notes: "Two numbers worth remembering." });
+      out.s3 = await run("deck_set_slide", { n: 3, layout: "sources", title: "Sources", bullets: ["Wikipedia: https://en.wikipedia.org/wiki/Red_fox", "A fox by Ann (CC0)"] });
+      out.photoBad = await run("deck_set_slide", { n: 4, layout: "bullets", title: "Oops", bullets: ["a"], photo: "p99" });
+      out.check1 = await run("deck_check", {});
+      out.fix = await run("deck_set_slide", { n: 3, layout: "sources", title: "Sources", bullets: ["Wikipedia: https://en.wikipedia.org/wiki/Red_fox", "Photo: A fox, Ann, CC0 (openverse.org)"] });
+      out.one = await run("deck_check", { n: 3 });
+      out.del = await run("deck_delete_slide", { n: 9 });
+      const el = slideEl(deck, 3), shown = layoutOf(deck.slides[2]);
+      out.dom = el.className; out.li = el.querySelectorAll("li").length; out.shown = shown; out.checks = ctx.checks; out.checked = ctx.checked; out.steps = block.steps.length; out.n = deck.slides.length;
+      out.theme = deck.theme; out.title = deck.title; out.cover = !!deck.coverPhoto;
+      return JSON.stringify(out);
+    })()`);
+    const o = JSON.parse(r), bad = [];
+    if (!/Design set: forest/.test(o.design) || o.theme !== "forest" || o.title !== "Foxes") bad.push("design");
+    if (!/saved \(image-right\)/.test(o.s1)) bad.push("slide 1: " + o.s1);
+    if (!/^Error: a quote slide/.test(o.bad)) bad.push("fake quote not refused");
+    if (!/saved \(sources\)/.test(o.s3) || o.shown !== "sources" || !/L-sources/.test(o.dom) || o.li !== 2) bad.push("sources slide: " + o.dom + " " + o.shown);
+    if (!/^Error: unknown photo/.test(o.photoBad)) bad.push("unknown photo accepted");
+    if (!/Fox facts/.test(o.check1) || !/PROBLEMS/.test(o.check1) || !/a source without an address/.test(o.check1)) bad.push("check didn't flag the bad source: " + o.check1.slice(0, 300));
+    if (!/\n   ok/.test(o.one) || /PROBLEMS/.test(o.one)) bad.push("fixed slide still flagged: " + o.one);
+    if (!/^Error: there is no slide 9/.test(o.del)) bad.push("delete of a missing slide");
+    if (!o.checked || o.checks !== 1 || o.n !== 3 || o.steps < 6) bad.push("bookkeeping " + JSON.stringify({ c: o.checks, n: o.n, st: o.steps }));
+    return bad.length ? bad.join(" | ") : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;
