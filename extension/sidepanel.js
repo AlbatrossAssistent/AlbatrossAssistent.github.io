@@ -52,13 +52,30 @@ $("#show").onclick = () => refresh({ action: "show" });
 $("#closeTab").onclick = () => refresh({ action: "closetab" });
 $("#reload").onclick = () => { appReady = false; frame.src = APP; };
 $("#openApp").onclick = () => chrome.tabs.create({ url: "https://albatrossassistent.github.io/public/" });
+// the code is shown as "123 456": spaces and anything else that isn't a digit are ignored, and the field shows it with the gap
+const codeDigits = () => $("#code").value.replace(/\D/g, "").slice(0, 6);
+const showCode = () => { const c = codeDigits(); $("#code").value = c.length > 3 ? c.slice(0, 3) + " " + c.slice(3) : c; };
+let lastTried = "";
+$("#code").oninput = () => { showCode(); if (codeDigits().length === 6) $("#pairGo").click(); };
+// the app copies the new code when you make it: pick it up from the clipboard (only a lone 6-digit code, only while not paired)
+async function takeCodeFromClipboard() {
+  if (!state || !state.hostUp || state.paired || $("#pair").hidden || $("#code").value) return;
+  try {
+    const m = (await navigator.clipboard.readText()).trim().match(/^(\d{3})\s?(\d{3})$/);
+    if (m && m[1] + m[2] !== lastTried) { $("#code").value = m[1] + m[2]; showCode(); $("#pairGo").click(); }
+  } catch {}
+}
+addEventListener("focus", takeCodeFromClipboard);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) takeCodeFromClipboard(); });
+setInterval(takeCodeFromClipboard, 2500);
 $("#pairGo").onclick = async () => {
-  const code = $("#code").value.replace(/\D/g, "");
+  const code = codeDigits();
   if (code.length !== 6) { $("#pairErr").textContent = "The code has 6 digits."; return; }
-  $("#pairGo").disabled = true; $("#pairErr").textContent = "";
+  if ($("#pairGo").disabled) return;
+  lastTried = code; $("#pairGo").disabled = true; $("#pairErr").textContent = "";
   const r = await ask({ pair: code });
   $("#pairGo").disabled = false;
-  if (!r.ok) $("#pairErr").textContent = r.error || "That didn't work.";
+  if (!r.ok) { $("#pairErr").textContent = r.error || "That didn't work."; $("#code").value = ""; }
   refresh();
 };
 $("#code").onkeydown = (e) => { if (e.key === "Enter") $("#pairGo").click(); };

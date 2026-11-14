@@ -861,6 +861,8 @@ function renderExt(st) {
     if (b.dataset.x === "forget" && !confirm("Disconnect your Chrome? The extension stays installed; you'd pair it again with a new code.")) return;
     b.disabled = true; box.dataset.sig = "";
     await extStatus(b.dataset.x);
+    // the new code goes to the clipboard (digits only): the Chrome sidebar picks it up from there by itself
+    if (b.dataset.x === "pair" && extLast && extLast.pairing) { try { await navigator.clipboard.writeText(extLast.pairing.code); toast("Code copied: the Chrome sidebar connects by itself"); } catch {} }
     if (b.dataset.x === "folder") toast("Opened the folder on your PC");
   }));
 }
