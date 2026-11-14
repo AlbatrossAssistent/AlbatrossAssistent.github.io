@@ -1005,8 +1005,11 @@ function renderSidebar() {
   const list = $("#chatList");
   const q = $("#search").value.trim().toLowerCase();
   list.innerHTML = "";
-  const filtered = chats.filter(c => (!window.EMBED_CHROME || c.src === "chrome") && (!q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content || "").toLowerCase().includes(q))));
-  const groups = [["Pinned", c => c.pinned], ["Today", c => !c.pinned && Date.now() - c.updated < 864e5], ["Earlier", c => !c.pinned && Date.now() - c.updated >= 864e5]];
+  const filtered = chats.filter(c => (!q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content || "").toLowerCase().includes(q))) && (!window.EMBED_CHROME || c.messages.some(m => !m.isEvent) || c === current));
+  // in the Chrome sidebar: its own chats first, then the ones started in the app (open one to continue it right here)
+  const groups = window.EMBED_CHROME
+    ? [["In the sidebar", c => c.src === "chrome"], ["From the app", c => c.src !== "chrome"]]
+    : [["Pinned", c => c.pinned], ["Today", c => !c.pinned && Date.now() - c.updated < 864e5], ["Earlier", c => !c.pinned && Date.now() - c.updated >= 864e5]];
   for (const [label, test] of groups) {
     const items = filtered.filter(test).sort((a, b) => b.updated - a.updated);
     if (!items.length) continue;
@@ -6038,8 +6041,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.1";
+const APP_VERSION = "2026-11-14.2";
 const WHATS_NEW = [
+  ["2026-11-14.2", ["Chrome sidebar: open the chats you started in the app and continue them there"]],
   ["2026-11-14.1", ["Host tab (sidebar → Host): go online or offline, guests, start at boot, Ollama, live activity, restart, control center"]],
   ["2026-11-13.20", ["Web searches can be watched: the AI searches in a tab of its own in your Chrome or the PC browser (your page stays)"]],
   ["2026-11-13.19", ["Nothing keeps loading forever when the PC doesn't answer; the Browser view mirrors your own Chrome when the AI uses it; collapsed sidebar shows Home, Chat, Tools and Settings"]],

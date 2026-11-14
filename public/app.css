@@ -2259,7 +2259,7 @@ aside.rail .app-ver { display: none; }
    Chrome sidebar (extension/sidepanel.html loads the app with ?embed=chrome): only the chat, about the page you're on
    ====================================================================== */
 html.embed-chrome #goHome, html.embed-chrome #goJarvis, html.embed-chrome #goNotes, html.embed-chrome #goMail, html.embed-chrome #goHub,
-html.embed-chrome #goMonitor, html.embed-chrome #goList, html.embed-chrome #railBtn, html.embed-chrome #typeBadge, html.embed-chrome #loadedPill,
+html.embed-chrome #goMonitor, html.embed-chrome #goList, html.embed-chrome #goHost, html.embed-chrome #goTools, html.embed-chrome #railBtn, html.embed-chrome #typeBadge, html.embed-chrome #loadedPill,
 html.embed-chrome #topFold, html.embed-chrome #sideBtn, html.embed-chrome #fullBtn, html.embed-chrome #imgBtn, html.embed-chrome #appVer { display: none !important; }
 html.embed-chrome .embed-empty h1 { font-size: 24px; }
 html.embed-chrome .embed-page { font-weight: 600; color: var(--fg); overflow-wrap: anywhere; max-width: 100%; }
