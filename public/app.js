@@ -1290,7 +1290,7 @@ const ICON = {
   speak: '<svg class="i" viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
   trash: '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
 };
-const LOGO = '<svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2C18.5 5.5 19.5 10 19.5 15V20H8.5V15C8.5 10 9.5 5.5 14 2ZM14 8.6A2.4 2.4 0 1 0 14 13.4A2.4 2.4 0 1 0 14 8.6Z"/><path d="M8.5 14.5L4.5 20.5V23L8.5 21ZM19.5 14.5L23.5 20.5V23L19.5 21Z"/><path d="M11 20.6H17L16.2 22.4H11.8Z"/><path class="flame" d="M12.3 23.2Q14 28.4 15.7 23.2Z"/></svg>';
+const LOGO = '<svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>';
 
 function userBubble(m, idx) {
   const d = document.createElement("div");
@@ -6130,8 +6130,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.7";
+const APP_VERSION = "2026-11-14.8";
 const WHATS_NEW = [
+  ["2026-11-14.8", ["Jarvis is the new logo: in the sidebar, on the home page, the app icon, the Windows app and the Chrome extension"]],
   ["2026-11-14.7", ["The opening screen shows your device pinging your PC and the PC pinging Ollama, live, instead of the rocket"]],
   ["2026-11-14.6", ["Google sign-in no longer hangs after you pick your account"]],
   ["2026-11-14.5", ["New opening screen: shows what's happening (connecting to your PC) with a bar, light and dark, in your accent colour; an updating screen when you update"]],

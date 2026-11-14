@@ -1,7 +1,7 @@
 {
   "name": "albatross-desktop",
   "productName": "Albatross",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Albatross as a Windows app: your own AI, with the host and Ollama started by itself",
   "main": "main.js",
   "private": true,
