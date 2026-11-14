@@ -2750,7 +2750,7 @@ async function runMediaTool(name, args, block) {
 // The model builds a presentation itself, like a person would: it plans, looks things up, picks a design, searches photos and
 // chooses one for each slide, writes each slide, then checks every slide and fixes what is weak. Each of these is a tool it calls
 // when it wants to (the plan and any question to the user come from the Agent's update_plan and ask_user).
-const DECK_TOOL_NAMES = new Set(["deck_design", "deck_find_photos", "deck_set_slide", "deck_delete_slide", "deck_check"]);
+const DECK_TOOL_NAMES = new Set(["deck_design", "deck_find_photos", "deck_make_picture", "deck_set_slide", "deck_delete_slide", "deck_check"]);
 const DECK_TOOLS = (() => {
   const P = (type, description, extra = {}) => ({ type, description, ...extra });
   const T = (name, description, properties, required = []) => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required } } });
@@ -2780,6 +2780,9 @@ const DECK_TOOLS = (() => {
       n: P("number", "Check just this slide (omit it to check all)") }),
   ];
 })();
+// only offered when an image model is installed (and AI pictures aren't switched off): slow, so for what no real photo can show
+const DECK_PICTURE_TOOL = { type: "function", function: { name: "deck_make_picture", description: "Make a picture with the image model on the user's PC for a slide: illustrations, fantasy, invented or abstract things, or when the user asks for AI pictures. It takes a while, so use it sparingly and only when real photos won't do. You get an id to pass as photo to deck_set_slide (or cover_photo to deck_design).", parameters: { type: "object", properties: {
+  prompt: { type: "string", description: "What the picture shows, in English, concrete and visual (subject, setting, light, style). No text or letters in the picture." }, shape: { type: "string", enum: ["wide", "tall"], description: "wide for a full-screen or cover picture, tall for a picture beside the points" } }, required: ["prompt"] } } };
 const DECK_WORKFLOW = `You can build presentations yourself with the tools deck_design, deck_find_photos, deck_set_slide, deck_delete_slide and deck_check. Whenever the user wants slides, a presentation, a keynote or a deck (or changes to the one in this chat) use them. Never write the slides out as plain text.
 How to work, like a careful person:
 1. Plan: call update_plan first. Say what the presentation has to cover (the story: one line per slide), which slides get a photo, a chart-like layout or a quote, and the look. Keep updating it as steps start and finish.
@@ -2787,6 +2790,7 @@ How to work, like a careful person:
 3. If a real choice matters (audience, language, how long, a focus) and the request doesn't say, call ask_user first with 2 to 4 short options; otherwise decide yourself.
 4. deck_design: pick the look that fits the topic.
 5. For each slide that wants a photo: deck_find_photos with a concrete English query, look at the candidates (their titles, and the pictures themselves if you can see), and pick the best id for deck_set_slide. If none fits, search again with another query or use a layout without a photo.
+5b. A picture no real photo can show (an illustration, a fantasy scene, something abstract) or one the user asked the AI to draw: deck_make_picture, if you have it (it is slow: sparingly).
 6. deck_set_slide for every slide, in order: 5 to 10 slides after the title, varied layouts (never the same one three times in a row), short points (at most 12 words), concrete and correct, speaker notes for each, in the user's language. Only use a quote if you know the exact words.
 7. Sources: when the user asks for sources, references, a bibliography or "Quellen", add a last slide with the layout "sources": one point per source, as "Title or site: address". List only pages you really opened or got from a search, and photo credits if you used photos (as in the candidate list). Never invent or guess a source; if you have none, say so instead of making a slide.
 8. deck_check, then fix every problem it lists with deck_set_slide, and check again. Read each slide as the audience would: does it say one clear thing, is the text short, does the picture fit?
@@ -2865,6 +2869,18 @@ async function runDeckTool(name, args, ctx) {
       return `Candidates for "${q}":\n` + ims.map((im, k) => `${ids[k]}: "${im.title || "untitled"}"${im.creator ? " by " + im.creator : ""}${im.license ? " (" + im.license + ")" : ""}`).join("\n") + (ctx.vision ? "\nThe pictures follow in the next message, in this order." : "\nYou can only judge by the titles.");
     } catch (e) { if (e.name === "AbortError") throw e; fin(st, e.message, "fail"); return "Error: " + e.message; }
   }
+  if (name === "deck_make_picture") {
+    const model = pickImageModel(), q = String(args.prompt || "").trim();
+    if (!model || S.deckAiPictures === false) return "No image model is available. Use photos instead.";
+    if (!q) return "Error: give a prompt.";
+    const st = step("Making a picture: " + q.slice(0, 60));
+    try {
+      const pic = await slidePicture(model, q, args.shape === "tall" ? [896, 1024] : [1344, 768]), id = "p" + ++ctx.seq;
+      ctx.pool.set(id, pic); if (ctx.vision) ctx.attach.push({ id, url: pic.thumb });
+      fin(st, "made");
+      return `Picture made: id ${id}.` + (ctx.vision ? " It follows in the next message so you can look at it." : "");
+    } catch (e) { if (e.name === "AbortError") throw e; fin(st, e.message, "fail"); return "Error: " + e.message + ". Use a photo or a layout without a picture."; }
+  }
   if (name === "deck_delete_slide") {
     const n = Math.round(Number(args.n));
     if (!(n >= 1 && n <= d.slides.length)) return `Error: there is no slide ${args.n} (the presentation has ${d.slides.length} slides after the title).`;
@@ -2900,6 +2916,44 @@ async function runDeckTool(name, args, ctx) {
   fin(step(`${n}. ${sl.title}`, { slide: n }), LAYOUT_NAMES[layout] + (sl.photo ? " · photo" : ""));
   return `Slide ${n} saved (${layout}).` + (miss.length ? ` It still needs ${miss.join(", ")}: until then it shows as plain points.` : "");
 }
+// ---------- More independent tools ----------
+// Charts, chances, notes and music are tools the model calls itself while it answers, with the same "form" it used to fill in a
+// separate step. It decides when, with what, and can combine them (look something up, then chart it, then explain). Models that can't
+// use tools still get them through the router (routeTool).
+const CHAT_TOOLS = (() => {
+  const str = { type: "string" }, num = { type: ["number", "null"] }, arr = (items, description) => ({ type: "array", items, ...(description ? { description } : {}) });
+  const T = (name, description, properties, required = []) => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required } } });
+  const done = (block) => Object.assign(block, { active: false, done: true, doneAt: Date.now() });
+  return [
+    { key: "graph", name: "make_chart", def: T("make_chart", "Draw a chart or graph and show it to the user. Use it when the user asks for a graph, chart, plot or diagram of numbers. Use exactly the numbers the user gave; otherwise real figures you know or just looked up (set estimated: true if approximate).", {
+      title: str, subtitle: str, type: { type: "string", enum: ["line", "area", "bar", "hbar", "donut", "scatter"], description: "line: change over time; area: a total over time; bar: compare up to about 12 categories; hbar: rankings or long names; donut: parts of one whole (2 to 8); scatter: how two numbers relate (fill points)" },
+      x_label: str, y_label: str, unit: { type: "string", description: "like %, °C, €, million people, or empty" }, labels: arr(str, "Categories or time points along the x axis, in order (donut: the part names)"),
+      series: arr({ type: "object", properties: { name: str, values: arr(num, "one number per label, null if unknown") }, required: ["name", "values"] }, "1 to 4 lines or bar groups"),
+      points: arr({ type: "object", properties: { x: { type: "number" }, y: { type: "number" }, label: str }, required: ["x", "y", "label"] }, "Only for scatter"),
+      source: { type: "string", description: "Where the numbers come from (like World Bank, 2023; your numbers; approximate, from memory)" }, estimated: { type: "boolean" } }, ["title", "type", "labels", "series", "source"]),
+      run(args) { const chart = cleanChart({ points: [], subtitle: "", x_label: "", y_label: "", unit: "", ...args }); return { block: done({ type: "chart", chart, title: chart.title }), out: `The chart "${chart.title}" is shown to the user. Answer in one to three sentences with the main takeaway (say so if the numbers are estimates); don't list all the numbers.` }; } },
+    { key: "chances", name: "estimate_chances", def: T("estimate_chances", "Estimate chances or make a prediction and show it as a card with bars. Use it when the user asks how likely something is, who will win, or how a number will develop. Think like a careful forecaster: start from the base rate, adjust for the situation, be calibrated (not 0 or 100 unless certain), and look up current facts first when they matter.", {
+      question: str, kind: { type: "string", enum: ["outcomes", "yesno", "separate"], description: "outcomes: exactly one of several happens (adds up to 100); yesno: one yes/no event; separate: independent events, each with its own chance" },
+      outcomes: arr({ type: "object", properties: { label: str, chance: { type: "number", description: "0 to 100" }, why: str }, required: ["label", "chance", "why"] }, "2 to 8"),
+      factors: arr({ type: "object", properties: { text: str, direction: { type: "string", enum: ["up", "down"] }, strength: { type: "integer", description: "1 small to 3 big" } }, required: ["text", "direction", "strength"] }, "3 to 6 things that push the chance of the most likely outcome up or down"),
+      confidence: { type: "string", enum: ["low", "medium", "high"] }, base_rate: { type: "string", description: "How often this usually happens, one sentence" },
+      forecast: { type: "object", description: "Only when asked how a number develops over time", properties: { title: str, unit: str, labels: arr(str), values: arr(num), low: arr(num), high: arr(num), from: { type: "integer", description: "index of the first predicted point" } } } }, ["question", "kind", "outcomes", "factors", "confidence"]),
+      run(args, ctx) { const c = chancesFrom(args, ctx.text || "", ctx.researched); return { block: done({ type: "chances", chances: c, title: c.question }), out: `The estimate is shown to the user. Answer in two to four sentences with your estimate and the main reasons.` }; } },
+    { key: "notes", name: "notes_show", need: "notesNow", def: T("notes_show", "Read the user's notes (titles, kind and lines). Call it before changing or answering questions about their notes, lists or to-dos.", {}), run() { return { out: window.notesNow() }; } },
+    { key: "notes", name: "notes_edit", need: "notesApply", def: T("notes_edit", "Change the user's notes: create notes and lists, add lines, tick things off, remove lines, replace a note's lines. Shopping lists and to-dos are checklists, steps are numbers, ranked things priority. Never invent notes that don't exist except with create or add.", {
+      changes: arr({ type: "object", properties: { action: { type: "string", enum: ["create", "add", "check", "uncheck", "remove", "replace", "delete_note", "show"], description: "create: new note with these lines; add: add lines to an existing note (creates a checklist if it doesn't exist); check/uncheck: tick the lines (their text); remove: delete those lines; replace: the note's lines become these; delete_note: only when the user clearly asks; show: just show the note" },
+        note: { type: "string", description: "The note's title, exactly as it is for an existing note" }, kind: { type: "string", enum: ["bullets", "numbers", "checklist", "letters", "roman", "priority", "text"] }, items: arr(str, "The lines (for text: the paragraphs)") }, required: ["action", "note", "kind", "items"] }) }, ["changes"]),
+      run(args) { const ids = window.notesApply(args.changes); return { block: done({ type: "notes", ids }), out: ids.length ? `Done: ${ids.length} note${ids.length > 1 ? "s" : ""} changed and shown to the user. Say briefly what you did.` : "Nothing matched: no note was changed. Tell the user, or check the titles with notes_show." }; } },
+    { key: "music", name: "make_music", need: "musicCompose", def: T("make_music", "Compose a piece of music that plays in the chat and downloads as a MIDI file. You only provide the musical idea; the app writes out the notes with real music rules, so choose carefully: the style, a key that fits the mood (sad: minor; happy: major; dark: phrygian; dreamy: lydian), chords that belong together, and a memorable motif. Build the piece up (calm start, full chorus).", window.MUSIC_PROPS || {}, ["title", "style", "key", "bpm", "progression", "motif", "structure"]),
+      run(args) { const song = window.musicCompose(args); return { block: done({ type: "music", song }), out: `The piece "${song.title}" (${song.key}, ${song.bpm} bpm) is shown with play and download buttons. Answer in one or two sentences; don't describe every note.` }; } },
+  ];
+})();
+const CHAT_TOOLS_HINT = {
+  graph: "Charts: when the user wants a graph or chart, call make_chart (look the numbers up first if you don't know them).",
+  chances: "Chances: when the user asks how likely something is or wants a prediction, call estimate_chances.",
+  notes: "Notes: when the user talks about their notes, lists or to-dos, call notes_show first, then notes_edit to change them.",
+  music: "Music: when the user wants a song, melody, beat or any music, call make_music. You give the idea (style, key, chords as roman numerals, a short motif, the structure); the app writes the notes. To change the last piece, call it again with the adjusted idea.",
+};
 // Web search and page reading: the server first (Ollama's search, or its free fallback); if that fails and this is your PC,
 // the PC searches (DuckDuckGo from your home connection) or reads the page itself. No credits needed either way.
 async function webTool(name, args, signal) {
@@ -2981,6 +3035,13 @@ async function chat(model, opts = {}) {
       const prevDeck = [...conv.messages].reverse().find(m => m.role === "assistant" && m.blocks?.some(x => x.type === "deck" && x.deck?.slides?.length))?.blocks.find(x => x.type === "deck").deck;
       system = (system ? system + "\n\n" : "") + DECK_WORKFLOW + (prevDeck ? `\n\nThis chat already has the presentation "${prevDeck.title}" (look: ${prevDeck.theme}). Its slides after the title slide:\n${prevDeck.slides.map((x, i) => `${i + 1}. ${deckSummary(x).slice(0, 110)}`).join("\n")}\nTo change it, edit these slides by number with deck_set_slide / deck_delete_slide (keep the rest) and call deck_check; to make a new one, start over with deck_design and renumber from 1.` : "");
     }
+    // charts, chances, notes and music: tools the model picks itself
+    const extraTools = !guestMode && toolsOk && window.agentChatTools ? CHAT_TOOLS.filter(t => routeOn(t.key) && (!t.need || window[t.need])) : [];
+    if (extraTools.length) {
+      const prevSong = [...conv.messages].reverse().map((m) => (m.blocks || []).find((b) => b.type === "music" && b.song?.spec)).find(Boolean)?.song;
+      system = (system ? system + "\n\n" : "") + [...new Set(extraTools.map(t => t.key))].map(k => CHAT_TOOLS_HINT[k]).join("\n")
+        + (prevSong && extraTools.some(t => t.key === "music") ? `\nThe last piece in this chat: ${JSON.stringify({ title: prevSong.title, ...prevSong.spec })}. Change only what the user asks for.` : "");
+    }
     if (EFFORT_HINT[effort] && !maxPlan) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
     { const mem = memoryForAI(); if (mem) system = (system ? system + "\n\n" : "") + mem; }
     if (opts.docs) {
@@ -3050,7 +3111,7 @@ async function chat(model, opts = {}) {
       if (guestMode && conv?.id) body.chatId = conv.id;
       if (S.keepAlive !== "") body.keep_alive = /^-?\d+$/.test(S.keepAlive) ? Number(S.keepAlive) : S.keepAlive;
       if (canThink) body.think = useThink ? (gptoss ? (effort === "max" ? "high" : effort) : true) : (gptoss ? "low" : false);
-      const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : []), ...(agentKit ? agentKit.tools : []), ...(deckOn ? DECK_TOOLS : [])];
+      const tools = [...(useTools ? TOOLS : []), ...(imageSearchAvailable ? MEDIA_TOOLS.filter(t => t.function.name === "image_search") : []), ...(agentKit ? agentKit.tools : []), ...(deckOn ? [...DECK_TOOLS, ...(pickImageModel() && S.deckAiPictures !== false ? [DECK_PICTURE_TOOL] : [])] : []), ...extraTools.map(t => t.def)];
       if (toolsOk && round < rounds - 1 && tools.length) body.tools = tools;
 
       const res = await chatApi(body, controller.signal, conv?.id);
@@ -3107,6 +3168,15 @@ async function chat(model, opts = {}) {
         const name = tc.function?.name;
         let args = tc.function?.arguments || {};
         if (typeof args === "string") { try { args = JSON.parse(args); } catch { args = {}; } }
+        // charts, chances, notes, music: each makes a card in this answer
+        const xt = extraTools.find(t => t.name === name);
+        if (xt) {
+          let out;
+          try { const r = await xt.run(args, { text: String(conv.messages.filter(m => m.role === "user").at(-1)?.content || ""), researched: reply.blocks.some(b => b.type === "search" || b.type === "fetch") }); if (r.block) { reply.blocks.push(r.block); redraw(); } out = r.out; }
+          catch (e) { if (e.name === "AbortError") throw e; out = "Error: " + e.message + (window.TOOL_FAIL_HINT || ""); }
+          msgs.push({ role: "tool", content: String(out).slice(0, 4000), tool_name: name });
+          continue;
+        }
         // the presentation tools: the deck grows in the side panel while the model works
         if (deckOn && DECK_TOOL_NAMES.has(name)) {
           let out; try { out = await runDeckTool(name, args, deckCtx); } catch (e) { if (e.name === "AbortError") throw e; out = "Error: " + e.message; }
@@ -3284,7 +3354,7 @@ const toolOfMsg = (m) => ((m && m.blocks) || []).map((b) => !b.inline && BLOCK_T
 async function routeTool(model, text) {
   // a model that can use tools does PC jobs itself in the chat (the Agent's tools are offered to it directly), so "agent" isn't routed
   const direct = await chatDoesPcJobs(model);
-  const on = (k) => routeOn(k) && !(direct && (k === "agent" || k === "slides"));   // a model with tools makes slides itself (deck tools in the chat)
+  const on = (k) => routeOn(k) && !(direct && ["agent", "slides", "graph", "chances", "notes", "music"].includes(k));   // a model with tools picks these itself (they are tools in the chat)
   const lastBot = current.messages.slice(0, -1).filter(m => m.role === "assistant" && !m.isEvent).at(-1), lastTool = toolOfMsg(lastBot);
   const hit = Object.keys(TOOLISH).some(k => on(k === "agentCode" ? "agent" : k) && TOOLISH[k].test(text)) || (!!lastTool && on(lastTool));
   const enabled = Object.keys(ROUTE_ABOUT).filter(on);
@@ -3697,6 +3767,29 @@ async function buildGraph(model, text) {
     return String(r.summary || "").trim();
   });
 }
+function chancesFrom(r, text, researched) {
+  const S1 = (x, n = 200) => String(x ?? "").trim().slice(0, n);
+  const kind = ["outcomes", "yesno", "separate"].includes(r.kind) ? r.kind : "outcomes";
+  let outcomes = (Array.isArray(r.outcomes) ? r.outcomes : []).slice(0, 8).map(o => ({ label: S1(o?.label, 80), chance: Math.max(0, Math.min(100, numOrNull(o?.chance) ?? 0)), why: S1(o?.why) })).filter(o => o.label);
+  if (!outcomes.length) throw new Error("the model didn't give any chances. Try asking more specifically.");
+  if (kind === "yesno" && outcomes.length === 1) outcomes.push({ label: /^(ja|yes)$/i.test(outcomes[0].label) ? (/^ja$/i.test(outcomes[0].label) ? "Nein" : "No") : "—", chance: 100 - outcomes[0].chance, why: "" });
+  if (kind !== "separate") {                      // one of them happens: make them add up to 100
+    const sum = outcomes.reduce((a, o) => a + o.chance, 0) || 1;
+    outcomes = outcomes.map(o => ({ ...o, chance: Math.round(o.chance / sum * 1000) / 10 }));
+  }
+  const factors = (Array.isArray(r.factors) ? r.factors : []).slice(0, 8).map(f => ({ text: S1(f?.text), direction: f?.direction === "down" ? "down" : "up", strength: Math.max(1, Math.min(3, Math.round(numOrNull(f?.strength) ?? 2))) })).filter(f => f.text);
+  let forecast = null;
+  const fc = r.forecast;
+  if (fc && Array.isArray(fc.labels) && fc.labels.length >= 2 && Array.isArray(fc.values)) {
+    const labels = fc.labels.slice(0, 40).map(x => S1(x, 30)), from = Math.max(0, Math.min(labels.length, Math.round(numOrNull(fc.from) ?? 0)));
+    const values = labels.map((_, i) => numOrNull(fc.values[i]));
+    if (values.filter(v => v != null).length >= 2) {
+      forecast = { type: "line", title: S1(fc.title, 120) || S1(r.question, 120), unit: S1(fc.unit, 20), labels, series: [{ name: S1(fc.title, 40), values }], from: from > 0 ? from : null,
+        band: labels.map((_, i) => i >= from ? { low: numOrNull(fc.low?.[i]) ?? values[i], high: numOrNull(fc.high?.[i]) ?? values[i] } : null), estimated: true, source: "prediction by your local AI", futureLabel: "prediction" };
+    }
+  }
+  return { question: S1(r.question, 200) || text.slice(0, 200), kind, outcomes, factors, confidence: ["low", "medium", "high"].includes(r.confidence) ? r.confidence : "medium", base_rate: S1(r.base_rate, 300), forecast, researched };
+}
 async function buildChances(model, text) {
   const block = { type: "chances", active: true, title: "", thinkLabel: "Weighing the chances…" };
   await toolAnswer(model, text, block, async ({ ask, history, research, today }) => {
@@ -3720,27 +3813,7 @@ async function buildChances(model, text) {
 - "summary": 2 to 4 sentences with your estimate and the main reasons.`;
     const user = [history && `The conversation so far:\n${history}`, research && `Facts from the web:\n${research}`, `Request: ${text}`].filter(Boolean).join("\n\n");
     const r = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
-    const S1 = (x, n = 200) => String(x ?? "").trim().slice(0, n);
-    const kind = ["outcomes", "yesno", "separate"].includes(r.kind) ? r.kind : "outcomes";
-    let outcomes = (Array.isArray(r.outcomes) ? r.outcomes : []).slice(0, 8).map(o => ({ label: S1(o?.label, 80), chance: Math.max(0, Math.min(100, numOrNull(o?.chance) ?? 0)), why: S1(o?.why) })).filter(o => o.label);
-    if (!outcomes.length) throw new Error("the model didn't give any chances. Try asking more specifically.");
-    if (kind === "yesno" && outcomes.length === 1) outcomes.push({ label: /^(ja|yes)$/i.test(outcomes[0].label) ? (/^ja$/i.test(outcomes[0].label) ? "Nein" : "No") : "—", chance: 100 - outcomes[0].chance, why: "" });
-    if (kind !== "separate") {                      // one of them happens: make them add up to 100
-      const sum = outcomes.reduce((a, o) => a + o.chance, 0) || 1;
-      outcomes = outcomes.map(o => ({ ...o, chance: Math.round(o.chance / sum * 1000) / 10 }));
-    }
-    const factors = (Array.isArray(r.factors) ? r.factors : []).slice(0, 8).map(f => ({ text: S1(f?.text), direction: f?.direction === "down" ? "down" : "up", strength: Math.max(1, Math.min(3, Math.round(numOrNull(f?.strength) ?? 2))) })).filter(f => f.text);
-    let forecast = null;
-    const fc = r.forecast;
-    if (fc && Array.isArray(fc.labels) && fc.labels.length >= 2 && Array.isArray(fc.values)) {
-      const labels = fc.labels.slice(0, 40).map(x => S1(x, 30)), from = Math.max(0, Math.min(labels.length, Math.round(numOrNull(fc.from) ?? 0)));
-      const values = labels.map((_, i) => numOrNull(fc.values[i]));
-      if (values.filter(v => v != null).length >= 2) {
-        forecast = { type: "line", title: S1(fc.title, 120) || S1(r.question, 120), unit: S1(fc.unit, 20), labels, series: [{ name: S1(fc.title, 40), values }], from: from > 0 ? from : null,
-          band: labels.map((_, i) => i >= from ? { low: numOrNull(fc.low?.[i]) ?? values[i], high: numOrNull(fc.high?.[i]) ?? values[i] } : null), estimated: true, source: "prediction by your local AI", futureLabel: "prediction" };
-      }
-    }
-    block.chances = { question: S1(r.question, 200) || text.slice(0, 200), kind, outcomes, factors, confidence: ["low", "medium", "high"].includes(r.confidence) ? r.confidence : "medium", base_rate: S1(r.base_rate, 300), forecast, researched: !!research };
+    block.chances = chancesFrom(r, text, !!research);
     block.title = block.chances.question;
     return String(r.summary || "").trim();
   });
@@ -6438,8 +6511,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.8";
+const APP_VERSION = "2026-11-14.9";
 const WHATS_NEW = [
+  ["2026-11-14.9", ["Slides are built step by step by the AI itself: it plans, researches, picks photos, writes each slide, checks them and can add a sources slide","Better music: the AI picks style, key, chords and a motif and Albatross writes in-key melodies, basslines and drums","Max effort plans, checks its work and asks questions; charts, chances, notes and music are tools the AI picks itself; 6 new slide designs; after every update the app checks itself"]],
   ["2026-11-14.8", ["Jarvis is the new logo: in the sidebar, on the home page, the app icon, the Windows app and the Chrome extension"]],
   ["2026-11-14.7", ["The opening screen shows your device pinging your PC and the PC pinging Ollama, live, instead of the rocket"]],
   ["2026-11-14.6", ["Google sign-in no longer hangs after you pick your account"]],

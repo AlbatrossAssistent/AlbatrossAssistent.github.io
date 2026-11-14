@@ -148,6 +148,38 @@ window.albatrossSelfTest = async function (w) {
     if (!o.checked || o.checks !== 1 || o.n !== 3 || o.steps < 6) bad.push("bookkeeping " + JSON.stringify({ c: o.checks, n: o.n, st: o.steps }));
     return bad.length ? bad.join(" | ") : true;
   });
+  await tryIt("the model's tools are well formed and independent", () => {
+    const defs = ev("[...DECK_TOOLS, DECK_PICTURE_TOOL, ...CHAT_TOOLS.map(t => t.def)].map(t => JSON.stringify(t))").map(JSON.parse), names = defs.map(d => d.function.name);
+    const bad = defs.filter(d => d.function.parameters?.type !== "object" || !d.function.description || JSON.stringify(d).length > 14000).map(d => d.function.name);
+    if (new Set(names).size !== names.length) return "duplicate tool names: " + names.join(",");
+    if (bad.length) return "malformed: " + bad.join(",");
+    for (const n of ["make_chart", "estimate_chances", "notes_show", "notes_edit", "make_music", "deck_make_picture", "deck_set_slide"]) if (!names.includes(n)) return "missing tool " + n;
+    const mus = defs.find(d => d.function.name === "make_music").function.parameters;
+    return (mus.properties.style?.enum?.length >= 10 && mus.properties.progression && mus.properties.motif && mus.required.includes("structure")) || "make_music form incomplete";
+  });
+  await tryIt("chart, chances, notes and music tools make their cards", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const by = (n) => CHAT_TOOLS.find(t => t.name === n), out = {};
+      const c = by("make_chart").run({ title: "Cats", type: "bar", labels: ["Mon", "Tue", "Wed"], series: [{ name: "Naps", values: [3, 5, 4] }], source: "my numbers", unit: "" });
+      out.chart = [c.block.type, c.block.chart.type, c.block.chart.labels.length, c.block.chart.series[0].values.join(",")];
+      const e = by("estimate_chances").run({ question: "Will it rain?", kind: "yesno", outcomes: [{ label: "Yes", chance: 30, why: "dry season" }, { label: "No", chance: 90, why: "" }], factors: [{ text: "clouds", direction: "up", strength: 2 }], confidence: "medium" }, { text: "rain?" });
+      out.chances = [e.block.type, e.block.chances.outcomes.map(x => x.chance).join(","), e.block.chances.factors.length];
+      const m = by("make_music").run({ title: "Test tune", style: "lofi", key: "A minor", bpm: 80, progression: ["i", "iv", "VII", "III"], motif: "3/1 5/0.5 6/0.5 5/2", structure: [{ name: "A", bars: 8, energy: 2, melody: "A" }] });
+      out.music = [m.block.type, m.block.song.tracks.map(t => t.name).join(","), m.block.song.beats];
+      const mid = await musicTest.midiFile(m.block.song).arrayBuffer(); out.midi = mid.byteLength;
+      const n1 = by("notes_edit").run({ changes: [{ action: "create", note: "Smoke list", kind: "checklist", items: ["milk", "eggs"] }] }), n2 = by("notes_edit").run({ changes: [{ action: "check", note: "Smoke list", kind: "checklist", items: ["milk"] }] });
+      out.notes = [n1.block.ids.length, n2.block.ids.length, by("notes_show").run().out.includes("[x] milk")];
+      by("notes_edit").run({ changes: [{ action: "delete_note", note: "Smoke list", kind: "checklist", items: [] }] });
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.chart.join() !== "chart,bar,3,3,5,4") bad.push("chart " + o.chart);
+    if (o.chances[0] !== "chances" || o.chances[1] !== "25,75" || o.chances[2] !== 1) bad.push("chances " + o.chances);
+    if (o.music[0] !== "music" || !/Melody/.test(o.music[1]) || !/Drums/.test(o.music[1]) || o.music[2] !== 9 * 4) bad.push("music " + o.music);
+    if (!(o.midi > 400)) bad.push("midi " + o.midi);
+    if (o.notes.join() !== "1,1,true") bad.push("notes " + o.notes);
+    return bad.length ? bad.join(" | ") : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;

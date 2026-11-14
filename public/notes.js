@@ -146,6 +146,31 @@ function findNote(title) {
   return list.find((n) => n.title.trim().toLowerCase() === t) || list.find((n) => n.title.toLowerCase().includes(t) || (n.title && t.includes(n.title.toLowerCase()))) || null;
 }
 const sameText = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+function notesNow() {
+  return notes().map((n) => `- "${n.title || "(untitled)"}" (${n.kind}${n.pinned ? ", pinned" : ""}): ${n.kind === "text" ? JSON.stringify(n.text.slice(0, 400)) : n.items.map((x) => (n.kind === "checklist" ? (x.done ? "[x] " : "[ ] ") : "") + x.t).join("; ").slice(0, 600)}`).join("\n") || "(no notes yet)";
+}
+function applyNoteChanges(changes) {
+  const touched = [];
+  for (const c of (Array.isArray(changes) ? changes : []).slice(0, 10)) {
+    const items = (Array.isArray(c.items) ? c.items : []).map((x) => String(x).trim().slice(0, 300)).filter(Boolean).slice(0, 60);
+    const kind = KINDS.some((k) => k[0] === c.kind) ? c.kind : "checklist";
+    let n = findNote(c.note);
+    if (c.action === "create" || (c.action === "add" && !n)) {
+      n = make(String(c.note || "Note").trim().slice(0, 80), kind, kind === "text" ? [] : items, kind === "text" ? items.join("\n") : "");
+      notes().unshift(n);
+    } else if (!n) continue;
+    else if (c.action === "add") { if (n.kind === "text") n.text = (n.text ? n.text + "\n" : "") + items.join("\n"); else n.items.push(...items.map((t) => ({ t }))); }
+    else if (c.action === "check" || c.action === "uncheck") { for (const t of items) { const it = n.items.find((x) => sameText(x.t, t)) || n.items.find((x) => x.t.toLowerCase().includes(t.toLowerCase())); if (it) it.done = c.action === "check"; } }
+    else if (c.action === "remove") n.items = n.items.filter((x) => !items.some((t) => sameText(x.t, t) || x.t.toLowerCase().includes(t.toLowerCase())));
+    else if (c.action === "replace") { if (n.kind === "text") n.text = items.join("\n"); else n.items = items.map((t) => ({ t })); }
+    else if (c.action === "delete_note") { notes().splice(notes().indexOf(n), 1); continue; }
+    n.updated = Date.now();
+    if (!touched.includes(n.id)) touched.push(n.id);
+  }
+  return touched;
+}
+window.notesNow = notesNow;
+window.notesApply = (changes) => { const ids = applyNoteChanges(changes); saveSettings(); if (document.body.classList.contains("notes-view")) renderPage(); return ids; };
 window.runNotesTool = async function (model, text) {
   const block = { type: "notes", active: true, thinkLabel: "Looking at your notes…", ids: [] };
   await toolAnswer(model, text, block, async ({ ask, history, today }) => {
@@ -155,7 +180,7 @@ window.runNotesTool = async function (model, text) {
         action: { type: "string", enum: ["create", "add", "check", "uncheck", "remove", "replace", "delete_note", "show"] },
         note: str, kind: { type: "string", enum: KINDS.map((k) => k[0]) }, items: { type: "array", items: str } }, required: ["action", "note", "kind", "items"] } },
       reply: str }, required: ["changes", "reply"] };
-    const now = notes().map((n) => `- "${n.title || "(untitled)"}" (${n.kind}${n.pinned ? ", pinned" : ""}): ${n.kind === "text" ? JSON.stringify(n.text.slice(0, 400)) : n.items.map((x) => (n.kind === "checklist" ? (x.done ? "[x] " : "[ ] ") : "") + x.t).join("; ").slice(0, 600)}`).join("\n") || "(no notes yet)";
+    const now = notesNow();
     const sys = `You keep the user's notes. Reply only with JSON. Today is ${today}.
 "changes": what to do, in order. Each has "action", "note" (the note's title, exactly as it is for an existing note), "kind" and "items":
 - create: a new note with that title, of that "kind" (bullets, numbers, checklist, letters, roman, priority, or text) and "items" as its lines (for text: the paragraphs). Shopping lists and to-dos are "checklist", steps are "numbers", ranked things "priority".
@@ -168,23 +193,7 @@ The notes now:
 ${now}`;
     const user = [history && `The conversation so far:\n${history}`, `Request: ${text}`].filter(Boolean).join("\n\n");
     const r = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
-    const touched = [];
-    for (const c of (Array.isArray(r.changes) ? r.changes : []).slice(0, 10)) {
-      const items = (Array.isArray(c.items) ? c.items : []).map((x) => String(x).trim().slice(0, 300)).filter(Boolean).slice(0, 60);
-      const kind = KINDS.some((k) => k[0] === c.kind) ? c.kind : "checklist";
-      let n = findNote(c.note);
-      if (c.action === "create" || (c.action === "add" && !n)) {
-        n = make(String(c.note || "Note").trim().slice(0, 80), kind, kind === "text" ? [] : items, kind === "text" ? items.join("\n") : "");
-        notes().unshift(n);
-      } else if (!n) continue;
-      else if (c.action === "add") { if (n.kind === "text") n.text = (n.text ? n.text + "\n" : "") + items.join("\n"); else n.items.push(...items.map((t) => ({ t }))); }
-      else if (c.action === "check" || c.action === "uncheck") { for (const t of items) { const it = n.items.find((x) => sameText(x.t, t)) || n.items.find((x) => x.t.toLowerCase().includes(t.toLowerCase())); if (it) it.done = c.action === "check"; } }
-      else if (c.action === "remove") n.items = n.items.filter((x) => !items.some((t) => sameText(x.t, t) || x.t.toLowerCase().includes(t.toLowerCase())));
-      else if (c.action === "replace") { if (n.kind === "text") n.text = items.join("\n"); else n.items = items.map((t) => ({ t })); }
-      else if (c.action === "delete_note") { notes().splice(notes().indexOf(n), 1); continue; }
-      n.updated = Date.now();
-      if (!touched.includes(n.id)) touched.push(n.id);
-    }
+    const touched = applyNoteChanges(r.changes);
     block.ids = touched; saveSettings();
     if (document.body.classList.contains("notes-view")) renderPage();
     return String(r.reply || "").trim() || (touched.length ? "Done." : "I couldn't find that note.");

@@ -180,29 +180,221 @@ const fileName = (s, ext) => (s.title.replace(/[^\p{L}\p{N} _-]+/gu, "").trim().
 
 // ---------- the chat tool ----------
 const NOTATION = `Notes are written as PITCH/BEATS separated by spaces: C4/1 is middle C for one beat (a quarter note), E4/0.5 an eighth note, G4/2 a half note, R/1 a one-beat rest, and a chord is [C4 E4 G4]/2. Repeat a group with (...)xN: (A2/0.5 A3/0.5)x8 is a driving bass for two bars; use it for every repeated figure so the answer stays short. Sharps and flats: F#4, Bb3. 4 beats make one bar. Melodies sit around octave 4 to 5, chords around 3 to 4, bass around 2 to 3.`;
+// ---------- the composer: the model has the musical idea, the app writes the notes ----------
+// Models are poor at writing raw notes (out of key, no pulse, random wandering). So the model only decides the idea: a style, a key,
+// the chords as roman numerals, a short motif in scale degrees and how the piece is built. The app then writes the music from it with
+// real music rules: voice-led chords, bass lines and drum patterns that belong to the style, a melody that develops the motif
+// (answer, sequence, inversion, cadence), always in the key and landing on chord tones on the strong beats.
+const MODES = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], dorian: [0, 2, 3, 5, 7, 9, 10], mixolydian: [0, 2, 4, 5, 7, 9, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11], "harmonic minor": [0, 2, 3, 5, 7, 8, 11] };
+const PCS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, ROMAN = { i: 0, ii: 1, iii: 2, iv: 3, v: 4, vi: 5, vii: 6 };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function parseKey(str) {
+  const m = /^\s*([A-Ga-g])\s*([#b♯♭]?)\s*(.*)$/.exec(String(str || "")), rest = (m ? m[3] : "").toLowerCase().trim();
+  const pc = m ? ((PCS[m[1].toUpperCase()] + (/[#♯]/.test(m[2]) ? 1 : /[b♭]/.test(m[2]) ? -1 : 0)) + 12) % 12 : 0;
+  const mode = /harmonic/.test(rest) ? "harmonic minor" : /dorian/.test(rest) ? "dorian" : /mixolydian/.test(rest) ? "mixolydian" : /phrygian/.test(rest) ? "phrygian" : /lydian/.test(rest) ? "lydian" : /^maj|^major/.test(rest) ? "major" : /^m(in|inor)?$|minor|^min/.test(rest) ? "minor" : "major";
+  return { pc, mode };
+}
+// a chord from a roman numeral ("i", "VI", "V7", "bVII", "ii°", "Imaj7") or a name ("Am", "F", "G7", "Cmaj7")
+function chordOf(tok, key) {
+  const t = String(tok || "").trim(), sc = MODES[key.mode];
+  let m = /^([b#♭♯]?)(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)(°|o|dim|\+|aug|maj7|M7|m7|7|9|sus4|sus2)?$/.exec(t);
+  if (m) {
+    const up = m[2] === m[2].toUpperCase(), deg = ROMAN[m[2].toLowerCase()], acc = /[b♭]/.test(m[1]) ? -1 : m[1] ? 1 : 0, q = m[3] || "";
+    const tones = [0, up && q !== "m7" ? 4 : 3, 7];
+    if (/°|^o$|dim/.test(q)) { tones[1] = 3; tones[2] = 6; } if (/\+|aug/.test(q)) tones[2] = 8;
+    if (q === "sus4") tones[1] = 5; if (q === "sus2") tones[1] = 2;
+    if (q === "7" || q === "9" || q === "m7") tones.push(10); if (/maj7|M7/.test(q)) tones.push(11);
+    return { root: (key.pc + sc[deg] + acc + 12) % 12, tones };
+  }
+  m = /^([A-G])([#b]?)(maj7|M7|m7|min7|min|m|dim|aug|\+|sus4|sus2|7)?$/.exec(t);
+  if (m) {
+    const q = m[3] || "", Q = { "": [0, 4, 7], m: [0, 3, 7], min: [0, 3, 7], m7: [0, 3, 7, 10], min7: [0, 3, 7, 10], dim: [0, 3, 6], aug: [0, 4, 8], "+": [0, 4, 8], sus4: [0, 5, 7], sus2: [0, 2, 7], 7: [0, 4, 7, 10], maj7: [0, 4, 7, 11], M7: [0, 4, 7, 11] }[q];
+    return { root: (PCS[m[1]] + (m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0) + 12) % 12, tones: Q };
+  }
+  return null;
+}
+// close voicing near the middle of the piano that moves as little as possible from the last chord
+function voiceChord(ch, prev) {
+  const pcs = ch.tones.map((x) => (ch.root + x) % 12); let best = null;
+  for (let inv = 0; inv < pcs.length; inv++) {
+    const order = pcs.slice(inv).concat(pcs.slice(0, inv)); let n = 52; while (n % 12 !== order[0]) n++;
+    const notes = [n]; for (const pc of order.slice(1)) { let q = notes[notes.length - 1] + 1; while (q % 12 !== pc) q++; notes.push(q); }
+    if (notes[notes.length - 1] > 76) continue;
+    const avg = notes.reduce((a, b) => a + b, 0) / notes.length, cost = Math.abs(avg - (prev || 62));
+    if (!best || cost < best.cost) best = { notes, cost, avg };
+  }
+  return best || { notes: pcs.map((pc) => 60 + pc), avg: 62 };
+}
+const bassNote = (ch) => 36 + (((ch.root - 36) % 12) + 12) % 12;
+// style: tempo, feel, who plays, and what the chords, bass and drums do at low (1), medium (2) and high (3) energy
+const STYLES = {
+  pop:       { bpm: [96, 124], swing: 0, inst: { chords: "piano", bass: "bass", lead: "lead", pad: "strings" }, chord: ["block", "alberti", "comp"], bass: ["root-half", "eighths", "eighths"], pad: 3, drums: { kick: "x.......x.x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", clap: "", openhat: "..............x." } },
+  rock:      { bpm: [112, 150], swing: 0, inst: { chords: "guitar", bass: "bass", lead: "lead", pad: "organ" }, chord: ["strum", "strum", "strum"], bass: ["eighths", "eighths", "eighths"], pad: 3, drums: { kick: "x.....x.x.......", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", clap: "", openhat: "" } },
+  lofi:      { bpm: [68, 88], swing: .5, inst: { chords: "epiano", bass: "bass", lead: "pluck", pad: "pad" }, chord: ["comp", "comp", "comp"], bass: ["root-half", "syncop", "syncop"], pad: 3, drums: { kick: "x.....x...x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", clap: "", openhat: "" } },
+  edm:       { bpm: [120, 132], swing: 0, inst: { chords: "pad", bass: "synthbass", lead: "lead", pad: "strings" }, chord: ["block", "stab", "stab"], bass: ["sub", "offbeat", "offbeat"], pad: 2, drums: { kick: "x...x...x...x...", snare: "", hat: "..x...x...x...x.", clap: "....x.......x...", openhat: "..x.....x......." } },
+  techno:    { bpm: [124, 136], swing: 0, inst: { chords: "organ", bass: "synthbass", lead: "bells", pad: "pad" }, chord: ["pad", "stab", "stab"], bass: ["sixteenth", "sixteenth", "sixteenth"], pad: 2, drums: { kick: "x...x...x...x...", snare: "", hat: "..x...x...x...x.", clap: "........x.......", openhat: "..x...x...x...x." } },
+  dnb:       { bpm: [168, 176], swing: 0, inst: { chords: "pad", bass: "synthbass", lead: "lead", pad: "strings" }, chord: ["pad", "pad", "stab"], bass: ["sub", "syncop", "syncop"], pad: 2, drums: { kick: "x.........x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", clap: "", openhat: "......x.......x." } },
+  ballad:    { bpm: [60, 80], swing: 0, inst: { chords: "piano", bass: "bass", lead: "flute", pad: "strings" }, chord: ["arp", "arp", "arp"], bass: ["root-half", "root-half", "root-half"], pad: 2, drums: { kick: "x.......x.......", snare: "", hat: "", clap: "........x.......", openhat: "" } },
+  classical: { bpm: [72, 104], swing: 0, inst: { chords: "piano", bass: "strings", lead: "flute", pad: "strings" }, chord: ["alberti", "alberti", "alberti"], bass: ["root-half", "root-half", "root-half"], pad: 3, drums: null },
+  jazz:      { bpm: [108, 150], swing: .6, sevenths: true, inst: { chords: "epiano", bass: "bass", lead: "flute", pad: "pad" }, chord: ["comp", "comp", "comp"], bass: ["walk", "walk", "walk"], pad: 99, drums: { kick: "x.......x.......", snare: "", hat: "x..xx..xx..xx..x", clap: "", openhat: "" } },
+  folk:      { bpm: [88, 116], swing: 0, inst: { chords: "guitar", bass: "bass", lead: "flute", pad: "strings" }, chord: ["arp", "arp", "alberti"], bass: ["folk", "folk", "folk"], pad: 99, drums: { kick: "x.......x.......", snare: "", hat: "", clap: "....x.......x...", openhat: "" } },
+  cinematic: { bpm: [66, 92], swing: 0, inst: { chords: "strings", bass: "strings", lead: "brass", pad: "choir" }, chord: ["pad", "pad", "block"], bass: ["sub", "sub", "sub"], pad: 2, drums: { kick: "x...............", snare: "", hat: "", clap: "", openhat: "" } },
+  hiphop:    { bpm: [78, 96], swing: .35, inst: { chords: "epiano", bass: "synthbass", lead: "bells", pad: "pad" }, chord: ["comp", "comp", "comp"], bass: ["root-half", "syncop", "syncop"], pad: 99, drums: { kick: "x.....x...x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", clap: "", openhat: "" } },
+  game:      { bpm: [124, 152], swing: 0, inst: { chords: "lead", bass: "synthbass", lead: "bells", pad: "organ" }, chord: ["arp", "arp", "arp"], bass: ["eighths", "eighths", "eighths"], pad: 99, drums: { kick: "x...x...x...x...", snare: "", hat: "x.x.x.x.x.x.x.x.", clap: "....x.......x...", openhat: "" } },
+};
+function chordNotes(pat, v) {   // [{ t, d, n: [pitches] }] for one bar
+  const top = v[v.length - 1], four = v.length > 3 ? v[3] : v[0] + 12, r = v[0], at = (list) => list.map(([t, d]) => ({ t, d, n: v }));
+  if (pat === "block" || pat === "pad") return [{ t: 0, d: 3.9, n: v }];
+  if (pat === "comp") return at([[0, 1.25], [1.5, .5], [2.75, 1]]);
+  if (pat === "stab") return [.5, 1.5, 2.5, 3.5].map((t) => ({ t, d: .35, n: v }));
+  if (pat === "strum") return Array.from({ length: 8 }, (_, i) => ({ t: i * .5, d: .45, n: [r - 12, r - 5, r] }));
+  if (pat === "alberti") return [v[0], v[2] ?? v[1], v[1], v[2] ?? v[1], v[0], v[2] ?? v[1], v[1], v[2] ?? v[1]].map((p, i) => ({ t: i * .5, d: .5, n: [p] }));
+  const seq = [v[0], v[1], v[2], four, v[2], v[1], v[2], v[1]];   // arp
+  return seq.map((p, i) => ({ t: i * .5, d: .55, n: [p] }));
+}
+function bassNotes(pat, b, next) {   // [{ t, d, p }]
+  const o = (list, p = b) => list.map(([t, d, q]) => ({ t, d, p: q ?? p }));
+  if (pat === "sub") return o([[0, 3.9]]);
+  if (pat === "root-half") return o([[0, 1.9], [2, 1.9]]);
+  if (pat === "eighths") return Array.from({ length: 8 }, (_, i) => ({ t: i * .5, d: .45, p: i % 4 === 3 ? b + 12 : b }));
+  if (pat === "offbeat") return [.5, 1.5, 2.5, 3.5].map((t) => ({ t, d: .45, p: b }));
+  if (pat === "sixteenth") return [2, 3, 6, 7, 10, 11, 14, 15].map((s) => ({ t: s * .25, d: .2, p: b }));
+  if (pat === "syncop") return o([[0, .75], [1.5, .5], [2.5, .75], [3.5, .4]]);
+  if (pat === "folk") return o([[0, 1.9], [2, 1.9, b + 7 > 50 ? b : b + 7]]);
+  return o([[0, .95], [1, .95, b + 4 > 50 ? b : b + 4], [2, .95, b + 7 > 50 ? b : b + 7], [3, .95, next - 1]]);   // walk: root, third, fifth, a step below the next root
+}
+function parseMotif(str) {
+  const out = []; let t = 0;
+  for (const tok of String(str || "").trim().split(/[\s,]+/)) {
+    const m = /^([1-7]|[rR])([+-]*)(?:\/([\d.]+))?$/.exec(tok); if (!m) continue;
+    const d = clamp(Number(m[3]) || 1, .25, 4);
+    if (/r/i.test(m[1])) { t += d; continue; }
+    out.push({ t, d, deg: Number(m[1]) - 1 + 7 * ((m[2].match(/\+/g) || []).length - (m[2].match(/-/g) || []).length) });
+    t += d;
+  }
+  return { notes: out, len: t };
+}
+function makeMotif(rng) {   // when the model gave none (or an unusable one): a singable one, mostly steps
+  const rhythms = [[1, 1, 1, 1], [1.5, .5, 1, 1], [1, .5, .5, 1, 1], [.5, .5, 1, .5, .5, 1], [2, 1, .5, .5], [1, 1, 2]], r = rhythms[Math.floor(rng() * rhythms.length)];
+  let deg = [0, 2, 4][Math.floor(rng() * 3)], t = 0; const notes = [];
+  r.forEach((d) => { notes.push({ t, d, deg }); t += d; deg = clamp(deg + [-2, -1, -1, 1, 1, 2, 2][Math.floor(rng() * 7)], -2, 8); });
+  notes[notes.length - 1].deg = [0, 1, 2, 4][Math.floor(rng() * 4)];
+  return { notes, len: 4 };
+}
+// one phrase (two bars) from the motif: A states it and answers, B is the sequence a step or two higher, C turns it upside down, END settles on the tonic
+function phrase(motif, kind) {
+  const cp = (ns, f) => ns.map((n) => ({ ...n, deg: f(n) })), a = motif.notes, c = a[0].deg, fit = motif.len <= 4 ? 4 : 8;
+  const sh = (ns, k) => cp(ns, (n) => n.deg + k), inv = (ns) => cp(ns, (n) => 2 * c - n.deg), later = (ns, t0) => ns.map((n) => ({ ...n, t: n.t + t0 }));
+  const end = (ns) => { const x = ns.map((n) => ({ ...n })), l = x[x.length - 1]; l.deg = 0; l.d = Math.max(l.d, fit - l.t - .1); return x; };
+  let out;
+  if (fit === 4) {
+    const first = kind === "B" ? sh(a, 2) : a, second = kind === "B" ? sh(a, 1) : kind === "C" ? inv(a) : kind === "END" ? end(a) : cp(a, (n) => n === a[a.length - 1] ? n.deg + 1 : n.deg);
+    out = [...first, ...later(second, 4)];
+  } else out = kind === "B" ? sh(a, 2) : kind === "C" ? inv(a) : kind === "END" ? end(a) : a;
+  return out.filter((n) => n.t < 8).map((n) => ({ ...n, d: Math.min(n.d, 8 - n.t) }));
+}
+function composeSong(spec) {
+  const title = String(spec.title || "Untitled").slice(0, 80), key = parseKey(spec.key), style = STYLES[spec.style] ? spec.style : "pop", st = STYLES[style], sc = MODES[key.mode];
+  let h = 2166136261; for (const ch of title + key.pc + style) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  const rng = () => { h = (h + 0x6D2B79F5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const bpm = clamp(Math.round(Number(spec.bpm)) || Math.round((st.bpm[0] + st.bpm[1]) / 2), st.bpm[0] - 12, st.bpm[1] + 12), swing = st.swing;
+  const minor = key.mode !== "major" && key.mode !== "lydian" && key.mode !== "mixolydian";
+  let raw = Array.isArray(spec.progression) ? spec.progression : String(spec.progression || "").split(/[\s,|]+/);
+  let prog = raw.map((x) => chordOf(x, key)).filter(Boolean).slice(0, 8);
+  if (!prog.length) prog = (minor ? ["i", "VI", "III", "VII"] : ["I", "V", "vi", "IV"]).map((x) => chordOf(x, key));
+  if (st.sevenths) for (const ch of prog) if (ch.tones.length === 3) ch.tones.push(ch.tones[1] === 4 ? 11 : 10);
+  const clean = (Array.isArray(spec.structure) ? spec.structure : []).slice(0, 10).map((x, i) => ({ name: String(x?.name || "Part " + (i + 1)).slice(0, 24), bars: clamp(Math.round(Number(x?.bars)) || 8, 2, 16), energy: clamp(Math.round(Number(x?.energy)) || 2, 1, 3), melody: /^b$/i.test(x?.melody) ? "B" : /^none|^-$|^no/i.test(String(x?.melody || "")) ? "" : "A" }));
+  let structure = []; let total = 0;
+  for (const x of clean) { if (total + x.bars > 64) break; structure.push(x); total += x.bars; }
+  if (!structure.length) structure = [{ name: "Intro", bars: 4, energy: 1, melody: "" }, { name: "Verse", bars: 8, energy: 2, melody: "A" }, { name: "Chorus", bars: 8, energy: 3, melody: "B" }, { name: "Outro", bars: 4, energy: 1, melody: "A" }];
+  const mA0 = parseMotif(spec.motif), mB0 = parseMotif(spec.motif_b), ok = (m) => m.notes.length >= 3 && m.len >= 2 && m.len <= 8;
+  const mA = ok(mA0) ? mA0 : makeMotif(rng), mB = ok(mB0) ? mB0 : { notes: mA.notes.map((n) => ({ ...n, deg: n.deg + 2 })), len: mA.len };
+  const ins = { ...st.inst, ...(spec.instruments && typeof spec.instruments === "object" ? Object.fromEntries(Object.entries(spec.instruments).filter(([k, v]) => k in st.inst && INSTR[v])) : {}) };
+  const tonic = 60 + key.pc - (key.pc > 5 ? 12 : 0) + 12, degPitch = (d) => tonic + 12 * Math.floor(d / 7) + sc[((d % 7) + 7) % 7];
+  const tr = { chords: [], bass: [], lead: [], pad: [] }, hits = [], pcSet = (ch) => new Set(ch.tones.map((x) => (ch.root + x) % 12)), inScale = new Set(sc.map((x) => (key.pc + x) % 12));
+  const sw = (t) => (Math.abs((t % 1) - .5) < .01 ? t + swing * .33 : t);
+  const drumHits = (bar0, e, fill) => {
+    if (!st.drums) return;
+    for (const k of Object.keys(DRUMS)) {
+      let pat = st.drums[k] || ""; if (!pat) continue;
+      if (e === 1 && !["kick", "hat"].includes(k) && !(k === "clap" && style === "ballad")) continue;
+      if (e === 1 && k === "hat") pat = "x...x...x...x...";
+      if (k === "openhat" && e < 3) continue;
+      if (k === "snare" && fill) pat = "....x...x.x.xxxx";
+      [...pat].forEach((c, i) => { if (c === "x" || c === "X") hits.push({ t: bar0 * 4 + i * .25 + (swing && i % 4 === 2 ? swing * .33 : swing && i % 2 === 1 ? swing * .16 : 0), k, v: c === "X" ? 1 : e === 3 ? .85 : .65 }); });
+    }
+  };
+  let bar = 0, prevAvg = 0;
+  structure.forEach((sec, si) => {
+    const e = sec.energy, motif = sec.melody === "B" ? mB : mA, nPh = Math.ceil(sec.bars / 2), kinds = ["A", "A", "B", "A"], last = si === structure.length - 1;
+    for (let b = 0; b < sec.bars; b++) {
+      const ch = prog[b % prog.length], next = prog[(b + 1) % prog.length], vc = voiceChord(ch, prevAvg), t0 = (bar + b) * 4; prevAvg = vc.avg;
+      for (const ev of chordNotes(st.chord[e - 1], vc.notes)) for (const p of ev.n) tr.chords.push({ t: sw(t0 + ev.t), d: ev.d, p });
+      if (e >= 2 || ["sub", "root-half"].includes(st.bass[0])) for (const n of bassNotes(st.bass[e - 1], bassNote(ch), bassNote(next))) tr.bass.push({ t: sw(t0 + n.t), d: n.d, p: n.p });
+      if (e >= st.pad) for (const p of vc.notes) tr.pad.push({ t: t0, d: 3.95, p: p - (style === "cinematic" ? 12 : 0) });
+      drumHits(bar + b, e, e >= 2 && !last && b === sec.bars - 1);
+    }
+    if (sec.melody) for (let ph = 0; ph < nPh; ph++) {
+      const kind = ph === nPh - 1 ? "END" : kinds[ph % 4];
+      for (const n of phrase(motif, kind)) {
+        const t = ph * 8 + n.t; if (t >= sec.bars * 4) continue;
+        const ch = prog[Math.floor(t / 4) % prog.length], strong = (t % 2 === 0) && n.d >= .75;
+        let p = degPitch(n.deg);
+        if (strong) { const set = pcSet(ch); let best = p; for (const dd of [0, -1, 1, -2, 2]) if (set.has((p + dd + 120) % 12) && inScale.has((p + dd + 120) % 12)) { best = p + dd; break; } p = best; }
+        while (p > 91) p -= 12; while (p < 62) p += 12;
+        tr.lead.push({ t: sw(bar * 4 + t), d: Math.min(n.d, sec.bars * 4 - t) * .95, p });
+      }
+    }
+    bar += sec.bars;
+  });
+  // the last bar: everything settles on the tonic chord
+  const tonicCh = prog[0].root === key.pc ? prog[0] : { root: key.pc, tones: [0, minor ? 3 : 4, 7] }, tv = voiceChord(tonicCh, prevAvg), tb = bar * 4;
+  for (const p of tv.notes) { tr.chords.push({ t: tb, d: 3.5, p }); if (st.pad < 99) tr.pad.push({ t: tb, d: 3.8, p }); }
+  tr.bass.push({ t: tb, d: 3.5, p: bassNote(tonicCh) });
+  if (structure.some((x) => x.melody)) tr.lead.push({ t: tb, d: 3, p: degPitch(0) + (degPitch(0) < 66 ? 12 : 0) });
+  if (st.drums) hits.push({ t: tb, k: "kick", v: .9 });
+  const tracks = [], add = (name, inst, notes, i) => notes.length && tracks.push({ name, inst, notes, color: COLORS[i % COLORS.length], mute: false });
+  add("Chords", ins.chords, tr.chords, 0); add("Bass", ins.bass, tr.bass, 1); add("Melody", ins.lead, tr.lead, 2); add("Pad", ins.pad, tr.pad, 3);
+  if (hits.length) tracks.push({ name: "Drums", inst: "drums", hits, color: "#8E8E93", mute: false });
+  const names = prog.map((c) => NN[c.root]).join(" ");
+  return { title, about: String(spec.description || "").slice(0, 400), key: `${NN[key.pc]} ${key.mode}`, bpm, beats: (bar + 1) * 4, tracks,
+    spec: { style, key: `${NN[key.pc]} ${key.mode}`, bpm, progression: raw.slice(0, 8).join(" "), motif: String(spec.motif || ""), motif_b: String(spec.motif_b || ""), structure, chordRoots: names } };
+}
+// what the model fills in, as a form: the same for the chat tool and for models without tools
+const MUSIC_PROPS = (() => {
+  const str = { type: "string" };
+  return {
+    title: { type: "string", description: "Title of the piece" }, description: { type: "string", description: "One sentence on mood and style" },
+    style: { type: "string", enum: Object.keys(STYLES), description: "pop, rock, lofi (calm beats), edm, techno, dnb (drum and bass), ballad (slow piano), classical, jazz, folk, cinematic (film score), hiphop, game (chiptune-like)" },
+    key: { type: "string", description: "Key and mode, like \"A minor\", \"C major\", \"D dorian\", \"E phrygian\" (dark), \"F lydian\" (dreamy)" },
+    bpm: { type: "integer", description: "Tempo; it should suit the style (ballad 60 to 80, pop 100 to 120, techno 125 to 135, drum and bass 170)" },
+    progression: { type: "array", items: str, description: "The chords, one per bar, as roman numerals in the key, 4 or 8 of them: major like I V vi IV or I vi IV V, minor like i VI III VII, i iv v i or i VII VI V. Uppercase is a major chord, lowercase minor; add 7 for a seventh (V7), ° for diminished (vii°). Chord names (Am, F, C, G7) also work." },
+    motif: { type: "string", description: "The main melody idea, one bar (4 beats), written as scale degrees of the key with a length in beats after a slash: 1 is the tonic, 5 the fifth, 1/1 = one beat, 3/0.5 = half a beat, add + for an octave up and - for an octave down (1+/1), r/1 is a rest. Like \"3/1 5/0.5 6/0.5 5/2\". Mostly steps with a leap now and then; the app develops it into a whole melody." },
+    motif_b: { type: "string", description: "Optional second idea for the chorus, same notation" },
+    structure: { type: "array", description: "How the piece is built, 16 to 48 bars in total", items: { type: "object", properties: { name: str, bars: { type: "integer", description: "2 to 16, usually 4 or 8" }, energy: { type: "integer", description: "1 calm, 2 medium, 3 full" }, melody: { type: "string", enum: ["A", "B", "none"], description: "A = the main idea, B = the second idea (chorus), none = no melody" } }, required: ["name", "bars", "energy", "melody"] } },
+    instruments: { type: "object", description: "Optional: change who plays what, from: " + Object.keys(INSTR).join(", "), properties: { chords: str, bass: str, lead: str, pad: str } },
+  };
+})();
+window.musicCompose = composeSong;
+window.MUSIC_PROPS = MUSIC_PROPS;
 window.runMusicTool = async function (model, text) {
   const block = { type: "music", active: true, thinkLabel: "Composing…" };
   await toolAnswer(model, text, block, async ({ ask, history }) => {
     const str = { type: "string" };
-    const schema = { type: "object", properties: {
-      language: str, title: str, description: str, key: str, bpm: { type: "integer" }, bars: { type: "integer" },
-      tracks: { type: "array", items: { type: "object", properties: { name: str, instrument: { type: "string", enum: Object.keys(INSTR) }, loop: { type: "boolean" }, notes: str }, required: ["name", "instrument", "loop", "notes"] } },
-      drums: { type: "object", properties: { kick: str, snare: str, clap: str, hat: str, openhat: str }, required: ["kick", "snare", "clap", "hat", "openhat"] },
-      reply: str }, required: ["language", "title", "description", "key", "bpm", "bars", "tracks", "drums", "reply"] };
-    const sys = `You are a composer. You write a short, catchy, musically correct piece for what the user asks. Reply only with JSON.
+    const schema = { type: "object", properties: { language: str, ...MUSIC_PROPS, reply: str }, required: ["language", "title", "description", "style", "key", "bpm", "progression", "motif", "structure", "reply"] };
+    const sys = `You are a composer. You come up with the musical idea for what the user asks, and the app writes out the notes. Reply only with JSON.
 - "language": the language the request is written in (for example English or German). Write "title", "description" and "reply" in it.
-- "title", "description" (one sentence on mood and style), "key" (like "A minor"), "bpm", "bars" (8 to 32; 16 is a good length).
-- Speed: the tempo AND the note lengths make music feel fast or slow. Calm: 60 to 90 bpm with long notes. Fast, energetic, dance, techno, rock, drum and bass: 130 to 180 bpm, with a busy melody of mostly 0.5 and 0.25 notes (8 to 16 notes per bar), a driving bass in 0.5 notes, and drums with hats on every step.
-- "tracks": 2 to 5 instruments that fit the style, from: ${Object.keys(INSTR).join(", ")}. Usually chords (piano, epiano, pad, strings, guitar or organ), a bass line and a melody (lead, flute, bells, piano, brass…). Each track: "name", "instrument", "notes" and "loop". With "loop": true the notes repeat until the end (good for a 4-bar chord or bass pattern); with false they play once, so write all bars (a melody with a beginning, a repeat with variation and an ending).
-- ${NOTATION} Stay in the key, give the melody a clear idea that comes back, let the bass play the chord roots, and make every track the right length.
-- "drums": patterns of 16 steps per bar (sixteenth notes), x = hit, X = accented hit, . = nothing, for kick, snare, clap, hat, openhat; one bar repeats, or write several bars in a row. Leave a part "" if it doesn't play; all "" for no drums (calm, classical, lullabies).
+- "style", "key", "bpm": choose them to fit the mood the user wants (sad: minor, slow; happy: major, medium; dark: minor or phrygian; dreamy: lydian or major 7ths; epic: minor, cinematic).
+- "progression": 4 or 8 chords, one per bar, as roman numerals in the key (uppercase major, lowercase minor), like I V vi IV or i VI III VII. Chords that really belong together; the last chord should lead back to the first.
+- "motif": the melody idea, one bar, as scale degrees with beat lengths, like "3/1 5/0.5 6/0.5 5/2". Make it singable and memorable: mostly steps, one leap, ending on a calm note (1, 3 or 5). "motif_b" optional for the chorus.
+- "structure": 3 to 5 parts (intro, verse, chorus, outro...), 16 to 48 bars in all, with an energy from 1 to 3 and which melody plays (A, B or none). Build up: start calm, end on the biggest part or a calm outro.
 - "reply": 1 or 2 sentences to the user about the piece, in the same language as the request.`;
     // a follow-up ("make it faster", "add drums") changes the last piece of this chat: the model sees what it was
     const prevSong = [...current.messages].reverse().map((m) => (m.blocks || []).find((b) => b.type === "music" && b.song)).find(Boolean)?.song;
-    const prevText = prevSong ? `The last piece in this chat (change it if the request asks for a change): "${prevSong.title}", ${prevSong.key}, ${prevSong.bpm} bpm, ${prevSong.beats / 4} bars; ${prevSong.tracks.map((t) => t.name + " (" + t.inst + ")").join(", ")}. ${prevSong.about}` : "";
+    const prevText = prevSong?.spec ? `The last piece in this chat (change it if the request asks for a change; keep what isn't mentioned): ${JSON.stringify({ title: prevSong.title, ...prevSong.spec })}` : prevSong ? `The last piece in this chat: "${prevSong.title}", ${prevSong.key}, ${prevSong.bpm} bpm.` : "";
     const user = [history && `The conversation so far:\n${history}`, prevText, `Request: ${text}`].filter(Boolean).join("\n\n");
     const r = await ask([{ role: "system", content: sys }, { role: "user", content: user }], schema);
-    block.song = buildSong(r);
+    block.song = composeSong(r);
     return String(r.reply || "").trim() || `Here is “${block.song.title}”. Press play, or download it for GarageBand.`;
   });
 };
@@ -260,5 +452,5 @@ window.musicCard = function (b) {
   requestAnimationFrame(() => drawRoll(roll, song));
   return w;
 };
-window.musicTest = { parseNotes, buildSong, midiFile, wavFile, preload };
+window.musicTest = { parseNotes, buildSong, composeSong, midiFile, wavFile, preload };
 })();
