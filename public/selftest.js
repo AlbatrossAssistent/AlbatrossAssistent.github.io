@@ -209,6 +209,34 @@ window.albatrossSelfTest = async function (w) {
     const d = JSON.parse(t).function;
     return (d.parameters.required.includes("tags") && d.parameters.properties.lyrics && d.parameters.properties.seconds && /ACE-Step/.test(d.description)) || "form incomplete";
   });
+  await tryIt("Settings → Tools → Music: song model and sound banks", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const orig = window.pcCall, out = {}, box = () => document.querySelector("#musicBox");
+      document.body.insertAdjacentHTML("beforeend", '<div id="musicBox"></div>');
+      const mk = (song, banks) => (window.pcCall = async (path) => path === "/agent/music/status" ? song : { banks });
+      const bank = (id, extra) => ({ id, name: id === "musescore" ? "MuseScore General" : "GeneralUser GS", about: "x", license: "MIT", size: 39900972, installed: false, ...extra });
+      mk({ installed: false, hasComfy: true, sizeBytes: 7699743341, download: { running: false } }, [bank("musescore"), bank("generaluser", { installed: true })]);
+      await paintMusicSetup(); const a = [...box().querySelectorAll(".mem-item")];
+      out.rows = a.length; out.song = a[0].textContent; out.songBtn = a[0].querySelector("button")?.textContent; out.b1 = a[1].querySelector("button")?.textContent; out.b2 = a[2].querySelector("button")?.textContent;
+      mk({ installed: false, hasComfy: true, sizeBytes: 7699743341, download: { running: true, got: 3.85e9, total: 7.7e9 } }, [bank("musescore", { running: true, got: 1e7, total: 4e7 }), bank("generaluser")]);
+      await paintMusicSetup(); out.running = box().textContent;
+      mk({ installed: false, hasComfy: false, sizeBytes: 7699743341, download: { running: false } }, []);
+      await paintMusicSetup(); out.noComfy = box().textContent + "|btn=" + box().querySelectorAll("button").length;
+      mk({ installed: true, hasComfy: true, sizeBytes: 7699743341, download: { running: false } }, []);
+      await paintMusicSetup(); out.installed = box().textContent + "|" + box().querySelector("button")?.textContent;
+      window.pcCall = async () => { throw new Error("offline"); }; await paintMusicSetup(); out.offline = box().textContent;
+      window.pcCall = orig; box().remove(); clearTimeout(musicPoll);
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.rows !== 3 || !/ACE-Step/.test(o.song) || !/^Download \(7\.\d GB\)$/.test(o.songBtn || "")) bad.push("rows " + JSON.stringify([o.rows, o.songBtn]));
+    if (!/^Download \(\d+ MB\)$/.test(o.b1 || "") || o.b2 !== "Remove") bad.push("bank buttons " + [o.b1, o.b2]);
+    if (!/Downloading… 50%/.test(o.running) || !/Downloading… 25%/.test(o.running)) bad.push("progress " + o.running.slice(0, 200));
+    if (!/Needs the picture engine/.test(o.noComfy) || !/btn=0/.test(o.noComfy)) bad.push("no ComfyUI case " + o.noComfy.slice(-80));
+    if (!/Installed/.test(o.installed) || !/Remove$/.test(o.installed)) bad.push("installed " + o.installed.slice(-60));
+    if (!/Connect to your PC/.test(o.offline)) bad.push("offline " + o.offline);
+    return bad.length ? bad.join(" | ") : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;

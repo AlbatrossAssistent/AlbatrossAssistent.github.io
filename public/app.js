@@ -4817,6 +4817,29 @@ function paintDeckPreset() {
   box.innerHTML = `<small>Look of new presentations</small><div class="dz-row">${sel("theme", Object.keys(DECK_THEMES), "Design")}${sel("fonts", Object.keys(DECK_FONTS), "Fonts")}${sel("transition", DECK_TRANSITIONS, "Transition")}${sel("animStyle", DECK_STYLES, "Animation style")}${sel("animation", ["entrance", "build", "none"], "Animation")}</div>`;
   box.querySelectorAll("select").forEach((s) => (s.onchange = () => { S.deckPreset = { ...(S.deckPreset || {}), [s.dataset.p]: s.value }; if (!s.value) delete S.deckPreset[s.dataset.p]; saveSettings(); }));
 }
+// Music setup: the song model and the SoundFont sound banks (each downloaded once, on request, to this PC)
+let musicPoll = 0;
+async function paintMusicSetup() {
+  const box = $("#musicBox"); if (!box) return;
+  let song, banks;
+  try { [song, banks] = await Promise.all([pcCall("/agent/music/status", {}), pcCall("/agent/soundfont/status", {}).then((j) => j.banks || [])]); }
+  catch { box.innerHTML = '<div class="note" style="margin:0">Connect to your PC (with the Albatross host running) to set up songs and better sounds.</div>'; return; }
+  const gb = (n) => (n / 1073741824).toFixed(1) + " GB", mb = (n) => Math.round(n / 1048576) + " MB", pct = (d) => Math.round(d.got / Math.max(1, d.total) * 100);
+  const items = [];
+  const dl = song.download || {};
+  items.push({ id: "song", title: "AI songs · ACE-Step", about: "Makes whole songs with singing. Apache-2.0. " + gb(song.sizeBytes || 7.7e9) + ", runs in the picture engine (ComfyUI).",
+    state: song.installed ? "ok" : dl.running ? "run" : !song.hasComfy ? "no" : "get", note: dl.running ? `Downloading… ${pct(dl)}% (${gb(dl.got)} of ${gb(dl.total)})` : song.installed ? "Installed" : !song.hasComfy ? "Needs the picture engine (ComfyUI), which isn't on this PC" : dl.error || "", size: gb(song.sizeBytes || 7.7e9) });
+  for (const b of banks) items.push({ id: b.id, title: "Sounds · " + b.name, about: b.about + " Licence: " + b.license + ".", state: b.installed ? "ok" : b.running ? "run" : "get",
+    note: b.running ? `Downloading… ${pct(b) }%` : b.installed ? "Installed" : b.error || "", size: mb(b.size) });
+  box.innerHTML = '<small>Music</small>' + items.map((x) => `<div class="mem-item" data-id="${x.id}"><span style="flex:1;min-width:0"><b>${esc(x.title)}</b><br><small>${esc(x.about)}</small>${x.note ? `<br><small class="mu-snote">${esc(x.note)}</small>` : ""}</span>${x.state === "ok" ? '<button class="btn small" data-a="rm" type="button">Remove</button>' : x.state === "get" ? `<button class="btn small primary" data-a="get" type="button">Download (${esc(x.size)})</button>` : x.state === "run" ? '<button class="btn small" disabled type="button">Downloading…</button>' : ""}</div>`).join("");
+  box.querySelectorAll(".mem-item").forEach((row) => {
+    const id = row.dataset.id, isSong = id === "song", g = row.querySelector('[data-a="get"]'), r = row.querySelector('[data-a="rm"]');
+    if (g) g.onclick = async () => { g.disabled = true; try { await pcCall(isSong ? "/agent/music/get" : "/agent/soundfont/get", { id }); } catch (e) { toast(e.message); } paintMusicSetup(); };
+    if (r) r.onclick = async () => { if (!confirm("Remove it from this PC? You can download it again later.")) return; try { await pcCall(isSong ? "/agent/music/remove" : "/agent/soundfont/remove", { id }); window.songOk = false; songChecked = 0; } catch (e) { toast(e.message); } paintMusicSetup(); };
+  });
+  clearTimeout(musicPoll);
+  if ((dl.running || banks.some((b) => b.running)) && $("#settings").open) musicPoll = setTimeout(paintMusicSetup, 1500);
+}
 // Documents: the folders on the PC that are searched, indexing, and the search model
 let docsPoll = 0;
 async function paintDocs() {
@@ -4844,7 +4867,7 @@ async function paintDocs() {
   clearTimeout(docsPoll);
   if (j.running && $("#settings").open) docsPoll = setTimeout(paintDocs, 1500);
 }
-function fillToolSwitches() { paintDocs(); paintDeckPreset(); $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
+function fillToolSwitches() { paintDocs(); paintDeckPreset(); paintMusicSetup(); $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
 for (const el of $$("[data-tool]")) el.onchange = () => { S.tools = { ...(S.tools || {}), [el.dataset.tool]: el.checked }; saveSettings(); };
 const _openSettings = openSettings;
 openSettings = function (tab) { fillToolSwitches(); return _openSettings(tab); };
@@ -6553,8 +6576,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.12";
+const APP_VERSION = "2026-11-14.13";
 const WHATS_NEW = [
+  ["2026-11-14.13", ["Settings → Tools → Music: download the AI song model and the better sound banks with one click on any PC (a download that stops carries on where it left off)"]],
   ["2026-11-14.12", ["Music: choose between the classic sounds and better SoundFont banks (MuseScore General, GeneralUser GS) with a recorded drum kit, and compare them side by side; ask for a real AI song with singing (ACE-Step, runs on your PC)","Image models: only Qwen Image remains"]],
   ["2026-11-14.11", ["Music has more character: better instrument recordings (violin, cello, sax, horn, vibraphone, guitars...), a balanced mix where the instruments are no longer drowned out by the drums, phrased melodies, and the AI can write the whole tune"]],
   ["2026-11-14.10", ["Music sounds better: accents and soft/loud notes, a human feel, a room reverb, a balanced mix, a proper drum kit sound, and no more falling back to the plain synth when one note is missing"]],

@@ -524,13 +524,58 @@ function serveSong(req, res, file) {
   res.writeHead(200, { "Content-Type": "audio/mpeg", "Content-Length": fs.statSync(f).size, "Cache-Control": "max-age=86400" });
   fs.createReadStream(f).pipe(res); return true;
 }
+// the song model on a PC that doesn't have it yet: one click in Settings → Tools → Music. 7.7 GB, so it resumes where it stopped
+// (the .part file stays when the connection drops: press Download again and it continues).
+const SONG_URL = "https://huggingface.co/Comfy-Org/ACE-Step_ComfyUI_repackaged/resolve/main/all_in_one/ace_step_v1_3.5b.safetensors";
+const SONG_MIN = 7.6e9, songDl = { running: false, got: 0, total: 0, error: "" };
+function fetchResumable(url, dest, minBytes, st, done) {
+  const lib = url.startsWith("http:") ? require("http") : require("https"), part = dest + ".part";
+  const have = fs.existsSync(part) ? fs.statSync(part).size : 0;
+  Object.assign(st, { running: true, got: have, total: minBytes, error: "" });
+  const stop = (msg) => { st.running = false; st.error = msg; done && done(new Error(msg)); };
+  const finish = () => {
+    let size = 0; try { size = fs.statSync(part).size; } catch {}
+    if (size < minBytes) return stop("The download was cut off. Press Download again to continue where it stopped.");
+    try { fs.renameSync(part, dest); } catch (e) { return stop(e.message); }
+    st.running = false; done && done(null);
+  };
+  const get = (u, hops) => lib.get(u, { headers: { "User-Agent": "Albatross-Desktop", ...(have ? { Range: "bytes=" + have + "-" } : {}) } }, (res) => {
+    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && hops < 8) { res.resume(); return get(new URL(res.headers.location, u).href, hops + 1); }
+    if (res.statusCode === 416) { res.resume(); return finish(); }                       // the file is already complete
+    if (res.statusCode !== 200 && res.statusCode !== 206) { res.resume(); return stop("The download failed (" + res.statusCode + ")"); }
+    const resumed = res.statusCode === 206, start = resumed ? have : 0, len = Number(res.headers["content-length"]) || 0;
+    st.got = start; st.total = len ? start + len : minBytes;
+    const out = fs.createWriteStream(part, { flags: resumed ? "a" : "w" });
+    res.on("data", (c) => { st.got += c.length; });
+    res.pipe(out);
+    out.on("finish", () => out.close(finish));
+    out.on("error", (e) => stop(e.message));
+    res.on("error", () => {}); res.on("close", () => { if (!res.complete) { out.end(); } });
+  }).on("error", (e) => stop(e.message));
+  get(url, 0);
+}
+function songDownload(note) {
+  if (songInstalled()) return;
+  if (!hasPython()) throw new Error("ComfyUI (the picture engine) isn't on this PC, and the song model runs inside it");
+  if (songDl.running) return;
+  const dir = M("checkpoints"); fs.mkdirSync(dir, { recursive: true });
+  try { const f = fs.statfsSync(dir); if (f.bavail * f.bsize < 10e9) throw new Error("Not enough free disk space: the song model needs about 8 GB"); } catch (e) { if (/disk space/.test(e.message)) throw e; }
+  fetchResumable(SONG_URL, M(...SONG_CKPT), SONG_MIN, songDl, (err) => { if (!err) note && note("Music: downloaded the song model (ACE-Step)"); });
+}
 async function songHandle(p, body) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
   try {
-    if (p === "/agent/music/status") return [200, { installed: songInstalled(), model: "ACE-Step 3.5B", ...songState }];
+    if (p === "/agent/music/status") return [200, { installed: songInstalled(), model: "ACE-Step 3.5B", sizeBytes: 7699743341, hasComfy: hasPython(), download: { ...songDl }, ...songState }];
+    if (p === "/agent/music/get") { songDownload((t) => console.log("[song] " + t)); return [200, { started: true }]; }
+    if (p === "/agent/music/remove") {
+      if (songDl.running || songState.running) throw new Error("It is busy: wait until it is done");
+      if (lastModel === "ace-step" && (await up())) await killComfy();               // the model is in memory: let go of it first
+      try { fs.unlinkSync(M(...SONG_CKPT)); } catch {}
+      return [200, { removed: true }];
+    }
     if (p === "/agent/music/song") return [200, await makeSong(j, (t) => console.log("[song] " + t))];
   } catch (e) { return [400, { error: e.message }]; }
   return [404, { error: "Unknown music request" }];
 }
 
-module.exports = { songInstalled, songState, makeSong, serveSong, songHandle, MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };
+module.exports = { _test: { fetchResumable }, songInstalled, songState, makeSong, serveSong, songHandle, MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };
