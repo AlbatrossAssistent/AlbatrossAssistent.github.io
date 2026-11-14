@@ -278,7 +278,12 @@ async function handle(method, p, body, note) {
     if (p === "/agent/upload") return [200, upload(j)];
     if (p === "/agent/print") { const r = await print(j.spec, j.printer); note(`Agent: printed ${r.printed} on ${r.printer}`); return [200, r]; }
     if (p === "/agent/browse") return [200, await browse(j.url)];
-    if (p === "/agent/search") return [200, { results: await require("./freesearch").search(j.query, Math.min(10, Math.max(1, Number(j.max) || 6))), via: "pc" }];
+    if (p === "/agent/search") {
+      const max = Math.min(10, Math.max(1, Number(j.max) || 6)), sx = require("./searxng");
+      // SearXNG on this PC when it is installed (many engines at once, no captchas); the DuckDuckGo page otherwise, or if it fails
+      if (sx.installed()) { try { const results = await sx.search(j.query, max); if (results.length) return [200, { results, via: "searxng" }]; } catch {} }
+      return [200, { results: await require("./freesearch").search(j.query, max), via: "pc" }];
+    }
   } catch (e) { return [400, { error: e.message }]; }
   return [404, { error: "Unknown request" }];
 }

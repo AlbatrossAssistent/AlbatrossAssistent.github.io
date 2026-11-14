@@ -56,6 +56,9 @@ async function handle(method, p, body, note) {
     }
     if (p === "/agent/voice/tts") {
       const text = String(j.text || "").trim(); if (!text) throw new Error("Nothing to say");
+      // the natural voice (Kokoro) when it is installed and speaks this language; Piper otherwise, or if it fails
+      const natural = await require("./kokoro").speak(text, String(j.lang || "en").slice(0, 8)).catch(() => null);
+      if (natural && natural.wav) return [200, natural];
       return [200, await ask({ op: "tts", text: text.slice(0, 4000), lang: String(j.lang || "en").slice(0, 8) }, 10 * 60 * 1000)];
     }
   } catch (e) { return [400, { error: e.message }]; }

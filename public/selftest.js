@@ -237,6 +237,71 @@ window.albatrossSelfTest = async function (w) {
     if (!/Connect to your PC/.test(o.offline)) bad.push("offline " + o.offline);
     return bad.length ? bad.join(" | ") : true;
   });
+  await tryIt("Settings → Tools → Add-ons: sharper pictures, natural voice, better search", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const orig = window.pcCall, out = {}, box = () => document.querySelector("#addonsBox");
+      const had = !!box(); if (!had) document.body.insertAdjacentHTML("beforeend", '<div id="addonsBox"></div>');
+      const mk = (up, kk, sx) => (window.pcCall = async (path) => path.startsWith("/agent/upscale/") ? up : path.startsWith("/agent/kokoro/") ? kk : path.startsWith("/agent/searxng/") ? sx : { scans: true });
+      const voices = [{ id: "af_heart", name: "Heart · American, woman" }, { id: "bm_george", name: "George · British, man" }];
+      mk({ installed: false, hasComfy: true, sizeBytes: 67040989, download: {} }, { installed: false, sizeBytes: 560e6, install: {} }, { installed: false, sizeBytes: 60e6, install: {} });
+      await paintAddons(); let rows = [...box().querySelectorAll(".mem-item")];
+      out.rows = rows.length; out.btns = rows.map((r) => r.querySelector("button")?.textContent || "");
+      out.text = box().textContent;
+      mk({ installed: false, hasComfy: true, download: { running: true, got: 33e6, total: 67e6 } }, { installed: false, install: { running: true, step: "Downloading the voice model…", got: 140e6, total: 560e6 } }, { installed: false, install: { running: true, step: "Installing what it needs (a minute or two)…" } });
+      await paintAddons(); out.running = box().textContent; clearTimeout(addonsPoll);
+      mk({ installed: true, hasComfy: true, download: {} }, { installed: true, on: true, voice: "bm_george", voices, install: {} }, { installed: true, install: {} });
+      await paintAddons(); out.ok = [...box().querySelectorAll(".mem-item[data-id] > button")].map((b) => b.textContent);
+      out.voice = box().querySelector(".kk-voice")?.value; out.on = box().querySelector(".kk-on")?.checked; out.flags = [window.upscaleOk, window.searxOk];
+      mk({ installed: false, hasComfy: false, download: {} }, { installed: false, install: { error: "Not enough free disk space" } }, { installed: false, install: {} });
+      await paintAddons(); out.noComfy = box().querySelector('[data-id="upscale"]').textContent + "|btn=" + box().querySelectorAll('[data-id="upscale"] button').length; out.err = box().textContent;
+      window.pcCall = async () => { throw new Error("offline"); }; await paintAddons(); out.offline = box().textContent;
+      window.pcCall = orig; if (!had) box().remove(); else box().innerHTML = ""; window.upscaleOk = window.searxOk = false;
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.rows !== 4 || o.btns.slice(0, 3).join() !== "Download (64 MB),Download (534 MB),Download (57 MB)" || o.btns[3] !== "") bad.push("rows " + JSON.stringify([o.rows, o.btns]));
+    if (!/Real-ESRGAN/.test(o.text) || !/Kokoro/.test(o.text) || !/SearXNG/.test(o.text) || !/built into Windows/.test(o.text)) bad.push("names " + o.text.slice(0, 120));
+    if (!/Downloading… 49%/.test(o.running) || !/voice model… 25%/.test(o.running) || !/Installing what it needs/.test(o.running)) bad.push("progress " + o.running.slice(0, 300));
+    if (o.ok.join() !== "Remove,Remove,Remove" || o.voice !== "bm_george" || o.on !== true || o.flags.join() !== "true,true") bad.push("installed " + JSON.stringify([o.ok, o.voice, o.on, o.flags]));
+    if (!/Needs the picture engine/.test(o.noComfy) || !/btn=0/.test(o.noComfy) || !/Not enough free disk space/.test(o.err)) bad.push("no ComfyUI / error " + o.noComfy.slice(-60));
+    if (!/Connect to your PC/.test(o.offline)) bad.push("offline " + o.offline);
+    return bad.length ? bad.join(" | ") : true;
+  });
+  await tryIt("pictures get a Sharper button once the sharpener is installed, and it swaps in the sharper picture", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const orig = window.pcCall, out = {}, px = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+      const m = { role: "assistant", genImage: px, prompt: "a cat" };
+      const d = botBubble(m, 0); document.body.appendChild(d);
+      window.upscaleOk = false; fillBot(d, m, 0); out.before = !!d.querySelector('.actions [aria-label^="Make it sharper"]');
+      window.upscaleOk = true; fillBot(d, m, 0); const b = d.querySelector('.actions [aria-label^="Make it sharper"]'); out.after = !!b;
+      let sent = null; window.pcCall = async (path, body) => { sent = [path, body.scale, body.image === px]; return { image: px + "", width: 2048, height: 2048, pcFile: { rel: "Pictures/x-sharper-2x.png" } }; };
+      const keepRender = window.renderMessages, keepSave = window.saveChats; window.renderMessages = () => {}; window.saveChats = () => {};
+      await sharpen(m, b); out.sent = sent; out.sharper = m.sharper;
+      fillBot(d, m, 0); out.again = !!d.querySelector('.actions [aria-label^="Make it sharper"]');
+      window.renderMessages = keepRender; window.saveChats = keepSave; window.pcCall = orig; window.upscaleOk = false; d.remove();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.before || !o.after) bad.push("button " + [o.before, o.after]);
+    if (!o.sent || o.sent[0] !== "/agent/upscale/run" || o.sent[1] !== 2 || !o.sent[2]) bad.push("request " + JSON.stringify(o.sent));
+    if (!o.sharper || o.sharper.width !== 2048 || o.sharper.file !== "Pictures/x-sharper-2x.png") bad.push("result " + JSON.stringify(o.sharper));
+    if (o.again) bad.push("still offers Sharper on a sharpened picture");
+    return bad.length ? bad.join(" | ") : true;
+  });
+  await tryIt("web searches go to SearXNG on the PC first when it is installed", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const orig = window.pcCall, keepConn = connected, keepFetch = window.fetch, calls = [];
+      window.pcCall = async (path, body) => { calls.push(path + ":" + body.query); return { results: [{ title: "t", url: "https://example.org/" }], via: "searxng" }; };
+      window.fetch = async () => { calls.push("server"); return new Response("{}", { status: 500 }); };
+      connected = true; window.searxOk = true;
+      const j = await webTool("web_search", { query: "rtx 5070" });
+      window.searxOk = false; calls.push("--");
+      await webTool("web_search", { query: "rtx 5070" }).catch(() => {});
+      connected = keepConn; window.pcCall = orig; window.fetch = keepFetch;
+      return JSON.stringify({ via: j.via, calls });
+    })()`));
+    return (o.via === "searxng" && o.calls[0] === "/agent/search:rtx 5070" && o.calls[1] === "--" && o.calls.slice(2).includes("server")) || "calls " + JSON.stringify(o);
+  });
   await tryIt("help: every tour step points at something that exists", async () => {
     const T = w.AlbatrossTour;
     if (!T || !T.TOPICS.length) return "no tours";

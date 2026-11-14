@@ -1,14 +1,17 @@
 // "Ask your documents": the folders the user picks (inside their own user folder) are read, their text is cut into passages, and
 // each passage gets an embedding from a small Ollama model (embeddinggemma), all on this PC. A question then finds the passages
 // that mean the closest thing, and the website's AI answers from them, naming the files.
-// Reads: txt, md, csv, json, html, docx, pptx, xlsx, pdf. Never changes or deletes anything.
+// Reads: txt, md, csv, json, html, docx, pptx, xlsx, pdf, and on Windows also scans: pictures of pages (png, jpg, tif, bmp, gif) and
+// PDF pages without text of their own go through the text reader built into Windows (host/ocr.ps1). Never changes or deletes anything.
 // Kept in <LocalAppData>\Albatross\docs (config.json: the folders; index.json: the passages and their embeddings).
 const fs = require("fs"), path = require("path"), os = require("os"), zlib = require("zlib");
 
 const DIR = process.env.ALB_DOCS_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "docs");
 const CONFIG = path.join(DIR, "config.json"), INDEX = path.join(DIR, "index.json");
 const MODEL = "embeddinggemma", V = 2;           // V: raise when what goes into an embedding changes, so everything is read again
-const EXT = /\.(txt|md|markdown|csv|json|html?|docx|pptx|xlsx|pdf)$/i, SKIP_DIR = /^(node_modules|\.git|\$recycle\.bin|appdata|\.cache|__pycache__|venv|\.venv)$/i;
+const OCR_ON = process.platform === "win32" && !process.env.ALB_NO_OCR;
+const PICS = /\.(png|jpe?g|bmp|tiff?|gif)$/i;
+const EXT = OCR_ON ? /\.(txt|md|markdown|csv|json|html?|docx|pptx|xlsx|pdf|png|jpe?g|bmp|tiff?|gif)$/i : /\.(txt|md|markdown|csv|json|html?|docx|pptx|xlsx|pdf)$/i, SKIP_DIR = /^(node_modules|\.git|\$recycle\.bin|appdata|\.cache|__pycache__|venv|\.venv)$/i;
 const MAX_FILES = 4000, MAX_BYTES = 40 * 1024 * 1024, CHUNK = 900, OVERLAP = 150;
 let OLLAMA = "http://127.0.0.1:11434";
 
@@ -61,10 +64,34 @@ async function pdfPages(buf) {
   await doc.destroy();
   return pages;
 }
-// [{ text, page }] for a file ("page" is a page or slide number where it helps)
+// The text reader built into Windows, for scans: { page: text }. pages = the PDF pages to read (none = a picture, or every page).
+function ocr(file, pages = []) {
+  return new Promise((ok, fail) => require("child_process").execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path.join(__dirname, "ocr.ps1"), "-File", file, "-Pages", pages.join(",")],
+    { windowsHide: true, timeout: 60000 + pages.length * 8000, maxBuffer: 32e6 }, (e, out) => {
+      let j = null; try { j = JSON.parse(String(out).trim().split(/\r?\n/).filter((l) => l.startsWith("{")).pop()); } catch {}
+      if (!j) return fail(new Error(e ? "The text reader failed: " + e.message.slice(0, 80) : "The text reader gave no answer"));
+      if (j.error) return fail(new Error(j.error));
+      const res = {}; for (const x of [].concat(j.pages || [])) res[x.page] = String(x.text || ""); ok(res);
+    }));
+}
+// [{ text, page, ocr }] for a file ("page" is a page or slide number where it helps; ocr: read from a scan)
 async function extract(file) {
-  const ext = path.extname(file).slice(1).toLowerCase(), buf = fs.readFileSync(file);
-  if (ext === "pdf") return (await pdfPages(buf)).map((t, i) => ({ text: t, page: i + 1 }));
+  const ext = path.extname(file).slice(1).toLowerCase();
+  if (PICS.test(file)) {
+    if (!OCR_ON || fs.statSync(file).size < 8000) return [];          // icons and thumbnails: nothing to read
+    const t = (await ocr(file))[0] || "";
+    return t.replace(/\s+/g, " ").trim().length >= 40 ? [{ text: t, page: 0, ocr: true }] : [];   // a photo with a word or two isn't a document
+  }
+  const buf = fs.readFileSync(file);
+  if (ext === "pdf") {
+    const pages = (await pdfPages(buf)).map((t, i) => ({ text: t, page: i + 1 }));
+    // pages without text of their own are scans (or photos of pages): read what is printed on them
+    const empty = pages.filter((x) => x.text.replace(/\s+/g, "").length < 30).map((x) => x.page);
+    if (OCR_ON && empty.length) {
+      try { const read = await ocr(file, empty.slice(0, 200)); for (const x of pages) if (read[x.page]) { x.text = read[x.page]; x.ocr = true; } } catch {}
+    }
+    return pages;
+  }
   if (ext === "docx") { const z = unzip(buf); return [{ text: xmlText(z["word/document.xml"] || "", "w:p") }]; }
   if (ext === "pptx") { const z = unzip(buf); return Object.keys(z).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => parseInt(a.match(/\d+/)) - parseInt(b.match(/\d+/))).map((n) => ({ text: xmlText(z[n], "a:p"), page: parseInt(n.match(/\d+/)) })); }
   if (ext === "xlsx") { const z = unzip(buf); return [{ text: xmlText(z["xl/sharedStrings.xml"] || "", "si") }]; }
@@ -119,15 +146,16 @@ async function runIndex(note) {
     const files = []; for (const f of config().folders) walk(f, files);
     const keep = new Set(files);
     for (const f of Object.keys(index.files)) if (!keep.has(f)) { delete index.files[f]; state.removed++; }
-    const todo = files.filter((f) => { try { const st = fs.statSync(f); const old = index.files[f]; return st.size <= MAX_BYTES && (!old || old.mtime !== st.mtimeMs || old.size !== st.size); } catch { return false; } });
+    // PDFs read before scans could be read (no "o" mark) are read once more, for their scanned pages
+    const todo = files.filter((f) => { try { const st = fs.statSync(f); const old = index.files[f]; return st.size <= MAX_BYTES && (!old || old.mtime !== st.mtimeMs || old.size !== st.size || (OCR_ON && /\.pdf$/i.test(f) && !old.o)); } catch { return false; } });
     state.total = todo.length;
     let sinceSave = 0;
     for (const f of todo) {
       state.file = path.basename(f);
       try {
-        const st = fs.statSync(f), cs = chunks(await extract(f));
+        const st = fs.statSync(f), parts = await extract(f), cs = chunks(parts);
         for (let i = 0; i < cs.length; i += 32) { const vs = await embed(cs.slice(i, i + 32).map((c) => `title: ${path.basename(f)} | text: ${c.t}`)); vs.forEach((v, k) => (cs[i + k].e = pack(v))); }
-        index.files[f] = { mtime: st.mtimeMs, size: st.size, chunks: cs }; state.added++;
+        index.files[f] = { mtime: st.mtimeMs, size: st.size, chunks: cs, ...(OCR_ON ? { o: 1 } : {}), ...(parts.some((x) => x.ocr) ? { scan: true } : {}) }; state.added++;
       } catch (e) { if (/search model/.test(e.message)) throw e; index.files[f] = { mtime: -1, size: -1, chunks: [], error: e.message.slice(0, 120) }; }
       state.done++; vecCache = null;
       if (++sinceSave >= 25) { saveIndex(); sinceSave = 0; }
@@ -144,7 +172,7 @@ function search(q, vec, k) {
   const out = [], perFile = {}, floor = Math.max(0.2, (hits[0]?.s || 0) * 0.55);   // weak matches only add noise
   for (const { h, s } of hits) {                      // at most 3 passages from one file, so several files can speak
     if (out.length >= k || s < floor) break; if ((perFile[h.f] = (perFile[h.f] || 0) + 1) > 3) continue;
-    out.push({ file: path.basename(h.f), path: h.f, page: h.c.p || 0, text: h.c.t, score: Math.round(s * 1000) / 1000 });
+    out.push({ file: path.basename(h.f), path: h.f, page: h.c.p || 0, text: h.c.t, score: Math.round(s * 1000) / 1000, ...(index.files[h.f]?.scan ? { scan: true } : {}) });
   }
   return out;
 }
@@ -155,7 +183,7 @@ async function handle(method, p, body, note, opts) {
   try {
     if (p === "/agent/docs/status") {
       loadIndex(); const files = Object.values(index.files);
-      return [200, { folders: config().folders, home: os.homedir(), model: MODEL, hasModel: await hasModel(), files: files.filter((x) => x.chunks.length).length, failed: files.filter((x) => x.error).length, passages: files.reduce((n, x) => n + x.chunks.length, 0), ...state }];
+      return [200, { folders: config().folders, home: os.homedir(), model: MODEL, scans: OCR_ON, scanned: files.filter((x) => x.scan).length, hasModel: await hasModel(), files: files.filter((x) => x.chunks.length).length, failed: files.filter((x) => x.error).length, passages: files.reduce((n, x) => n + x.chunks.length, 0), ...state }];
     }
     if (p === "/agent/docs/folders") {
       const list = (Array.isArray(j.folders) ? j.folders : []).slice(0, 20).map(checkFolder);
@@ -177,4 +205,4 @@ async function handle(method, p, body, note, opts) {
   } catch (e) { return [400, { error: e.message }]; }
   return [404, { error: "Unknown documents request" }];
 }
-module.exports = { handle, extract, chunks, unzip, _test: { runIndex, state } };
+module.exports = { handle, extract, chunks, unzip, ocr, _test: { runIndex, state } };

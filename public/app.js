@@ -926,7 +926,7 @@ window.moveSharedChats = async () => {
 // shared: without the account (only for moving the shared chats into it)
 // How long a request to the PC may take before we give up (so nothing keeps "loading" forever when the PC is busy, asleep or
 // offline). Jobs that are slow by nature get longer.
-const PC_SLOW = /^\/agent\/(docs\/(pull|index)|run|print|upload|mail\/send)|^\/browser\/(open|act|start)|^\/pc\/(shutdown|sleep)/;
+const PC_SLOW = /^\/agent\/(docs\/(pull|index)|upscale\/run|kokoro\/try|run|print|upload|mail\/send)|^\/browser\/(open|act|start)|^\/pc\/(shutdown|sleep)/;
 async function pcCall(path, body, method = "POST", shared = false) {
   if (ACCT_PATHS.test(path) && !shared) {
     const t = await acctToken();
@@ -1536,6 +1536,7 @@ function fillBot(d, m, idx, live) {
   a.innerHTML = "";
   if (live) return;
   if (m.genImage) a.appendChild(actBtn(ICON.dl, "Download image", () => download("burrow-image.png", b64ToBlob(m.genImage, "image/png"))));
+  if (m.genImage && window.upscaleOk && !m.sharper && !guestMode) a.appendChild(actBtn(ICON_SHARP, "Make it sharper (2× larger, Real-ESRGAN)", (e) => sharpen(m, e.currentTarget)));
   else {
     a.appendChild(actBtn(ICON.copy, "Copy", () => copy(m.content)));
     if ("speechSynthesis" in window) a.appendChild(actBtn(ICON.speak, "Read aloud", () => speak(m.content)));
@@ -3026,6 +3027,8 @@ async function webTool(name, args, signal) {
   // you can watch it: the search runs in a tab of its own in the browser (your page stays); falls back to the quiet search
   const vis = name === "web_search" && connected && !guestMode && window.visibleSearchVia && window.visibleSearchVia();
   if (vis) { try { const j = await pcCall("/browser/search", { query: args.query, ...(vis === "ext" ? { via: "ext" } : {}) }); if (j.results && j.results.length) return j; } catch (e) { if (e.name === "AbortError") throw e; } }
+  // SearXNG on your PC (Settings → Tools → Add-ons): many search engines at once, free, no captchas
+  if (name === "web_search" && window.searxOk && connected && !guestMode) { try { const j = await pcCall("/agent/search", { query: args.query, max: args.max_results }); if (j.results && j.results.length) return j; } catch (e) { if (e.name === "AbortError") throw e; } }
   try {
     const r = await fetch(toolsBase() + "/tools/" + name, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args), signal });
     const j = await r.json().catch(() => ({}));
@@ -4914,7 +4917,7 @@ async function paintDocs() {
   const box = $("#docsBox"); if (!box) return;
   const j = await checkDocs();
   if (!j) { box.innerHTML = '<div class="note" style="margin:0">Connect to your PC (with the Albatross host running) to pick folders.</div>'; return; }
-  const status = j.running ? `Reading ${j.done} of ${j.total}${j.file ? ": " + j.file : ""}…` : j.error ? "⚠ " + j.error : j.files ? `${j.files} file${j.files === 1 ? "" : "s"} ready (${j.passages} passages)${j.failed ? `, ${j.failed} couldn't be read` : ""}` : j.folders.length ? "Not read yet: press Read now." : "No folders yet.";
+  const status = (j.running ? `Reading ${j.done} of ${j.total}${j.file ? ": " + j.file : ""}…` : j.error ? "⚠ " + j.error : j.files ? `${j.files} file${j.files === 1 ? "" : "s"} ready (${j.passages} passages${j.scanned ? `, ${j.scanned} read from scans` : ""})${j.failed ? `, ${j.failed} couldn't be read` : ""}` : j.folders.length ? "Not read yet: press Read now." : "No folders yet.") + (j.scans && !j.running && !j.error ? " Scans and photos of pages are read too." : "");
   box.innerHTML = `<div class="docs-folders"></div>
     <div class="row"><input id="docsNew" placeholder="${j.home}\\Documents\\School" autocomplete="off" style="flex:1 1 240px"><button class="btn small" id="docsAdd" type="button">Add folder</button></div>
     <div class="row" style="align-items:center">${j.folders.length ? `<button class="btn small primary" id="docsIndex" type="button"${j.running ? " disabled" : ""}>Read now</button>` : ""}${j.hasModel ? "" : '<button class="btn small" id="docsPull" type="button">Download the search model (0.6 GB)</button>'}<small class="docs-st"></small></div>`;
@@ -4935,7 +4938,7 @@ async function paintDocs() {
   clearTimeout(docsPoll);
   if (j.running && $("#settings").open) docsPoll = setTimeout(paintDocs, 1500);
 }
-function fillToolSwitches() { paintDocs(); paintDeckPreset(); paintMusicSetup(); $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
+function fillToolSwitches() { paintDocs(); paintDeckPreset(); paintMusicSetup(); paintAddons(); $("#glassOn").checked = S.glass !== false; $("#starsOn").checked = S.stars !== false; for (const el of $$("[data-tool]")) el.checked = toolOn(el.dataset.tool); }
 for (const el of $$("[data-tool]")) el.onchange = () => { S.tools = { ...(S.tools || {}), [el.dataset.tool]: el.checked }; saveSettings(); };
 const _openSettings = openSettings;
 openSettings = function (tab) { fillToolSwitches(); return _openSettings(tab); };
@@ -6644,8 +6647,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.15";
+const APP_VERSION = "2026-11-14.16";
 const WHATS_NEW = [
+  ["2026-11-14.16", ["Add-ons in Settings → Tools, open source and on your PC, one click each: a Sharper button on pictures (Real-ESRGAN), a natural voice for answers read aloud (Kokoro), and better web search that asks many search engines at once (SearXNG)","Documents: scanned PDFs and photos of pages are read too, with the text reader built into Windows"]],
   ["2026-11-14.15", ["Thinking no longer shows up as the answer: reasoning a model writes into its reply (<think> tags and similar) goes into the thinking box, and Max's final check can't replace your answer with a remark"]],
   ["2026-11-14.14", ["Help tab in Settings: guided tours of Albatross and a What's this? mode that explains whatever you click","Help with my screen: the AI looks at the app you were using, describes it, and points at the important parts with glowing frames on your real screen (Windows app)","A warning card in front of your other apps when something slows Albatross down or stops it, with a fix when there is one"]],
   ["2026-11-14.13", ["Settings → Tools → Music: download the AI song model and the better sound banks with one click on any PC (a download that stops carries on where it left off)"]],
@@ -6856,3 +6860,71 @@ async function paintHealthToggle() {
 }
 document.querySelector('#settings .tabs [data-tab="help"]')?.addEventListener("click", paintHealthToggle);
 paintHealthToggle();
+
+// ---------- Add-ons: open-source tools that run on your PC (Settings → Tools) ----------
+// Sharper pictures (Real-ESRGAN, BSD-3), a natural voice (Kokoro, Apache-2.0), better web search (SearXNG, AGPL-3.0). Each is one
+// click to download and lives in its own folder on the PC (host/comfy.js, host/kokoro.js, host/searxng.js). Reading scans needs no
+// download: Windows has a text reader built in (host/ocr.ps1).
+const ICON_SHARP = '<svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/><path d="M14 4h6v6M10 20H4v-6"/></svg>';
+let addonsChecked = 0, addonsPoll = 0;
+async function refreshAddons(force) {
+  if (!connected || guestMode || (!force && Date.now() - addonsChecked < 60e3)) return;
+  addonsChecked = Date.now();
+  const was = !!window.upscaleOk;
+  const [up, sx] = await Promise.all([pcCall("/agent/upscale/status", {}).catch(() => ({})), pcCall("/agent/searxng/status", {}).catch(() => ({}))]);
+  window.upscaleOk = !!up.installed; window.searxOk = !!sx.installed;
+  if (was !== window.upscaleOk && current && current.messages.some((m) => m.genImage)) renderMessages();
+}
+setTimeout(() => refreshAddons(true), 4000);
+setInterval(() => refreshAddons(), 60e3);
+// the Sharper button: Real-ESRGAN draws the picture 4× with real detail, then it's scaled to 2×. The sharper one replaces the picture
+// in the chat (and is saved on the PC in Downloads → Albatross → Pictures); a very large one stays on the PC only, to spare the chat.
+async function sharpen(m, btn) {
+  if (btn) { btn.disabled = true; btn.classList.add("busy"); }
+  toast("Making it sharper… (the first time takes about half a minute)");
+  try {
+    const r = await pcCall("/agent/upscale/run", { image: m.genImage, scale: 2 });
+    m.sharper = { width: r.width, height: r.height, file: r.pcFile ? r.pcFile.rel : "" };
+    if (r.image.length < 12e6) { m.genImage = r.image; m.genAt = Date.now(); }
+    saveChats(); renderMessages();
+    toast(`Sharper: ${r.width}×${r.height}` + (r.pcFile ? " · saved in Downloads → Albatross → " + r.pcFile.rel : ""));
+  } catch (e) { toast("Couldn't make it sharper: " + e.message); if (btn) { btn.disabled = false; btn.classList.remove("busy"); } }
+}
+async function paintAddons() {
+  const box = $("#addonsBox"); if (!box) return;
+  if (guestMode) { box.innerHTML = ""; return; }
+  let up, kk, sx, docs;
+  try { [up, kk, sx, docs] = await Promise.all([pcCall("/agent/upscale/status", {}), pcCall("/agent/kokoro/status", {}), pcCall("/agent/searxng/status", {}), pcCall("/agent/docs/status", {}).catch(() => ({}))]); }
+  catch { box.innerHTML = '<small>Add-ons</small><div class="note" style="margin:0">Connect to your PC (with the Albatross host running, updated) to add open-source tools.</div>'; return; }
+  window.upscaleOk = !!up.installed; window.searxOk = !!sx.installed;
+  const mb = (n) => n >= 1e9 ? (n / 1073741824).toFixed(1) + " GB" : Math.round(n / 1048576) + " MB", pct = (d) => Math.round((d.got || 0) / Math.max(1, d.total || 1) * 100);
+  const items = [
+    { id: "upscale", title: "Sharper pictures · Real-ESRGAN", about: "Adds a Sharper button to every picture in the chat: twice the size, with real detail instead of blur. BSD-3. Runs in the picture engine (ComfyUI).",
+      state: up.installed ? "ok" : up.download?.running ? "run" : !up.hasComfy ? "no" : "get", note: up.download?.running ? `Downloading… ${pct(up.download)}%` : !up.installed && !up.hasComfy ? "Needs the picture engine (ComfyUI), which isn't on this PC" : up.download?.error || (up.installed ? "Installed" : ""), size: mb(up.sizeBytes || 67e6) },
+    { id: "kokoro", title: "Natural voice · Kokoro", about: "Reads answers aloud like a person instead of a voice assistant, in English, Spanish, French, Italian, Portuguese, Hindi, Japanese and Chinese (German stays with the classic voice). Apache-2.0. On the processor.",
+      state: kk.installed ? "ok" : kk.install?.running ? "run" : "get", note: kk.install?.running ? `${kk.install.step} ${kk.install.total && /Download/.test(kk.install.step) ? pct(kk.install) + "%" : ""}` : kk.install?.error || (kk.installed ? "Installed" : ""), size: mb(kk.sizeBytes || 560e6) },
+    { id: "searxng", title: "Better web search · SearXNG", about: "The AI's web searches ask Google, Brave, Bing, Wikipedia and more at once, on your PC: free, private, and no captchas. AGPL-3.0. Starts with the first search.",
+      state: sx.installed ? "ok" : sx.install?.running ? "run" : "get", note: sx.install?.running ? sx.install.step : sx.install?.error || (sx.installed ? "Installed" : ""), size: mb(sx.sizeBytes || 60e6) },
+  ];
+  box.innerHTML = '<small>Add-ons (open source, on your PC)</small>' + items.map((x) => `<div class="mem-item" data-id="${x.id}"><span style="flex:1;min-width:0"><b>${esc(x.title)}</b><br><small>${esc(x.about)}</small>${x.note ? `<br><small class="mu-snote">${esc(x.note)}</small>` : ""}${x.id === "kokoro" && x.state === "ok" ? '<span class="row addon-voice" style="margin-top:6px;gap:6px;align-items:center"><select class="kk-voice"></select><button class="btn small kk-try" type="button">Listen</button><label style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="checkbox" class="kk-on"><small>Use it</small></label></span>' : ""}</span>${x.state === "ok" ? '<button class="btn small" data-a="rm" type="button">Remove</button>' : x.state === "get" ? `<button class="btn small primary" data-a="get" type="button">Download (${esc(x.size)})</button>` : x.state === "run" ? '<button class="btn small" disabled type="button">Installing…</button>' : ""}</div>`).join("") +
+    (docs && docs.scans ? '<div class="mem-item"><span style="flex:1;min-width:0"><b>Reading scans · built into Windows</b><br><small>Documents can now be photos of pages and scanned PDFs: Windows\' own text reader reads them on your PC. Nothing to download.</small></span></div>' : "");
+  box.querySelectorAll(".mem-item[data-id]").forEach((row) => {
+    const id = row.dataset.id, g = row.querySelector('[data-a="get"]'), r = row.querySelector('[data-a="rm"]');
+    if (g) g.onclick = async () => { g.disabled = true; try { await pcCall(`/agent/${id}/get`, {}); } catch (e) { toast(e.message); } paintAddons(); };
+    if (r) r.onclick = async () => { if (!confirm("Remove it from this PC? You can download it again later.")) return; try { await pcCall(`/agent/${id}/remove`, {}); } catch (e) { toast(e.message); } addonsChecked = 0; paintAddons(); };
+  });
+  const sel = box.querySelector(".kk-voice");
+  if (sel) {
+    sel.innerHTML = (kk.voices || []).map((v) => `<option value="${esc(v.id)}">${esc(v.name)}</option>`).join(""); sel.value = kk.voice;
+    sel.onchange = () => pcCall("/agent/kokoro/voice", { voice: sel.value }).catch((e) => toast(e.message));
+    const on = box.querySelector(".kk-on"); on.checked = kk.on !== false;
+    on.onchange = () => pcCall("/agent/kokoro/voice", { on: on.checked }).then(() => toast(on.checked ? "Answers are read with the natural voice" : "Answers are read with the classic voice")).catch((e) => toast(e.message));
+    box.querySelector(".kk-try").onclick = async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      try { const j = await pcCall("/agent/kokoro/try", { voice: sel.value }); new Audio("data:audio/wav;base64," + j.wav).play(); } catch (err) { toast(err.message); }
+      b.disabled = false;
+    };
+  }
+  clearTimeout(addonsPoll);
+  if ((up.download?.running || kk.install?.running || sx.install?.running) && $("#settings").open) addonsPoll = setTimeout(paintAddons, 1500);
+}

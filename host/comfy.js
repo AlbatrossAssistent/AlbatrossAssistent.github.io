@@ -578,4 +578,82 @@ async function songHandle(p, body) {
   return [404, { error: "Unknown music request" }];
 }
 
-module.exports = { _test: { fetchResumable }, songInstalled, songState, makeSong, serveSong, songHandle, MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };
+// ---------- Sharper pictures: Real-ESRGAN (xinntao/Real-ESRGAN, BSD-3-Clause), run by ComfyUI's own upscale nodes ----------
+// One click in Settings → Tools → Add-ons downloads the 64 MB model; then every picture in the chat gets a "Sharper" button.
+// It draws the picture 4× as large with real detail (not just blurrier pixels), then scales it back to 2× unless 4× is asked for.
+// Small enough to sit next to a loaded picture model, so it never restarts ComfyUI.
+const UPSCALE_FILE = ["upscale_models", "RealESRGAN_x4plus.pth"];
+const UPSCALE_URL = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth";
+const UPSCALE_MIN = 60e6, UPSCALE_SIZE = 67040989;
+const upscaleInstalled = () => hasPython() && fs.existsSync(M(...UPSCALE_FILE)) && fs.statSync(M(...UPSCALE_FILE)).size > UPSCALE_MIN;
+const upDl = { running: false, got: 0, total: 0, error: "" };
+let upscaling = false;
+function upscaleWorkflow(image, scale) {
+  const w = {
+    1: { class_type: "LoadImage", inputs: { image } },
+    2: { class_type: "UpscaleModelLoader", inputs: { model_name: UPSCALE_FILE[1] } },
+    3: { class_type: "ImageUpscaleWithModel", inputs: { upscale_model: ["2", 0], image: ["1", 0] } },
+  };
+  if (scale === 4) w[5] = { class_type: "SaveImage", inputs: { images: ["3", 0], filename_prefix: "albatross-sharper" } };
+  else {
+    w[4] = { class_type: "ImageScaleBy", inputs: { image: ["3", 0], upscale_method: "lanczos", scale_by: scale / 4 } };
+    w[5] = { class_type: "SaveImage", inputs: { images: ["4", 0], filename_prefix: "albatross-sharper" } };
+  }
+  return w;
+}
+async function upscale(body, log = () => {}) {
+  if (!upscaleInstalled()) throw new Error("The sharpener (Real-ESRGAN) isn't installed: download it in Settings → Tools → Add-ons");
+  if (upscaling) throw new Error("Already sharpening a picture: wait a moment");
+  const b64 = String(body.image || "").replace(/^data:[^,]+,/, "");
+  if (!b64 || b64.length > 30e6) throw new Error("No picture to sharpen");
+  const scale = Number(body.scale) === 4 ? 4 : 2, t0 = Date.now();
+  upscaling = true; busy++;
+  try {
+    await ensureRunning(log, () => {});
+    const [name] = await uploadRefs([b64]);
+    if (!name) throw new Error("The picture is too large to sharpen");
+    const r = await fetch(COMFY + "/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: upscaleWorkflow(name, scale), client_id: crypto.randomUUID() }) });
+    const j = await r.json();
+    if (!r.ok || !j.prompt_id) throw new Error(j.error?.message || JSON.stringify(j.node_errors || j).slice(0, 300));
+    let img = null;
+    for (let i = 0; i < 600 && !img; i++) {          // up to 5 minutes (a big picture on the processor alone)
+      await sleep(500);
+      const hist = (await (await fetch(COMFY + "/history/" + j.prompt_id)).json())[j.prompt_id];
+      if (hist?.status?.status_str === "error") throw new Error((hist.status.messages || []).map((m) => m[1]?.exception_message).filter(Boolean)[0] || "ComfyUI couldn't sharpen it");
+      img = Object.values(hist?.outputs || {}).flatMap((o) => o.images || [])[0];
+    }
+    if (!img) throw new Error("Sharpening took too long");
+    const q = new URLSearchParams({ filename: img.filename, subfolder: img.subfolder || "", type: img.type || "output" });
+    const png = Buffer.from(await (await fetch(COMFY + "/view?" + q)).arrayBuffer());
+    const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+    let pcFile = null;
+    try {
+      const dir = path.join(process.env.ALBATROSS_FILES || path.join(os.homedir(), "Downloads", "Albatross"), "Pictures");
+      fs.mkdirSync(dir, { recursive: true });
+      const fname = `${new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19)}-sharper-${scale}x.png`, full = path.join(dir, fname);
+      fs.writeFileSync(full, png);
+      pcFile = { kind: "image", name: fname, path: full, rel: "Pictures/" + fname, size: png.length };
+    } catch {}
+    try { fs.unlinkSync(path.join(COMFY_DIR, "ComfyUI", "output", img.subfolder || "", img.filename)); } catch {}   // the copy above is the one that's kept
+    log(`Sharpened a picture to ${width}×${height} in ${Math.round((Date.now() - t0) / 1000)} s`);
+    return { image: png.toString("base64"), width, height, scale, pcFile, took: Math.round((Date.now() - t0) / 1000) };
+  } finally { upscaling = false; busy--; lastUsed = Date.now(); }
+}
+async function upscaleHandle(p, body) {
+  let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+  try {
+    if (p === "/agent/upscale/status") return [200, { installed: upscaleInstalled(), hasComfy: hasPython(), sizeBytes: UPSCALE_SIZE, busy: upscaling, download: { ...upDl } }];
+    if (p === "/agent/upscale/get") {
+      if (upscaleInstalled() || upDl.running) return [200, { started: true }];
+      if (!hasPython()) throw new Error("ComfyUI (the picture engine) isn't on this PC, and the sharpener runs inside it");
+      fs.mkdirSync(M(UPSCALE_FILE[0]), { recursive: true });
+      fetchResumable(UPSCALE_URL, M(...UPSCALE_FILE), UPSCALE_MIN, upDl, (err) => { if (!err) console.log("[upscale] downloaded Real-ESRGAN"); });
+      return [200, { started: true }];
+    }
+    if (p === "/agent/upscale/remove") { if (upscaling || upDl.running) throw new Error("It is busy: wait until it is done"); try { fs.unlinkSync(M(...UPSCALE_FILE)); } catch {} return [200, { removed: true }]; }
+    if (p === "/agent/upscale/run") return [200, await upscale(j, (t) => console.log("[upscale] " + t))];
+  } catch (e) { return [400, { error: e.message }]; }
+  return [404, { error: "Unknown sharpen request" }];
+}
+
+module.exports = { upscaleHandle, upscaleInstalled, _test: { fetchResumable, upscaleWorkflow }, songInstalled, songState, makeSong, serveSong, songHandle, MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };
