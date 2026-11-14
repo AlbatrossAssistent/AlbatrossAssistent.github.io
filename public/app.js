@@ -6087,8 +6087,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-14.5";
+const APP_VERSION = "2026-11-14.6";
 const WHATS_NEW = [
+  ["2026-11-14.6", ["Google sign-in no longer hangs after you pick your account"]],
   ["2026-11-14.5", ["New opening screen: shows what's happening (connecting to your PC) with a bar, light and dark, in your accent colour; an updating screen when you update"]],
   ["2026-11-14.4", ["Google sign-in through the browser; new opening and updating screens"]],
   ["2026-11-14.3", ["Google sign-in works in the Windows app"]],

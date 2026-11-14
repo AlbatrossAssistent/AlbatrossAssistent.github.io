@@ -24,7 +24,7 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
     for (const [k, v] of signins) if (Date.now() - v.at > 15 * 60e3) signins.delete(k);
     if (req.method === "GET" && p === "/signin") {
       if (host !== "localhost") { res.writeHead(302, { Location: `http://localhost:${port}/signin?${q}` }); return res.end(); }
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "strict-origin-when-cross-origin" });   // Firebase's helper frame checks who embeds it by the referrer (only the origin goes out, never ?s=)
       return fs.createReadStream(path.join(__dirname, "signin.html")).pipe(res);
     }
     if (req.method === "GET" && p === "/signin/take") {            // the app, every second or two: 204 = not yet
