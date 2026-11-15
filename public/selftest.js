@@ -492,8 +492,10 @@ window.albatrossSelfTest = async function (w) {
       out.offered = !!(sent && JSON.stringify(sent).includes("redstone_design"));
       out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.length === 5);
       const vis = [...document.querySelectorAll(".rs-vis")].pop();
-      out.shown = !!vis && vis.querySelectorAll(".lever").length === 2 && vis.querySelectorAll("tbody tr").length === 4;
-      if (vis) { vis.querySelector(".lever").dispatchEvent(new MouseEvent("click", { bubbles: true })); await new Promise(r => setTimeout(r, 1200)); out.lit = !!vis.querySelector("[data-lamp].on"); }
+      out.shown = !!vis && !!vis.querySelector(".rs-3d canvas") && vis.querySelectorAll(".rs-3d tbody tr").length === 4 && vis.querySelectorAll(".lever").length === 2;
+      if (vis) { vis.querySelector(".rs-3d tbody tr:nth-child(3)").click(); await new Promise(r => setTimeout(r, 3500)); out.lit = /Lamp is <b>ON/.test(vis.querySelector(".rs-3d .rs-status").innerHTML); }
+      // every build must pass its own redstone simulation, wires crossing on bridges included
+      out.builds = ["a and b", "a xor b", "(a and b) or not c", "a xor b xor c", "(a or b) and (c or d)"].map(e => { try { const L = redstoneLayout(redstonePlan({ circuit: e }).spec); return L.counts.torches > 0; } catch (x) { return e + ": " + x.message; } }).filter(x => x !== true);
       out.answer = m.content;
       current.messages.splice(-2, 2); window.chatApi = origApi; window.getCaps = origCaps; saveChats();
       return JSON.stringify(out);
@@ -503,6 +505,7 @@ window.albatrossSelfTest = async function (w) {
     if (!o.block) bad.push("no redstone block in the answer");
     if (!o.shown) bad.push("the diagram isn't on the page");
     if (!o.lit) bad.push("switching lever a didn't light the lamp");
+    if (o.builds && o.builds.length) bad.push("3D builds failed: " + o.builds.join("; "));
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
   await sleep(300);

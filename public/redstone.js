@@ -47,7 +47,7 @@
   function build(ast) {
     const gates = [], memo = new Map(), vars = [];
     const gate = (ins) => {
-      ins = [...ins].sort();
+      ins = [...new Set(ins)].sort();      // "a and a": both inputs the same wire is one input
       const k = ins.join(",");
       if (!memo.has(k)) { memo.set(k, "T" + (gates.length + 1)); gates.push({ name: memo.get(k), ins }); }
       return memo.get(k);
@@ -70,7 +70,15 @@
         case "xnor": return NOT(XOR(a, b));
       }
     }
-    const out = go(ast);
+    let out = go(ast);
+    // keep only the torches the output needs ("not not a" leaves one behind), numbered T1, T2, ... again
+    const need = new Set(), mark = (x) => { if (need.has(x)) return; need.add(x); const g = byName(x); if (g) g.ins.forEach(mark); };
+    mark(out);
+    const kept = gates.filter((g) => need.has(g.name)), rename = {};
+    kept.forEach((g, i) => (rename[g.name] = "T" + (i + 1)));
+    const rn = (x) => rename[x] || x;
+    gates.length = 0; for (const g of kept) gates.push({ name: rn(g.name), ins: g.ins.map(rn) });
+    out = rn(out);
     if (gates.length > MAX_GATES) throw new Error(`That needs ${gates.length} gates; keep it under ${MAX_GATES} or split it up.`);
     return { vars, gates, out };
   }
@@ -118,9 +126,11 @@
       "Torches (T1, T2, ...): each one is a solid block with a redstone torch on its side. The dust lines named in brackets run into that block. The torch is ON only while none of them is powered (one input = NOT, two = NOR). A torch's output is dust leading away from it:",
       wiring,
       "",
-      "The user sees an interactive diagram of this circuit under the tool step (levers to click, wires lighting up tick by tick, the truth table), so refer to it rather than redrawing it. Build tips: leave one block between neighbouring torches so they don't power each other's blocks; put a repeater in any dust line longer than 15 blocks (it adds 1 tick). Same for Java and Bedrock.",
     ].join("\n");
-    return { text, spec: { kind: "logic", expr: String(expr).trim(), vars: net.vars, gates: net.gates, out: net.out } };
+    const spec = { kind: "logic", expr: String(expr).trim(), vars: net.vars, gates: net.gates, out: net.out };
+    let built = "";
+    try { built = window.redstoneLayoutText ? window.redstoneLayoutText(spec) : ""; } catch (e) { built = "(No 3D build for this one: " + e.message + " The schematic is shown instead.)"; }
+    return { text: text + "\n\n" + (built ? built + "\n" : "") + "The user sees this circuit under the tool step: a 3D build they can turn and click (levers, dust lighting up tick by tick), a schematic tab and the truth table. Refer to it rather than redrawing it.", spec };
   }
 
   // ---------- ring clock ----------
@@ -210,6 +220,10 @@
 .rs-vis .rs-legend svg { margin: 0; }
 .rs-vis .rs-ctl { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .rs-vis .rs-warn { color: var(--danger); font-weight: 600; }
+.rs-vis .rs-inner { border: 0; padding: 0; background: none; }
+.rs-vis .rs-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--soft); }
+.rs-vis .rs-tabs button { font: 600 12px system-ui, sans-serif; border: 0; background: none; color: var(--muted); padding: 4px 10px; border-radius: 7px; cursor: pointer; }
+.rs-vis .rs-tabs button[aria-selected="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 `;
   function styleOnce() {
     if (document.getElementById("rs-style")) return;
@@ -229,8 +243,27 @@
     return box;
   }
 
-  // ---------- logic circuit ----------
+  // ---------- logic circuit: the 3D build (redstone3d.js) and the schematic, in two tabs ----------
   function logicVisual(spec) {
+    const d3 = window.redstone3D ? window.redstone3D(spec) : null, sch = schematic(spec);
+    if (!d3) return sch;
+    const box = document.createElement("div"); box.className = "rs-vis";
+    let d = depths({ vars: spec.vars, gates: spec.gates, out: spec.out })[spec.out] || 0;
+    try { d = window.redstoneLayout(spec).delay; } catch {}      // the build's own delay, repeaters included
+    box.innerHTML = `<div class="rs-head"><b>Redstone circuit</b><code></code><span class="rs-sub"></span><span style="flex:1"></span><span class="rs-tabs" role="tablist"><button type="button" role="tab" data-t="3d" aria-selected="true">3D build</button><button type="button" role="tab" data-t="sch" aria-selected="false">Schematic</button></span></div>`;
+    box.querySelector("code").textContent = spec.expr;
+    box.querySelector(".rs-sub").textContent = `${spec.gates.length} torch${spec.gates.length === 1 ? "" : "es"} · up to ${d} tick${d === 1 ? "" : "s"} delay (${(d * 0.1).toFixed(1)} s)`;
+    sch.classList.add("rs-inner"); sch.querySelector(".rs-head").remove(); sch.hidden = true;
+    box.append(d3, sch);
+    box.querySelectorAll(".rs-tabs button").forEach((b) => (b.onclick = () => {
+      const t = b.dataset.t;
+      box.querySelectorAll(".rs-tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+      d3.hidden = t !== "3d"; sch.hidden = t !== "sch";
+      if (t === "3d" && d3._resize) d3._resize();
+    }));
+    return box;
+  }
+  function schematic(spec) {
     const net = { vars: spec.vars, gates: spec.gates, out: spec.out };
     const dep = depths(net), maxD = Math.max(0, ...net.gates.map((g) => dep[g.name]));
     const COLW = 150, ROWH = 84, LEFT = 22, TOP = 62;
