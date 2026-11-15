@@ -22,7 +22,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Ollama's own updater (which has none) can't replace the files in use: updates failed half-way and
 // left Ollama without its engine. With a copy the updater never meets a locked file. The copy is
 // refreshed at the next start after an update, and only from a complete install.
-const RUNTIME = path.join(path.dirname(path.dirname(__dirname)), "ollama-runtime");
+// In the Windows app (ALBATROSS_DATA is set: %LOCALAPPDATA%\Albatross\host) the copy lives next to that data folder, never inside the
+// install folder: an app update replaces the install folder and used to delete the running Ollama's engine ("llama-server binary not found").
+const RUNTIME = path.join(process.env.ALBATROSS_DATA ? path.dirname(process.env.ALBATROSS_DATA) : path.dirname(path.dirname(__dirname)), "ollama-runtime");
 function runtimeCopy() {
   const src = path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama");
   const done = path.join(RUNTIME, "copied-from.txt"), exe = path.join(RUNTIME, "ollama.exe");
