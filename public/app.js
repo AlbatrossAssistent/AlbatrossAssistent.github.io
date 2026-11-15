@@ -3106,6 +3106,7 @@ const REDSTONE_EXPR_PROMPT = "You turn a Minecraft redstone request into ONE log
 async function chat(model, opts = {}) {
   const conv = current;
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
+  window.liveReply = reply;        // the reply being written: the voice conversation watches it to talk while the AI works
   const bubble = botBubble(reply, -1);
   $("#inner").appendChild(bubble);
   fillBot(bubble, reply, -1, true);
@@ -3378,6 +3379,7 @@ async function chat(model, opts = {}) {
     if (e.name !== "AbortError") errorBubble("Something went wrong: " + e.message); else stopped = true;
   } finally {
     controller = null; setBusy(false);
+    if (window.liveReply === reply) window.liveReply = null;
     delete reply.loading; delete reply.phase; delete reply.phaseText; delete reply.loadPct;
     reply.blocks.forEach(b => { b.active = false; b.done = true; delete b.fresh; delete b.start; delete b.userOpen; if (b.type === "deck" && b.deck) for (const sl of b.deck.slides) { delete sl.ready; delete sl.about; } });
     if (reply.content || reply.blocks.length) {
@@ -6723,8 +6725,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.9";
+const APP_VERSION = "2026-11-15.10";
 const WHATS_NEW = [
+  ["2026-11-15.10", ["Voice conversations are better: a new living circle that moves with your voice and with the AI's voice (blue while listening, purple thinking, amber looking things up, green speaking), the AI says things while it works (\"let me think about that\", \"that needs me to think longer\", \"let me look that up\", \"I found something on wikipedia.org\"), reads the answer sentence by sentence as it is written, and starts with \"According to ...\" when it used the web."]],
   ["2026-11-15.9", ["While the AI is thinking, its thoughts sit at the bottom of the reply and move to the top when it is done. Every circuit it makes in one reply is a draft under the thoughts, each one fully usable (newest open, older ones folded)."]],
   ["2026-11-15.8", ["Redstone circuits are now practical: the app builds them with the fewest torches (wires that meet are a free OR, so NAND is 2 torches and XOR 3), and common gates come as compact hand-made layouts on one level (XOR is 14 by 5 instead of 29 by 22). New: an RS latch (a memory) and a pulse generator."]],
   ["2026-11-15.7", ["Redstone circuits now show with any model, even ones without tool support (the app builds the circuit from the logic the model gives), and the left sidebar keeps Jarvis, Notes, Mail, Hub, Monitor, List and Host in one Tools menu."]],

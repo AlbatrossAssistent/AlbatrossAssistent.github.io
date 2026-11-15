@@ -577,6 +577,72 @@ window.albatrossSelfTest = async function (w) {
     if (!o.finalOrder) bad.push("the finished reply is in the wrong order");
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
+  await tryIt("voice conversation: names its sources, has things to say while it works, reads the answer as it is written, and the circle draws", async () => {
+    const o = JSON.parse(await w.eval(`(() => {
+      const V = voiceTest, out = {};
+      const blocks = [{ type: "search", query: "x", active: false, results: [{ url: "https://www.wikipedia.org/wiki/A" }, { url: "https://www.bbc.com/n" }, { url: "https://example.org/z" }] }, { type: "fetch", url: "https://docs.python.org/3/", active: false }];
+      out.sources = V.sourcesOf(blocks).join(",");
+      out.according = V.PH.en.according(["wikipedia.org", "bbc.com"], "en");
+      out.foundDe = V.PH.de.found(["wikipedia.org"], "de");
+      const text = "First sentence is here and it is quite long for a test. Second one follows right after it, ok. Third is incompl";
+      const a = V.nextPiece(text, 0, false), b = V.nextPiece(text, a.cut, false), c2 = V.nextPiece(text, a.cut, true);
+      out.piece = a.piece; out.second = b.piece; out.final = c2.piece;
+      out.short = V.nextPiece("Hi there. ", 0, false).piece + "|" + V.nextPiece("Hi there. ", 0, true).piece;
+      out.fillers = ["en", "de", "fr", "es", "it"].every(l => V.PH[l].first.length && V.PH[l].long.length === 2 && V.PH[l].search.length && V.PH[l].tool && V.PH[l].found([], l) && V.PH[l].according(["a.com"], l));
+      // the circle: draws something in every state without an error
+      const host = document.createElement("div"); document.body.appendChild(host);
+      let lvl = 0, orb = V.makeOrb(host, () => lvl), drew = [];
+      for (const st of ["loading", "listening", "thinking", "looking", "speaking"]) { orb.setState(st); lvl = st === "listening" || st === "speaking" ? 0.7 : 0; for (let i = 0; i < 6; i++) orb.draw(0.05); const cv = host.querySelector("canvas"), px = cv.getContext("2d").getImageData(cv.width / 2, cv.height / 2, 1, 1).data; drew.push(px[3] > 0); }
+      out.drew = drew.join(); orb.destroy(); out.gone = !host.querySelector("canvas"); host.remove();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.sources !== "wikipedia.org,docs.python.org" && o.sources !== "docs.python.org,wikipedia.org") bad.push("sources " + o.sources);
+    if (o.according !== "According to wikipedia dot org and bbc dot com, ") bad.push("according: " + o.according);
+    if (!/^Okay, ich habe etwas auf wikipedia Punkt org gefunden/.test(o.foundDe)) bad.push("german found: " + o.foundDe);
+    if (!/^First sentence is here and it is quite long for a test\. Second one follows right after it, ok\.$/.test(o.piece)) bad.push("first piece: " + o.piece);
+    if (o.second) bad.push("an unfinished third sentence was read: " + o.second);
+    if (o.final !== "Third is incompl") bad.push("the final piece should be the rest: " + o.final);
+    if (o.short !== "|Hi there.") bad.push("short pieces: " + o.short);
+    if (!o.fillers) bad.push("a language is missing its fillers");
+    if (o.drew !== "true,true,true,true,true" || !o.gone) bad.push("the circle: " + o.drew + " gone " + o.gone);
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
+  await tryIt("voice conversation: fillers while it thinks and searches, then the answer read as it is written, starting with its sources", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const V = voiceTest, said = [], origPc = window.pcCall, wait = (ms) => new Promise(r => setTimeout(r, ms));
+      const wav = "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";    // a silent, empty sound
+      window.pcCall = async (path, body) => { if (path === "/agent/voice/tts") { said.push(body.text); return { wav }; } return origPc(path, body); };
+      V.setTalking(true);
+      const reply = { role: "assistant", content: "", blocks: [{ type: "thinking", text: "hm", done: false }], phase: "thinking" };
+      window.liveReply = reply;
+      const talk = V.startTalk("en");
+      await wait(2500);                                   // thinking for a while: it says something
+      const search = { type: "search", query: "x", active: true, results: [] }; reply.blocks.push(search);
+      await wait(1200);                                   // it goes to look something up
+      search.active = false; search.results = [{ url: "https://www.wikipedia.org/wiki/A" }];
+      await wait(1200);                                   // it found something
+      reply.content = "The tower is 330 metres tall, which makes it one of the tallest in the city. It was finished in 1889. Visitors can";
+      await wait(1500);                                   // the answer is being written
+      reply.content += " go up by lift.";
+      const final = { role: "assistant", content: reply.content, blocks: reply.blocks };
+      await talk.finish(final);
+      window.pcCall = origPc; window.liveReply = null; V.setTalking(false);
+      return JSON.stringify({ said });
+    })()`));
+    const s = o.said, bad = [];
+    if (s.length < 4) bad.push("it said too little: " + JSON.stringify(s));
+    if (!/think|second|work/i.test(s[0] || "")) bad.push("the first thing should be a remark about thinking: " + s[0]);
+    if (!s.some(x => /look that up|check the web/i.test(x))) bad.push("nothing said when it went to search");
+    if (!s.some(x => /found something on wikipedia dot org/i.test(x))) bad.push("nothing said about the site it found");
+    const ans = s.findIndex(x => /^According to wikipedia dot org, The tower is 330 metres/.test(x));
+    if (ans < 0) bad.push("the answer didn't start with its source: " + JSON.stringify(s));
+    const all = s.join(" ");
+    if ((all.match(/According to/g) || []).length !== 1) bad.push("the source should be named once");
+    if (!/go up by lift\./.test(all)) bad.push("the end of the answer wasn't read");
+    if ((all.match(/It was finished in 1889/g) || []).length !== 1) bad.push("a sentence was read twice or not at all");
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;
