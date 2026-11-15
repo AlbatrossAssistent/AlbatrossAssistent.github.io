@@ -492,12 +492,13 @@ window.albatrossSelfTest = async function (w) {
       await chat("fake-model"); await new Promise(r => setTimeout(r, 200));
       const m = current.messages[current.messages.length - 1];
       out.offered = !!(sent && JSON.stringify(sent).includes("redstone_design"));
-      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.length === 5);
+      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.filter(g => !g.merge).length === 3);
       const vis = [...document.querySelectorAll(".rs-vis")].pop();
       out.shown = !!vis && !!vis.querySelector(".rs-3d canvas") && vis.querySelectorAll(".rs-3d tbody tr").length === 4 && vis.querySelectorAll(".lever").length === 2;
       if (vis) { vis.querySelector(".rs-3d tbody tr:nth-child(3)").click(); await new Promise(r => setTimeout(r, 3500)); out.lit = /Lamp is <b>ON/.test(vis.querySelector(".rs-3d .rs-status").innerHTML); }
       // every build must pass its own redstone simulation, wires crossing on bridges included
-      out.builds = ["a and b", "a xor b", "(a and b) or not c", "a xor b xor c", "(a or b) and (c or d)"].map(e => { try { const L = redstoneLayout(redstonePlan({ circuit: e }).spec); return L.counts.torches > 0; } catch (x) { return e + ": " + x.message; } }).filter(x => x !== true);
+      out.builds = ["a and b", "a xor b", "a nand b", "a or b or c", "(a and b) or not c", "a xor b xor c", "(a or b) and (c or d)", "rs latch", "pulse"].map(e => { try { const L = redstoneLayout(redstonePlan({ circuit: e }).spec); return L.counts.torches > 0; } catch (x) { return e + ": " + x.message; } }).filter(x => x !== true);
+      out.size = ["a xor b", "a nand b", "not a", "a and b and c", "rs latch"].map(e => { const sp = redstonePlan({ circuit: e }).spec, bx = redstoneLayout(sp).box; return e + ": " + sp.gates.filter(g => !g.merge).length + " torches, " + (bx.x1 - bx.x0 + 1) + "x" + (bx.z1 - bx.z0 + 1) + "x" + bx.y1; });
       out.answer = m.content;
       current.messages.splice(-2, 2); window.chatApi = origApi; window.getCaps = origCaps; saveChats();
       return JSON.stringify(out);
@@ -508,6 +509,8 @@ window.albatrossSelfTest = async function (w) {
     if (!o.shown) bad.push("the diagram isn't on the page");
     if (!o.lit) bad.push("switching lever a didn't light the lamp");
     if (o.builds && o.builds.length) bad.push("3D builds failed: " + o.builds.join("; "));
+    const want = { "a xor b": [3, 14, 5, 1], "a nand b": [2, 8, 3, 1], "not a": [1, 6, 1, 1], "a and b and c": [4, 11, 5, 1], "rs latch": [2, 8, 7, 1] };
+    for (const line of o.size || []) { const m = /^(.+): (d+) torches, (d+)x(d+)x(d+)$/.exec(line), w = m && want[m[1]]; if (!w || +m[2] !== w[0] || +m[3] > w[1] || +m[4] > w[2] || +m[5] > w[3]) bad.push("not the practical size: " + line); }
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
   await tryIt("a redstone circuit also shows for a model that can't use tools (the app builds it from the logic the model gives)", async () => {
@@ -523,7 +526,7 @@ window.albatrossSelfTest = async function (w) {
       await chat("fake-model"); await new Promise(r => setTimeout(r, 200));
       const m = current.messages[current.messages.length - 1];
       out.calls = calls; out.noTools = seen.every(b => !b.tools);
-      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.length === 5);
+      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.filter(g => !g.merge).length === 3);
       out.told = !!(seen[1] && JSON.stringify(seen[1].messages).includes("redstone circuit"));
       out.shown = !!document.querySelector(".rs-vis .rs-3d canvas");
       current.messages.splice(-2, 2); window.chatApi = origApi; window.getCaps = origCaps; saveChats();

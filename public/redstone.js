@@ -44,7 +44,7 @@
   }
 
   // ---------- NOR-only netlist ----------
-  function build(ast) {
+  function buildNaive(ast) {
     const gates = [], memo = new Map(), vars = [];
     const gate = (ins) => {
       ins = [...new Set(ins)].sort();      // "a and a": both inputs the same wire is one input
@@ -85,52 +85,187 @@
   // in the order gates are listed, every gate comes after its inputs (input names are never gate names, which start with "T" + digit)
   const isGate = (net, x) => !net.vars.includes(x);
 
-  // one redstone tick: every torch's next value is the NOR of its inputs now
+  // A "gate" is a redstone torch (it inverts: NOT, or NOR when several wires run into its block) or, with merge: true, wires that simply
+  // meet and join: an OR that costs no torch and no time.
+  const gateVal = (g, val) => { const any = g.ins.some((x) => val[x]); return g.merge ? (any ? 1 : 0) : any ? 0 : 1; };
+  // one redstone tick: every torch's next value follows its inputs now (a join follows at once)
   function tick(net, val) {
     const nx = { ...val };
-    for (const g of net.gates) nx[g.name] = g.ins.some((x) => val[x]) ? 0 : 1;
+    for (const g of net.gates) nx[g.name] = gateVal(g, val);
     return nx;
   }
   function settle(net, inputs, from) {
     let val = { ...(from || {}), ...inputs };
     for (const g of net.gates) if (!(g.name in val)) val[g.name] = 0;
-    for (let t = 0; t < net.gates.length + 3; t++) {
+    for (let t = 0; t < net.gates.length + 3 || (net.seq && t < 80); t++) {
       const nx = tick(net, val);
       if (net.gates.every((g) => nx[g.name] === val[g.name])) break;
       val = nx;
     }
     return val;
   }
-  function depths(net) {
+  // ticks from the levers to each signal; a join adds none (for the drawing it takes a column of its own)
+  function depths(net, forDrawing) {
     const d = {};
     for (const v of net.vars) d[v] = 0;
-    for (const g of net.gates) d[g.name] = 1 + Math.max(...g.ins.map((x) => d[x]));
+    for (let pass = 0; pass < net.gates.length + 2; pass++)
+      for (const g of net.gates) { const m = Math.max(0, ...g.ins.map((x) => (x in d ? d[x] : 0))); d[g.name] = g.merge && !forDrawing ? m : m + 1; }
     return d;
   }
   const inputsOf = (net, n) => { const o = {}; net.vars.forEach((v, k) => (o[v] = (n >> (net.vars.length - 1 - k)) & 1)); return o; };
+  const torchCount = (net) => net.gates.filter((g) => !g.merge).length;
+  // circuits that remember (a latch) start from a known state: this lever pattern first, then everything released
+  function restState(net) {
+    if (!net.seq) return settle(net, Object.fromEntries(net.vars.map((v) => [v, 0])));
+    let val = Object.fromEntries(net.gates.map((g) => [g.name, 1]));
+    for (const phase of [net.init || {}, {}]) {
+      const inp = Object.fromEntries(net.vars.map((v) => [v, phase[v] ? 1 : 0]));
+      val = settle(net, inp, val);
+    }
+    return val;
+  }
 
-  function design(expr) {
-    const ast = parse(expr), net = build(ast);
-    if (net.vars.length > MAX_VARS) throw new Error(`Use at most ${MAX_VARS} inputs (you gave ${net.vars.length}).`);
+  // ---------- the practical way: the fewest torches ----------
+  // What redstone does for free: wires that meet are an OR; a torch inverts. So  a OR b  needs no torch at all, NAND is two torches,
+  // and XOR needs three. Every candidate below is a different way to write the same function, built with those rules; the one with
+  // the fewest torches (then the shortest delay) wins. buildNaive (NOR gates only) is only kept to say how much that saves.
+  const varsOf = (n, acc = []) => { if (n.v) { if (!acc.includes(n.v)) acc.push(n.v); } else { varsOf(n.a, acc); if (n.b) varsOf(n.b, acc); } return acc; };
+  const evalAst = (n, env) => {
+    if (n.v) return !!env[n.v];
+    const a = evalAst(n.a, env), b = n.b ? evalAst(n.b, env) : false;
+    switch (n.op) { case "not": return !a; case "and": return a && b; case "or": return a || b; case "xor": return a !== b; case "nand": return !(a && b); case "nor": return !(a || b); case "xnor": return a === b; }
+    return false;
+  };
+  function structural(ast, vars) {
+    const gates = [], memo = new Map();
+    const torch = (parts) => { parts = [...new Set(parts)].sort(); const k = parts.join(","); if (!memo.has(k)) { memo.set(k, "T" + (gates.length + 1)); gates.push({ name: memo.get(k), ins: parts }); } return memo.get(k); };
+    // a signal is known as a bundle of joined wires, for the function (p) or for its opposite (n); the other one costs one torch
+    const flip = (a) => ({ get p() { return a.n; }, set p(v) { a.n = v; }, get n() { return a.p; }, set n(v) { a.p = v; } });
+    const POS = (a) => a.p || (a.p = [torch(a.n)]);
+    const NEG = (a) => a.n || (a.n = [torch(a.p)]);
+    const go = (n) => {
+      if (n.v) return { p: [n.v], n: null };
+      const a = go(n.a), b = n.b ? go(n.b) : null;
+      switch (n.op) {
+        case "not": return flip(a);
+        case "or": return { p: [...POS(a), ...POS(b)], n: null };
+        case "nor": return flip({ p: [...POS(a), ...POS(b)], n: null });
+        case "and": return { p: null, n: [...NEG(a), ...NEG(b)] };
+        case "nand": return flip({ p: null, n: [...NEG(a), ...NEG(b)] });
+        case "xor": case "xnor": {            // a XOR b = (a NOR (a NOR b)) joined with (b NOR (a NOR b)): three torches
+          const ap = POS(a), bp = POS(b), t1 = torch([...ap, ...bp]);
+          const x = { p: [torch([...ap, t1]), torch([...bp, t1])], n: null };
+          return n.op === "xor" ? x : flip(x);
+        }
+      }
+    };
+    const parts = POS(go(ast));
+    const used = new Set(), mark = (x) => { if (used.has(x)) return; used.add(x); const g = gates.find((q) => q.name === x); if (g) g.ins.forEach(mark); };
+    parts.forEach(mark);
+    const kept = gates.filter((g) => used.has(g.name)), rename = {};
+    kept.forEach((g, i) => (rename[g.name] = "T" + (i + 1)));
+    const rn = (x) => rename[x] || x, out = kept.map((g) => ({ name: rn(g.name), ins: g.ins.map(rn) }));
+    let outName;
+    if (parts.length === 1) outName = rn(parts[0]); else { out.push({ name: "OUT", ins: parts.map(rn), merge: true }); outName = "OUT"; }
+    return { vars, gates: out, out: outName };
+  }
+  // Quine-McCluskey: the smallest sum of products (as the bit patterns of the inputs)
+  function implicants(nv, ones) {
+    let cur = new Map(ones.map((t) => [t + ":0", { v: t, m: 0 }])), primes = [];
+    while (cur.size) {
+      const arr = [...cur.values()], used = new Set(), nxt = new Map();
+      for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i], b = arr[j]; if (a.m !== b.m) continue;
+        const d = a.v ^ b.v; if (d && (d & (d - 1)) === 0) { used.add(i); used.add(j); const m = a.m | d, v = a.v & ~d; nxt.set(v + ":" + m, { v, m }); }
+      }
+      arr.forEach((x, i) => { if (!used.has(i)) primes.push(x); });
+      cur = nxt;
+    }
+    const covers = (p, t) => (t & ~p.m) === p.v, lits = (p) => nv - p.m.toString(2).split("1").length + 1;
+    const left = new Set(ones), pick = [];
+    for (const t of ones) { const c = primes.filter((p) => covers(p, t)); if (c.length === 1 && !pick.includes(c[0])) pick.push(c[0]); }
+    for (const p of pick) for (const t of [...left]) if (covers(p, t)) left.delete(t);
+    while (left.size) {
+      let best = null, bs = -1;
+      for (const p of primes) { const s = [...left].filter((t) => covers(p, t)).length * 10 - lits(p); if (s > bs) { bs = s; best = p; } }
+      pick.push(best); for (const t of [...left]) if (covers(best, t)) left.delete(t);
+    }
+    return pick;
+  }
+  const fold = (items, op) => items.reduce((a, b) => ({ op, a, b }));
+  function sumOfProducts(vars, ones, invert) {      // invert: the product-of-sums form (the SOP of the opposite function, complemented)
+    const nv = vars.length, lit = (i, positive) => (positive ? { v: vars[i] } : { op: "not", a: { v: vars[i] } });
+    const terms = implicants(nv, ones).map((p) => {
+      const ls = []; for (let i = 0; i < nv; i++) { const bit = nv - 1 - i; if (p.m >> bit & 1) continue; ls.push(lit(i, invert ? !(p.v >> bit & 1) : !!(p.v >> bit & 1))); }
+      return fold(ls, invert ? "or" : "and");
+    });
+    return fold(terms, invert ? "and" : "or");
+  }
+  function optimize(ast) {
+    const vars = varsOf(ast), nv = vars.length, rowsN = 1 << nv, ones = [], zeros = [];
+    for (let r = 0; r < rowsN; r++) { const env = {}; vars.forEach((v, k) => (env[v] = (r >> (nv - 1 - k)) & 1)); (evalAst(ast, env) ? ones : zeros).push(r); }
+    if (!ones.length) throw new Error("That circuit is never on, whatever the levers do, so there is nothing to build.");
+    if (!zeros.length) throw new Error("That circuit is always on, whatever the levers do, so there is nothing to build (a block of redstone does that).");
+    const cands = [structural(ast, vars), structural(sumOfProducts(vars, ones, false), vars), structural(sumOfProducts(vars, zeros, true), vars)];
+    let best = null, bs = Infinity;
+    cands.forEach((c, idx) => { const s = torchCount(c) * 1000 + idx * 50 + (depths(c)[c.out] || 0); if (s < bs) { bs = s; best = c; } });
+    return best;
+  }
+
+  const gateText = (g, isOut) => (g.merge ? `  ${g.name} = ${g.ins.join(" + ")}   (just join these dust lines: an OR, no torch)` : `  ${g.name} = ${g.ins.length === 1 ? "NOT" : "NOR"}(${g.ins.join(", ")})`) + (g.name === isOut ? "   ← the output, to the lamp" : "");
+  const delayText = (d) => `${d} redstone tick${d === 1 ? "" : "s"} (${d * 2} game ticks, ${(d * 0.1).toFixed(1)} s)`;
+  function describe(net, spec, expr, how, extra) {
+    const nT = torchCount(net), d = depths(net)[net.out] || 0;
     const rows = [];
-    for (let n = 0; n < 1 << net.vars.length; n++) { const inp = inputsOf(net, n); rows.push(net.vars.map((v) => inp[v]).join(" ") + " | " + settle(net, inp)[net.out]); }
-    const wiring = net.gates.map((g) => `  ${g.name} = ${g.ins.length === 1 ? "NOT" : "NOR"}(${g.ins.join(", ")})` + (g.name === net.out ? "   ← output, to the lamp" : "")).join("\n");
-    const d = depths(net)[net.out] || 0;
+    if (!net.seq) for (let n = 0; n < 1 << net.vars.length; n++) { const inp = inputsOf(net, n); rows.push(net.vars.map((v) => inp[v]).join(" ") + " | " + settle(net, inp)[net.out]); }
     const text = [
-      `Circuit for: ${String(expr).trim()}`,
-      net.gates.length ? `Inputs (levers): ${net.vars.join(", ")}. ${net.gates.length} torch${net.gates.length === 1 ? "" : "es"} on ${net.gates.length} solid block${net.gates.length === 1 ? "" : "s"}, signal delay ${d} redstone tick${d === 1 ? "" : "s"} (${d * 2} game ticks, ${(d * 0.1).toFixed(1)} s).` : `The output is just the input ${net.out}: no torches needed.`,
+      `Circuit for: ${expr}`,
+      nT ? `Inputs (levers): ${net.vars.join(", ")}. ${nT} redstone torch${nT === 1 ? "" : "es"}, signal delay ${delayText(d)}.` : `Inputs (levers): ${net.vars.join(", ")}. No torches at all: just wires.`,
+      how,
       "",
-      "Truth table (" + net.vars.join(" ") + " | output, after the signal has settled):",
-      ...rows.map((r) => "  " + r),
-      "",
-      "Torches (T1, T2, ...): each one is a solid block with a redstone torch on its side. The dust lines named in brackets run into that block. The torch is ON only while none of them is powered (one input = NOT, two = NOR). A torch's output is dust leading away from it:",
-      wiring,
-      "",
+      ...(rows.length ? ["Truth table (" + net.vars.join(" ") + " | output, after the signal has settled):", ...rows.map((r) => "  " + r), ""] : []),
+      "Wiring (each torch sits on the side of a solid block; every wire named in brackets runs into that block, and the torch is ON only while none of them is powered):",
+      ...net.gates.map((g) => gateText(g, net.out)),
+      ...(extra ? ["", extra] : []),
     ].join("\n");
-    const spec = { kind: "logic", expr: String(expr).trim(), vars: net.vars, gates: net.gates, out: net.out };
     let built = "";
     try { built = window.redstoneLayoutText ? window.redstoneLayoutText(spec) : ""; } catch (e) { built = "(No 3D build for this one: " + e.message + " The schematic is shown instead.)"; }
-    return { text: text + "\n\n" + (built ? built + "\n" : "") + "The user sees this circuit under the tool step: a 3D build they can turn and click (levers, dust lighting up tick by tick), a schematic tab and the truth table. Refer to it rather than redrawing it.", spec };
+    return { text: text + "\n\n" + (built ? built + "\n" : "") + "The user sees this circuit under the tool step: a 3D build they can turn and click (levers, dust lighting up tick by tick), a schematic tab" + (rows.length ? " and the truth table" : "") + ". Refer to it rather than redrawing it. Say how many torches it needs; it is already the smallest the app could find.", spec };
+  }
+
+  function design(expr) {
+    const ast = parse(expr);
+    const vars = varsOf(ast);
+    if (vars.length > MAX_VARS) throw new Error(`Use at most ${MAX_VARS} inputs (you gave ${vars.length}).`);
+    let net = optimize(ast);
+    if (net.gates.length > MAX_GATES) throw new Error(`That needs ${net.gates.length} gates; keep it under ${MAX_GATES} or split it up.`);
+    // a compact hand-made layout, if this function has one: the circuit is then named exactly like the picture
+    let shape = null;
+    if (window.redstoneTemplate) {
+      const tt = []; for (let n = 0; n < 1 << net.vars.length; n++) tt.push(settle(net, inputsOf(net, n))[net.out] ? 1 : 0);
+      const tpl = window.redstoneTemplate(net.vars, tt);
+      if (tpl && torchCount({ gates: tpl.net.gates }) <= torchCount(net)) { net = { vars: net.vars, gates: tpl.net.gates, out: tpl.net.out }; shape = tpl.shape; }
+    }
+    let naive = net; try { naive = buildNaive(ast); } catch {}
+    const nT = torchCount(net), nN = torchCount(naive);
+    const how = nN > nT ? `Built the practical way: wires that meet are an OR (free) and a torch inverts, so this needs ${nT} torch${nT === 1 ? "" : "es"} where a plain NOR-only build would need ${nN}.` : `Built the practical way (wires that meet are an OR, a torch inverts): ${nT} torch${nT === 1 ? "" : "es"}, the fewest the app could find.`;
+    const spec = { kind: "logic", expr: String(expr).trim(), vars: net.vars, gates: net.gates, out: net.out, naive: nN, ...(shape ? { shape } : {}) };
+    return describe(net, spec, String(expr).trim(), how);
+  }
+
+  // circuits that remember or react to a change: written out gate by gate
+  function sequential(name) {
+    if (/latch|flip[- ]?flop|memory|\bsr\b|\brs\b/i.test(name)) {
+      const net = { vars: ["S", "R"], gates: [{ name: "T1", ins: ["R", "T2"] }, { name: "T2", ins: ["S", "T1"] }], out: "T1", seq: true, init: { R: 1 }, test: [{ S: 0, R: 0 }, { S: 1, R: 0 }, { S: 0, R: 0 }, { S: 0, R: 1 }, { S: 0, R: 0 }, { S: 1, R: 0 }, { S: 0, R: 0 }] };
+      const spec = { kind: "logic", expr: "RS latch", ...net, shape: { t: "latch" }, note: "Click S: the lamp turns on and stays on. Click R: it turns off and stays off." };
+      return describe(net, spec, "RS latch (a one-bit memory)", "Two torches that feed each other: the lamp is the memory. Switch S on and off again: the lamp comes on and STAYS on. Switch R on and off again: it goes off and stays off. Don't switch S and R on at the same time.", "How it works: T1 is the output. T1 is on unless R or T2 is on; T2 is on unless S or T1 is on. Whichever one is on keeps the other off, so the state holds without any lever.");
+    }
+    if (/pulse|edge|one[- ]?shot|monostable/i.test(name)) {
+      const net = { vars: ["a"], gates: [{ name: "T1", ins: ["a"] }, { name: "T2", ins: ["T1"] }, { name: "T3", ins: ["T1", "T2"] }], out: "T3", seq: true, init: {}, pulse: true, test: [{ a: 0 }, { a: 1 }, { a: 0 }] };
+      const spec = { kind: "logic", expr: "Pulse generator", ...net, shape: { t: "pulse" }, note: "Switch the lever on: the lamp blinks once, for one redstone tick, however long the lever stays on." };
+      return describe(net, spec, "Pulse generator (rising-edge detector)", "Turns a lever or button being switched ON into one short pulse (1 redstone tick = 0.1 s), however long it stays on. Use it to fire a piston or a dropper exactly once.", "How it works: T2 is the opposite of T1, but one tick later. For that single tick T1 and T2 are both off, so T3 (the output) turns on; then T2 comes on and T3 goes off again.");
+    }
+    return null;
   }
 
   // ---------- ring clock ----------
@@ -166,9 +301,12 @@
     a = a || {};
     const what = String(a.circuit || a.expression || "").trim();
     if (/^(ring )?(torch )?clock\b|^oscillator\b/i.test(what)) return ringClock(a.torches || (/(\d+)/.exec(what) || [])[1]);
+    const q = sequential(what);
+    if (q) return q;
     return design(what.replace(/^(gate|circuit|logic)\s*:\s*/i, ""));
   }
   window.redstonePlan = plan;
+  window.redstoneTest = { parse, evalAst, optimize, buildNaive };   // for the self-test
   window.redstoneDesign = (a) => plan(a).text;
 
   // ====================================================================== the picture ======================================================================
@@ -203,6 +341,8 @@
 .rs-vis .lever:focus-visible .base { stroke: var(--accent); stroke-width: 3; }
 .rs-vis .lever:hover .base { fill: #8a8a8a; }
 .rs-vis .port { fill: var(--rs-off); }
+.rs-vis .mj { fill: var(--rs-off); stroke: #3a0d0a; stroke-width: 2; transition: fill .08s; }
+.rs-vis .on .mj { fill: var(--rs-on); filter: drop-shadow(0 0 4px rgba(255,59,47,.8)); }
 .rs-vis .on .port, .rs-vis .port.on { fill: var(--rs-on); }
 .rs-vis .rs-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; margin-top: 8px; }
 .rs-vis .rs-status { flex: 1 1 180px; min-width: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
@@ -252,7 +392,8 @@
     try { d = window.redstoneLayout(spec).delay; } catch {}      // the build's own delay, repeaters included
     box.innerHTML = `<div class="rs-head"><b>Redstone circuit</b><code></code><span class="rs-sub"></span><span style="flex:1"></span><span class="rs-tabs" role="tablist"><button type="button" role="tab" data-t="3d" aria-selected="true">3D build</button><button type="button" role="tab" data-t="sch" aria-selected="false">Schematic</button></span></div>`;
     box.querySelector("code").textContent = spec.expr;
-    box.querySelector(".rs-sub").textContent = `${spec.gates.length} torch${spec.gates.length === 1 ? "" : "es"} · up to ${d} tick${d === 1 ? "" : "s"} delay (${(d * 0.1).toFixed(1)} s)`;
+    const nT = spec.gates.filter((g) => !g.merge).length;
+    box.querySelector(".rs-sub").textContent = `${nT} torch${nT === 1 ? "" : "es"}${spec.naive > nT ? ` (a plain NOR-only build: ${spec.naive})` : ""} · up to ${d} tick${d === 1 ? "" : "s"} delay (${(d * 0.1).toFixed(1)} s)`;
     sch.classList.add("rs-inner"); sch.querySelector(".rs-head").remove(); sch.hidden = true;
     box.append(d3, sch);
     box.querySelectorAll(".rs-tabs button").forEach((b) => (b.onclick = () => {
@@ -264,8 +405,8 @@
     return box;
   }
   function schematic(spec) {
-    const net = { vars: spec.vars, gates: spec.gates, out: spec.out };
-    const dep = depths(net), maxD = Math.max(0, ...net.gates.map((g) => dep[g.name]));
+    const net = { vars: spec.vars, gates: spec.gates, out: spec.out, seq: spec.seq, init: spec.init };
+    const dep = depths(net, true), maxD = Math.max(0, ...net.gates.map((g) => dep[g.name]));
     const COLW = 150, ROWH = 84, LEFT = 22, TOP = 62;
     // columns: levers, then the torches by how many ticks from the levers they are, then the lamp
     const cols = [net.vars.slice()];
@@ -283,7 +424,7 @@
     });
     const colOf = (n) => dep[n] || 0;
     const X = (c) => LEFT + c * COLW, Y = (s) => TOP + s * ROWH;
-    const outX = (n) => X(colOf(n)) + (isGate(net, n) ? 52 : 28);
+    const outX = (n) => X(colOf(n)) + (!isGate(net, n) ? 28 : (net.gates.find((g) => g.name === n) || {}).merge ? 34 : 52);
     const W = X(lampCol) + 34 + LEFT, H = Y(rows - 1) + 46;
     // wires: from a source's output to a torch block's left side (or to the lamp). One column apart: through the gap between the
     // columns. Further: up into the free strip between rows, across, then down into the block, so no wire runs through a block.
@@ -308,8 +449,8 @@
     inner += wires.map((w, i) => `<g data-w="${i}"><path class="w" d="${w.d}"/></g>`).join("");
     for (const g of net.gates) {
       const x = X(colOf(g.name)), y = Y(slot[g.name]);
-      inner += `<g data-n="${esc(g.name)}">${g.ins.map((_, j) => `<circle class="port" data-p="${j}" cx="${x}" cy="${y + (j - (g.ins.length - 1) / 2) * 12}" r="3"/>`).join("")}${torchBlock(x, y)}</g>
-        <text x="${x + 16}" y="${y + 32}" text-anchor="middle">${esc(g.name)}</text><text class="m" x="${x + 16}" y="${y + 45}" text-anchor="middle">${g.ins.length === 1 ? "NOT" : "NOR"}</text>`;
+      inner += `<g data-n="${esc(g.name)}">${g.ins.map((_, j) => `<circle class="port" data-p="${j}" cx="${x}" cy="${y + (j - (g.ins.length - 1) / 2) * 12}" r="3"/>`).join("")}${g.merge ? `<path class="w" d="M${x} ${y}H${x + 34}"/><circle class="mj" cx="${x + 17}" cy="${y}" r="8"/>` : torchBlock(x, y)}</g>
+        <text x="${x + 16}" y="${y + 32}" text-anchor="middle">${g.merge ? "join" : esc(g.name)}</text><text class="m" x="${x + 16}" y="${y + 45}" text-anchor="middle">${g.merge ? "wires meet = OR" : g.ins.length === 1 ? "NOT" : "NOR"}</text>`;
     }
     for (const v of net.vars) {
       const x = X(0), y = Y(slot[v]);
@@ -318,18 +459,19 @@
     inner += `<g data-lamp>${lampAt(X(lampCol), Y(slot[net.out]))}</g><text class="m" x="${X(lampCol) + 16}" y="${Y(slot[net.out]) + 32}" text-anchor="middle">output</text>`;
 
     const box = document.createElement("div"); box.className = "rs-vis";
-    const d = dep[net.out] || 0;
+    const d = depths(net)[net.out] || 0;
     box.innerHTML = `<div class="rs-head"><b>Redstone circuit</b><code></code><span class="rs-sub"></span></div><div class="rs-stage">${svgEl(W, H, inner)}</div>
       <div class="rs-row"><div class="rs-status"></div><table><thead><tr>${net.vars.map((v) => `<th>${esc(v)}</th>`).join("")}<th class="o">lamp</th></tr></thead><tbody></tbody></table></div>`;
     box.querySelector("code").textContent = spec.expr;
-    box.querySelector(".rs-sub").textContent = `${net.gates.length} torch${net.gates.length === 1 ? "" : "es"} · ${d} tick${d === 1 ? "" : "s"} delay (${(d * 0.1).toFixed(1)} s)`;
+    { const nT = net.gates.filter((g) => !g.merge).length; box.querySelector(".rs-sub").textContent = `${nT} torch${nT === 1 ? "" : "es"} · ${d} tick${d === 1 ? "" : "s"} delay (${(d * 0.1).toFixed(1)} s)`; }
     const svg = box.querySelector("svg"); svg.setAttribute("aria-label", `Circuit diagram for ${spec.expr}: click the levers`);
     const status = box.querySelector(".rs-status"), tbody = box.querySelector("tbody");
     const table = [];
-    for (let n = 0; n < 1 << net.vars.length; n++) { const inp = inputsOf(net, n); table.push(settle(net, inp)[net.out]); }
-    tbody.innerHTML = table.map((o, n) => { const inp = inputsOf(net, n); return `<tr data-row="${n}">${net.vars.map((v) => `<td>${inp[v]}</td>`).join("")}<td class="o${o ? " y" : ""}">${o ? "ON" : "off"}</td></tr>`; }).join("");
+    if (net.seq) box.querySelector("table").hidden = true;
+    else for (let n = 0; n < 1 << net.vars.length; n++) { const inp = inputsOf(net, n); table.push(settle(net, inp)[net.out]); }
+    if (!net.seq) tbody.innerHTML = table.map((o, n) => { const inp = inputsOf(net, n); return `<tr data-row="${n}">${net.vars.map((v) => `<td>${inp[v]}</td>`).join("")}<td class="o${o ? " y" : ""}">${o ? "ON" : "off"}</td></tr>`; }).join("");
 
-    let inputs = Object.fromEntries(net.vars.map((v) => [v, 0])), val = settle(net, inputs), timer = null, ticks = 0;
+    let inputs = Object.fromEntries(net.vars.map((v) => [v, 0])), val = restState(net), timer = null, ticks = 0;
     const rowNo = () => net.vars.reduce((s, v) => s * 2 + inputs[v], 0);
     function paint(settling) {
       wires.forEach((w, i) => svg.querySelector(`[data-w="${i}"]`).classList.toggle("on", !!val[w.src]));
@@ -347,7 +489,7 @@
       const r = rowNo();
       tbody.querySelectorAll("tr").forEach((tr) => tr.classList.toggle("cur", Number(tr.dataset.row) === r));
       const lit = net.gates.filter((g) => val[g.name]).map((g) => g.name);
-      status.innerHTML = `<b>Click a lever</b> (or a row of the table) to switch it. Each torch is <b>on</b> only while <b>none</b> of the wires into its block is powered. ` +
+      status.innerHTML = (net.seq ? `<b>Click the levers</b>. ${spec.note || ""} ` : `<b>Click a lever</b> (or a row of the table) to switch it. Each torch is <b>on</b> only while <b>none</b> of the wires into its block is powered. `) +
         (settling ? `<br><b>Tick ${ticks}</b>: the signal is still moving…` : `<br>Lamp is <b>${val[net.out] ? "ON" : "off"}</b>${ticks ? ` (settled after ${ticks} tick${ticks === 1 ? "" : "s"})` : ""}. Lit torches: ${lit.length ? lit.join(", ") : "none"}.`);
     }
     // the levers change at once; the torches follow one redstone tick at a time, slowed down so you can watch it travel
