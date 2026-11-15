@@ -476,6 +476,35 @@ window.albatrossSelfTest = async function (w) {
     if (o.review.calls !== 2 || !/^Yes: pizza is good\./.test(o.review.content)) bad.push("review " + JSON.stringify(o.review));
     return bad.length ? bad.join(" | ") : true;
   });
+  await tryIt("a redstone circuit asked for in chat shows its diagram (no PC needed)", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const NL = String.fromCharCode(10), origApi = chatApi, origCaps = getCaps, out = {};
+      const stream = (parts) => new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); for (const p of parts) c.enqueue(e.encode(JSON.stringify(p) + NL)); c.close(); } }));
+      let calls = 0, sent = null;
+      const script = [[{ message: { role: "assistant", content: "", tool_calls: [{ function: { name: "redstone_design", arguments: { circuit: "a xor b" } } }] } }, { done: true }],
+        [{ message: { role: "assistant", content: "Here is your XOR gate." } }, { done: true }]];
+      window.chatApi = async (body) => { if (!sent) sent = body; return stream(script[calls++] || [{ message: { role: "assistant", content: "?" } }, { done: true }]); };
+      window.getCaps = async () => ["completion", "tools"];
+      setView("chat"); await new Promise(r => setTimeout(r, 150));
+      current.messages.push({ role: "user", content: "Make me a redstone XOR gate" });
+      await chat("fake-model"); await new Promise(r => setTimeout(r, 200));
+      const m = current.messages[current.messages.length - 1];
+      out.offered = !!(sent && JSON.stringify(sent).includes("redstone_design"));
+      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.length === 5);
+      const vis = [...document.querySelectorAll(".rs-vis")].pop();
+      out.shown = !!vis && vis.querySelectorAll(".lever").length === 2 && vis.querySelectorAll("tbody tr").length === 4;
+      if (vis) { vis.querySelector(".lever").dispatchEvent(new MouseEvent("click", { bubbles: true })); await new Promise(r => setTimeout(r, 1200)); out.lit = !!vis.querySelector("[data-lamp].on"); }
+      out.answer = m.content;
+      current.messages.splice(-2, 2); window.chatApi = origApi; window.getCaps = origCaps; saveChats();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (!o.offered) bad.push("the tool wasn't offered to the model");
+    if (!o.block) bad.push("no redstone block in the answer");
+    if (!o.shown) bad.push("the diagram isn't on the page");
+    if (!o.lit) bad.push("switching lever a didn't light the lamp");
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;

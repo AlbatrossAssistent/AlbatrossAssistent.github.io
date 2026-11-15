@@ -1731,7 +1731,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
-  if (b.type === "chart" || b.type === "chances" || b.type === "song" || b.type === "screen" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes" || b.type === "music") return renderToolBlock(b);
+  if (b.type === "chart" || b.type === "chances" || b.type === "song" || b.type === "screen" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes" || b.type === "music" || b.type === "redstone") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -2977,6 +2977,10 @@ const CHAT_TOOLS = (() => {
       run(args) { const ids = window.notesApply(args.changes); return { block: done({ type: "notes", ids }), out: ids.length ? `Done: ${ids.length} note${ids.length > 1 ? "s" : ""} changed and shown to the user. Say briefly what you did.` : "Nothing matched: no note was changed. Tell the user, or check the titles with notes_show." }; } },
     { key: "music", name: "make_music", need: "musicCompose", def: T("make_music", "Compose a piece of music that plays in the chat and downloads as a MIDI file. You only provide the musical idea; the app writes out the notes with real music rules, so choose carefully: the style, a key that fits the mood (sad: minor; happy: major; dark: phrygian; dreamy: lydian), chords that belong together, and a memorable motif. Build the piece up (calm start, full chorus).", window.MUSIC_PROPS || {}, ["title", "style", "key", "bpm", "progression", "motif", "structure"]),
       run(args) { const song = window.musicCompose(args); return { block: done({ type: "music", song }), out: `The piece "${song.title}" (${song.key}, ${song.bpm} bpm) is shown with play and download buttons. Answer in one or two sentences; don't describe every note.` }; } },
+    // Minecraft redstone (redstone.js): the circuit is worked out and simulated by the app, and drawn as a card the user can click
+    { key: "redstone", name: "redstone_design", need: "redstonePlan", def: T("redstone_design", "Design a Minecraft redstone circuit and show it to the user as an interactive diagram (levers to click, wires and torches that light up, the lamp as output, a truth table). Give a logic expression over inputs, like \"a xor b\" or \"(a and b) or not c\" (words and, or, xor, not, nand, nor, xnor, or symbols & | ^ !; up to 6 inputs; a door that opens from either of two levers is \"a or b\"), or \"ring clock\" with an odd number of torches for a torch clock.", {
+      circuit: { type: "string", description: "the logic expression, or \"ring clock\"" }, torches: { type: ["number", "null"], description: "ring clock only: how many torches (odd, 3 to 31)" } }, ["circuit"]),
+      run(args) { const { text, spec } = window.redstonePlan(args); return { block: done({ type: "redstone", spec, title: spec.expr || "Torch clock" }), out: text + "\n\nAnswer in two to four sentences: what the circuit does and how to use the diagram (click the levers). Don't repeat the wiring list or the truth table; they are in the card." }; } },
     { key: "song", name: "make_song", need: "songOk", def: T("make_song", "Make a real song with the AI song model on the user's PC (ACE-Step): music with singing, in any style, from style tags and lyrics. It takes one to three minutes and plays in the chat. Use it when the user wants a song, a track with vocals, or an AI-made piece; for quick editable music without singing use make_music.", {
       tags: { type: "string", description: "Comma-separated style tags in English: genre, mood, instruments, voice and tempo, like \"indie pop, upbeat, female vocals, acoustic guitar, 110 bpm, summer\"" },
       lyrics: { type: "string", description: "The lyrics with structure markers on their own lines: [verse], [chorus], [verse], [bridge], [chorus]; in the language of the song. Use [instrumental] (or leave empty) for no singing. Keep it to what fits the length: about 4 lines per section." },
@@ -3015,6 +3019,7 @@ const CHAT_TOOLS = (() => {
 const CHAT_TOOLS_HINT = {
   screen: "Screen help: when the user asks what is on their screen, what they are looking at, or needs help with something in another app, call look_at_screen first (you get the app they were using, not Albatross). Describe what you see in plain words, then call show_on_screen with the numbers of the few things that matter and a short label for each, so the user sees them lit up on their real screen. Never invent a number. You point; you do not click for them (Jarvis does that).",
   song: "Songs: when the user wants a real song (with singing) or an AI-made track, call make_song with style tags and lyrics with [verse]/[chorus] markers (or [instrumental]); it takes a minute or two. Quick editable music without singing is make_music.",
+  redstone: "Minecraft redstone: when the user wants a redstone circuit, logic gate, door or lamp logic, or a torch clock, call redstone_design with the logic as an expression; never draw or describe a layout yourself. The app shows the user an interactive diagram.",
   graph: "Charts: when the user wants a graph or chart, call make_chart (look the numbers up first if you don't know them).",
   chances: "Chances: when the user asks how likely something is or wants a prediction, call estimate_chances.",
   notes: "Notes: when the user talks about their notes, lists or to-dos, call notes_show first, then notes_edit to change them.",
@@ -3401,7 +3406,7 @@ async function sendGuestRecap(conv, model, extraPcFiles) {
 // ---------- tools: the AI picks them by itself (Settings → Tools switches single ones off) ----------
 let toolMode = "";   // older code paths still look at it; nothing sets it anymore
 // in the Chrome sidebar only what helps with the page and your PC's files and info is on (no pictures, music, slides, charts, Jarvis)
-const EMBED_OFF = new Set(["image", "slides", "graph", "chances", "music", "challenge", "jarvis"]);
+const EMBED_OFF = new Set(["image", "slides", "graph", "chances", "music", "challenge", "jarvis", "redstone"]);
 const toolOn = (k) => S.tools?.[k] !== false && !(window.EMBED_CHROME && EMBED_OFF.has(k));
 // Documents only takes part once the PC has some indexed (docsReady, from the PC's status); the other tools whenever they are on
 let docsReady = false;
@@ -4106,6 +4111,7 @@ function renderToolBlock(b) {
   if (b.type === "music") return window.musicCard ? window.musicCard(b) : document.createElement("div");
   if (b.type === "song") return songCard(b);
   if (b.type === "screen") return screenCard(b);
+  if (b.type === "redstone") return (window.redstoneVisual && b.spec && window.redstoneVisual(b.spec)) || document.createElement("div");
   const wrap = document.createElement("div"); wrap.className = "tool-block";
   if (b.active) {
     wrap.innerHTML = `<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>`;
@@ -6647,8 +6653,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.2";
+const APP_VERSION = "2026-11-15.3";
 const WHATS_NEW = [
+  ["2026-11-15.3", ["Redstone circuits work in every chat now, even without your PC connected, and always show the clickable diagram."]],
   ["2026-11-15.2", ["Redstone circuits now come with a picture: click the levers and watch the signal light up the wires, torches and lamp tick by tick; torch clocks tick (and burn out) on screen."]],
   ["2026-11-15.1", ["The AI can now design Minecraft redstone circuits: logic gates with a truth table, and torch clocks with a burnout check."]],
   ["2026-11-14.17", ["Settings → Input & Output: pick the microphone and speakers Albatross uses (with a live level meter and a test sound), and the ones Jarvis uses on your PC"]],

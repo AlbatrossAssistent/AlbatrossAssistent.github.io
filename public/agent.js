@@ -701,7 +701,6 @@ const GROUP_HINT = {
   files: /(?<![\p{L}\p{N}])(?:files?|folders?|datei\p{L}*|ordner|workspace|downloads?|desktop|pc files|albatross folder)(?![\p{L}\p{N}])/iu,
   print: /(?<![\p{L}\p{N}])(?:print(?:s|ed|ing|er|out)?|ausdruck\p{L}*|drucke\p{L}*|druck|drucker)(?![\p{L}\p{N}])/iu,
   browser: /(?<![\p{L}\p{N}])(?:browse|browser|web ?page|website|webseite|url|https?:\/\/\S+|www\.\S+|amazon|youtube|log ?in|einloggen|anmelden|formular)(?![\p{L}\p{N}])/iu,
-  redstone: /(?<![\p{L}\p{N}])(?:redstone|red stone|torch clock|minecraft (?:circuit|clock|gate))(?![\p{L}\p{N}])/iu,
   code: /(?<![\p{L}\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|change|fix|improve|schreib\p{L}*|erstell\p{L}*|programmier\p{L}*|bau\p{L}*|änder\p{L}*|verbesser\p{L}*)(?![\p{L}\p{N}])[^.?!]{0,60}(?<![\p{L}\p{N}])(?:program|script|app|application|website|web ?page|game|bot|html|python|javascript|programm|skript|webseite|spiel|code project)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(?:code projects?|run (?:this|the|my) code)(?![\p{L}\p{N}])/iu,
 };
 // the Agent's instructions, line by line, for the groups that are offered
@@ -716,7 +715,6 @@ function chatToolsSystem(groups) {
     groups.has("files") && "To attach a file from the PC to your answer (a picture, a document you wrote), write [[file:PATH]] with its path, like [[file:agent:summary.txt]] or [[file:all:Pictures/cat.png]]: the user sees it there and can download it.",
     pick("Important:"),
     groups.has("print") && pick("Printing:"),
-    groups.has("redstone") && pick("Minecraft redstone:"),
     groups.has("browser") && pick("Web:"),
     pick("Tools can fail")].filter(Boolean).join("\n");
 }
@@ -729,6 +727,7 @@ window.agentChatTools = function (text, opts = {}) {
   const tools = ALL_TOOLS.filter((t) => {
     const n = t.function.name, g = TOOL_GROUP[n];
     if (n === "web_search" && opts.ownSearch) return false;      // the chat's own web search is offered already
+    if (n === "redstone_design") return false;                  // the chat has it as a tool of its own (app.js CHAT_TOOLS), PC or not
     return g ? groups.has(g) : n === "ask_user" || (opts.planning && n === "update_plan");
   });
   // Max effort: plan and ask tools only, without PC tools, need no PC-tools instructions
