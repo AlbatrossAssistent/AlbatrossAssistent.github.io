@@ -53,7 +53,10 @@ if (!S.conn.relay) S.conn.relay = DEFAULT_SERVER;
 // the right chats show at once, before the sign-in has finished loading (account.js then confirms it or switches).
 let acctUid = store.get("acctUid", "");
 const chatKey = (k) => (acctUid ? `${k}.${acctUid}` : k);
-let chats = S.persist ? store.get(chatKey("chats"), []) : [];
+// a chat that is missing or damaged (null, no messages) must never get into the list: one such entry broke the sidebar, and with it
+// making and sending chats, until the saved data was cleaned
+const cleanChats = (a) => (Array.isArray(a) ? a : []).filter((c) => c && typeof c === "object" && Array.isArray(c.messages));
+let chats = S.persist ? cleanChats(store.get(chatKey("chats"), [])) : [];
 // ---------- who this device is (shown to the PC, under Beam -> Devices) ----------
 function deviceInfo() {
   let id = store.get("deviceId", ""); if (!id) { id = crypto.randomUUID(); store.set("deviceId", id); }
@@ -105,6 +108,7 @@ function deepMerge(a, b) { for (const k in b) { if (b[k] && typeof b[k] === "obj
 function saveSettings() { store.set("settings", S); }
 function saveChats() {
   if (!S.persist) return;
+  if (chats.some((c) => !c)) chats = chats.filter(Boolean);
   chatSyncSoon();
   // the PC has the others; this device keeps only its device-only chats then
   if (S.keepLocal === false && sync.ok) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set(chatKey("chats"), own); else store.del(chatKey("chats")); return; }
@@ -172,12 +176,12 @@ async function syncChats() {
         const g = (await pcCall("/chats/get", { id: c.id })).chat; adopt(c, g); changed = true;
       } else if (mine) {
         const x = await pushChat(c);
-        if (x.kept === "pc") { const g = (await pcCall("/chats/get", { id: c.id })).chat; adopt(c, g); changed = true; }
+        if (x.kept === "pc") { const g = (await pcCall("/chats/get", { id: c.id })).chat; if (g && Array.isArray(g.messages)) { adopt(c, g); changed = true; } }
       } else sync.sig[c.id] = chatSig(c);
     }
     for (const r of remote.values()) {                  // chats this device has never seen
       if (have.has(r.id) || sync.sig[r.id] !== undefined) continue;
-      const g = (await pcCall("/chats/get", { id: r.id })).chat; chats.push(g); sync.sig[g.id] = chatSig(g); changed = true;
+      const g = (await pcCall("/chats/get", { id: r.id })).chat; if (!g || !Array.isArray(g.messages)) continue; chats.push(g); sync.sig[g.id] = chatSig(g); changed = true;
     }
     sync.ok = true; sync.fail = 0;
     if (S.keepLocal === false) { const own = chats.filter((c) => c.deviceOnly); if (own.length) store.set(chatKey("chats"), own); else store.del(chatKey("chats")); store.del(chatKey("chatSync")); }
@@ -890,7 +894,7 @@ window.onAccountChange = (uid) => {
     if (S.persist) saveChats();                     // the old account's chats stay saved under its own key
     acctUid = uid;
     if (uid) store.set("acctUid", uid); else store.del("acctUid");
-    chats = S.persist ? store.get(chatKey("chats"), []) : [];
+    chats = S.persist ? cleanChats(store.get(chatKey("chats"), [])) : [];
     sync.sig = S.keepLocal === false ? {} : store.get(chatKey("chatSync"), {}); sync.ok = false;
     current = chats.find(c => c.messages.length) || null;
     if (!current) newChat(); else renderAll();
@@ -908,8 +912,8 @@ window.moveSharedChats = async () => {
     toast("Moving the shared chats into your account…");
     const have = new Set(chats.map((c) => c.id)), moved = [];
     const l = await pcCall("/chats/list", {}, "POST", true);
-    for (const r of l.chats || []) if (!have.has(r.id)) { const g = (await pcCall("/chats/get", { id: r.id }, "POST", true)).chat; chats.push(g); have.add(g.id); moved.push(g.id); }
-    for (const c of store.get("chats", [])) if (!have.has(c.id) && c.messages.length) { chats.push(c); have.add(c.id); moved.push(c.id); }
+    for (const r of l.chats || []) if (!have.has(r.id)) { const g = (await pcCall("/chats/get", { id: r.id }, "POST", true)).chat; if (!g || !Array.isArray(g.messages)) continue; chats.push(g); have.add(g.id); moved.push(g.id); }
+    for (const c of cleanChats(store.get("chats", []))) if (!have.has(c.id) && c.messages.length) { chats.push(c); have.add(c.id); moved.push(c.id); }
     if (!moved.length) { toast("There are no shared chats to move"); return; }
     chats.sort((a, b) => (b.updated || 0) - (a.updated || 0));
     saveChats(); renderSidebar();
@@ -1094,7 +1098,7 @@ function renderSidebar() {
   const list = $("#chatList");
   const q = $("#search").value.trim().toLowerCase();
   list.innerHTML = "";
-  const filtered = chats.filter(c => (!q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content || "").toLowerCase().includes(q))) && (!window.EMBED_CHROME || c.messages.some(m => !m.isEvent) || c === current));
+  const filtered = chats.filter(c => c && (!q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content || "").toLowerCase().includes(q))) && (!window.EMBED_CHROME || c.messages.some(m => !m.isEvent) || c === current));
   // in the Chrome sidebar: its own chats first, then the ones started in the app (open one to continue it right here)
   const groups = window.EMBED_CHROME
     ? [["In the sidebar", c => c.src === "chrome"], ["From the app", c => c.src !== "chrome"]]
@@ -1219,9 +1223,13 @@ function splitThinking(raw) {
 }
 // Max's last look at its own answer: "OK" keeps the answer and a corrected answer replaces it, but a remark about the answer
 // ("I checked it again, it is all correct. OK") is not an answer and must never take its place
+// thinking out loud about the check ("Actually, I think what happened is...", "my previous answer", "the note from the app") is no answer either
+const REVIEW_TALK = /^(actually|wait|hmm+|okay,? so|ok,? so|let me|let's|i (re)?(read|checked|think|notice|see|will|should|need|believe)|the user|this (appears|seems|looks)|looking at|upon (review|reflection)|after (re)?(read|check|review)|on second thought|so,? (the|i|this))\b/i;
+const REVIEW_ABOUT = /\b(my (previous|last|first|earlier) (answer|response|reply)|(the |a )?notes? from the app|the app note|fresh conversation|asking me to check|this review|the review (step|prompt))\b/i;
 function reviewResult(original, revised) {
   const r = splitThinking(revised).answer.trim();
   if (!r || /^ok\b/i.test(r) || /(^|\n|[.!])\s*ok\W{0,3}$/i.test(r)) return original;
+  if (REVIEW_TALK.test(r) || REVIEW_ABOUT.test(r)) return original;
   if (original && r.length < Math.min(120, original.length * 0.35)) return original;   // too short to be the whole corrected answer
   return r;
 }
@@ -2472,6 +2480,8 @@ function wireDeskCard(root) {
   paintDeskVer();
 }
 if (window.albatrossDesktop) window.albatrossDesktop.onUpdate((u) => { if (u && u.ready) toast("Albatross " + u.version + " is ready: it installs the next time the app starts (or Home → This PC)"); paintDeskVer(); });
+// an update that failed (the check, the download, or an install that never happened): the app says so instead of staying quiet
+if (window.albatrossDesktop && window.albatrossDesktop.onUpdateError) { const upErr = (e) => { if (e && e.message) toast("Albatross couldn't update: " + e.message, { action: "OK" }); }; window.albatrossDesktop.onUpdateError(upErr); setTimeout(() => window.albatrossDesktop.lastUpdateError().then(upErr).catch(() => {}), 9000); }
 
 // ---------- pictures and files in answers ----------
 // Every picture in a chat has a number, oldest first: the ones the user attached and the ones made here. The model shows one in its
@@ -6655,8 +6665,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.5";
+const APP_VERSION = "2026-11-15.6";
 const WHATS_NEW = [
+  ["2026-11-15.6", ["Chat works again when a damaged chat is in the saved list (new chat and sending were stuck), the AI's Max re-check can no longer put its rambling into your answer, and the app now tells you when an update fails."]],
   ["2026-11-15.5", ["Models keep their thinking when a tool runs in the middle of an answer, so it stays in the thinking box and doesn't show up as the answer."]],
   ["2026-11-15.4", ["Redstone circuits are now a real 3D build with Minecraft-style blocks: one block per cell, wires cross on raised bridges so no dust lines touch, and you can turn it and click the levers."]],
   ["2026-11-15.3", ["Redstone circuits work in every chat now, even without your PC connected, and always show the clickable diagram."]],

@@ -440,6 +440,8 @@ window.albatrossSelfTest = async function (w) {
     if (rv("OK") !== orig || rv("OK.") !== orig) bad.push("plain OK");
     if (rv("I read the request again and checked every tip. Everything is correct and complete. OK") !== orig) bad.push("a remark replaced the answer");
     if (rv("Looks good.") !== orig) bad.push("a short remark replaced the answer");
+    if (rv("Actually, I think what happened is: this appears to be a fresh conversation where the user only sent the app note asking me to check my previous answer.") !== orig) bad.push("rambling about the check replaced the answer");
+    if (rv("Wait, let me look at my previous answer again. The user wanted a list, and it has one.") !== orig) bad.push("a thinking-out-loud remark replaced the answer");
     if (rv("<think>checking</think>OK") !== orig) bad.push("OK after thinking");
     const fixed = "Three tips for sleeping better: keep the bedroom cool (about 18 °C) and dark, keep the same bedtime every day, and stop screens an hour before bed.";
     if (rv(fixed) !== fixed) bad.push("a real correction was not taken");

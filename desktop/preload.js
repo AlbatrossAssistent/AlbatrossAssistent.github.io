@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("albatrossDesktop", {
   checkUpdate: () => ipcRenderer.invoke("update-check"),
   installUpdate: () => ipcRenderer.invoke("update-install"),
   onUpdate: (fn) => ipcRenderer.on("update", (_e, info) => fn(info)),
+  onUpdateError: (fn) => ipcRenderer.on("update-error", (_e, info) => fn(info)),
+  lastUpdateError: () => ipcRenderer.invoke("update-error"),
   // help with my screen: look at the window the user was using, point at things on the real screen
   screenAvailable: () => ipcRenderer.invoke("screen-available"),
   screenLook: (opts) => ipcRenderer.invoke("screen-look", opts),

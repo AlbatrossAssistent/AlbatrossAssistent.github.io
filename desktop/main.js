@@ -175,9 +175,28 @@ function makeTray() {
 //   in the tray); with the window open it waits for "Restart to update", or until the window is closed to the tray
 const LAST_VER = path.join(DATA, ".last-version");
 const canUpdate = () => !!autoUpdater && app.isPackaged && !/win-unpacked/i.test(process.execPath);
+// If an update fails (the check, the download, or an install that never happened), this says so: updateError is set to
+// { message, version, at } (the page and "Check for updates" can read it), the details go to update-error.log next to the host's
+// data, and a notification tells you once per problem. A good update (or a good check) clears it.
+let updateError = null;
+const UPDATE_LOG = path.join(DATA, "update-error.log"), UPDATE_TARGET = path.join(DATA, ".update-target");
+function noteUpdateError(err, version) {
+  const message = String((err && err.message) || err || "unknown error").split(/\r?\n/)[0].slice(0, 300);
+  const same = updateError && updateError.message === message;
+  updateError = { message, version: version || (update && update.version) || "", at: Date.now() };
+  try { fs.mkdirSync(DATA, { recursive: true }); fs.appendFileSync(UPDATE_LOG, "[" + new Date().toLocaleString() + "] (running " + app.getVersion() + ") " + message + "\n"); } catch {}
+  if (win && !win.isDestroyed()) win.webContents.send("update-error", updateError);
+  makeTray.refresh && makeTray.refresh();
+  if (!same && Notification.isSupported()) {
+    const n = new Notification({ title: "Albatross couldn't update", body: message + " You are on version " + app.getVersion() + ". Click for the details." });
+    n.on("click", () => { try { shell.openPath(UPDATE_LOG); } catch {} }); n.show();
+  }
+}
+const clearUpdateError = () => { updateError = null; if (win && !win.isDestroyed()) win.webContents.send("update-error", null); };
 function installUpdate(opts = {}) {
   if (!canUpdate() || !(update && update.ready) || installUpdate.busy) return;
   installUpdate.busy = true; quitting = true;
+  try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(UPDATE_TARGET, update.version); } catch {}     // checked at the next start: did it really install?
   if (opts.hidden) { try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(HIDDEN_MARK, "1"); } catch {} }
   else showUpdating("Installing version " + update.version + "… Albatross opens again by itself.", null);
   setTimeout(() => autoUpdater.quitAndInstall(true, true), opts.hidden ? 0 : 1200);
@@ -188,8 +207,8 @@ function updateAtStart() {
     let found = false, timer = 0;
     const end = (v) => { clearTimeout(timer); for (const [e, fn] of on) autoUpdater.removeListener(e, fn); resolve(v); };
     const on = [
-      ["update-not-available", () => end(false)],
-      ["error", () => end(false)],
+      ["update-not-available", () => { clearUpdateError(); end(false); }],
+      ["error", (e) => { noteUpdateError(e); end(false); }],
       ["update-available", (i) => {
         found = true; clearTimeout(timer); update = { version: i.version, ready: false };
         if (!hidden) showUpdating("A new version (" + i.version + ") is here. Downloading…", 0);
@@ -200,7 +219,7 @@ function updateAtStart() {
     ];
     for (const [e, fn] of on) autoUpdater.on(e, fn);
     timer = setTimeout(() => { if (!found) end(false); }, 8000);
-    autoUpdater.checkForUpdates().catch(() => end(false));
+    autoUpdater.checkForUpdates().catch((e) => { noteUpdateError(e); end(false); });
   });
 }
 function startUpdates() {
@@ -214,8 +233,9 @@ function startUpdates() {
     if (!win || win.isDestroyed() || !win.isVisible()) return installUpdate({ hidden: true });    // in the tray: right away, quietly
     if (Notification.isSupported()) { const n = new Notification({ title: "Albatross " + i.version + " is ready", body: "Click to update now (takes a few seconds), or it updates when you close the window." }); n.on("click", () => installUpdate()); n.show(); }
   });
-  autoUpdater.on("error", () => {});
-  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 3600e3);
+  autoUpdater.on("error", (e) => noteUpdateError(e));
+  autoUpdater.on("update-not-available", () => clearUpdateError());
+  setInterval(() => autoUpdater.checkForUpdates().catch((e) => noteUpdateError(e)), 4 * 3600e3);
 }
 // ---------- the self-check after every update ----------
 // The first time a new version starts, Albatross runs its self-check (public/selftest.js, the same checks as the developer smoke
@@ -261,7 +281,8 @@ async function runSelfTest(reason) {
 
 ipcMain.handle("version", () => ({ app: app.getVersion(), update }));
 ipcMain.handle("boot", (_e, on) => setBootStart(on));
-ipcMain.handle("update-check", async () => { if (!autoUpdater || !app.isPackaged) return { error: "Updates work in the installed app." }; try { const r = await autoUpdater.checkForUpdates(); return { latest: r && r.updateInfo && r.updateInfo.version, current: app.getVersion(), update }; } catch (e) { return { error: e.message }; } });
+ipcMain.handle("update-check", async () => { if (!autoUpdater || !app.isPackaged) return { error: "Updates work in the installed app." }; try { const r = await autoUpdater.checkForUpdates(); return { latest: r && r.updateInfo && r.updateInfo.version, current: app.getVersion(), update, lastError: updateError }; } catch (e) { noteUpdateError(e); return { error: e.message, lastError: updateError }; } });
+ipcMain.handle("update-error", () => updateError);
 ipcMain.handle("update-install", () => { installUpdate(); return { ok: !!(update && update.ready) }; });
 
 // ---------- help with my screen, and the slowdown warning ----------
@@ -290,6 +311,10 @@ app.whenReady().then(async () => {
   // the version that ran last time (read before the splash writes the new one): different means this start follows an update
   let prevVer = ""; try { prevVer = fs.readFileSync(LAST_VER, "utf8").trim(); } catch {}
   const justUpdated = !!prevVer && prevVer !== app.getVersion();
+  try {
+    const target = fs.existsSync(UPDATE_TARGET) ? fs.readFileSync(UPDATE_TARGET, "utf8").trim() : "";
+    if (target) { fs.unlinkSync(UPDATE_TARGET); if (target !== app.getVersion()) setTimeout(() => noteUpdateError(new Error("Version " + target + " was downloaded, but it did not install (still on " + app.getVersion() + ")."), target), 6000); }
+  } catch {}
   makeTray();
   setUpHelpers();
   if (app.isPackaged && !/win-unpacked/i.test(process.execPath) && !app.getLoginItemSettings().openAtLogin && !fs.existsSync(path.join(DATA, ".asked-autostart"))) {
