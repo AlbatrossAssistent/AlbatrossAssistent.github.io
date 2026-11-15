@@ -371,6 +371,7 @@ const pageUI = {
   },
   plan(steps) { AG.plan = steps; renderPlan(); },
   page(j) { showPage(j); },
+  redstone(spec) { const v = window.redstoneVisual && window.redstoneVisual(spec); if (v) { logEl().appendChild(v); v.scrollIntoView({ block: "nearest", behavior: "smooth" }); } },
   code(lang, code) {
     $("#agCodeCard").hidden = false; $("#agCodeLang").value = lang; $("#agCodeSrc").value = code; $("#agConsole").textContent = "";
     return runInFrame($("#agFrame"), lang, code, (t) => { $("#agConsole").textContent = t; });
@@ -388,6 +389,7 @@ function chatUI(block, redraw) {
     async ask(q, opts) { const st = mk("ask", q, ""); const ans = await pend({ kind: "ask", options: (opts || []).slice(0, 5) }); st.state = ans == null ? "fail" : "done"; st.detail = ans == null ? "(not answered)" : "You answered: " + ans; redraw(); return ans; },
     plan(steps) { block.plan = steps; redraw(); },
     page(j) { block.page = { title: j.title || j.url, url: j.url }; redraw(); },
+    redstone(spec) { (block.redstone = block.redstone || []).push(spec); redraw(); },
     async code(lang, code) { block.code = { lang, code }; redraw(); window.codeSide && window.codeSide(lang, code, false); return runHidden(lang, code); },
     relabel(st, x) { if (st.act) { st.act.x = x; redraw(); } },
     // a project runs in the Code tab, where the user sees it (and plays it)
@@ -521,7 +523,7 @@ async function runTool(name, a, signal) {
     }
     case "redstone_design": {
       const d = step("run", "Designing a redstone circuit: " + String(a.circuit || "").slice(0, 80), "", { t: "run", x: "redstone" });
-      try { const out = window.redstoneDesign(a); done(d, true, out.split("\n").slice(0, 2).join("\n")); return out; } catch (e) { done(d, false, e.message); return "Error: " + e.message; }
+      try { const { text, spec } = window.redstonePlan(a); done(d, true, text.split("\n").slice(0, 2).join("\n")); ui.redstone && ui.redstone(spec); return text; } catch (e) { done(d, false, e.message); return "Error: " + e.message; }
     }
     case "list_printers": { const d = step("run", "Looking for printers", "", { t: "printers", x: "on this PC" }); try { const j = await pcCall("/agent/printers", {}); done(d, true, j.printers.map((p) => p.name + (p.default ? " (default)" : "") + (p.toFile ? " (saves a file)" : "")).join("\n") || "None"); return JSON.stringify(j.printers); } catch (e) { done(d, false, e.message); return "Error: " + e.message; } }
     case "print_file": {
@@ -668,6 +670,7 @@ window.agentCard = function (b) {
   }
   const extra = w.querySelector(".ag-chat-extra");
   if (b.page) { const a = document.createElement("a"); a.href = b.page.url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.className = "ag-pagelink"; a.textContent = "🌐 " + b.page.title; extra.appendChild(a); }
+  for (const spec of b.redstone || []) { const v = window.redstoneVisual && window.redstoneVisual(spec); if (v) extra.appendChild(v); }
   if (b.code) { const c = document.createElement("div"); c.className = "md"; c.innerHTML = md("```" + (b.code.lang === "js" ? "js" : "html") + "\n" + b.code.code + "\n```"); extra.appendChild(c); }
   if (b.pending) {
     const acts = document.createElement("div"); acts.className = "ag-acts";

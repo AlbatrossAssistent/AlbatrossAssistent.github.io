@@ -6647,8 +6647,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.1";
+const APP_VERSION = "2026-11-15.2";
 const WHATS_NEW = [
+  ["2026-11-15.2", ["Redstone circuits now come with a picture: click the levers and watch the signal light up the wires, torches and lamp tick by tick; torch clocks tick (and burn out) on screen."]],
   ["2026-11-15.1", ["The AI can now design Minecraft redstone circuits: logic gates with a truth table, and torch clocks with a burnout check."]],
   ["2026-11-14.17", ["Settings → Input & Output: pick the microphone and speakers Albatross uses (with a live level meter and a test sound), and the ones Jarvis uses on your PC"]],
   ["2026-11-14.16", ["Add-ons in Settings → Tools, open source and on your PC, one click each: a Sharper button on pictures (Real-ESRGAN), a natural voice for answers read aloud (Kokoro), and better web search that asks many search engines at once (SearXNG)","Documents: scanned PDFs and photos of pages are read too, with the text reader built into Windows"]],
