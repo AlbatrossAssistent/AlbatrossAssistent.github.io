@@ -63,7 +63,10 @@ function runtimeCopy() {
     // Models live in <Burrow folder>\Ollama\models. If OLLAMA_MODELS points at a folder that is gone (the folder was moved to another drive), use that one.
     const modelsHere = path.join(path.dirname(path.dirname(__dirname)), "Ollama", "models");
     if ((!env.OLLAMA_MODELS || !fs.existsSync(env.OLLAMA_MODELS)) && fs.existsSync(modelsHere)) env.OLLAMA_MODELS = modelsHere;
-    const child = spawn(exe, ["serve"], { detached: true, env, stdio: ["ignore", ollamaLog, ollamaLog], windowsHide: true });
+    // NOT detached: a detached process has no console at all, and then every program Ollama starts (llama-server.exe for each model it
+    // loads, its GPU probes) opens a console window of its own, which flashes on screen (a Windows Terminal window by default).
+    // With windowsHide and no "detached", Ollama gets one hidden console that all those programs share.
+    const child = spawn(exe, ["serve"], { env, stdio: ["ignore", ollamaLog, ollamaLog], windowsHide: true });
     child.on("error", (e) => console.log("Couldn't start Ollama:", e.message));
     child.unref();
     for (let i = 0; i < 60 && !(await up()); i++) await wait(1000);
