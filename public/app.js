@@ -3247,7 +3247,9 @@ async function chat(model, opts = {}) {
         finished = true; break;
       }
 
-      msgs.push({ role: "assistant", content: roundText, tool_calls: calls });
+      // the model's own thinking goes back with its tool call (as Ollama asks), so it carries on from its reasoning after the tool's
+      // answer instead of writing that reasoning into the reply
+      msgs.push({ role: "assistant", content: roundText, tool_calls: calls, ...(think && think.text ? { thinking: think.text } : textThink && textThink.text ? { thinking: textThink.text } : {}) });
       ph(reply, "working"); reply.phaseText = "Using a tool…";
       for (const tc of calls) {
         const name = tc.function?.name;
@@ -6653,8 +6655,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.4";
+const APP_VERSION = "2026-11-15.5";
 const WHATS_NEW = [
+  ["2026-11-15.5", ["Models keep their thinking when a tool runs in the middle of an answer, so it stays in the thinking box and doesn't show up as the answer."]],
   ["2026-11-15.4", ["Redstone circuits are now a real 3D build with Minecraft-style blocks: one block per cell, wires cross on raised bridges so no dust lines touch, and you can turn it and click the levers."]],
   ["2026-11-15.3", ["Redstone circuits work in every chat now, even without your PC connected, and always show the clickable diagram."]],
   ["2026-11-15.2", ["Redstone circuits now come with a picture: click the levers and watch the signal light up the wires, torches and lamp tick by tick; torch clocks tick (and burn out) on screen."]],
