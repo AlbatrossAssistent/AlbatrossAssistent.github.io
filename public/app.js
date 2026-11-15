@@ -3068,6 +3068,8 @@ async function runTool(name, args, block) {
   return JSON.stringify({ title: j.title, url: args.url, content: j.content });
 }
 
+const REDSTONE_ASK = /(?<![\p{L}\p{N}])(?:red ?stone|torch clock)(?![\p{L}\p{N}])/iu;
+const REDSTONE_EXPR_PROMPT = "You turn a Minecraft redstone request into ONE logic expression. Use single letters a, b, c... for the inputs (levers or buttons) and these words: and, or, xor, not, nand, nor, xnor, with parentheses (up to 6 inputs). Answer with ONLY the expression on one line, no explanation. For a torch clock answer: ring clock 5 (an odd number of torches, 3 to 31).\nExamples:\na door that opens when both buttons are pressed -> a and b\na gate that is on when exactly one lever is on -> a xor b\na lamp that is on unless the lever is on -> not a\non when a or b is on but not c -> (a or b) and not c\na torch clock -> ring clock 5";
 async function chat(model, opts = {}) {
   const conv = current;
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
@@ -3126,6 +3128,28 @@ async function chat(model, opts = {}) {
       const prevSong = [...conv.messages].reverse().map((m) => (m.blocks || []).find((b) => b.type === "music" && b.song?.spec)).find(Boolean)?.song;
       system = (system ? system + "\n\n" : "") + [...new Set(extraTools.map(t => t.key))].map(k => CHAT_TOOLS_HINT[k]).join("\n")
         + (prevSong && extraTools.some(t => t.key === "music") ? `\nThe last piece in this chat: ${JSON.stringify({ title: prevSong.title, ...prevSong.spec })}. Change only what the user asks for.` : "");
+    }
+    // Minecraft redstone for models that can't use tools (llava, gemma3...): they can't call redstone_design, so for a clear request the
+    // app asks the model once for just the logic, builds and simulates the circuit itself, shows it, and tells the model what was built
+    if (!toolsOk && window.redstonePlan && routeOn("redstone")) {
+      const asked = String(conv.messages.filter(m => m.role === "user").at(-1)?.content || "");
+      if (REDSTONE_ASK.test(asked) && /\b(make|build|design|create|circuit|gate|clock|diagram|show|xor|nand|nor|and|or|not|flip|door|lamp|lever)\b/i.test(asked)) {
+        ph(reply, "working"); reply.phaseText = "Designing the circuit…"; redraw();
+        try {
+          const body = { model, messages: [{ role: "system", content: REDSTONE_EXPR_PROMPT }, { role: "user", content: asked.slice(0, 600) }], stream: true, options: { temperature: 0, num_predict: 60 } };
+          if (guestMode && conv?.id) body.chatId = conv.id;
+          const res = await chatApi(body, controller.signal, conv?.id);
+          let raw = ""; await readNdjson(res, j => { if (j.error) throw new Error(j.error); raw += (j.message || {}).content || ""; });
+          const expr = splitThinking(raw).answer.split(/\r?\n/).map(l => l.trim()).find(Boolean) || "";
+          const clean = expr.replace(/^[`"'\s]+|[`"'\s.]+$/g, "").replace(/^(expression|circuit|answer)\s*:\s*/i, "").slice(0, 120);
+          if (clean) {
+            const { text, spec } = window.redstonePlan({ circuit: clean });
+            reply.blocks.push({ type: "redstone", spec, title: spec.expr || "Torch clock", active: false, done: true, doneAt: Date.now() }); redraw();
+            system = (system ? system + "\n\n" : "") + "The app has built this Minecraft redstone circuit and shown it to the user as a picture in the chat (a 3D build with levers they can click, a schematic and a truth table):\n" + text + "\n\nAnswer in two to four sentences: what the circuit does and how to use the picture. Don't repeat the wiring list or the truth table, and don't draw a layout yourself.";
+          }
+        } catch (e) { if (e.name === "AbortError") throw e; }       // no circuit: it just answers as usual
+        delete reply.phaseText;
+      }
     }
     if (EFFORT_HINT[effort] && !maxPlan) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
     { const mem = memoryForAI(); if (mem) system = (system ? system + "\n\n" : "") + mem; }
@@ -4983,7 +5007,7 @@ $("#goTools").onclick = (e) => {
     pop.appendChild(b);
   }
   const r = $("#goTools").getBoundingClientRect();
-  pop.style.left = (r.right + 8) + "px"; pop.style.top = Math.min(r.top, innerHeight - 320) + "px";
+  pop.style.left = Math.max(8, Math.min(r.right + 8, innerWidth - 230)) + "px"; pop.style.top = Math.max(8, Math.min(r.top, innerHeight - 320)) + "px";
   document.body.appendChild(pop); $("#goTools").setAttribute("aria-expanded", "true");
   pop.querySelector("button")?.focus();
   const off = (ev) => { if (!pop.contains(ev.target)) { pop.remove(); $("#goTools").setAttribute("aria-expanded", "false"); removeEventListener("pointerdown", off, true); } };
@@ -5048,6 +5072,7 @@ function setView(v, opt) {
   $("#goMail").classList.toggle("on", v === "mail");
   $("#goHub").classList.toggle("on", v === "hub");
   $("#goMonitor").classList.toggle("on", v === "monitor");
+  $("#goTools").classList.toggle("on", ["jarvis", "notes", "mail", "hub", "monitor", "list", "pc"].includes(v));
   if (v === "hub") window.hubOpen && window.hubOpen(); else window.hubClose && window.hubClose();
   if (v === "monitor") window.monitorOpen && window.monitorOpen(); else window.monitorClose && window.monitorClose();
   if (v === "mail") window.mailOpen && window.mailOpen(opt);
@@ -6665,8 +6690,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.6";
+const APP_VERSION = "2026-11-15.7";
 const WHATS_NEW = [
+  ["2026-11-15.7", ["Redstone circuits now show with any model, even ones without tool support (the app builds the circuit from the logic the model gives), and the left sidebar keeps Jarvis, Notes, Mail, Hub, Monitor, List and Host in one Tools menu."]],
   ["2026-11-15.6", ["Chat works again when a damaged chat is in the saved list (new chat and sending were stuck), the AI's Max re-check can no longer put its rambling into your answer, and the app now tells you when an update fails."]],
   ["2026-11-15.5", ["Models keep their thinking when a tool runs in the middle of an answer, so it stays in the thinking box and doesn't show up as the answer."]],
   ["2026-11-15.4", ["Redstone circuits are now a real 3D build with Minecraft-style blocks: one block per cell, wires cross on raised bridges so no dust lines touch, and you can turn it and click the levers."]],

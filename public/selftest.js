@@ -510,6 +510,33 @@ window.albatrossSelfTest = async function (w) {
     if (o.builds && o.builds.length) bad.push("3D builds failed: " + o.builds.join("; "));
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
+  await tryIt("a redstone circuit also shows for a model that can't use tools (the app builds it from the logic the model gives)", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const NL = String.fromCharCode(10), origApi = chatApi, origCaps = getCaps, out = {};
+      const stream = (parts) => new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); for (const p of parts) c.enqueue(e.encode(JSON.stringify(p) + NL)); c.close(); } }));
+      let calls = 0, seen = [];
+      const script = [[{ message: { role: "assistant", content: "a xor b" } }, { done: true }], [{ message: { role: "assistant", content: "Here is your XOR gate: click the levers." } }, { done: true }]];
+      window.chatApi = async (body) => { seen.push(body); return stream(script[calls++] || [{ message: { role: "assistant", content: "?" } }, { done: true }]); };
+      window.getCaps = async () => ["completion"];
+      setView("chat"); await new Promise(r => setTimeout(r, 150));
+      current.messages.push({ role: "user", content: "Make me a redstone XOR gate" });
+      await chat("fake-model"); await new Promise(r => setTimeout(r, 200));
+      const m = current.messages[current.messages.length - 1];
+      out.calls = calls; out.noTools = seen.every(b => !b.tools);
+      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.length === 5);
+      out.told = !!(seen[1] && JSON.stringify(seen[1].messages).includes("redstone circuit"));
+      out.shown = !!document.querySelector(".rs-vis .rs-3d canvas");
+      current.messages.splice(-2, 2); window.chatApi = origApi; window.getCaps = origCaps; saveChats();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.calls !== 2) bad.push("expected 2 model calls, got " + o.calls);
+    if (!o.noTools) bad.push("tools were sent to a model without tools");
+    if (!o.block) bad.push("no redstone block in the answer");
+    if (!o.told) bad.push("the model wasn't told what was built");
+    if (!o.shown) bad.push("the circuit isn't on the page");
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;
