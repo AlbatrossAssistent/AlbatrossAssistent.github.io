@@ -1531,7 +1531,11 @@ function fillBot(d, m, idx, live) {
     } else c.innerHTML = `<div style="color:var(--muted)">(image not stored)</div>`;
   } else {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
-    blocks.forEach((b, bi) => c.appendChild(renderBlock(b, !!live && !b.done && bi === blocks.length - 1)));
+    // thoughts on top, then the drafts (every circuit the AI made, each one usable), then the other cards, then the answer
+    for (const b of blocks) if (b.type === "thinking") c.appendChild(renderBlock(b, false));
+    const drafts = blocks.filter((b) => b.type === "redstone" && b.spec);
+    if (drafts.length) c.appendChild(draftsCard(drafts));
+    for (const b of blocks) if (b.type !== "thinking" && b.type !== "redstone") c.appendChild(renderBlock(b, false));
     const body = document.createElement("div"); body.className = "md";
     body.innerHTML = m.content ? md(stripAsk(m.content)) : "";
     c.appendChild(body);
@@ -1562,23 +1566,32 @@ function fillLive(c, m) {
   let L = c._live;
   if (!L) {
     c.innerHTML = "";
-    L = c._live = { blocks: [], wrap: document.createElement("div"), body: document.createElement("div"), done: 0, n: 0, tail: null };
+    // while the AI is thinking its thoughts sit at the bottom of the reply; when it is done they move to the top, above the drafts
+    L = c._live = { blocks: [], top: document.createElement("div"), drafts: document.createElement("div"), wrap: document.createElement("div"), body: document.createElement("div"), bottom: document.createElement("div"), draftKey: "", done: 0, n: 0, tail: null };
     L.body.className = "md";
-    c.append(L.wrap, L.body);
+    c.append(L.top, L.drafts, L.wrap, L.body, L.bottom);
     c.closest(".msg").querySelector(".actions").innerHTML = "";
   }
   const blocks = m.blocks || [];
   blocks.forEach((b, i) => {
     const active = !b.done && i === blocks.length - 1, e = L.blocks[i];
-    if (b.type === "thinking" && e) return updateThink(e, b, active);
+    if (b.type === "redstone") { L.blocks[i] = { skip: true }; return; }      // drafts: built below
+    if (b.type === "thinking") {
+      const host = b.done ? L.top : L.bottom;                                // done: top; still thinking: bottom
+      if (e) { updateThink(e, b, active); if (e.el.parentNode !== host) host.appendChild(e.el); return; }
+      const el = renderBlock(b, active); host.appendChild(el);
+      L.blocks[i] = { el, tt: el.querySelector(".think-text"), sum: el.querySelector("summary"), len: el.querySelector(".think-text").textContent.length, active };
+      return;
+    }
     const key = [b.active, b.error, b.title, (b.results || b.images || []).length, b.progress, b.status].join("|");
     if (e && e.key === key) return;
     const el = renderBlock(b, active);
     if (e) e.el.replaceWith(el); else L.wrap.appendChild(el);
-    L.blocks[i] = b.type === "thinking"
-      ? { el, tt: el.querySelector(".think-text"), sum: el.querySelector("summary"), len: el.querySelector(".think-text").textContent.length, active }
-      : { el, key };
+    L.blocks[i] = { el, key };
   });
+  const drafts = blocks.filter((b) => b.type === "redstone" && b.spec);
+  const dKey = drafts.length + ":" + drafts.map((b) => (b.userOpen === undefined ? "-" : b.userOpen ? 1 : 0)).join("");
+  if (dKey !== L.draftKey) { L.draftKey = dKey; L.drafts.replaceChildren(...(drafts.length ? [draftsCard(drafts)] : [])); }
   const body = L.body, src = stripAsk(m.content || "");
   const trimTail = () => { while (body.childNodes.length > L.n) body.lastChild.remove(); };
   const rest = src.slice(L.done), cut = settledLength(rest);
@@ -1651,6 +1664,26 @@ function updateThink(e, b, active) {
     e.sum.innerHTML = BRAIN + thinkLabel(b, active) + CHEV;
     e.el.open = b.userOpen ?? active;
   }
+}
+// Every circuit the AI makes in one reply is a draft of its own and works on its own (levers, 3D build, schematic). They sit under the
+// thoughts; the newest is open, the older ones fold away, so you can compare how the circuit changed.
+const DRAFT_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg>';
+function draftsCard(drafts) {
+  const n = drafts.length, wrap = document.createElement("div"); wrap.className = "drafts";
+  wrap.innerHTML = `<div class="drafts-head">${DRAFT_ICON}<b>Drafts</b><small></small></div><div class="drafts-list"></div>`;
+  wrap.querySelector("small").textContent = n === 1 ? "the circuit it made" : n + " versions, each one works on its own";
+  const list = wrap.querySelector(".drafts-list");
+  drafts.forEach((b, k) => {
+    const last = k === n - 1, det = document.createElement("details"); det.className = "draft";
+    det.open = b.userOpen ?? last;
+    det.innerHTML = `<summary><span class="draft-n"></span><span class="draft-t"></span>${last && n > 1 ? '<span class="draft-new">newest</span>' : ""}${CHEV}</summary><div class="draft-body"></div>`;
+    det.querySelector(".draft-n").textContent = "Draft " + (k + 1);
+    det.querySelector(".draft-t").textContent = b.title || (b.spec && b.spec.expr) || "";
+    det.querySelector("summary").addEventListener("click", () => { b.userOpen = !det.open; });
+    const v = window.redstoneVisual && window.redstoneVisual(b.spec); if (v) det.querySelector(".draft-body").appendChild(v);
+    list.appendChild(det);
+  });
+  return wrap;
 }
 function thinkLabel(b, active) {
   return active ? '<span class="shimmer">Thinking…</span>' : (b.secs ? `Thought for ${b.secs < 1 ? "<1" : Math.round(b.secs)} second${Math.round(b.secs) === 1 ? "" : "s"}` : "Thoughts");
@@ -6690,8 +6723,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.8";
+const APP_VERSION = "2026-11-15.9";
 const WHATS_NEW = [
+  ["2026-11-15.9", ["While the AI is thinking, its thoughts sit at the bottom of the reply and move to the top when it is done. Every circuit it makes in one reply is a draft under the thoughts, each one fully usable (newest open, older ones folded)."]],
   ["2026-11-15.8", ["Redstone circuits are now practical: the app builds them with the fewest torches (wires that meet are a free OR, so NAND is 2 torches and XOR 3), and common gates come as compact hand-made layouts on one level (XOR is 14 by 5 instead of 29 by 22). New: an RS latch (a memory) and a pulse generator."]],
   ["2026-11-15.7", ["Redstone circuits now show with any model, even ones without tool support (the app builds the circuit from the logic the model gives), and the left sidebar keeps Jarvis, Notes, Mail, Hub, Monitor, List and Host in one Tools menu."]],
   ["2026-11-15.6", ["Chat works again when a damaged chat is in the saved list (new chat and sending were stuck), the AI's Max re-check can no longer put its rambling into your answer, and the app now tells you when an update fails."]],

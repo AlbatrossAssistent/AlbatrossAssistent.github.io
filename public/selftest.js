@@ -540,6 +540,43 @@ window.albatrossSelfTest = async function (w) {
     if (!o.shown) bad.push("the circuit isn't on the page");
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
+  await tryIt("thoughts sit at the bottom while thinking and move to the top when done; every circuit is a draft under them", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const out = {}, s1 = redstonePlan({ circuit: "a and b" }).spec, s2 = redstonePlan({ circuit: "a xor b" }).spec;
+      const think = { type: "thinking", text: "Let me work out the gate.", start: performance.now() };
+      const reply = { role: "assistant", content: "Here is the circuit.", blocks: [think], model: "x", phase: "thinking" };
+      const bubble = botBubble(reply, -1); document.body.appendChild(bubble); fillBot(bubble, reply, -1, true);
+      const c = bubble.querySelector(".content");
+      const before = (a, b) => !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));   // a comes before b
+      const T = () => c.querySelector(".think-block"), body = () => c.querySelector(".md");
+      out.bottomWhileThinking = before(body(), T());
+      reply.blocks.push({ type: "redstone", spec: s1, title: s1.expr, active: false, done: true });
+      fillBot(bubble, reply, -1, true);
+      out.stillBottom = before(body(), T()) && !!c.querySelector(".drafts");
+      think.done = true; think.secs = 2;
+      reply.blocks.push({ type: "redstone", spec: s2, title: s2.expr, active: false, done: true });
+      fillBot(bubble, reply, -1, true);
+      const dr = () => c.querySelector(".drafts");
+      out.topWhenDone = before(T(), dr()) && before(dr(), body());
+      out.draftCount = c.querySelectorAll(".draft").length;
+      out.newestOpen = [...c.querySelectorAll(".draft")].map(d => d.open).join();
+      out.usable = c.querySelectorAll(".draft .rs-vis .rs-3d canvas").length;
+      fillBot(bubble, reply, -1, false);          // the finished reply
+      const c2 = bubble.querySelector(".content"), T2 = c2.querySelector(".think-block");
+      out.finalOrder = before(T2, c2.querySelector(".drafts")) && before(c2.querySelector(".drafts"), c2.querySelector(".md")) && c2.querySelectorAll(".draft").length === 2;
+      bubble.remove();
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (!o.bottomWhileThinking) bad.push("thoughts weren't at the bottom while thinking");
+    if (!o.stillBottom) bad.push("thoughts left the bottom before they were done (or no drafts card)");
+    if (!o.topWhenDone) bad.push("thoughts didn't move to the top, above the drafts, when done");
+    if (o.draftCount !== 2) bad.push("expected 2 drafts, got " + o.draftCount);
+    if (o.newestOpen !== "false,true") bad.push("only the newest draft should be open: " + o.newestOpen);
+    if (o.usable !== 2) bad.push("each draft should hold a usable 3D circuit: " + o.usable);
+    if (!o.finalOrder) bad.push("the finished reply is in the wrong order");
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;

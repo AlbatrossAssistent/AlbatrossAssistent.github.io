@@ -404,6 +404,22 @@ body.compact .inner { gap: 14px; }
 .topbar.folded #topFold svg { transform: rotate(180deg); }
 
 /* ---------- Thinking ---------- */
+/* drafts: the circuits the AI made in this reply, under its thoughts */
+.drafts { margin: 0 0 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--soft); overflow: hidden; }
+.drafts-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px 6px; font-size: 14px; }
+.drafts-head .i { width: 16px; height: 16px; color: var(--muted); }
+.drafts-head small { color: var(--muted); font-size: 12.5px; }
+.drafts-list { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px 8px; }
+.draft { border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+.draft > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13.5px; user-select: none; }
+.draft > summary::-webkit-details-marker { display: none; }
+.draft-n { font-weight: 600; }
+.draft-t { color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-new { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.draft > summary .chev { margin-left: auto; transition: transform .25s; }
+.draft[open] > summary .chev { transform: rotate(180deg); }
+.draft-body { padding: 0 8px 8px; }
+.draft-body > .rs-vis { margin: 0; }
 .think-block { margin: 0 0 12px; border-radius: 18px; overflow: hidden; box-shadow: var(--glass-hi); }
 .think-block summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; color: var(--muted); user-select: none; }
 .think-block summary::-webkit-details-marker { display: none; }
