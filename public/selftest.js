@@ -328,6 +328,8 @@ window.albatrossSelfTest = async function (w) {
       out.text = box.textContent; out.hasIn = !!box.querySelector("#sndIn"); out.hasOut = !!box.querySelector("#sndOut");
       out.jvOut = box.querySelector("#jvOut")?.value; out.jvInOpts = [...(box.querySelector("#jvIn")?.options || [])].map((x) => x.value);
       let jin = null; for (let i = 0; i < 50 && !(jin = box.querySelector("#jvIn")); i++) await new Promise((r) => setTimeout(r, 100));   // the pane can redraw itself (devices, permission): look it up again
+      if (!jin) { document.querySelector('#settings .tabs [data-tab="sound"]').click(); for (let i = 0; i < 50 && !(jin = box.querySelector("#jvIn")); i++) await new Promise((r) => setTimeout(r, 100)); }   // a slower redraw from before can replace it once: draw the pane again
+      if (!jin) { window.jarvisCall = keepJ; S._set(keepCfg); document.querySelector("#settings").close(); return JSON.stringify({ missing: box.textContent.slice(0, 300) }); }
       jin.value = "Kopfhörer (Deine Airpods - Find My)"; jin.dispatchEvent(new Event("change"));
       out.btNote = box.querySelector("#jvInNote").textContent;
       const same = box.querySelector("#jvSame"); out.sameShown = !same.hidden; same.click(); await new Promise((r) => setTimeout(r, 50));
@@ -339,6 +341,7 @@ window.albatrossSelfTest = async function (w) {
       window.jarvisCall = keepJ; S._set(keepCfg); S.stopMeter(); document.querySelector("#settings").close();
       return JSON.stringify(out);
     })()`));
+    if (o.missing !== undefined) return "the Jarvis microphone list never appeared; the pane said: " + o.missing;
     const bad = [];
     if (o.sinks.join() !== "el:spk1,ctx:spk1" || !o.isAudio) bad.push("speakers hook " + JSON.stringify([o.sinks, o.isAudio]));
     if (!o.hasIn || !o.hasOut || !/Here, in Albatross/.test(o.text) || !/Jarvis on your PC/.test(o.text)) bad.push("page " + o.text.slice(0, 160));
