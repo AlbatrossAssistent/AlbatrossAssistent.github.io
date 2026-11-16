@@ -327,7 +327,8 @@ window.albatrossSelfTest = async function (w) {
       const box = document.querySelector("#soundBox");
       out.text = box.textContent; out.hasIn = !!box.querySelector("#sndIn"); out.hasOut = !!box.querySelector("#sndOut");
       out.jvOut = box.querySelector("#jvOut")?.value; out.jvInOpts = [...(box.querySelector("#jvIn")?.options || [])].map((x) => x.value);
-      const jin = box.querySelector("#jvIn"); jin.value = "Kopfhörer (Deine Airpods - Find My)"; jin.dispatchEvent(new Event("change"));
+      let jin = null; for (let i = 0; i < 50 && !(jin = box.querySelector("#jvIn")); i++) await new Promise((r) => setTimeout(r, 100));   // the pane can redraw itself (devices, permission): look it up again
+      jin.value = "Kopfhörer (Deine Airpods - Find My)"; jin.dispatchEvent(new Event("change"));
       out.btNote = box.querySelector("#jvInNote").textContent;
       const same = box.querySelector("#jvSame"); out.sameShown = !same.hidden; same.click(); await new Promise((r) => setTimeout(r, 50));
       out.sent = sent;
