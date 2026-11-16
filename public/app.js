@@ -4986,6 +4986,19 @@ function drawWallArt(text, w) {
   ctx.drawImage(art, 0, 0);
   if (dark) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.filter = "blur(" + Math.round(3 * DPR) + "px)"; ctx.globalAlpha = .28; ctx.drawImage(art, 0, 0); ctx.restore(); }   // a little bloom: the light seems to shine
 }
+function paintWallBox() {
+  const w = wallCfg(), grid = $("#wallGrid");
+  $("#wallBox").hidden = S.bgStyle !== "wall";
+  if (!grid.children.length) for (const [id, label] of wallList()) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "wp-sw"; b.dataset.wall = id; b.setAttribute("role", "radio"); b.title = label;
+    const s = document.createElement("span"); s.textContent = label; b.append(s);
+    b.onclick = () => { S.wall = { ...wallCfg(), id }; saveSettings(); applyAppearance(); paintWallBox(); };
+    grid.append(b);
+  }
+  grid.querySelectorAll(".wp-sw").forEach(b => b.setAttribute("aria-checked", String(b.dataset.wall === w.id)));
+  $("#wallLook").value = w.look; $("#wallText").value = w.name; $("#wallStyle").value = w.style; $("#wallSize").value = w.size; $("#wallPos").value = w.pos; $("#wallCustom").value = w.custom;
+  $("#wallCustomRow").hidden = w.name !== "custom";
+}
 for (const [el, key] of [["#wallText", "name"], ["#wallStyle", "style"], ["#wallSize", "size"], ["#wallPos", "pos"], ["#wallLook", "look"]]) $(el).onchange = e => { S.wall = { ...wallCfg(), [key]: e.target.value }; saveSettings(); paintWall(); paintWallBox(); };
 $("#wallCustom").oninput = e => { S.wall = { ...wallCfg(), custom: e.target.value }; saveSettings(); paintWall(); };
 let wallResize = 0; addEventListener("resize", () => { clearTimeout(wallResize); wallResize = setTimeout(paintWall, 150); });
