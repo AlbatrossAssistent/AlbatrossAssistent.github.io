@@ -1,3 +1,6 @@
+/* the model wallpaper's letters: Inter Tight, the open font closest to Apple's SF Pro Display (vendor/fonts, OFL), where SF isn't there */
+@font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 700 900; font-display: swap; src: url(vendor/fonts/InterTight-latin-700-900.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 /* Albatross: the app's styles (was inline in index.html) */
 :root {
   /* Light: cool, layered surfaces over a soft blue-grey scene */
@@ -2452,10 +2455,10 @@ html[data-bg="wall"] #orbs, html[data-bg="wall"] #sky, html.effort-max[data-bg="
 html[data-wallpos="left"] #wall { align-items: flex-end; justify-content: flex-start; padding: 0 0 calc(150px + 6vh) 5vw; }
 html[data-wallpos="bottom"] #wall { align-items: flex-end; padding-bottom: calc(150px + 6vh); }
 #wallName { display: inline-block; white-space: nowrap; line-height: 1.04; padding-bottom: .06em; font-weight: 600; letter-spacing: -.045em; font-size: 120px;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Inter Tight", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   background: linear-gradient(180deg, rgba(var(--wp-ink), .30), rgba(var(--wp-ink), .07)); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
 .wp-sw { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 12px; border: 2px solid transparent; outline: 1px solid var(--line); padding: 0; cursor: pointer; background: var(--wp-bg); overflow: hidden; }
-.wp-sw span { position: absolute; left: 8px; bottom: 5px; font: 600 12px/1 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", system-ui, sans-serif; letter-spacing: -.02em; color: rgba(var(--wp-ink), .8); }
+.wp-sw span { position: absolute; left: 8px; bottom: 5px; font: 600 12px/1 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter Tight", "Inter", "Segoe UI", system-ui, sans-serif; letter-spacing: -.02em; color: rgba(var(--wp-ink), .8); }
 .wp-sw[aria-checked="true"] { border-color: var(--accent); }
 .wp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .wp-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }

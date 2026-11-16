@@ -1177,7 +1177,9 @@ function renderMessages() {
   document.body.classList.toggle("run-elsewhere", !!run && current !== run.chat);
   inner.innerHTML = "";
   paintQueue();
+  const wasEmpty = document.body.classList.contains("chat-empty");
   document.body.classList.toggle("chat-empty", !current.messages.length);
+  if (window.wallAnim) { if (!current.messages.length && !wasEmpty) window.wallAnim.enter(); else window.wallAnim.kick(); }
   if (!current.messages.length) return renderEmpty();
   current.messages.forEach((m, i) => inner.appendChild(m.isEvent ? eventEl(m) : m.role === "user" ? userBubble(m, i) : m.isError ? errorEl(m, i) : botBubble(m, i)));
   if (run && live && current === run.chat && !run.chat.messages.includes(live.m)) inner.appendChild(live.el);
@@ -4915,9 +4917,14 @@ function paintWall() {
 // brightness and tint, bright at the top and bottom of the letters with a darker band through the middle, now and then a fine
 // line of colour or a gap onto the deep base; a soft glow sits under it.
 // Drawn once (and again when the window, the name or the wallpaper changes), never animated.
-let wallArtKey = "";
+let wallArtKey = "", wallFont = "";
 function drawWallArt(text, w) {
   const cv = $("#wallArt"); if (!cv) return;
+  // the letters need their font loaded first (on a canvas a missing font just falls back, silently)
+  if (wallFont !== "ready") {
+    if (wallFont !== "loading" && document.fonts) { wallFont = "loading"; Promise.race([document.fonts.load('800 200px "Inter Tight"', text), new Promise((r) => setTimeout(r, 2500))]).finally(() => { wallFont = "ready"; wallArtKey = ""; paintWall(); }); }
+    if (document.fonts) return;
+  }
   const root = document.documentElement, dark = root.dataset.theme === "dark";
   const side = $("#sidebar"), sr = side && getComputedStyle(side).display !== "none" && innerWidth > 820 ? side.getBoundingClientRect().right : 0;
   const DPR = Math.min(2, devicePixelRatio || 1), W = Math.round(innerWidth * DPR), H = Math.round(innerHeight * DPR);
@@ -4929,7 +4936,7 @@ function drawWallArt(text, w) {
   // the letters' box: the space right of the sidebar
   const areaL = sr * DPR + W * .03, areaR = W * .97, areaW = areaR - areaL;
   const hFrac = { s: .36, m: .6, l: .8 }[w.size] || .6;
-  const font = '800 200px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
+  const font = '800 200px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter Tight", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
   const m = document.createElement("canvas").getContext("2d"); m.font = font; try { m.letterSpacing = "-6px"; } catch {}
   const mt = m.measureText(text), tw = Math.max(1, mt.actualBoundingBoxLeft + mt.actualBoundingBoxRight), th = Math.max(1, mt.actualBoundingBoxAscent + mt.actualBoundingBoxDescent);
   const boxH = H * hFrac, sy = boxH / th, sx = Math.min(sy * .7, (areaW * .96) / tw);      // tall, condensed, never wider than the space
@@ -4981,11 +4988,75 @@ function drawWallArt(text, w) {
     }
   }
   const art = document.createElement("canvas"); art.width = W; art.height = H; art.getContext("2d").putImageData(img, bx, by);
-  // a soft glow under the letters, the way the light spills on a dark screen
-  ctx.save(); ctx.filter = "blur(" + Math.round(34 * DPR) + "px)"; ctx.globalAlpha = dark ? .3 : .1; ctx.drawImage(art, 0, 0); ctx.restore();
-  ctx.drawImage(art, 0, 0);
-  if (dark) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.filter = "blur(" + Math.round(3 * DPR) + "px)"; ctx.globalAlpha = .28; ctx.drawImage(art, 0, 0); ctx.restore(); }   // a little bloom: the light seems to shine
+  // the finished picture: a soft glow under the letters (the way light spills on a dark screen), the letters, a little bloom
+  const base = document.createElement("canvas"); base.width = W; base.height = H;
+  const bc = base.getContext("2d");
+  bc.save(); bc.filter = "blur(" + Math.round(34 * DPR) + "px)"; bc.globalAlpha = dark ? .3 : .1; bc.drawImage(art, 0, 0); bc.restore();
+  bc.drawImage(art, 0, 0);
+  if (dark) { bc.save(); bc.globalCompositeOperation = "lighter"; bc.filter = "blur(" + Math.round(3 * DPR) + "px)"; bc.globalAlpha = .28; bc.drawImage(art, 0, 0); bc.restore(); }
+  window.wallAnim && window.wallAnim.set({ base, art, dark, box: [bx, by - Math.round(40 * DPR), bw, bh + Math.round(80 * DPR)], DPR });
 }
+// The small animation. On a new chat the letters light up from the top down; while the chat is empty a soft sheen of light
+// passes across them every few seconds. Only when the letters are actually showing (an empty chat, not Home, the page in view),
+// never with "reduce motion"; otherwise the finished picture just stands still.
+window.wallAnim = (() => {
+  let pic = null, raf = 0, revealAt = 0, nextSheen = 0, sheenAt = -1;
+  const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const showing = () => document.documentElement.dataset.bg === "wall" && document.documentElement.dataset.walllook === "streaks" && document.body.classList.contains("chat-empty") && !document.body.classList.contains("home-view") && !document.hidden;
+  const ease = (x) => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 3);
+  function frame() {
+    raf = 0;
+    const now = performance.now();                 // one clock for the reveal and the sheen (a frame's own timestamp can lag behind it)
+    const cv = $("#wallArt"); if (!pic || !cv) return;
+    const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, [bx, by, bw, bh] = pic.box;
+    ctx.clearRect(0, 0, W, H);
+    // the reveal: a soft edge of light moving down the letters
+    const p = revealAt ? ease((now - revealAt) / 1300) : 1;
+    if (p < 1) {
+      const edge = by + bh * p, soft = 90 * pic.DPR;
+      ctx.save(); ctx.globalAlpha = .22; ctx.drawImage(pic.base, 0, 0); ctx.restore();    // the whole word, faint, from the first frame: never a blank screen
+      ctx.save(); ctx.globalAlpha = .35 + .65 * p; ctx.beginPath(); ctx.rect(0, 0, W, Math.max(0, edge - soft)); ctx.clip(); ctx.drawImage(pic.base, 0, 0); ctx.restore();
+      const g = ctx.createLinearGradient(0, edge - soft, 0, edge);
+      g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)");
+      const tmp = wallTmp(W, H), tc = tmp.getContext("2d");
+      tc.clearRect(0, 0, W, H); tc.drawImage(pic.base, 0, 0); tc.globalCompositeOperation = "destination-in"; tc.fillStyle = g; tc.fillRect(0, edge - soft, W, soft);
+      tc.globalCompositeOperation = "destination-out"; tc.fillRect(0, 0, W, edge - soft); tc.globalCompositeOperation = "source-over";
+      ctx.save(); ctx.globalAlpha = .35 + .65 * p; ctx.drawImage(tmp, 0, 0); ctx.restore();
+    } else { revealAt = 0; ctx.drawImage(pic.base, 0, 0); }
+    // the sheen: a band of light about a sixth of the letters wide, crossing them in 2.4 seconds, then a pause of about 6
+    if (p >= 1 && sheenAt < 0 && now >= nextSheen) sheenAt = now;
+    if (sheenAt >= 0) {
+      const q = (now - sheenAt) / 2400;
+      if (q >= 1) { sheenAt = -1; nextSheen = now + 5000 + Math.random() * 3000; }
+      else {
+        const bandW = bw * .17, cx = bx - bandW + (bw + bandW * 2) * ease(q);
+        const tmp = wallTmp(W, H), tc = tmp.getContext("2d");
+        tc.clearRect(0, 0, W, H);
+        const g = tc.createLinearGradient(cx - bandW, 0, cx + bandW, 0);
+        const a = pic.dark ? .55 : .5;
+        g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(.5, "rgba(255,255,255," + a + ")"); g.addColorStop(1, "rgba(255,255,255,0)");
+        tc.fillStyle = g; tc.fillRect(cx - bandW, 0, bandW * 2, H);
+        tc.globalCompositeOperation = "destination-in"; tc.drawImage(pic.art, 0, 0); tc.globalCompositeOperation = "source-over";
+        ctx.save(); ctx.globalCompositeOperation = pic.dark ? "lighter" : "source-over"; ctx.drawImage(tmp, 0, 0); ctx.restore();
+      }
+    }
+    if (showing() && !still()) raf = requestAnimationFrame(frame);
+  }
+  function kick() { if (!raf && pic) raf = requestAnimationFrame(frame); }
+  document.addEventListener("visibilitychange", kick);
+  return {
+    set(p) {
+      pic = p; nextSheen = performance.now() + 2600;
+      const cv = $("#wallArt"); if (cv) { const c2 = cv.getContext("2d"); c2.clearRect(0, 0, cv.width, cv.height); c2.drawImage(p.base, 0, 0); }   // the finished picture at once; the animation only plays over it
+      if (showing() && !still()) revealAt = performance.now();
+      kick();
+    },
+    enter() { if (!pic || still()) return; revealAt = performance.now(); sheenAt = -1; nextSheen = revealAt + 2600; kick(); },    // a new chat: light it up again
+    kick,
+  };
+})();
+let wallTmpCv = null;
+function wallTmp(W, H) { if (!wallTmpCv) wallTmpCv = document.createElement("canvas"); if (wallTmpCv.width !== W || wallTmpCv.height !== H) { wallTmpCv.width = W; wallTmpCv.height = H; } return wallTmpCv; }
 function paintWallBox() {
   const w = wallCfg(), grid = $("#wallGrid");
   $("#wallBox").hidden = S.bgStyle !== "wall";
@@ -5383,7 +5454,9 @@ function setView(v, opt) {
   }
   if ((v === "browser" || v === "agent") && window.sideClose) window.sideClose();   // the full-size page instead of the side panel
   if (v === "jarvis" && pcLocked) { ensureUnlocked("Jarvis").then(ok => ok && setView("jarvis", opt)); return; }
+  const wasHome = document.body.classList.contains("home-view");
   document.body.classList.toggle("home-view", v === "home");
+  if (wasHome && v !== "home") setTimeout(() => window.wallAnim && window.wallAnim.enter(), 0);
   document.body.classList.toggle("jarvis-view", v === "jarvis");
   document.body.classList.toggle("pc-view", v === "pc");
   document.body.classList.toggle("agent-view", v === "agent");
@@ -7018,8 +7091,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.6";
+const APP_VERSION = "2026-11-16.7";
 const WHATS_NEW = [
+  ["2026-11-16.7", ["The model wallpaper's letters now use Inter Tight (the open font closest to Apple's SF Pro), light up from the top when you open a new chat, and a soft sheen of light passes over them now and then."]],
   ["2026-11-16.6", ["The MacBook Pro look is redrawn: smooth glossy ribbons of light on near-black, bold letters, a deep band through the middle and a soft glow."]],
   ["2026-11-16.5", ["Model wallpapers now draw the name in tall letters of light streaks, like the MacBook Pro artwork (Letters: Plain switches back). A new chat is an empty screen, and the sidebar folds away completely (the menu button at the top left brings it back; Settings → Appearance can keep the icon strip)."]],
   ["2026-11-16.4", ["Model wallpapers: six quiet backgrounds (Mist, Dusk, Glow, Meadow, Ocean, Graphite) with your model's name in big Apple-style letters, without tags like :12b. Settings → Appearance → Background → Model wallpaper: pick one, the size, the position, or your own text."]],

@@ -3,3 +3,5 @@ Third-party code in this folder (all permissive licences, their licence files si
   bundled into one file with esbuild (MIT). A SoundFont (.sf2/.sf3) synthesizer for the browser: used by the Music tool.
 - spessasynth_processor.min.js: the AudioWorklet part of spessasynth_lib (same licence).
 To rebuild: npm install spessasynth_lib esbuild; esbuild entry.js --bundle --format=esm --minify  (entry: export { WorkletSynthesizer, Sequencer } from "spessasynth_lib")
+- fonts/InterTight-latin-700-900.woff2: Inter Tight (weights 700 to 900, Latin), SIL Open Font License 1.1 (fonts/LICENSE-InterTight.txt), from Google Fonts.
+  The letters of the model wallpaper: the open font closest to Apple's SF Pro Display, for systems that don't have SF.

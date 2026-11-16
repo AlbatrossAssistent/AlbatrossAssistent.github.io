@@ -588,7 +588,10 @@ window.albatrossSelfTest = async function (w) {
         out.on = root.dataset.bg === "wall" && root.dataset.wall === "ocean" && getComputedStyle(document.querySelector("#wall")).display === "flex";
         out.text = el.textContent;
         out.fits = el.scrollWidth <= innerWidth * .92;
-        const cv = document.querySelector("#wallArt"), px = cv.width ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data : [];
+        const cv = document.querySelector("#wallArt");
+        for (let i = 0; i < 40 && !(cv.width && wallFont === "ready"); i++) await new Promise(r => setTimeout(r, 100));   // the font loads first
+        await new Promise(r => setTimeout(r, 1600));            // and the letters light up
+        const px = cv.width ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data : [];
         let lit = 0; for (let i = 3; i < px.length; i += 4 * 97) if (px[i] > 40) lit++;
         out.streaks = root.dataset.walllook === "streaks" && getComputedStyle(cv).display === "block" && lit > 200;
         document.querySelector("#inner").innerHTML = ""; renderEmpty();
