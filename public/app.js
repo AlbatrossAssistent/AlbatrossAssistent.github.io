@@ -3185,6 +3185,21 @@ async function hostCustomTools() {
     $("#ptIns").replaceChildren(...(t.params || []).map(insRow));
     kindFields(); nameHint(); showView(true);
   }
+  // the reference servers of the MCP project (github.com/modelcontextprotocol/servers): copied, never started from here
+  const CATALOG = [
+    { id: "memory", title: "Memory", text: "Remembers things between chats in a small knowledge graph on your PC.", cmd: "npx", args: ["-y", "@modelcontextprotocol/server-memory"] },
+    { id: "files", title: "Files", text: "Reads and writes files, but only inside the folder you give it. Change the folder in the config first.", cmd: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/you/Documents"] },
+    { id: "thinking", title: "Sequential thinking", text: "Helps the AI work through a hard problem step by step.", cmd: "npx", args: ["-y", "@modelcontextprotocol/server-sequential-thinking"] },
+    { id: "git", title: "Git", text: "Reads and works with a git repository (needs uv installed). Change the folder in the config first.", cmd: "uvx", args: ["mcp-server-git", "--repository", "C:/Users/you/project"] },
+  ];
+  for (const c of CATALOG) {
+    const card = mk("div", "pt-card pt-cat"), head = mk("div", "pt-head"), btn = mk("button", "btn small", "Copy"); btn.type = "button";
+    btn.dataset.config = JSON.stringify({ servers: { [c.id]: { command: c.cmd, args: c.args } } }, null, 2);
+    btn.onclick = async () => { try { await navigator.clipboard.writeText(btn.dataset.config); toast("Copied. Paste it into mcp.json on your PC."); } catch { toast("Couldn't copy it. Your browser blocked the clipboard."); } };
+    head.append(mk("b", "", c.title), mk("span", "pt-tag", c.cmd + " " + c.args[1].replace("@modelcontextprotocol/", "")), btn);
+    card.append(head, mk("div", "note", c.text));
+    $("#ptCat").append(card);
+  }
   $("#ptOpen").onclick = () => { dlg.showModal(); showView(false); draw(true); };
   $("#ptNew").onclick = () => openEditor("");
   $("#ptCancel").onclick = () => { showView(false); draw(false); };
@@ -6855,8 +6870,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.2";
+const APP_VERSION = "2026-11-16.3";
 const WHATS_NEW = [
+  ["2026-11-16.3", ["Your tools now has a list of ready-made open-source tool servers (memory, files, sequential thinking, git) to copy into the PC's tools folder."]],
   ["2026-11-16.2", ["Your own tools on the PC: add a web service or a text for the AI in Settings → Tools → Your tools, or put scripts and open-source MCP tool servers in the PC's tools folder. They work in every chat while you're connected, in the Chrome sidebar too."]],
   ["2026-11-16.1", ["The Chrome extension now has My tools: make your own tools for the AI (JavaScript that runs on the page you're on, or a text for it to follow), test them, export and import them. The Minecraft redstone tool has been archived."]],
   ["2026-11-15.10", ["Voice conversations are better: a new living circle that moves with your voice and with the AI's voice (blue while listening, purple thinking, amber looking things up, green speaking), the AI says things while it works (\"let me think about that\", \"that needs me to think longer\", \"let me look that up\", \"I found something on wikipedia.org\"), reads the answer sentence by sentence as it is written, and starts with \"According to ...\" when it used the web."]],

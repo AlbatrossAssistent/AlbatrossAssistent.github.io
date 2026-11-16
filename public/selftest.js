@@ -552,6 +552,7 @@ window.albatrossSelfTest = async function (w) {
         out.dlgOpen = dlg.open; out.cards = dlg.querySelectorAll(".pt-card").length; out.editBtns = dlg.querySelectorAll(".pt-card button").length;
         out.servers = /files \(1 tools\)/.test(document.querySelector("#ptServers").textContent);
         document.querySelector("#ptNew").click(); await new Promise(r => setTimeout(r, 50));
+        out.catalog = [...dlg.querySelectorAll(".pt-cat button")].map(b => { try { const j = JSON.parse(b.dataset.config), n = Object.keys(j.servers)[0]; return j.servers[n].command + ":" + j.servers[n].args.length; } catch { return "bad"; } }).join();
         out.editorShown = !document.querySelector("#ptEdit").hidden && document.querySelector("#ptListView").hidden;
         document.querySelector("#ptKind").value = "prompt"; document.querySelector("#ptKind").onchange();
         out.kindFields = [...dlg.querySelectorAll("[data-k]")].map(f => f.dataset.k + ":" + (f.hidden ? "hidden" : "shown")).join();
@@ -568,6 +569,7 @@ window.albatrossSelfTest = async function (w) {
     if (!o.dlgOpen || o.cards !== 2) bad.push("the Settings dialog doesn't list the tools");
     if (o.editBtns !== 1) bad.push("only tools made on the website can be edited (got " + o.editBtns + " edit buttons)");
     if (!o.servers) bad.push("tool servers aren't shown");
+    if (o.catalog !== "npx:2,npx:3,npx:2,uvx:3") bad.push("the tool server catalog is wrong: " + o.catalog);
     if (!o.editorShown) bad.push("New tool doesn't open the editor");
     if (o.kindFields !== "http:hidden,prompt:shown") bad.push("the kind switch shows the wrong fields: " + o.kindFields);
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
