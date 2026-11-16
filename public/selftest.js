@@ -574,6 +574,44 @@ window.albatrossSelfTest = async function (w) {
     if (o.kindFields !== "http:hidden,prompt:shown") bad.push("the kind switch shows the wrong fields: " + o.kindFields);
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
+  await tryIt("model wallpapers: six of them, the model's name without its tag, set and changed in Settings → Appearance", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const keep = JSON.stringify({ bgStyle: S.bgStyle, wall: S.wall, model: S.model }), out = {};
+      try {
+        out.names = ["gemma3:12b", "qwen2.5vl:7b", "gpt-oss:20b", "hf.co/x/Qwen2.5-7B-Instruct-GGUF:Q4_K_M", "llama3.2"].map(n => prettyModel(n)).join("|");
+        out.asis = prettyModel("gemma3:12b", false);
+        S.model = "gemma3:12b"; S.bgStyle = "wall"; S.wall = { id: "ocean" }; applyAppearance();
+        const sel = document.querySelector("#model"); if (sel) sel.value = "";
+        paintWall();
+        const root = document.documentElement, el = document.querySelector("#wallName");
+        out.on = root.dataset.bg === "wall" && root.dataset.wall === "ocean" && getComputedStyle(document.querySelector("#wall")).display === "flex";
+        out.text = el.textContent;
+        out.fits = el.scrollWidth <= innerWidth * .92;
+        openSettings("appearance"); await new Promise(r => setTimeout(r, 100));
+        out.box = !document.querySelector("#wallBox").hidden; out.swatches = document.querySelectorAll("#wallGrid .wp-sw").length;
+        document.querySelector('#wallGrid .wp-sw[data-wall="dusk"]').click();
+        out.picked = root.dataset.wall === "dusk" && S.wall.id === "dusk";
+        const ws = document.querySelector("#wallStyle"); ws.value = "asis"; ws.onchange({ target: ws });
+        out.asisShown = el.textContent;
+        const wn = document.querySelector("#wallText"); wn.value = "custom"; wn.onchange({ target: wn });
+        const wc = document.querySelector("#wallCustom"); wc.value = "Hello"; wc.oninput({ target: wc });
+        out.custom = el.textContent;
+        document.querySelector("#settings").close();
+      } finally { Object.assign(S, JSON.parse(keep)); if (S.wall === undefined) delete S.wall; saveSettings(); applyAppearance(); }
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.names !== "Gemma 3|Qwen 2.5 VL|GPT OSS|Qwen 2.5 Instruct|Llama 3.2") bad.push("names: " + o.names);
+    if (o.asis !== "gemma3") bad.push("as written: " + o.asis);
+    if (!o.on) bad.push("the wallpaper isn't showing");
+    if (o.text !== "Gemma 3") bad.push("the wallpaper says " + o.text);
+    if (!o.fits) bad.push("the name is wider than the screen");
+    if (!o.box || o.swatches !== 6) bad.push("Settings doesn't show the six wallpapers");
+    if (!o.picked) bad.push("picking a wallpaper didn't change it");
+    if (o.asisShown !== "gemma3") bad.push("the name style didn't change it: " + o.asisShown);
+    if (o.custom !== "Hello") bad.push("own text didn't show: " + o.custom);
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
   await tryIt("voice conversation: names its sources, has things to say while it works, reads the answer as it is written, and the circle draws",async () => {
     const o = JSON.parse(await w.eval(`(() => {
       const V = voiceTest, out = {};

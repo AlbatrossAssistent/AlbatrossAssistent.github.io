@@ -4869,6 +4869,60 @@ function b64ToBlob(b64, type) { const bin = atob(b64); const arr = new Uint8Arra
 function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, 220) + "px"; updateGuestImgWarn(); }
 function slug(s) { return (s || "chat").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "chat"; }
 
+// ---------- Model wallpapers: a quiet gradient with the model's name, in the typeface of Apple's "MacBook Pro" ----------
+// (functions, not constants: applyAppearance and applyType may run before this part of the file has)
+function wallList() { return [["mist", "Mist"], ["dusk", "Dusk"], ["glow", "Glow"], ["meadow", "Meadow"], ["ocean", "Ocean"], ["graphite", "Graphite"]]; }
+function wallCfg() { return { id: "mist", name: "model", custom: "", style: "tidy", size: "m", pos: "center", ...(S.wall || {}) }; }
+// "gemma3:12b" -> "Gemma 3", "hf.co/user/Qwen2.5-GGUF:Q4_K_M" -> "Qwen 2.5", "gpt-oss:20b" -> "GPT OSS"; tidy = false keeps the name as written, just without the tag
+function prettyModel(raw, tidy = true) {
+  let n = String(raw || "").trim().replace(/^.*[/]/, "").replace(/:.*$/, "");
+  if (!n || !tidy) return n;
+  n = n.replace(/[-_]gguf$/i, "");
+  const upper = ["gpt", "oss", "vl", "ocr", "ai", "llm", "glm", "moe", "it"];
+  const cap = (x) => (upper.includes(x.toLowerCase()) ? x.toUpperCase() : x.charAt(0).toUpperCase() + x.slice(1));
+  const words = [];
+  for (const w of n.split(/[-_ ]+/).filter(Boolean)) {
+    if (/^[0-9.]+[bm]$/i.test(w)) continue;           // sizes inside the name (7B, 0.5B): the same clutter as :12b
+    const m = /^([a-z]{3,})([0-9][0-9.]*)([a-z]*)$/i.exec(w);
+    if (m) { if (m[3].length > 1) words.push(cap(m[1]), m[2], cap(m[3])); else words.push(cap(m[1]), m[2] + m[3]); }
+    else words.push(cap(w));
+  }
+  return words.join(" ");
+}
+function wallText() {
+  const w = wallCfg();
+  if (w.name === "custom" && w.custom.trim()) return w.custom.trim();
+  const sel = $("#model"), raw = (sel && sel.value) || S.model || "";
+  return prettyModel(raw, w.style !== "asis") || "Albatross";
+}
+// fit the name to the screen: as big as the Size says, never wider than about 90% of the width
+function paintWall() {
+  const root = document.documentElement, w = wallCfg(), el = $("#wallName");
+  root.dataset.wall = wallList().some(x => x[0] === w.id) ? w.id : "mist";
+  root.dataset.wallpos = ["left", "bottom"].includes(w.pos) ? w.pos : "center";
+  if (!el || root.dataset.bg !== "wall") return;
+  el.textContent = wallText();
+  const base = Math.max(28, Math.min(innerWidth * ({ s: .09, m: .14, l: .2 }[w.size] || .14), { s: 150, m: 230, l: 340 }[w.size] || 230));
+  el.style.fontSize = base + "px";
+  const room = innerWidth * (w.pos === "left" ? .88 : .9), wide = el.scrollWidth;
+  if (wide > room) el.style.fontSize = Math.max(22, base * room / wide) + "px";
+}
+function paintWallBox() {
+  const w = wallCfg(), grid = $("#wallGrid");
+  $("#wallBox").hidden = S.bgStyle !== "wall";
+  if (!grid.children.length) for (const [id, label] of wallList()) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "wp-sw"; b.dataset.wall = id; b.setAttribute("role", "radio"); b.title = label;
+    const s = document.createElement("span"); s.textContent = label; b.append(s);
+    b.onclick = () => { S.wall = { ...wallCfg(), id }; saveSettings(); applyAppearance(); paintWallBox(); };
+    grid.append(b);
+  }
+  grid.querySelectorAll(".wp-sw").forEach(b => b.setAttribute("aria-checked", String(b.dataset.wall === w.id)));
+  $("#wallText").value = w.name; $("#wallStyle").value = w.style; $("#wallSize").value = w.size; $("#wallPos").value = w.pos; $("#wallCustom").value = w.custom;
+  $("#wallCustomRow").hidden = w.name !== "custom";
+}
+for (const [el, key] of [["#wallText", "name"], ["#wallStyle", "style"], ["#wallSize", "size"], ["#wallPos", "pos"]]) $(el).onchange = e => { S.wall = { ...wallCfg(), [key]: e.target.value }; saveSettings(); paintWall(); paintWallBox(); };
+$("#wallCustom").oninput = e => { S.wall = { ...wallCfg(), custom: e.target.value }; saveSettings(); paintWall(); };
+addEventListener("resize", () => paintWall());
 function applyAppearance() {
   // Aurora and Lagoon keep their accent colours while sharing the black/white backgrounds.
   const scene = S.theme === "aurora" || S.theme === "lagoon" ? S.theme : "";
@@ -4879,6 +4933,7 @@ function applyAppearance() {
   const bg = S.bgStyle && S.bgStyle !== "auto" ? S.bgStyle : S.stars === false ? "plain" : theme === "light" ? "shapes" : "stars";
   document.documentElement.dataset.bg = bg;
   polygonField && polygonField.setEnabled(bg === "shapes");
+  paintWall();
   startSky();
   // an accent colour of your own (else the theme's)
   const root = document.documentElement.style;
@@ -4888,6 +4943,7 @@ function applyAppearance() {
   $("#hint").textContent = `Runs on ${S.conn.mode === "remote" ? "your connected PC" : "your own computer"} through Ollama · ${S.enterSends ? "Enter to send · Shift+Enter for a new line" : "Ctrl+Enter to send"}`;
 }
 function applyType() {
+  paintWall();
   $("#typeBadge").hidden = true;
   $("#prompt").placeholder = forceImage ? "Describe the picture you want…" : "Message your AI, or ask it to draw something…";
   $("#ctxFieldChat").hidden = false;
@@ -4929,7 +4985,7 @@ function openSettings(tab) {
   paintMemory();
   $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#chatsDeviceOnly").checked = !!S.chatsDeviceOnly; $("#bgJobs").checked = S.bgJobs !== false; $("#askMid").checked = S.askMid !== false; $("#deviceName").value = S.deviceName || "";
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
-  $("#bgStyle").value = S.bgStyle || (S.stars === false ? "plain" : "auto"); $("#lookSync").checked = !!S.lookSync; paintAccents();
+  $("#bgStyle").value = S.bgStyle || (S.stars === false ? "plain" : "auto"); paintWallBox(); $("#lookSync").checked = !!S.lookSync; paintAccents();
   if (tab) switchTab(tab);
   d.showModal();
 }
@@ -5044,7 +5100,7 @@ $("#bgJobs").onchange = e => { S.bgJobs = e.target.checked; saveSettings(); };
 $("#deviceName").onchange = e => { S.deviceName = e.target.value.trim().slice(0, 40); saveSettings(); };
 $("#persist").onchange = e => { S.persist = e.target.checked; saveSettings(); if (S.persist) saveChats(); else store.del(chatKey("chats")); };
 $("#theme").onchange = e => { S.theme = e.target.value; saveSettings(); applyAppearance(); };
-$("#bgStyle").onchange = e => { S.bgStyle = e.target.value; if (S.bgStyle !== "plain") S.stars = true; saveSettings(); applyAppearance(); };
+$("#bgStyle").onchange = e => { S.bgStyle = e.target.value; if (S.bgStyle !== "plain") S.stars = true; saveSettings(); applyAppearance(); paintWallBox(); };
 $("#lookSync").onchange = e => { S.lookSync = e.target.checked; saveSettings(); };
 const ACCENTS = [["", "Theme"], ["#007AFF", "Blue"], ["#5E5CE6", "Indigo"], ["#AF52DE", "Purple"], ["#FF2D55", "Pink"], ["#FF3B30", "Red"], ["#FF9500", "Orange"], ["#34C759", "Green"], ["#00A6A6", "Teal"], ["#8E8E93", "Graphite"]];
 function paintAccents() {
@@ -6870,8 +6926,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.3";
+const APP_VERSION = "2026-11-16.4";
 const WHATS_NEW = [
+  ["2026-11-16.4", ["Model wallpapers: six quiet backgrounds (Mist, Dusk, Glow, Meadow, Ocean, Graphite) with your model's name in big Apple-style letters, without tags like :12b. Settings → Appearance → Background → Model wallpaper: pick one, the size, the position, or your own text."]],
   ["2026-11-16.3", ["Your tools now has a list of ready-made open-source tool servers (memory, files, sequential thinking, git) to copy into the PC's tools folder."]],
   ["2026-11-16.2", ["Your own tools on the PC: add a web service or a text for the AI in Settings → Tools → Your tools, or put scripts and open-source MCP tool servers in the PC's tools folder. They work in every chat while you're connected, in the Chrome sidebar too."]],
   ["2026-11-16.1", ["The Chrome extension now has My tools: make your own tools for the AI (JavaScript that runs on the page you're on, or a text for it to follow), test them, export and import them. The Minecraft redstone tool has been archived."]],

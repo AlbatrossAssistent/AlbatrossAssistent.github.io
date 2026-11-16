@@ -12,11 +12,12 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Albatross">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cdefs%3E%3CradialGradient id='o' cx='.36' cy='.3' r='.85'%3E%3Cstop offset='0' stop-color='%23ffffff'/%3E%3Cstop offset='.6' stop-color='%23e9ecf2'/%3E%3Cstop offset='1' stop-color='%23b4bccb'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='28' height='28' rx='7' fill='%230A0A0A'/%3E%3Cg transform='translate(3.92 3.92) scale(0.72)'%3E%3Ccircle cx='14' cy='14' r='12' fill='url(%23o)'/%3E%3Cpath d='M9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z' fill='%230A0A0A'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="stylesheet" href="app.css?v=2026-11-16.3">
+<link rel="stylesheet" href="app.css?v=2026-11-16.4">
 </head>
 <body class="intro">
 <div id="orbs" aria-hidden="true"></div>
 <canvas id="sky" aria-hidden="true"></canvas>
+<div id="wall" aria-hidden="true"><span id="wallName"></span></div>
 
 <!-- ================= INTRO ================= -->
 <div id="paintwave" aria-hidden="true"></div>
@@ -492,7 +493,19 @@
           <div class="field"><label for="theme">Theme</label><select id="theme"><option value="light">White (light mode)</option><option value="dark">Black (dark mode)</option><option value="aurora">Aurora accents (black)</option><option value="lagoon">Lagoon accents (white)</option><option value="system">Match system</option></select></div>
           <div class="field"><label>Text size</label><div class="range-row"><input type="range" id="fontSize" min="13" max="20" step="1"><output></output></div></div>
           <label class="check"><span>Liquid glass<small>Panels bend what is behind their edge like glass (from liqui.design). Needs a Chromium browser like Chrome, Edge or Opera for the bending; others get frosted glass.</small></span><input type="checkbox" class="switch" id="glassOn"></label>
-          <div class="field"><label for="bgStyle">Background</label><select id="bgStyle"><option value="auto">Automatic (shapes in light, stars in dark)</option><option value="shapes">Shapes</option><option value="stars">Night sky</option><option value="plain">Plain</option></select></div>
+          <div class="field"><label for="bgStyle">Background</label><select id="bgStyle"><option value="auto">Automatic (shapes in light, stars in dark)</option><option value="shapes">Shapes</option><option value="stars">Night sky</option><option value="wall">Model wallpaper</option><option value="plain">Plain</option></select></div>
+          <div class="field" id="wallBox" hidden>
+            <label>Wallpaper</label>
+            <div class="wp-grid" id="wallGrid" role="radiogroup" aria-label="Wallpaper"></div>
+            <div class="wp-opts">
+              <div class="field"><label for="wallText">Text</label><select id="wallText"><option value="model">The model's name</option><option value="custom">My own text</option></select></div>
+              <div class="field"><label for="wallStyle">Name style</label><select id="wallStyle"><option value="tidy">Tidy (Gemma 3)</option><option value="asis">As written (gemma3)</option></select></div>
+              <div class="field full" id="wallCustomRow" hidden><label for="wallCustom">Own text</label><input id="wallCustom" maxlength="40" placeholder="Albatross" autocomplete="off"></div>
+              <div class="field"><label for="wallSize">Size</label><select id="wallSize"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option></select></div>
+              <div class="field"><label for="wallPos">Position</label><select id="wallPos"><option value="center">Centre</option><option value="bottom">Bottom</option><option value="left">Lower left</option></select></div>
+            </div>
+            <small>The name follows the model you pick, without tags like :12b. It sits behind everything and fits the screen by itself.</small>
+          </div>
           <div class="field"><label>Accent colour</label><div class="accent-row" id="accentRow" role="radiogroup" aria-label="Accent colour"></div></div>
           <input type="checkbox" id="starsOn" hidden>
           <label class="check"><span>Same look on all my devices<small>Off: this device keeps its own appearance (theme, background, colour, text size and the rest here), even when you're signed in.</small></span><input type="checkbox" class="switch" id="lookSync"></label>
@@ -790,7 +803,7 @@
   <div class="jvf-bottom"><div class="jvf-log" id="jvFullLog"></div>
     <form class="jvf-ask" id="jvFullAsk"><input id="jvFullInput" placeholder="Tell Jarvis what to do…" autocomplete="off"><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form></div>
 </div>
-<script src="starfield.js?v=2026-11-16.3"></script>
+<script src="starfield.js?v=2026-11-16.4"></script>
 <script src="scenes.js"></script>
 <script src="liquid-glass.js"></script>
 <script src="network.js"></script>
@@ -803,9 +816,9 @@
 <script src="monitor.js"></script>
 <script src="xfer.js"></script>
 <script src="puzzle.js"></script>
-<script src="app.js?v=2026-11-16.3"></script>
-<script type="module" src="account.js?v=2026-11-16.3"></script>
-<script src="agent.js?v=2026-11-16.3"></script>
+<script src="app.js?v=2026-11-16.4"></script>
+<script type="module" src="account.js?v=2026-11-16.4"></script>
+<script src="agent.js?v=2026-11-16.4"></script>
 <script src="voice.js"></script>
 <script src="browser.js"></script>
 <script src="list.js"></script>

@@ -2441,3 +2441,34 @@ html:not(.embed-chrome) #goJarvis, html:not(.embed-chrome) #goNotes, html:not(.e
 #ptDlg input:not([type=checkbox]), #ptDlg select, #ptDlg textarea { font: inherit; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 7px 11px; min-width: 0; box-sizing: border-box; }
 #ptDlg textarea { width: 100%; resize: vertical; }
 #ptDlg .field input:not([type=checkbox]), #ptDlg .field select { width: 100%; }
+
+/* ---------- Model wallpapers (Settings → Appearance → Background → Model wallpaper) ----------
+   Six quiet gradients, each in a light and a dark version, with the model's name set large in the typeface of Apple's "MacBook Pro". */
+#wall { position: fixed; inset: 0; z-index: -1; display: none; pointer-events: none; overflow: hidden; background: var(--wp-bg); align-items: center; justify-content: center; }
+html[data-bg="wall"] #wall { display: flex; }
+#wallName { transition: opacity .35s ease; }
+body.home-view #wallName { opacity: 0; }     /* Home has its own big title: just the gradient there */
+html[data-bg="wall"] #orbs, html[data-bg="wall"] #sky, html.effort-max[data-bg="wall"] #sky { display: none; }
+html[data-wallpos="left"] #wall { align-items: flex-end; justify-content: flex-start; padding: 0 0 calc(150px + 6vh) 5vw; }
+html[data-wallpos="bottom"] #wall { align-items: flex-end; padding-bottom: calc(150px + 6vh); }
+#wallName { display: inline-block; white-space: nowrap; line-height: 1.04; padding-bottom: .06em; font-weight: 600; letter-spacing: -.045em; font-size: 120px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  background: linear-gradient(180deg, rgba(var(--wp-ink), .30), rgba(var(--wp-ink), .07)); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+.wp-sw { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 12px; border: 2px solid transparent; outline: 1px solid var(--line); padding: 0; cursor: pointer; background: var(--wp-bg); overflow: hidden; }
+.wp-sw span { position: absolute; left: 8px; bottom: 5px; font: 600 12px/1 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", system-ui, sans-serif; letter-spacing: -.02em; color: rgba(var(--wp-ink), .8); }
+.wp-sw[aria-checked="true"] { border-color: var(--accent); }
+.wp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.wp-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.wp-opts .full { grid-column: 1 / -1; }
+[data-theme="light"][data-wall="mist"], [data-theme="light"] [data-wall="mist"] { --wp-bg: radial-gradient(120% 90% at 20% 0%, #ffffff 0%, transparent 60%), linear-gradient(160deg, #eef1f7, #d5dce9); --wp-ink: 58,68,96; }
+[data-theme="dark"][data-wall="mist"], [data-theme="dark"] [data-wall="mist"] { --wp-bg: radial-gradient(100% 80% at 80% 0%, #2b303c 0%, transparent 60%), linear-gradient(160deg, #16181d, #0a0b0e); --wp-ink: 232,236,246; }
+[data-theme="light"][data-wall="dusk"], [data-theme="light"] [data-wall="dusk"] { --wp-bg: radial-gradient(90% 70% at 15% 8%, #ffd8c2, transparent 60%), radial-gradient(90% 80% at 92% 96%, #cbb6ff, transparent 60%), linear-gradient(#fbf3ee, #efe8f8); --wp-ink: 96,62,112; }
+[data-theme="dark"][data-wall="dusk"], [data-theme="dark"] [data-wall="dusk"] { --wp-bg: radial-gradient(90% 70% at 15% 8%, #6d3a4b, transparent 60%), radial-gradient(90% 80% at 92% 96%, #3f2f80, transparent 60%), linear-gradient(#18121d, #0c0911); --wp-ink: 255,224,236; }
+[data-theme="light"][data-wall="glow"], [data-theme="light"] [data-wall="glow"] { --wp-bg: radial-gradient(55% 50% at 50% 42%, #fff6e4, transparent 70%), linear-gradient(#f5f5f7, #e5e6eb); --wp-ink: 122,98,64; }
+[data-theme="dark"][data-wall="glow"], [data-theme="dark"] [data-wall="glow"] { --wp-bg: radial-gradient(55% 50% at 50% 42%, #3c3427, transparent 70%), linear-gradient(#101012, #050506); --wp-ink: 255,240,208; }
+[data-theme="light"][data-wall="meadow"], [data-theme="light"] [data-wall="meadow"] { --wp-bg: radial-gradient(90% 70% at 85% 4%, #d2f4de, transparent 60%), radial-gradient(80% 70% at 8% 100%, #cde8f3, transparent 62%), linear-gradient(#f2f9f5, #e2f0ed); --wp-ink: 36,96,80; }
+[data-theme="dark"][data-wall="meadow"], [data-theme="dark"] [data-wall="meadow"] { --wp-bg: radial-gradient(90% 70% at 85% 4%, #1f4b3b, transparent 60%), radial-gradient(80% 70% at 8% 100%, #173c4b, transparent 62%), linear-gradient(#0c1513, #060b0a); --wp-ink: 204,246,228; }
+[data-theme="light"][data-wall="ocean"], [data-theme="light"] [data-wall="ocean"] { --wp-bg: radial-gradient(100% 70% at 50% 0%, #cde2ff, transparent 62%), radial-gradient(90% 70% at 92% 100%, #b8caff, transparent 60%), linear-gradient(#eef4ff, #dde7fb); --wp-ink: 38,68,140; }
+[data-theme="dark"][data-wall="ocean"], [data-theme="dark"] [data-wall="ocean"] { --wp-bg: radial-gradient(100% 70% at 50% 0%, #1c3b7a, transparent 62%), radial-gradient(90% 70% at 92% 100%, #1b2b68, transparent 60%), linear-gradient(#0a1020, #04070f); --wp-ink: 202,221,255; }
+[data-theme="light"][data-wall="graphite"], [data-theme="light"] [data-wall="graphite"] { --wp-bg: linear-gradient(135deg, #f2f2f4 0%, #dcdce1 55%, #ececef 100%); --wp-ink: 68,68,78; }
+[data-theme="dark"][data-wall="graphite"], [data-theme="dark"] [data-wall="graphite"] { --wp-bg: linear-gradient(135deg, #1e1e21 0%, #0e0e10 55%, #19191c 100%); --wp-ink: 240,240,246; }
