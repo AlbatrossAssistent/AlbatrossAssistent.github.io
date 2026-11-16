@@ -25,6 +25,27 @@
   .pair input { font: 600 20px/1 ui-monospace, Consolas, monospace; letter-spacing: .25em; text-align: center; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
   .err { color: #ff3b30; font-size: 12px; min-height: 1em; }
   iframe { flex: 1; width: 100%; border: 0; display: block; background: var(--bg); }
+  /* My tools */
+  .tools { flex: 1; overflow: auto; padding: 12px 12px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .tools h2 { margin: 0; font-size: 16px; flex: 1; }
+  .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tools small, .hint { color: var(--muted); font-size: 11.5px; }
+  .tools input, .tools textarea, .tools select { font: inherit; font-size: 12.5px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; box-sizing: border-box; min-width: 0; }
+  .tools textarea { width: 100%; resize: vertical; }
+  .tools textarea.code { font: 12px/1.45 ui-monospace, Consolas, monospace; min-height: 130px; white-space: pre; tab-size: 2; }
+  .tools label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-size: 12px; }
+  .tools label > input, .tools label > select { width: 100%; font-weight: 400; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; background: var(--soft); display: flex; flex-direction: column; gap: 4px; }
+  .card b { overflow-wrap: anywhere; }
+  .card .d { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .tag { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .inrow { display: grid; grid-template-columns: 1fr 78px 24px; gap: 5px; align-items: center; }
+  .inrow .desc { grid-column: 1 / 3; }
+  .inrow .req { display: flex; flex-direction: row; align-items: center; gap: 4px; font-weight: 400; font-size: 11.5px; }
+  .inrow + .inrow { margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line); }
+  pre.out { margin: 0; padding: 8px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; font: 12px/1.45 ui-monospace, Consolas, monospace; }
+  pre.out.bad { border-color: #ff3b30; }
+  button.danger { color: #ff3b30; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -41,6 +62,7 @@
     <button id="show">Show the AI's tab</button>
     <button id="closeTab">Close the AI's tab</button>
     <button id="reload">Reload chat</button>
+    <button id="myTools">My tools</button>
     <small>When “Follow my tab” is on, the AI reads and works in the tab you're looking at. Chrome shows a bar while it's attached; Cancel there pauses it. Buying, sending or deleting always asks you first.</small>
   </div>
   <div class="pair" id="pair" hidden>
@@ -58,7 +80,44 @@
     <h2>Albatross isn't running</h2>
     <div>The Albatross host on this PC is off. Start it, then this panel connects by itself.</div>
   </div>
-  <iframe id="app" title="Albatross" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; local-network-access; local-network; loopback-network" hidden></iframe>
+  <div class="tools" id="tools" hidden>
+    <div class="row"><h2>My tools</h2><button id="tNew" class="primary">New tool</button><button id="tDone">Back to chat</button></div>
+    <div id="tListView">
+      <div class="hint" style="margin-bottom:8px">Make your own tools for the AI. It sees each one as <b>my_</b>name and uses it when your question fits. A tool either runs a bit of JavaScript on the page you're on, or hands the AI a ready-made text to follow.</div>
+      <div id="tList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="row" style="margin-top:10px"><button id="tExport">Export</button><button id="tImport">Import</button><input type="file" id="tFile" accept=".json,application/json" hidden></div>
+      <div class="card" id="tReview" hidden style="margin-top:10px">
+        <b id="tReviewTitle"></b>
+        <div class="hint">Tools from a file can run code on the pages you visit with the AI. Read them before you add them, and only add tools from people you trust.</div>
+        <div id="tReviewList" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div class="row"><button class="primary" id="tReviewAdd">Add them</button><button id="tReviewNo">Cancel</button></div>
+      </div>
+      <div class="err" id="tListErr"></div>
+    </div>
+    <div id="tEdit" hidden style="display:flex;flex-direction:column;gap:10px">
+      <label>Start from an example
+        <select id="tExample"><option value="">Empty tool</option></select>
+      </label>
+      <label>Name <input id="tName" maxlength="38" placeholder="list_links" autocomplete="off" spellcheck="false"></label>
+      <div class="hint" id="tNameHint"></div>
+      <label>What it does <textarea id="tDesc" rows="2" maxlength="600" placeholder="Lists the links on the page. The AI reads this to decide when to use the tool."></textarea></label>
+      <label>Kind
+        <select id="tKind"><option value="page">Run JavaScript on the page</option><option value="prompt">Give the AI a text to follow</option></select>
+      </label>
+      <div>
+        <div class="row"><b style="flex:1;font-size:12px">Inputs the AI fills in</b><button id="tAddIn">Add input</button></div>
+        <div id="tIns" style="margin-top:6px"></div>
+      </div>
+      <label><span id="tCodeLabel">Code</span> <textarea class="code" id="tCode" spellcheck="false" maxlength="20000"></textarea></label>
+      <div class="hint" id="tCodeHint"></div>
+      <label>Try it with (JSON) <input id="tTestArgs" placeholder='{"limit": 10}' spellcheck="false" autocomplete="off"></label>
+      <pre class="out" id="tTestOut" hidden></pre>
+      <div class="row"><button class="primary" id="tSave">Save</button><button id="tTest">Test</button><button id="tCancel">Cancel</button><span style="flex:1"></span><button class="danger" id="tDelete" hidden>Delete</button></div>
+      <div class="err" id="tErr"></div>
+    </div>
+  </div>
+  <iframe id="app"title="Albatross" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; local-network-access; local-network; loopback-network" hidden></iframe>
 <script src="sidepanel.js"></script>
+<script src="mytools.js"></script>
 </body>
 </html>

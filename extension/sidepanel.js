@@ -7,7 +7,7 @@ let appReady = false;
 const $ = (s) => document.querySelector(s);
 const ask = (msg) => chrome.runtime.sendMessage(msg);
 const frame = $("#app");
-let state = null, winId = null;
+let state = null, winId = null, toolsOpen = false;     // toolsOpen: the "My tools" screen (mytools.js) is in front of the chat
 
 // the background script knows the panel is open while this port is connected (follow mode ends when it closes)
 chrome.windows.getCurrent().then((w) => { winId = w.id; chrome.runtime.connect({ name: "panel:" + w.id }); refresh(); sendTab(); });
@@ -24,11 +24,11 @@ function paint(s) {
   $("#follow").textContent = s.follow ? "Follow my tab: on" : "Follow my tab: off";
   $("#follow").className = s.follow ? "primary" : "";
   $("#show").disabled = $("#closeTab").disabled = !s.tab || s.follow;
-  $("#pair").hidden = !s.hostUp || s.paired;
-  $("#down").hidden = s.hostUp;
+  $("#pair").hidden = !s.hostUp || s.paired || toolsOpen;
+  $("#down").hidden = s.hostUp || toolsOpen;
   const showApp = s.hostUp && s.paired;
   if (showApp && !frame.src) frame.src = APP;
-  frame.hidden = !showApp;
+  frame.hidden = !showApp || toolsOpen;
 }
 async function refresh(msg = {}) { paint(await ask({ ...msg, windowId: winId })); }
 
@@ -41,9 +41,9 @@ async function sendTab() {
 }
 chrome.tabs.onActivated.addListener((i) => { if (i.windowId === winId) { sendTab(); setTimeout(refresh, 300); } });
 chrome.tabs.onUpdated.addListener((id, info, t) => { if (t.windowId === winId && t.active && (info.title || info.url || info.status === "complete")) sendTab(); });
-frame.addEventListener("load", () => { appReady = !!frame.src; setTimeout(sendTab, 1500); });
-// the app asks for the tab again when it needs it (a new chat, the page reloaded)
-addEventListener("message", (e) => { if (e.source === frame.contentWindow && e.origin === APP_ORIGIN && e.data && e.data.type === "albatross-tab?") { appReady = true; sendTab(); } });
+frame.addEventListener("load", () => { appReady = !!frame.src; setTimeout(() => { sendTab(); sendTools(); }, 1500); });
+// the app asks for the tab again when it needs it (a new chat, the page reloaded); the user's own tools (mytools.js) go along with it
+addEventListener("message", (e) => { if (e.source === frame.contentWindow && e.origin === APP_ORIGIN && e.data && e.data.type === "albatross-tab?") { appReady = true; sendTab(); sendTools(); } });
 
 $("#moreBtn").onclick = () => { const m = $("#more"); m.hidden = !m.hidden; $("#moreBtn").setAttribute("aria-expanded", String(!m.hidden)); };
 $("#pause").onclick = () => refresh({ action: state && state.paused ? "resume" : "pause" });

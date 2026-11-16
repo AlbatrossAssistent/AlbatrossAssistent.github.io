@@ -150,6 +150,19 @@ The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDA
 - Picture steps use your size, steps and style from Settings → Image; with a fixed seed every repeat gets the next seed, so they differ.
 - The list shows progress, **Stop**, **Open chat** and **Edit again**. Only one list runs at a time; more wait their turn.
 
+## Chrome extension: your own tools
+
+The Albatross extension (`extension/`, load it unpacked in chrome://extensions) puts the chat in Chrome's sidebar. **⋯ → My tools** lets you make tools for the AI:
+
+- **Run JavaScript on the page**: the code is the body of an async function. The inputs the AI fills in are in `args`, and you `return` the answer (text or JSON). It runs on the page you're on (turn on *Follow my tab*) and stops after 30 seconds.
+- **Give the AI a text to follow**: a prompt with `{{input}}` gaps; the filled-in text goes back to the AI.
+
+Give a tool a name, say what it does (the AI reads that to decide when to use it) and list its inputs. **Test** runs it before you save. The AI sees each tool as `my_name`, uses it when your question fits, and each use shows as a small card in the chat. Start from an example, or **Export** your tools to a file and **Import** them elsewhere (you see the code before anything is added).
+
+- Tools are stored in the extension (`chrome.storage.local`). The chat only gets the name, description and inputs, never the code; the extension looks the code up itself when the AI asks for a tool.
+- A page tool can read and change the page, like a bookmarklet. Only add tools you wrote or trust.
+- The Minecraft redstone tool was taken out of the app on 2026-11-16 and is kept in `archive/redstone/` (see its README to put it back).
+
 ## Accounts: your chats and lists stay yours
 
 Chats live on the PC. While you're signed in (Settings → Account), your chats and lists are kept **per account**: in `%LOCALAPPDATA%\Albatross\Chats\accounts\<account>` on the PC, and under that account on each device. Signing in with the same account on another device shows the same chats; other accounts, and devices that aren't signed in, don't see them. Devices that aren't signed in share the chats directly in `Chats\`, as before.

@@ -43,6 +43,29 @@ if (window.EMBED_CHROME) {
     if (typeof current !== "undefined" && current && !current.messages.length && typeof renderMessages === "function") renderMessages();   // the start screen names the page
   });
   try { window.parent.postMessage({ type: "albatross-tab?" }, "*"); } catch {}
+  // The user's own tools (made in the extension: sidepanel.js "My tools"). The sidebar sends their names, descriptions and inputs, never
+  // their code; a call goes back to the sidebar by id and the extension answers with the result.
+  window.chromeTools = [];
+  const toolCalls = new Map();
+  window.callChromeTool = (name, args) => new Promise((resolve, reject) => {
+    const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const timer = setTimeout(() => { toolCalls.delete(id); reject(new Error("The tool took longer than a minute.")); }, 60000);
+    toolCalls.set(id, { resolve, reject, timer });
+    try { window.parent.postMessage({ type: "albatross-tool-call", id, name, args }, "*"); } catch (e) { clearTimeout(timer); toolCalls.delete(id); reject(e); }
+  });
+  addEventListener("message", (e) => {
+    if (e.source !== window.parent || !/^chrome-extension:\/\/[a-p]{32}$/.test(e.origin) || !e.data) return;
+    const d = e.data;
+    if (d.type === "albatross-tools" && Array.isArray(d.tools)) {
+      window.chromeTools = d.tools.slice(0, 40).filter((x) => x && /^[a-z0-9_]{1,40}$/.test(x.name)).map((x) => ({
+        name: x.name, description: String(x.description || "").slice(0, 600), kind: x.kind === "prompt" ? "prompt" : "page",
+        params: (Array.isArray(x.params) ? x.params : []).slice(0, 10).filter((p) => p && /^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(p.name)).map((p) => ({
+          name: p.name, type: ["string", "number", "boolean"].includes(p.type) ? p.type : "string", description: String(p.description || "").slice(0, 200), required: !!p.required })) }));
+    } else if (d.type === "albatross-tool-result" && toolCalls.has(d.id)) {
+      const c = toolCalls.get(d.id); toolCalls.delete(d.id); clearTimeout(c.timer);
+      d.ok ? c.resolve(String(d.result == null ? "" : d.result)) : c.reject(new Error(String(d.error || "The tool failed.")));
+    }
+  });
 }
 // Older versions saved whatever address the page was opened from as the server.
 // Switch every saved setup to the Render server once; changes made after that are kept.
@@ -1533,9 +1556,9 @@ function fillBot(d, m, idx, live) {
     const blocks = m.blocks || (m.thinking ? [{ type: "thinking", text: m.thinking }] : []);
     // thoughts on top, then the drafts (every circuit the AI made, each one usable), then the other cards, then the answer
     for (const b of blocks) if (b.type === "thinking") c.appendChild(renderBlock(b, false));
-    const drafts = blocks.filter((b) => b.type === "redstone" && b.spec);
+    const drafts = blocks.filter(isDraft);
     if (drafts.length) c.appendChild(draftsCard(drafts));
-    for (const b of blocks) if (b.type !== "thinking" && b.type !== "redstone") c.appendChild(renderBlock(b, false));
+    for (const b of blocks) if (b.type !== "thinking" && !isDraft(b)) c.appendChild(renderBlock(b, false));
     const body = document.createElement("div"); body.className = "md";
     body.innerHTML = m.content ? md(stripAsk(m.content)) : "";
     c.appendChild(body);
@@ -1575,7 +1598,7 @@ function fillLive(c, m) {
   const blocks = m.blocks || [];
   blocks.forEach((b, i) => {
     const active = !b.done && i === blocks.length - 1, e = L.blocks[i];
-    if (b.type === "redstone") { L.blocks[i] = { skip: true }; return; }      // drafts: built below
+    if (isDraft(b)) { L.blocks[i] = { skip: true }; return; }      // drafts: built below
     if (b.type === "thinking") {
       const host = b.done ? L.top : L.bottom;                                // done: top; still thinking: bottom
       if (e) { updateThink(e, b, active); if (e.el.parentNode !== host) host.appendChild(e.el); return; }
@@ -1589,7 +1612,7 @@ function fillLive(c, m) {
     if (e) e.el.replaceWith(el); else L.wrap.appendChild(el);
     L.blocks[i] = { el, key };
   });
-  const drafts = blocks.filter((b) => b.type === "redstone" && b.spec);
+  const drafts = blocks.filter(isDraft);
   const dKey = drafts.length + ":" + drafts.map((b) => (b.userOpen === undefined ? "-" : b.userOpen ? 1 : 0)).join("");
   if (dKey !== L.draftKey) { L.draftKey = dKey; L.drafts.replaceChildren(...(drafts.length ? [draftsCard(drafts)] : [])); }
   const body = L.body, src = stripAsk(m.content || "");
@@ -1668,6 +1691,15 @@ function updateThink(e, b, active) {
 // Every circuit the AI makes in one reply is a draft of its own and works on its own (levers, 3D build, schematic). They sit under the
 // thoughts; the newest is open, the older ones fold away, so you can compare how the circuit changed.
 const DRAFT_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg>';
+function myToolCard(b) {
+  const wrap = document.createElement("div"); wrap.className = "tool-block";
+  if (b.active) { wrap.innerHTML = '<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>'; wrap.querySelector(".q").textContent = b.status || "Working…"; return wrap; }
+  const det = document.createElement("details"); det.className = "mytool";
+  const sum = document.createElement("summary"); sum.textContent = (b.error ? "Tool failed: " : "Used your tool: ") + b.name; det.appendChild(sum);
+  const pre = document.createElement("pre"); pre.textContent = (Object.keys(b.args || {}).length ? "Input: " + JSON.stringify(b.args) + "\n\n" : "") + (b.error ? "Error: " + b.error : b.result || "(nothing)");
+  det.appendChild(pre); wrap.appendChild(det); return wrap;
+}
+const isDraft = (b) => b.type === "redstone" && !!b.spec && !!window.redstoneVisual;      // a drafts card needs the (archived) redstone drawing code; without it old circuits show a short note
 function draftsCard(drafts) {
   const n = drafts.length, wrap = document.createElement("div"); wrap.className = "drafts";
   wrap.innerHTML = `<div class="drafts-head">${DRAFT_ICON}<b>Drafts</b><small></small></div><div class="drafts-list"></div>`;
@@ -1772,7 +1804,7 @@ function renderBlock(b, active) {
     return wrap;
   }
   if (b.type === "deck") return renderDeck(b);
-  if (b.type === "chart" || b.type === "chances" || b.type === "song" || b.type === "screen" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "agent" || b.type === "notes" || b.type === "music" || b.type === "redstone") return renderToolBlock(b);
+  if (b.type === "chart" || b.type === "chances" || b.type === "song" || b.type === "screen" || b.type === "code" || b.type === "challenge" || b.type === "jarvis" || b.type === "mytool" || b.type === "agent" || b.type === "notes" || b.type === "music" || b.type === "redstone") return renderToolBlock(b);
   if (b.type === "fetch") {
     const d = document.createElement("div");
     d.className = "fetch-line";
@@ -3020,10 +3052,6 @@ const CHAT_TOOLS = (() => {
       run(args) { const ids = window.notesApply(args.changes); return { block: done({ type: "notes", ids }), out: ids.length ? `Done: ${ids.length} note${ids.length > 1 ? "s" : ""} changed and shown to the user. Say briefly what you did.` : "Nothing matched: no note was changed. Tell the user, or check the titles with notes_show." }; } },
     { key: "music", name: "make_music", need: "musicCompose", def: T("make_music", "Compose a piece of music that plays in the chat and downloads as a MIDI file. You only provide the musical idea; the app writes out the notes with real music rules, so choose carefully: the style, a key that fits the mood (sad: minor; happy: major; dark: phrygian; dreamy: lydian), chords that belong together, and a memorable motif. Build the piece up (calm start, full chorus).", window.MUSIC_PROPS || {}, ["title", "style", "key", "bpm", "progression", "motif", "structure"]),
       run(args) { const song = window.musicCompose(args); return { block: done({ type: "music", song }), out: `The piece "${song.title}" (${song.key}, ${song.bpm} bpm) is shown with play and download buttons. Answer in one or two sentences; don't describe every note.` }; } },
-    // Minecraft redstone (redstone.js): the circuit is worked out and simulated by the app, and drawn as a card the user can click
-    { key: "redstone", name: "redstone_design", need: "redstonePlan", def: T("redstone_design", "Design a Minecraft redstone circuit and show it to the user as an interactive diagram (levers to click, wires and torches that light up, the lamp as output, a truth table). The app finds the smallest practical build itself (wires that meet are a free OR, a torch inverts), so just give the logic: an expression over inputs, like \"a xor b\" or \"(a and b) or not c\" (words and, or, xor, not, nand, nor, xnor, or symbols & | ^ !; up to 6 inputs; a door that opens from either of two levers is \"a or b\"). Or one of the ready-made circuits: \"rs latch\" (a memory: one lever turns the lamp on and it stays, the other turns it off), \"pulse\" (one short pulse when a lever is switched on), or \"ring clock\" with an odd number of torches.", {
-      circuit: { type: "string", description: "the logic expression, or \"rs latch\", \"pulse\" or \"ring clock\"" }, torches: { type: ["number", "null"], description: "ring clock only: how many torches (odd, 3 to 31)" } }, ["circuit"]),
-      run(args) { const { text, spec } = window.redstonePlan(args); return { block: done({ type: "redstone", spec, title: spec.expr || "Torch clock" }), out: text + "\n\nAnswer in two to four sentences: what the circuit does and how to use the diagram (click the levers). Don't repeat the wiring list or the truth table; they are in the card." }; } },
     { key: "song", name: "make_song", need: "songOk", def: T("make_song", "Make a real song with the AI song model on the user's PC (ACE-Step): music with singing, in any style, from style tags and lyrics. It takes one to three minutes and plays in the chat. Use it when the user wants a song, a track with vocals, or an AI-made piece; for quick editable music without singing use make_music.", {
       tags: { type: "string", description: "Comma-separated style tags in English: genre, mood, instruments, voice and tempo, like \"indie pop, upbeat, female vocals, acoustic guitar, 110 bpm, summer\"" },
       lyrics: { type: "string", description: "The lyrics with structure markers on their own lines: [verse], [chorus], [verse], [bridge], [chorus]; in the language of the song. Use [instrumental] (or leave empty) for no singing. Keep it to what fits the length: about 4 lines per section." },
@@ -3059,10 +3087,28 @@ const CHAT_TOOLS = (() => {
       } },
   ];
 })();
+// The user's own tools from the Chrome extension, offered to the model next to the built-in ones. Their names start with my_, so they can
+// never replace a built-in tool; each call becomes a small card in the answer and the extension's reply goes back to the model.
+function chromeCustomTools() {
+  if (!window.EMBED_CHROME || !Array.isArray(window.chromeTools)) return [];
+  return window.chromeTools.map((t) => {
+    const name = "my_" + t.name;
+    return { key: "custom", name, def: { type: "function", function: { name, description: (t.description || t.name) + " (the user's own tool)", parameters: { type: "object",
+      properties: Object.fromEntries(t.params.map((p) => [p.name, { type: p.type, ...(p.description ? { description: p.description } : {}) }])), required: t.params.filter((p) => p.required).map((p) => p.name) } } },
+      async run(args, ctx) {
+        const block = { type: "mytool", name: t.name, args: args || {}, active: true, status: "Running " + t.name + "…" };
+        ctx.reply.blocks.push(block); ctx.redraw();
+        try { block.result = (await window.callChromeTool(t.name, args || {})).slice(0, 6000); }
+        catch (e) { block.error = e.message; }
+        Object.assign(block, { active: false, done: true, doneAt: Date.now() }); ctx.redraw();
+        return { out: block.error ? "Error: " + block.error : block.result || "(the tool returned nothing)" };
+      } };
+  });
+}
 const CHAT_TOOLS_HINT = {
+  custom: "The user made their own tools (names start with my_). Use one when the user asks for what it does, or when it clearly helps with the page they're on; the tool's answer comes back to you, so tell the user the result in your own words.",
   screen: "Screen help: when the user asks what is on their screen, what they are looking at, or needs help with something in another app, call look_at_screen first (you get the app they were using, not Albatross). Describe what you see in plain words, then call show_on_screen with the numbers of the few things that matter and a short label for each, so the user sees them lit up on their real screen. Never invent a number. You point; you do not click for them (Jarvis does that).",
   song: "Songs: when the user wants a real song (with singing) or an AI-made track, call make_song with style tags and lyrics with [verse]/[chorus] markers (or [instrumental]); it takes a minute or two. Quick editable music without singing is make_music.",
-  redstone: "Minecraft redstone: when the user wants a redstone circuit, logic gate, door or lamp logic, or a torch clock, call redstone_design with the logic as an expression (or \"rs latch\", \"pulse\", \"ring clock\" for a memory, a one-tick pulse or a clock); never draw or describe a layout yourself and never build it out of more gates than needed: the app finds the smallest practical circuit and shows it as an interactive 3D build.",
   graph: "Charts: when the user wants a graph or chart, call make_chart (look the numbers up first if you don't know them).",
   chances: "Chances: when the user asks how likely something is or wants a prediction, call estimate_chances.",
   notes: "Notes: when the user talks about their notes, lists or to-dos, call notes_show first, then notes_edit to change them.",
@@ -3101,8 +3147,6 @@ async function runTool(name, args, block) {
   return JSON.stringify({ title: j.title, url: args.url, content: j.content });
 }
 
-const REDSTONE_ASK = /(?<![\p{L}\p{N}])(?:red ?stone|torch clock)(?![\p{L}\p{N}])/iu;
-const REDSTONE_EXPR_PROMPT = "You turn a Minecraft redstone request into ONE logic expression. Use single letters a, b, c... for the inputs (levers or buttons) and these words: and, or, xor, not, nand, nor, xnor, with parentheses (up to 6 inputs). Answer with ONLY the expression on one line, no explanation. For a torch clock answer: ring clock 5 (an odd number of torches, 3 to 31). For a memory or latch answer: rs latch. For a one-tick pulse answer: pulse.\nExamples:\na door that opens when both buttons are pressed -> a and b\na gate that is on when exactly one lever is on -> a xor b\na lamp that is on unless the lever is on -> not a\non when a or b is on but not c -> (a or b) and not c\na torch clock -> ring clock 5\na memory that stays on after one lever and goes off with another -> rs latch\none short pulse when a lever is switched on -> pulse";
 async function chat(model, opts = {}) {
   const conv = current;
   const reply = { role: "assistant", content: "", blocks: [], model, phase: "sent" };
@@ -3158,32 +3202,11 @@ async function chat(model, opts = {}) {
     // charts, chances, notes, music and songs: tools the model picks itself
     await refreshSong();
     const extraTools = !guestMode && toolsOk && window.agentChatTools ? CHAT_TOOLS.filter(t => routeOn(t.key) && (!t.need || window[t.need])) : [];
+    if (!guestMode && toolsOk) extraTools.push(...chromeCustomTools());
     if (extraTools.length) {
       const prevSong = [...conv.messages].reverse().map((m) => (m.blocks || []).find((b) => b.type === "music" && b.song?.spec)).find(Boolean)?.song;
       system = (system ? system + "\n\n" : "") + [...new Set(extraTools.map(t => t.key))].map(k => CHAT_TOOLS_HINT[k]).join("\n")
         + (prevSong && extraTools.some(t => t.key === "music") ? `\nThe last piece in this chat: ${JSON.stringify({ title: prevSong.title, ...prevSong.spec })}. Change only what the user asks for.` : "");
-    }
-    // Minecraft redstone for models that can't use tools (llava, gemma3...): they can't call redstone_design, so for a clear request the
-    // app asks the model once for just the logic, builds and simulates the circuit itself, shows it, and tells the model what was built
-    if (!toolsOk && window.redstonePlan && routeOn("redstone")) {
-      const asked = String(conv.messages.filter(m => m.role === "user").at(-1)?.content || "");
-      if (REDSTONE_ASK.test(asked) && /\b(make|build|design|create|circuit|gate|clock|diagram|show|xor|nand|nor|and|or|not|flip|door|lamp|lever)\b/i.test(asked)) {
-        ph(reply, "working"); reply.phaseText = "Designing the circuit…"; redraw();
-        try {
-          const body = { model, messages: [{ role: "system", content: REDSTONE_EXPR_PROMPT }, { role: "user", content: asked.slice(0, 600) }], stream: true, options: { temperature: 0, num_predict: 60 } };
-          if (guestMode && conv?.id) body.chatId = conv.id;
-          const res = await chatApi(body, controller.signal, conv?.id);
-          let raw = ""; await readNdjson(res, j => { if (j.error) throw new Error(j.error); raw += (j.message || {}).content || ""; });
-          const expr = splitThinking(raw).answer.split(/\r?\n/).map(l => l.trim()).find(Boolean) || "";
-          const clean = expr.replace(/^[`"'\s]+|[`"'\s.]+$/g, "").replace(/^(expression|circuit|answer)\s*:\s*/i, "").slice(0, 120);
-          if (clean) {
-            const { text, spec } = window.redstonePlan({ circuit: clean });
-            reply.blocks.push({ type: "redstone", spec, title: spec.expr || "Torch clock", active: false, done: true, doneAt: Date.now() }); redraw();
-            system = (system ? system + "\n\n" : "") + "The app has built this Minecraft redstone circuit and shown it to the user as a picture in the chat (a 3D build with levers they can click, a schematic and a truth table):\n" + text + "\n\nAnswer in two to four sentences: what the circuit does and how to use the picture. Don't repeat the wiring list or the truth table, and don't draw a layout yourself.";
-          }
-        } catch (e) { if (e.name === "AbortError") throw e; }       // no circuit: it just answers as usual
-        delete reply.phaseText;
-      }
     }
     if (EFFORT_HINT[effort] && !maxPlan) system = (system ? system + "\n\n" : "") + EFFORT_HINT[effort];
     { const mem = memoryForAI(); if (mem) system = (system ? system + "\n\n" : "") + mem; }
@@ -3477,7 +3500,7 @@ async function sendGuestRecap(conv, model, extraPcFiles) {
 // ---------- tools: the AI picks them by itself (Settings → Tools switches single ones off) ----------
 let toolMode = "";   // older code paths still look at it; nothing sets it anymore
 // in the Chrome sidebar only what helps with the page and your PC's files and info is on (no pictures, music, slides, charts, Jarvis)
-const EMBED_OFF = new Set(["image", "slides", "graph", "chances", "music", "challenge", "jarvis", "redstone"]);
+const EMBED_OFF = new Set(["image", "slides", "graph", "chances", "music", "challenge", "jarvis"]);
 const toolOn = (k) => S.tools?.[k] !== false && !(window.EMBED_CHROME && EMBED_OFF.has(k));
 // Documents only takes part once the PC has some indexed (docsReady, from the PC's status); the other tools whenever they are on
 let docsReady = false;
@@ -4182,7 +4205,8 @@ function renderToolBlock(b) {
   if (b.type === "music") return window.musicCard ? window.musicCard(b) : document.createElement("div");
   if (b.type === "song") return songCard(b);
   if (b.type === "screen") return screenCard(b);
-  if (b.type === "redstone") return (window.redstoneVisual && b.spec && window.redstoneVisual(b.spec)) || document.createElement("div");
+  if (b.type === "mytool") return myToolCard(b);
+  if (b.type === "redstone") { const v = isDraft(b) && window.redstoneVisual(b.spec); if (v) return v; const d = document.createElement("div"); d.className = "tool-block"; d.style.color = "var(--muted)"; d.textContent = "A redstone circuit was here. The redstone tool has been archived."; return d; }
   const wrap = document.createElement("div"); wrap.className = "tool-block";
   if (b.active) {
     wrap.innerHTML = `<div class="search-bar active"><span class="spin"></span><span class="q"></span></div>`;
@@ -6725,8 +6749,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-15.10";
+const APP_VERSION = "2026-11-16.1";
 const WHATS_NEW = [
+  ["2026-11-16.1", ["The Chrome extension now has My tools: make your own tools for the AI (JavaScript that runs on the page you're on, or a text for it to follow), test them, export and import them. The Minecraft redstone tool has been archived."]],
   ["2026-11-15.10", ["Voice conversations are better: a new living circle that moves with your voice and with the AI's voice (blue while listening, purple thinking, amber looking things up, green speaking), the AI says things while it works (\"let me think about that\", \"that needs me to think longer\", \"let me look that up\", \"I found something on wikipedia.org\"), reads the answer sentence by sentence as it is written, and starts with \"According to ...\" when it used the web."]],
   ["2026-11-15.9", ["While the AI is thinking, its thoughts sit at the bottom of the reply and move to the top when it is done. Every circuit it makes in one reply is a draft under the thoughts, each one fully usable (newest open, older ones folded)."]],
   ["2026-11-15.8", ["Redstone circuits are now practical: the app builds them with the fewest torches (wires that meet are a free OR, so NAND is 2 torches and XOR 3), and common gates come as compact hand-made layouts on one level (XOR is 14 by 5 instead of 29 by 22). New: an RS latch (a memory) and a pulse generator."]],

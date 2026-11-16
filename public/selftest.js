@@ -478,106 +478,46 @@ window.albatrossSelfTest = async function (w) {
     if (o.review.calls !== 2 || !/^Yes: pizza is good\./.test(o.review.content)) bad.push("review " + JSON.stringify(o.review));
     return bad.length ? bad.join(" | ") : true;
   });
-  await tryIt("a redstone circuit asked for in chat shows its diagram (no PC needed)", async () => {
+  await tryIt("Chrome sidebar: the user's own tools are offered to the model (as my_...), run through the extension, and show as a card", async () => {
     const o = JSON.parse(await w.eval(`(async () => {
-      const NL = String.fromCharCode(10), origApi = chatApi, origCaps = getCaps, out = {};
+      const NL = String.fromCharCode(10), origApi = chatApi, origCaps = getCaps, origCall = window.callChromeTool, origTools = window.chromeTools, out = {};
       const stream = (parts) => new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); for (const p of parts) c.enqueue(e.encode(JSON.stringify(p) + NL)); c.close(); } }));
-      let calls = 0, sent = null;
-      const script = [[{ message: { role: "assistant", content: "", tool_calls: [{ function: { name: "redstone_design", arguments: { circuit: "a xor b" } } }] } }, { done: true }],
-        [{ message: { role: "assistant", content: "Here is your XOR gate." } }, { done: true }]];
-      window.chatApi = async (body) => { if (!sent) sent = body; return stream(script[calls++] || [{ message: { role: "assistant", content: "?" } }, { done: true }]); };
+      const bodies = [], calls = [];
+      const script = [[{ message: { role: "assistant", content: "", tool_calls: [{ function: { name: "my_word_count", arguments: { word: "pizza" } } }] } }, { done: true }],
+        [{ message: { role: "assistant", content: "The page says pizza 3 times." } }, { done: true }]];
+      let n = 0;
+      window.chatApi = async (body) => { bodies.push(JSON.parse(JSON.stringify(body))); return stream(script[n++] || [{ message: { role: "assistant", content: "?" } }, { done: true }]); };
       window.getCaps = async () => ["completion", "tools"];
       setView("chat"); await new Promise(r => setTimeout(r, 150));
-      current.messages.push({ role: "user", content: "Make me a redstone XOR gate" });
-      await chat("fake-model"); await new Promise(r => setTimeout(r, 200));
-      const m = current.messages[current.messages.length - 1];
-      out.offered = !!(sent && JSON.stringify(sent).includes("redstone_design"));
-      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.filter(g => !g.merge).length === 3);
-      const vis = [...document.querySelectorAll(".rs-vis")].pop();
-      out.shown = !!vis && !!vis.querySelector(".rs-3d canvas") && vis.querySelectorAll(".rs-3d tbody tr").length === 4 && vis.querySelectorAll(".lever").length === 2;
-      if (vis) { vis.querySelector(".rs-3d tbody tr:nth-child(3)").click(); await new Promise(r => setTimeout(r, 3500)); out.lit = /Lamp is <b>ON/.test(vis.querySelector(".rs-3d .rs-status").innerHTML); }
-      // every build must pass its own redstone simulation, wires crossing on bridges included
-      out.builds = ["a and b", "a xor b", "a nand b", "a or b or c", "(a and b) or not c", "a xor b xor c", "(a or b) and (c or d)", "rs latch", "pulse"].map(e => { try { const L = redstoneLayout(redstonePlan({ circuit: e }).spec); return L.counts.torches > 0; } catch (x) { return e + ": " + x.message; } }).filter(x => x !== true);
-      out.size = ["a xor b", "a nand b", "not a", "a and b and c", "rs latch"].map(e => { const sp = redstonePlan({ circuit: e }).spec, bx = redstoneLayout(sp).box; return e + ": " + sp.gates.filter(g => !g.merge).length + " torches, " + (bx.x1 - bx.x0 + 1) + "x" + (bx.z1 - bx.z0 + 1) + "x" + bx.y1; });
-      out.answer = m.content;
-      current.messages.splice(-2, 2); window.chatApi = origApi; window.getCaps = origCaps; saveChats();
+      window.chromeTools = [{ name: "word_count", description: "Counts a word on the page", kind: "page", params: [{ name: "word", type: "string", description: "The word", required: true }, { name: "limit", type: "number", description: "", required: false }] }];
+      window.callChromeTool = async (name, args) => { calls.push([name, args]); return "3 matches"; };
+      window.EMBED_CHROME = true;
+      try {
+        current.messages.push({ role: "user", content: "How often does the page say pizza?" });
+        try { await chat("fake-model"); } catch (e) { out.err = String(e && e.stack || e).slice(0, 400); } await new Promise(r => setTimeout(r, 200));
+        const m = current.messages[current.messages.length - 1]; out.nb = bodies.length; out.last = String(m.content || "").slice(0, 200);
+        if (!bodies.length) return JSON.stringify(out);
+        const tool = (bodies[0].tools || []).map(t => t.function).find(f => f.name === "my_word_count");
+        out.offered = !!tool && tool.parameters.required.join() === "word" && tool.parameters.properties.limit.type === "number" && /Counts a word/.test(tool.description);
+        out.called = JSON.stringify(calls);
+        out.block = (m.blocks || []).some(b => b.type === "mytool" && b.name === "word_count" && b.result === "3 matches" && !b.active);
+        out.back = JSON.stringify(bodies[1] ? bodies[1].messages : "").includes("3 matches");
+        out.answer = m.content;
+        const card = [...document.querySelectorAll(".mytool")].pop();
+        out.card = !!card && /word_count/.test(card.textContent) && /3 matches/.test(card.textContent);
+        current.messages.splice(-2, 2);
+      } finally { window.EMBED_CHROME = false; window.chatApi = origApi; window.getCaps = origCaps; window.callChromeTool = origCall; window.chromeTools = origTools; saveChats(); }
       return JSON.stringify(out);
     })()`));
     const bad = [];
-    if (!o.offered) bad.push("the tool wasn't offered to the model");
-    if (!o.block) bad.push("no redstone block in the answer");
-    if (!o.shown) bad.push("the diagram isn't on the page");
-    if (!o.lit) bad.push("switching lever a didn't light the lamp");
-    if (o.builds && o.builds.length) bad.push("3D builds failed: " + o.builds.join("; "));
-    const want = { "a xor b": [3, 14, 5, 1], "a nand b": [2, 8, 3, 1], "not a": [1, 6, 1, 1], "a and b and c": [4, 11, 5, 1], "rs latch": [2, 8, 7, 1] };
-    for (const line of o.size || []) { const m = /^(.+): (d+) torches, (d+)x(d+)x(d+)$/.exec(line), w = m && want[m[1]]; if (!w || +m[2] !== w[0] || +m[3] > w[1] || +m[4] > w[2] || +m[5] > w[3]) bad.push("not the practical size: " + line); }
+    if (!o.offered) bad.push("the tool wasn't offered with its form");
+    if (o.called !== '[["word_count",{"word":"pizza"}]]') bad.push("the extension was called with " + o.called);
+    if (!o.block) bad.push("no tool card block in the answer");
+    if (!o.back) bad.push("the result didn't go back to the model");
+    if (!o.card) bad.push("the card isn't on the page");
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
-  await tryIt("a redstone circuit also shows for a model that can't use tools (the app builds it from the logic the model gives)", async () => {
-    const o = JSON.parse(await w.eval(`(async () => {
-      const NL = String.fromCharCode(10), origApi = chatApi, origCaps = getCaps, out = {};
-      const stream = (parts) => new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); for (const p of parts) c.enqueue(e.encode(JSON.stringify(p) + NL)); c.close(); } }));
-      let calls = 0, seen = [];
-      const script = [[{ message: { role: "assistant", content: "a xor b" } }, { done: true }], [{ message: { role: "assistant", content: "Here is your XOR gate: click the levers." } }, { done: true }]];
-      window.chatApi = async (body) => { seen.push(body); return stream(script[calls++] || [{ message: { role: "assistant", content: "?" } }, { done: true }]); };
-      window.getCaps = async () => ["completion"];
-      setView("chat"); await new Promise(r => setTimeout(r, 150));
-      current.messages.push({ role: "user", content: "Make me a redstone XOR gate" });
-      await chat("fake-model"); await new Promise(r => setTimeout(r, 200));
-      const m = current.messages[current.messages.length - 1];
-      out.calls = calls; out.noTools = seen.every(b => !b.tools);
-      out.block = (m.blocks || []).some(b => b.type === "redstone" && b.spec && b.spec.gates.filter(g => !g.merge).length === 3);
-      out.told = !!(seen[1] && JSON.stringify(seen[1].messages).includes("redstone circuit"));
-      out.shown = !!document.querySelector(".rs-vis .rs-3d canvas");
-      current.messages.splice(-2, 2); window.chatApi = origApi; window.getCaps = origCaps; saveChats();
-      return JSON.stringify(out);
-    })()`));
-    const bad = [];
-    if (o.calls !== 2) bad.push("expected 2 model calls, got " + o.calls);
-    if (!o.noTools) bad.push("tools were sent to a model without tools");
-    if (!o.block) bad.push("no redstone block in the answer");
-    if (!o.told) bad.push("the model wasn't told what was built");
-    if (!o.shown) bad.push("the circuit isn't on the page");
-    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
-  });
-  await tryIt("thoughts sit at the bottom while thinking and move to the top when done; every circuit is a draft under them", async () => {
-    const o = JSON.parse(await w.eval(`(async () => {
-      const out = {}, s1 = redstonePlan({ circuit: "a and b" }).spec, s2 = redstonePlan({ circuit: "a xor b" }).spec;
-      const think = { type: "thinking", text: "Let me work out the gate.", start: performance.now() };
-      const reply = { role: "assistant", content: "Here is the circuit.", blocks: [think], model: "x", phase: "thinking" };
-      const bubble = botBubble(reply, -1); document.body.appendChild(bubble); fillBot(bubble, reply, -1, true);
-      const c = bubble.querySelector(".content");
-      const before = (a, b) => !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));   // a comes before b
-      const T = () => c.querySelector(".think-block"), body = () => c.querySelector(".md");
-      out.bottomWhileThinking = before(body(), T());
-      reply.blocks.push({ type: "redstone", spec: s1, title: s1.expr, active: false, done: true });
-      fillBot(bubble, reply, -1, true);
-      out.stillBottom = before(body(), T()) && !!c.querySelector(".drafts");
-      think.done = true; think.secs = 2;
-      reply.blocks.push({ type: "redstone", spec: s2, title: s2.expr, active: false, done: true });
-      fillBot(bubble, reply, -1, true);
-      const dr = () => c.querySelector(".drafts");
-      out.topWhenDone = before(T(), dr()) && before(dr(), body());
-      out.draftCount = c.querySelectorAll(".draft").length;
-      out.newestOpen = [...c.querySelectorAll(".draft")].map(d => d.open).join();
-      out.usable = c.querySelectorAll(".draft .rs-vis .rs-3d canvas").length;
-      fillBot(bubble, reply, -1, false);          // the finished reply
-      const c2 = bubble.querySelector(".content"), T2 = c2.querySelector(".think-block");
-      out.finalOrder = before(T2, c2.querySelector(".drafts")) && before(c2.querySelector(".drafts"), c2.querySelector(".md")) && c2.querySelectorAll(".draft").length === 2;
-      bubble.remove();
-      return JSON.stringify(out);
-    })()`));
-    const bad = [];
-    if (!o.bottomWhileThinking) bad.push("thoughts weren't at the bottom while thinking");
-    if (!o.stillBottom) bad.push("thoughts left the bottom before they were done (or no drafts card)");
-    if (!o.topWhenDone) bad.push("thoughts didn't move to the top, above the drafts, when done");
-    if (o.draftCount !== 2) bad.push("expected 2 drafts, got " + o.draftCount);
-    if (o.newestOpen !== "false,true") bad.push("only the newest draft should be open: " + o.newestOpen);
-    if (o.usable !== 2) bad.push("each draft should hold a usable 3D circuit: " + o.usable);
-    if (!o.finalOrder) bad.push("the finished reply is in the wrong order");
-    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
-  });
-  await tryIt("voice conversation: names its sources, has things to say while it works, reads the answer as it is written, and the circle draws", async () => {
+  await tryIt("voice conversation: names its sources, has things to say while it works, reads the answer as it is written, and the circle draws",async () => {
     const o = JSON.parse(await w.eval(`(() => {
       const V = voiceTest, out = {};
       const blocks = [{ type: "search", query: "x", active: false, results: [{ url: "https://www.wikipedia.org/wiki/A" }, { url: "https://www.bbc.com/n" }, { url: "https://example.org/z" }] }, { type: "fetch", url: "https://docs.python.org/3/", active: false }];

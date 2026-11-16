@@ -168,9 +168,51 @@ async function onMessage(m) {
   catch (e) { out({ id: m.id, ok: false, error: String(e && e.message || e) }); }
 }
 
+// ---------- the user's own tools ----------
+// Made in the sidebar (sidepanel.js, "My tools") and kept in chrome.storage.local. The chat only ever sends a name and the inputs;
+// the code is looked up here, so nothing in a page or in the AI's answer can bring its own code.
+//   page tool:   the code is the body of an async function (inputs in "args") that runs in the AI's tab, the page you're on with "Follow my tab"
+//   prompt tool: the text comes back to the AI with {{input}} replaced by what it passed in
+const CUSTOM_LIMIT = 8000;
+const asText = (v) => (v === undefined ? "" : typeof v === "string" ? v : JSON.stringify(v, null, 2));
+async function runCustomTool({ name, args, draft }) {
+  const { tools } = await chrome.storage.local.get({ tools: [] });
+  const t = draft || tools.find((x) => x && x.name === name);
+  if (!t) throw new Error('There is no tool called "' + name + '" (any more).');
+  args = args && typeof args === "object" && !Array.isArray(args) ? args : {};
+  if (t.kind === "prompt") {
+    let text = String(t.code || "");
+    for (const [k, v] of Object.entries(args)) text = text.split("{{" + k + "}}").join(asText(v));
+    return text.slice(0, CUSTOM_LIMIT);
+  }
+  if (st.paused) throw new Error("The AI is paused in Chrome (Albatross extension), so tools can't run on the page. Resume it first.");
+  if (!(await tabInfo())) await followTab();
+  const tab = await tabInfo();
+  if (!tab) throw new Error("There is no page to run the tool on. Open a normal web page in this window first.");
+  await attach(tab.id);
+  const expression = "(async (args) => {\n" + String(t.code || "") + "\n})(" + JSON.stringify(args) + ")";
+  let timer;
+  const r = await Promise.race([
+    chrome.debugger.sendCommand({ tabId: tab.id }, "Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, userGesture: true }),
+    new Promise((_, no) => { timer = setTimeout(() => no(new Error("The tool took longer than 30 seconds and was stopped waiting for.")), 30000); }),
+  ]).finally(() => clearTimeout(timer));
+  if (r.exceptionDetails) {
+    const d = r.exceptionDetails;
+    throw new Error("The tool's code failed: " + ((d.exception && (d.exception.description || d.exception.value)) || d.text || "error").toString().split("\n")[0].slice(0, 300));
+  }
+  const v = r.result && r.result.value;
+  return (v === undefined ? "(the tool returned nothing: end the code with return ...)" : asText(v)).slice(0, CUSTOM_LIMIT);
+}
+
 // ---------- the popup ----------
 chrome.runtime.onMessage.addListener((msg, _s, reply) => {
   (async () => {
+    if (msg.customTool) {
+      // "draft" (a tool being tested before it's saved) only from our own pages
+      const mine = _s.id === chrome.runtime.id && String(_s.url || "").startsWith(chrome.runtime.getURL(""));
+      const { name, args, draft } = msg.customTool;
+      return { ok: true, result: await runCustomTool({ name, args, draft: mine ? draft : null }) };
+    }
     if (msg.pair) {
       await connect();
       for (let i = 0; i < 20 && !(ws && ws.readyState === WebSocket.OPEN); i++) await sleep(150);
