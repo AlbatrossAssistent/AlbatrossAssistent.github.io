@@ -322,7 +322,8 @@ window.albatrossSelfTest = async function (w) {
       };
       S._set({ in: { id: "m1", label: "Default - Mikrofon (USB Audio)" } });
       openSettings("sound"); document.querySelector('#settings .tabs [data-tab="sound"]').click();
-      await new Promise((r) => setTimeout(r, 600));
+      for (let i = 0; i < 50 && !document.querySelector("#soundBox #jvIn"); i++) await new Promise((r) => setTimeout(r, 100));   // a slow machine takes longer than 600 ms
+      await new Promise((r) => setTimeout(r, 100));
       const box = document.querySelector("#soundBox");
       out.text = box.textContent; out.hasIn = !!box.querySelector("#sndIn"); out.hasOut = !!box.querySelector("#sndOut");
       out.jvOut = box.querySelector("#jvOut")?.value; out.jvInOpts = [...(box.querySelector("#jvIn")?.options || [])].map((x) => x.value);
