@@ -587,6 +587,15 @@ window.albatrossSelfTest = async function (w) {
         out.on = root.dataset.bg === "wall" && root.dataset.wall === "ocean" && getComputedStyle(document.querySelector("#wall")).display === "flex";
         out.text = el.textContent;
         out.fits = el.scrollWidth <= innerWidth * .92;
+        const cv = document.querySelector("#wallArt"), px = cv.width ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data : [];
+        let lit = 0; for (let i = 3; i < px.length; i += 4 * 97) if (px[i] > 40) lit++;
+        out.streaks = root.dataset.walllook === "streaks" && getComputedStyle(cv).display === "block" && lit > 200;
+        document.querySelector("#inner").innerHTML = ""; renderEmpty();
+        out.emptyChat = document.querySelectorAll("#inner .empty > *").length;
+        const keepSide = [S.sideGone, S.sideRail, S.sideIcons]; S.sideIcons = false; S.sideRail = false; S.sideGone = false; toggleSide();
+        out.sideGone = document.body.classList.contains("side-gone") && getComputedStyle(document.querySelector("#sidebar")).display === "none" && getComputedStyle(document.querySelector("#menuBtn")).display !== "none";
+        document.querySelector("#menuBtn").click(); out.sideBack = !document.body.classList.contains("side-gone");
+        [S.sideGone, S.sideRail, S.sideIcons] = keepSide; applyRail(); renderMessages();
         openSettings("appearance"); await new Promise(r => setTimeout(r, 100));
         out.box = !document.querySelector("#wallBox").hidden; out.swatches = document.querySelectorAll("#wallGrid .wp-sw").length;
         document.querySelector('#wallGrid .wp-sw[data-wall="dusk"]').click();
@@ -606,6 +615,9 @@ window.albatrossSelfTest = async function (w) {
     if (!o.on) bad.push("the wallpaper isn't showing");
     if (o.text !== "Gemma 3") bad.push("the wallpaper says " + o.text);
     if (!o.fits) bad.push("the name is wider than the screen");
+    if (!o.streaks) bad.push("the streak letters weren't drawn");
+    if (o.emptyChat !== 0) bad.push("a new chat isn't empty (" + o.emptyChat + " things on it)");
+    if (!o.sideGone || !o.sideBack) bad.push("the sidebar doesn't fold away completely and come back");
     if (!o.box || o.swatches !== 6) bad.push("Settings doesn't show the six wallpapers");
     if (!o.picked) bad.push("picking a wallpaper didn't change it");
     if (o.asisShown !== "gemma3") bad.push("the name style didn't change it: " + o.asisShown);

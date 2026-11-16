@@ -39,7 +39,7 @@ const secrets = () => ({ code: S.conn.code || "", powerUrl: store.get("powerUrl"
 // device), and the devices could not be told apart in Beam → My PC.
 const DEVICE_ONLY = () => ({ name: S.files && S.files.name || "", deviceName: S.deviceName || "" });
 // the appearance belongs to the device too, unless "Same look on all my devices" (lookSync) is on
-const LOOK = ["theme", "fontSize", "glass", "stars", "compact", "intro", "bgStyle", "accent", "wall"];
+const LOOK = ["theme", "fontSize", "glass", "stars", "compact", "intro", "bgStyle", "accent", "wall", "sideIcons"];
 const myLook = () => Object.fromEntries(LOOK.filter((k) => S[k] !== undefined).map((k) => [k, S[k]]));
 function publicSettings() {
   const c = structuredClone(S);

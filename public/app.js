@@ -1177,6 +1177,7 @@ function renderMessages() {
   document.body.classList.toggle("run-elsewhere", !!run && current !== run.chat);
   inner.innerHTML = "";
   paintQueue();
+  document.body.classList.toggle("chat-empty", !current.messages.length);
   if (!current.messages.length) return renderEmpty();
   current.messages.forEach((m, i) => inner.appendChild(m.isEvent ? eventEl(m) : m.role === "user" ? userBubble(m, i) : m.isError ? errorEl(m, i) : botBubble(m, i)));
   if (run && live && current === run.chat && !run.chat.messages.includes(live.m)) inner.appendChild(live.el);
@@ -1287,6 +1288,7 @@ function renderEmpty() {
     : [["Explain a concept", "like I'm new to it"], ["Help me write", "an email, essay or message"], ["Debug my code", "paste it in"], ["Draw a picture", "of a lighthouse in a storm, oil painting"]];
   const d = document.createElement("div");
   d.className = "empty";
+  if (!(connected && !guestMode && !models.some((m) => m.kind !== "image" && m.kind !== "embed"))) { $("#inner").appendChild(d); return; }   // a new chat is an empty screen
   d.innerHTML = `<h1>${imageMode ? "What should I draw?" : "What can I help with?"}</h1><p>Everything runs on ${S.conn.mode === "remote" ? "your connected PC" : "this computer"} — nothing goes to the cloud.</p><div class="suggestions"></div>`;
   for (const [a, b] of sugg) {
     const btn = document.createElement("button");
@@ -4872,7 +4874,7 @@ function slug(s) { return (s || "chat").toLowerCase().replace(/[^a-z0-9]+/g, "-"
 // ---------- Model wallpapers: a quiet gradient with the model's name, in the typeface of Apple's "MacBook Pro" ----------
 // (functions, not constants: applyAppearance and applyType may run before this part of the file has)
 function wallList() { return [["mist", "Mist"], ["dusk", "Dusk"], ["glow", "Glow"], ["meadow", "Meadow"], ["ocean", "Ocean"], ["graphite", "Graphite"]]; }
-function wallCfg() { return { id: "mist", name: "model", custom: "", style: "tidy", size: "m", pos: "center", ...(S.wall || {}) }; }
+function wallCfg() { return { id: "mist", name: "model", custom: "", style: "tidy", size: "m", pos: "center", look: "streaks", ...(S.wall || {}) }; }
 // "gemma3:12b" -> "Gemma 3", "hf.co/user/Qwen2.5-GGUF:Q4_K_M" -> "Qwen 2.5", "gpt-oss:20b" -> "GPT OSS"; tidy = false keeps the name as written, just without the tag
 function prettyModel(raw, tidy = true) {
   let n = String(raw || "").trim().replace(/^.*[/]/, "").replace(/:.*$/, "");
@@ -4900,12 +4902,72 @@ function paintWall() {
   const root = document.documentElement, w = wallCfg(), el = $("#wallName");
   root.dataset.wall = wallList().some(x => x[0] === w.id) ? w.id : "mist";
   root.dataset.wallpos = ["left", "bottom"].includes(w.pos) ? w.pos : "center";
+  root.dataset.walllook = w.look === "plain" ? "plain" : "streaks";
   if (!el || root.dataset.bg !== "wall") return;
   el.textContent = wallText();
   const base = Math.max(28, Math.min(innerWidth * ({ s: .09, m: .14, l: .2 }[w.size] || .14), { s: 150, m: 230, l: 340 }[w.size] || 230));
   el.style.fontSize = base + "px";
   const room = innerWidth * (w.pos === "left" ? .88 : .9), wide = el.scrollWidth;
   if (wide > room) el.style.fontSize = Math.max(22, base * room / wide) + "px";
+  if (root.dataset.walllook === "streaks") drawWallArt(el.textContent, w);
+}
+// The streak letters. The name is drawn huge and tall as a mask, over a field of thin vertical lines of light: each line its own
+// brightness and tint, bright at the top and bottom of the letters with a darker band through the middle, now and then a fine
+// line of colour or a gap onto the deep base; a soft glow sits under it.
+// Drawn once (and again when the window, the name or the wallpaper changes), never animated.
+let wallArtKey = "";
+function drawWallArt(text, w) {
+  const cv = $("#wallArt"); if (!cv) return;
+  const root = document.documentElement, dark = root.dataset.theme === "dark";
+  const side = $("#sidebar"), sr = side && getComputedStyle(side).display !== "none" && innerWidth > 820 ? side.getBoundingClientRect().right : 0;
+  const DPR = Math.min(2, devicePixelRatio || 1), W = Math.round(innerWidth * DPR), H = Math.round(innerHeight * DPR);
+  const ink = (getComputedStyle(root).getPropertyValue("--wp-ink") || "220,230,255").split(",").map(Number);
+  const key = [text, w.id, w.size, w.pos, dark, W, H, Math.round(sr), ink.join()].join("|");
+  if (key === wallArtKey && cv.width === W) return;
+  wallArtKey = key; cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, W, H);
+  // the letters' box: the space right of the sidebar
+  const areaL = sr * DPR + W * .03, areaR = W * .97, areaW = areaR - areaL;
+  const hFrac = { s: .34, m: .56, l: .78 }[w.size] || .56;
+  const font = '700 200px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
+  const m = document.createElement("canvas").getContext("2d"); m.font = font;
+  const mt = m.measureText(text), tw = Math.max(1, mt.actualBoundingBoxLeft + mt.actualBoundingBoxRight), th = Math.max(1, mt.actualBoundingBoxAscent + mt.actualBoundingBoxDescent);
+  const boxH = H * hFrac, sy = boxH / th, sx = Math.min(sy * .78, (areaW * .96) / tw);   // tall and a little condensed, never wider than the space
+  const boxW = tw * sx;
+  const x0 = w.pos === "left" ? areaL + W * .01 : areaL + (areaW - boxW) / 2;
+  const y0 = w.pos === "center" ? (H - boxH) / 2 : H - boxH - Math.min(H * .3, 150 * DPR + H * .06);
+  // the mask, smeared vertically
+  const mask = document.createElement("canvas"); mask.width = W; mask.height = H;
+  const mc = mask.getContext("2d");
+  const one = document.createElement("canvas"); one.width = W; one.height = H;
+  const oc = one.getContext("2d"); oc.font = font; oc.fillStyle = "#fff";
+  oc.setTransform(sx, 0, 0, sy, x0 + mt.actualBoundingBoxLeft * sx, y0 + mt.actualBoundingBoxAscent * sy); oc.fillText(text, 0, 0);
+  const run = 2;                          // crisp edges, like the artwork
+  mc.drawImage(one, 0, 0);
+  // the field of light: one line per column of pixels, in runs of 1 to 3
+  const field = document.createElement("canvas"); field.width = W; field.height = H;
+  const fc = field.getContext("2d");
+  const rnd = (() => { let s = 0; for (const ch of text + w.id) s = (s * 31 + ch.charCodeAt(0)) >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); })();
+  const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+  const hi = dark ? [255, 255, 255] : mix(ink, [0, 0, 0], .25), lo = dark ? mix(ink, [20, 30, 60], .35) : mix(ink, [255, 255, 255], .45);
+  const top = y0 - boxH * .05, bot = y0 + boxH * 1.08;
+  const deep = dark ? mix(ink, [6, 10, 24], .86) : mix(ink, [255, 255, 255], .62);     // the letters are solid: a deep base under the light
+  fc.fillStyle = "rgb(" + deep.join(",") + ")"; fc.fillRect(0, top, W, bot - top);
+  for (let x = Math.floor(x0 - run); x < x0 + boxW + run; ) {
+    const wpx = 1 + Math.floor(rnd() * 4), b = .62 + rnd() * .38, tint = rnd();
+    let col = mix(hi, lo, tint * .7);
+    if (rnd() < .012) col = [[255, 90, 60], [255, 170, 60], [255, 220, 120]][Math.floor(rnd() * 3)];       // the odd thread of colour
+    if (rnd() < .07) { x += wpx; continue; }                                                                  // a gap: the deep base shows
+    const dip = .45 + rnd() * .2, g = fc.createLinearGradient(0, top, 0, bot), rgba = (a) => "rgba(" + col.join(",") + "," + Math.max(0, Math.min(1, a * b)).toFixed(3) + ")";
+    g.addColorStop(0, rgba(.0)); g.addColorStop(.05, rgba(1)); g.addColorStop(dip - .22, rgba(.85)); g.addColorStop(dip, rgba(.04 + rnd() * .12));
+    g.addColorStop(Math.min(.94, dip + .2), rgba(.75)); g.addColorStop(.97, rgba(.95)); g.addColorStop(1, rgba(0));
+    fc.fillStyle = g; fc.fillRect(x, top, wpx, bot - top);
+    x += wpx;
+  }
+  fc.globalCompositeOperation = "destination-in"; fc.drawImage(mask, 0, 0); fc.globalCompositeOperation = "source-over";
+  // a soft glow under it, then the letters
+  ctx.save(); ctx.filter = "blur(" + Math.round(26 * DPR) + "px)"; ctx.globalAlpha = dark ? .22 : .14; ctx.drawImage(field, 0, 0); ctx.restore();
+  ctx.save(); ctx.filter = "blur(" + (.45 * DPR).toFixed(2) + "px)"; ctx.drawImage(field, 0, 0); ctx.restore();
 }
 function paintWallBox() {
   const w = wallCfg(), grid = $("#wallGrid");
@@ -4917,12 +4979,12 @@ function paintWallBox() {
     grid.append(b);
   }
   grid.querySelectorAll(".wp-sw").forEach(b => b.setAttribute("aria-checked", String(b.dataset.wall === w.id)));
-  $("#wallText").value = w.name; $("#wallStyle").value = w.style; $("#wallSize").value = w.size; $("#wallPos").value = w.pos; $("#wallCustom").value = w.custom;
+  $("#wallLook").value = w.look; $("#wallText").value = w.name; $("#wallStyle").value = w.style; $("#wallSize").value = w.size; $("#wallPos").value = w.pos; $("#wallCustom").value = w.custom;
   $("#wallCustomRow").hidden = w.name !== "custom";
 }
-for (const [el, key] of [["#wallText", "name"], ["#wallStyle", "style"], ["#wallSize", "size"], ["#wallPos", "pos"]]) $(el).onchange = e => { S.wall = { ...wallCfg(), [key]: e.target.value }; saveSettings(); paintWall(); paintWallBox(); };
+for (const [el, key] of [["#wallText", "name"], ["#wallStyle", "style"], ["#wallSize", "size"], ["#wallPos", "pos"], ["#wallLook", "look"]]) $(el).onchange = e => { S.wall = { ...wallCfg(), [key]: e.target.value }; saveSettings(); paintWall(); paintWallBox(); };
 $("#wallCustom").oninput = e => { S.wall = { ...wallCfg(), custom: e.target.value }; saveSettings(); paintWall(); };
-addEventListener("resize", () => paintWall());
+let wallResize = 0; addEventListener("resize", () => { clearTimeout(wallResize); wallResize = setTimeout(paintWall, 150); });
 function applyAppearance() {
   // Aurora and Lagoon keep their accent colours while sharing the black/white backgrounds.
   const scene = S.theme === "aurora" || S.theme === "lagoon" ? S.theme : "";
@@ -4985,7 +5047,7 @@ function openSettings(tab) {
   paintMemory();
   $("#chatsOnPC").checked = S.chatsOnPC !== false; $("#keepLocal").checked = S.keepLocal !== false; $("#chatsDeviceOnly").checked = !!S.chatsDeviceOnly; $("#bgJobs").checked = S.bgJobs !== false; $("#askMid").checked = S.askMid !== false; $("#deviceName").value = S.deviceName || "";
   $("#theme").value = S.theme; $("#fontSize").value = S.fontSize; $("#fontSize").nextElementSibling.textContent = S.fontSize + "px";
-  $("#bgStyle").value = S.bgStyle || (S.stars === false ? "plain" : "auto"); paintWallBox(); $("#lookSync").checked = !!S.lookSync; paintAccents();
+  $("#bgStyle").value = S.bgStyle || (S.stars === false ? "plain" : "auto"); paintWallBox(); $("#sideIcons").checked = !!S.sideIcons; $("#lookSync").checked = !!S.lookSync; paintAccents();
   if (tab) switchTab(tab);
   d.showModal();
 }
@@ -5223,13 +5285,25 @@ openSettings = function (tab) { fillToolSwitches(); return _openSettings(tab); }
 // the menu at the top of the sidebar can be folded away
 // the whole sidebar as a slim strip of icons (wide screens; on phones it is a slide-out menu anyway)
 function applyRail() {
-  const on = !!S.sideRail;
+  const gone = !!S.sideGone && matchMedia("(min-width: 821px)").matches;
+  document.body.classList.toggle("side-gone", gone);
+  $("#menuBtn").title = gone ? "Show the sidebar" : "Open chats"; $("#menuBtn").setAttribute("aria-label", $("#menuBtn").title);
+  setTimeout(() => paintWall(), 0);       // the wallpaper's letters centre in the space that's left
+  const on = !!S.sideRail && !gone;
   $("#sidebar").classList.toggle("rail", on); document.body.classList.toggle("side-rail", on);
   $("#railBtn").title = on ? "Open the sidebar" : "Collapse the sidebar"; $("#railBtn").setAttribute("aria-label", $("#railBtn").title);
   $("#railBtn").setAttribute("aria-expanded", String(!on));
   for (const b of $$("#sidebar .side-btn")) if (!b.title) b.title = b.textContent.replace(/Ctrl\+.*$/, "").trim();   // names on the icons
 }
-$("#railBtn").onclick = () => { S.sideRail = !S.sideRail; saveSettings(); applyRail(); };
+// collapse: completely away (or to icons, Settings → Appearance); from the icons the same button opens it again
+function toggleSide() {
+  if (S.sideGone) S.sideGone = false;
+  else if (S.sideRail) S.sideRail = false;
+  else if (S.sideIcons) S.sideRail = true;
+  else S.sideGone = true;
+  saveSettings(); applyRail();
+}
+$("#railBtn").onclick = toggleSide;
 // the collapsed sidebar's Tools button: a menu with everything that isn't Home, Chat or Settings
 $("#goTools").onclick = (e) => {
   e.stopPropagation();
@@ -5250,12 +5324,12 @@ $("#goTools").onclick = (e) => {
   addEventListener("pointerdown", off, true);
   pop.onkeydown = (ev) => { if (ev.key === "Escape") { pop.remove(); $("#goTools").focus(); } };
 };
-addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); $("#railBtn").click(); } });   // Ctrl+\
+addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); toggleSide(); } });   // Ctrl+\
 // Closing the sidebar always leaves its icons (the rail). On wide screens the chevron next to "Albatross" does that too; only in the
 // phone's slide-out menu does it still fold the menu away.
 const wideSide = () => matchMedia("(min-width: 821px)").matches;
 function applyNavFold() { const fold = !!S.navFold && !wideSide(); $("#sideNav").classList.toggle("folded", fold); $("#brandToggle").setAttribute("aria-expanded", String(!fold)); }
-$("#brandToggle").onclick = () => { if (wideSide()) { S.sideRail = !S.sideRail; saveSettings(); applyRail(); return; } S.navFold = !S.navFold; saveSettings(); applyNavFold(); };
+$("#brandToggle").onclick = () => { if (wideSide()) { toggleSide(); return; } S.navFold = !S.navFold; saveSettings(); applyNavFold(); };
 addEventListener("resize", () => applyNavFold());
 
 // per-chat (lives in Settings → Chat)
@@ -6875,7 +6949,8 @@ $("#goMail").onclick = () => { setView("mail"); $("#sidebar").classList.remove("
 $("#goHub").onclick = () => { setView("hub"); $("#sidebar").classList.remove("open"); };
 $("#goMonitor").onclick = () => { setView("monitor"); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
-$("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
+$("#menuBtn").onclick = () => { if (S.sideGone && matchMedia("(min-width: 821px)").matches) { S.sideGone = false; saveSettings(); applyRail(); return; } $("#sidebar").classList.toggle("open"); };
+$("#sideIcons").onchange = (e) => { S.sideIcons = e.target.checked; if (S.sideGone && S.sideIcons) { S.sideGone = false; S.sideRail = true; } saveSettings(); applyRail(); };
 $("#openSettings").onclick = () => openSettings();
 function openConnect() { openSettings("connection"); setConnCards("remote"); setTimeout(() => $("#codeInput").focus(), 50); }
 $("#search").addEventListener("input", renderSidebar);
@@ -6926,8 +7001,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.4";
+const APP_VERSION = "2026-11-16.5";
 const WHATS_NEW = [
+  ["2026-11-16.5", ["Model wallpapers now draw the name in tall letters of light streaks, like the MacBook Pro artwork (Letters: Plain switches back). A new chat is an empty screen, and the sidebar folds away completely (the menu button at the top left brings it back; Settings → Appearance can keep the icon strip)."]],
   ["2026-11-16.4", ["Model wallpapers: six quiet backgrounds (Mist, Dusk, Glow, Meadow, Ocean, Graphite) with your model's name in big Apple-style letters, without tags like :12b. Settings → Appearance → Background → Model wallpaper: pick one, the size, the position, or your own text."]],
   ["2026-11-16.3", ["Your tools now has a list of ready-made open-source tool servers (memory, files, sequential thinking, git) to copy into the PC's tools folder."]],
   ["2026-11-16.2", ["Your own tools on the PC: add a web service or a text for the AI in Settings → Tools → Your tools, or put scripts and open-source MCP tool servers in the PC's tools folder. They work in every chat while you're connected, in the Chrome sidebar too."]],

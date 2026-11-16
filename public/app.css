@@ -2472,3 +2472,17 @@ html[data-wallpos="bottom"] #wall { align-items: flex-end; padding-bottom: calc(
 [data-theme="dark"][data-wall="ocean"], [data-theme="dark"] [data-wall="ocean"] { --wp-bg: radial-gradient(100% 70% at 50% 0%, #1c3b7a, transparent 62%), radial-gradient(90% 70% at 92% 100%, #1b2b68, transparent 60%), linear-gradient(#0a1020, #04070f); --wp-ink: 202,221,255; }
 [data-theme="light"][data-wall="graphite"], [data-theme="light"] [data-wall="graphite"] { --wp-bg: linear-gradient(135deg, #f2f2f4 0%, #dcdce1 55%, #ececef 100%); --wp-ink: 68,68,78; }
 [data-theme="dark"][data-wall="graphite"], [data-theme="dark"] [data-wall="graphite"] { --wp-bg: linear-gradient(135deg, #1e1e21 0%, #0e0e10 55%, #19191c 100%); --wp-ink: 240,240,246; }
+
+/* streak letters: the name drawn on a canvas as tall letters of vertical light, like the MacBook Pro artwork */
+#wallArt { position: absolute; inset: 0; width: 100%; height: 100%; display: none; transition: opacity .5s ease; }
+html[data-walllook="streaks"] #wallArt { display: block; }
+html[data-walllook="streaks"] #wallName { display: none; }
+body.home-view #wallArt { opacity: 0; }
+body:not(.chat-empty) #wallArt { opacity: .2; }              /* behind a conversation: quiet, so the text stays easy to read */
+[data-theme="light"] body:not(.chat-empty) #wallArt { opacity: .16; }
+
+/* the sidebar folded away completely (the menu button in the top bar brings it back) */
+@media (min-width: 821px) {
+  body.side-gone aside { display: none; }
+  body.side-gone .menu-btn { display: flex; }
+}
