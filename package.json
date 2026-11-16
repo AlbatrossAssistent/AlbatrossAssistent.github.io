@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "host": "node host/host.js",
-    "test": "node test/smoke.js",
+    "test": "node test/smoke.js && node test/mytools.js",
     "install-hook": "node test/install-hook.js"
   },
   "engines": {

@@ -11,3 +11,4 @@ extension.crx
 desktop/node_modules/
 desktop/dist/
 desktop/bundle/
+host/my-tools/

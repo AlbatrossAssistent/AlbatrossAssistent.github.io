@@ -2427,3 +2427,17 @@ html:not(.embed-chrome) #goJarvis, html:not(.embed-chrome) #goNotes, html:not(.e
 .snd-bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--lv) * 100%); background: linear-gradient(90deg, #34c759, #ffd60a 70%, #ff453a); border-radius: inherit; transition: width .06s linear; }
 .snd-note { color: var(--muted); }
 .snd-note.warn { color: #ff9f0a; }
+
+/* ---------- Your tools on the PC (Settings → Tools) ---------- */
+.pt-list { display: flex; flex-direction: column; gap: 8px; }
+.pt-card { border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; }
+.pt-head { display: flex; align-items: center; gap: 8px; }
+.pt-head b { flex: 1; overflow-wrap: anywhere; }
+.pt-tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); opacity: .75; white-space: nowrap; }
+.pt-in { display: grid; grid-template-columns: 1fr 96px 34px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.pt-in .pd { grid-column: 1 / 3; }
+.pt-req { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.pt-out { margin: 8px 0 0; padding: 10px; border-radius: 10px; border: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; font: 12px/1.45 ui-monospace, Consolas, monospace; }
+#ptDlg input:not([type=checkbox]), #ptDlg select, #ptDlg textarea { font: inherit; color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 7px 11px; min-width: 0; box-sizing: border-box; }
+#ptDlg textarea { width: 100%; resize: vertical; }
+#ptDlg .field input:not([type=checkbox]), #ptDlg .field select { width: 100%; }

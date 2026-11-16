@@ -3087,26 +3087,132 @@ const CHAT_TOOLS = (() => {
       } },
   ];
 })();
-// The user's own tools from the Chrome extension, offered to the model next to the built-in ones. Their names start with my_, so they can
-// never replace a built-in tool; each call becomes a small card in the answer and the extension's reply goes back to the model.
+// The user's own tools, offered to the model next to the built-in ones. They come from two places: the Chrome extension (names my_...,
+// they run in Chrome) and this PC's tools folder (names pc_..., run by the host: web services, texts, scripts, MCP servers; host/mytools.js).
+// The prefixes mean they can never replace a built-in tool; each call becomes a small card in the answer and the result goes back to the model.
+async function customToolCard(label, args, ctx, call) {
+  const block = { type: "mytool", name: label, args: args || {}, active: true, status: "Running " + label + "…" };
+  ctx.reply.blocks.push(block); ctx.redraw();
+  try { block.result = String(await call(args || {})).slice(0, 6000); }
+  catch (e) { block.error = e.message; }
+  Object.assign(block, { active: false, done: true, doneAt: Date.now() }); ctx.redraw();
+  return { out: block.error ? "Error: " + block.error : block.result || "(the tool returned nothing)" };
+}
 function chromeCustomTools() {
   if (!window.EMBED_CHROME || !Array.isArray(window.chromeTools)) return [];
   return window.chromeTools.map((t) => {
     const name = "my_" + t.name;
     return { key: "custom", name, def: { type: "function", function: { name, description: (t.description || t.name) + " (the user's own tool)", parameters: { type: "object",
       properties: Object.fromEntries(t.params.map((p) => [p.name, { type: p.type, ...(p.description ? { description: p.description } : {}) }])), required: t.params.filter((p) => p.required).map((p) => p.name) } } },
-      async run(args, ctx) {
-        const block = { type: "mytool", name: t.name, args: args || {}, active: true, status: "Running " + t.name + "…" };
-        ctx.reply.blocks.push(block); ctx.redraw();
-        try { block.result = (await window.callChromeTool(t.name, args || {})).slice(0, 6000); }
-        catch (e) { block.error = e.message; }
-        Object.assign(block, { active: false, done: true, doneAt: Date.now() }); ctx.redraw();
-        return { out: block.error ? "Error: " + block.error : block.result || "(the tool returned nothing)" };
-      } };
+      run: (args, ctx) => customToolCard(t.name, args, ctx, (a) => window.callChromeTool(t.name, a)) };
   });
 }
+// the tools on the PC: asked for at most every 45 seconds, and never longer than 6 (a tool server may still be starting)
+const hostTools = { at: 0, list: [], info: null };
+async function loadHostTools(force) {
+  if (!force && Date.now() - hostTools.at < 45000) return hostTools.list;
+  hostTools.at = Date.now();
+  try {
+    const j = await Promise.race([pcCall("/agent/mytools/list", {}), new Promise((_, no) => setTimeout(() => no(new Error("slow")), 6000))]);
+    hostTools.list = Array.isArray(j.tools) ? j.tools : []; hostTools.info = j;
+  } catch { hostTools.list = []; hostTools.info = null; }
+  return hostTools.list;
+}
+// a tool server's own form, cut down to what a model can take: an object with properties
+function safeSchema(s) {
+  try {
+    const c = JSON.parse(JSON.stringify(s));
+    if (c && c.properties && typeof c.properties === "object" && JSON.stringify(c).length < 8000) return { type: "object", properties: c.properties, required: Array.isArray(c.required) ? c.required.filter((x) => typeof x === "string") : [] };
+  } catch {}
+  return { type: "object", properties: {}, required: [] };
+}
+async function hostCustomTools() {
+  if (guestMode) return [];
+  const list = await loadHostTools();
+  return list.filter((t) => t && /^pc_[a-z0-9_]{1,45}$/.test(t.name)).slice(0, 40).map((t) => ({
+    key: "custom", name: t.name,
+    def: { type: "function", function: { name: t.name, description: String(t.description || t.name).slice(0, 600) + " (a tool on the user's PC)", parameters: safeSchema(t.schema) } },
+    run: (args, ctx) => customToolCard(t.name, args, ctx, async (a) => (await pcCall("/agent/mytools/run", { name: t.name, args: a })).result),
+  }));
+}
+// ---------- Settings → Tools → Your tools…: make, test and remove the tools made on the website ----------
+// Programs (scripts, MCP servers) are not made here: they are files in the PC's tools folder, so the website can never start a program.
+{
+  const dlg = $("#ptDlg"), NL = String.fromCharCode(10);
+  const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const pslug = (s) => { let n = String(s || "").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 34); if (n && !/^[a-z]/.test(n)) n = "t_" + n; return n; };
+  let editing = null;
+  const KIND = { http: "web address", prompt: "text", script: "script", mcp: "MCP" };
+  const showView = (edit) => { $("#ptListView").hidden = edit; $("#ptEdit").hidden = !edit; };
+  const kindFields = () => { const k = $("#ptKind").value; dlg.querySelectorAll("[data-k]").forEach((f) => (f.hidden = f.dataset.k !== k)); };
+  const nameHint = () => { const n = pslug($("#ptName").value); $("#ptNameHint").textContent = n ? "The AI sees it as pc_" + n : "Letters, numbers and _ only."; };
+  async function draw(force) {
+    await loadHostTools(force);
+    const info = hostTools.info, box = $("#ptList");
+    $("#ptConn").hidden = !!info; $("#ptNew").disabled = !info;
+    box.replaceChildren();
+    if (info && !hostTools.list.length) box.append(mk("div", "note", "No tools yet. Press New tool, or put tools in the folder below."));
+    for (const t of hostTools.list) {
+      const c = mk("div", "pt-card"), head = mk("div", "pt-head");
+      head.append(mk("b", "", t.name), mk("span", "pt-tag", (KIND[t.kind] || t.kind) + (t.source && t.kind === "mcp" ? " · " + t.source : t.source === "file" ? " · file" : "")));
+      if (t.source === "website") { const e = mk("button", "btn small", "Edit"); e.type = "button"; e.onclick = () => openEditor(t.name.slice(3)); head.append(e); }
+      c.append(head, mk("div", "note", t.description));
+      box.append(c);
+    }
+    const sv = (info && info.servers) || [];
+    $("#ptServers").textContent = sv.length ? "Tool servers: " + sv.map((s) => s.name + " (" + (s.state === "ready" ? s.tools + " tools" : s.state === "starting" ? "starting…" : s.error || s.state) + ")").join(", ") : "";
+    $("#ptFolder").textContent = info ? "Scripts, MCP servers and tools you write by hand go in " + info.dir + " on the PC (see host/tools-examples there). mcp.json connects MCP servers, the open-source tool collections. Restart nothing: changes are picked up by themselves." : "";
+  }
+  const insRow = (p = {}) => {
+    const r = mk("div", "pt-in"), n = mk("input"), ty = mk("select"), d = mk("input"), q = mk("input"), ql = mk("label", "pt-req"), x = mk("button", "btn small", "×");
+    n.placeholder = "name"; n.value = p.name || ""; n.maxLength = 31; n.className = "pn"; n.spellcheck = false;
+    for (const v of ["string", "number", "boolean"]) { const o = mk("option", "", v === "string" ? "text" : v === "number" ? "number" : "yes / no"); o.value = v; ty.append(o); }
+    ty.value = p.type || "string"; ty.className = "pt"; d.placeholder = "what the AI should put here"; d.value = p.description || ""; d.maxLength = 200; d.className = "pd";
+    q.type = "checkbox"; q.checked = !!p.required; q.className = "pr"; ql.append(q, document.createTextNode(" needed")); x.type = "button"; x.onclick = () => r.remove();
+    r.append(n, ty, x, d, ql); return r;
+  };
+  const readIns = () => [...$("#ptIns").children].map((r) => ({ name: r.querySelector(".pn").value.trim(), type: r.querySelector(".pt").value, description: r.querySelector(".pd").value.trim(), required: r.querySelector(".pr").checked })).filter((p) => p.name);
+  const readHeaders = () => Object.fromEntries($("#ptHeaders").value.split(NL).map((l) => l.trim()).filter((l) => l.includes(":")).map((l) => [l.slice(0, l.indexOf(":")).trim(), l.slice(l.indexOf(":") + 1).trim()]));
+  const readForm = () => ({ name: $("#ptName").value, description: $("#ptDesc").value, kind: $("#ptKind").value, params: readIns(), url: $("#ptUrl").value, method: $("#ptMethod").value, headers: readHeaders(), text: $("#ptText").value });
+  async function openEditor(name) {
+    editing = name || ""; $("#ptErr").textContent = ""; $("#ptTestOut").hidden = true; $("#ptTestArgs").value = ""; $("#ptDelete").hidden = !name;
+    $("#ptEditTitle").textContent = name ? "pc_" + name : "New tool";
+    let t = { kind: "http", method: "GET", params: [], headers: {} };
+    if (name) { try { t = (await pcCall("/agent/mytools/get", { name })).tool; } catch (e) { toast("Couldn't open it: " + e.message); return; } }
+    $("#ptName").value = t.name || ""; $("#ptDesc").value = t.description || ""; $("#ptKind").value = t.kind === "prompt" ? "prompt" : "http";
+    $("#ptUrl").value = t.url || ""; $("#ptMethod").value = t.method || "GET"; $("#ptText").value = t.text || "";
+    $("#ptHeaders").value = Object.entries(t.headers || {}).map(([k, v]) => k + ": " + v).join(NL);
+    $("#ptIns").replaceChildren(...(t.params || []).map(insRow));
+    kindFields(); nameHint(); showView(true);
+  }
+  $("#ptOpen").onclick = () => { dlg.showModal(); showView(false); draw(true); };
+  $("#ptNew").onclick = () => openEditor("");
+  $("#ptCancel").onclick = () => { showView(false); draw(false); };
+  $("#ptKind").onchange = kindFields; $("#ptName").oninput = nameHint;
+  $("#ptAddIn").onclick = () => { if ($("#ptIns").children.length < 10) $("#ptIns").append(insRow()); };
+  $("#ptSave").onclick = async () => {
+    $("#ptErr").textContent = "";
+    try { await pcCall("/agent/mytools/save", { tool: readForm() }); if (editing && pslug(readForm().name) !== editing) await pcCall("/agent/mytools/delete", { name: editing }).catch(() => {}); hostTools.at = 0; showView(false); draw(true); }
+    catch (e) { $("#ptErr").textContent = e.message; }
+  };
+  $("#ptDelete").onclick = async () => {
+    if (!editing || !confirm("Delete the tool pc_" + editing + "?")) return;
+    try { await pcCall("/agent/mytools/delete", { name: editing }); hostTools.at = 0; showView(false); draw(true); } catch (e) { $("#ptErr").textContent = e.message; }
+  };
+  // Test saves nothing: it runs the form as it is (the PC runs a saved copy under a test name, which is removed again)
+  $("#ptTest").onclick = async () => {
+    const out = $("#ptTestOut"); $("#ptErr").textContent = "";
+    let args = {}; const raw = $("#ptTestArgs").value.trim();
+    if (raw) { try { args = JSON.parse(raw); } catch { $("#ptErr").textContent = 'The test input is not valid JSON, like {"city": "Berlin"}.'; return; } }
+    out.hidden = false; out.textContent = "Running…"; $("#ptTest").disabled = true;
+    const f = readForm(), test = { ...f, name: "zz_test_" + pslug(f.name).slice(0, 20) };
+    try { await pcCall("/agent/mytools/save", { tool: test }); out.textContent = (await pcCall("/agent/mytools/run", { name: "pc_" + pslug(test.name), args })).result; }
+    catch (e) { out.textContent = "Error: " + e.message; }
+    finally { pcCall("/agent/mytools/delete", { name: test.name }).catch(() => {}); $("#ptTest").disabled = false; }
+  };
+}
 const CHAT_TOOLS_HINT = {
-  custom: "The user made their own tools (names start with my_). Use one when the user asks for what it does, or when it clearly helps with the page they're on; the tool's answer comes back to you, so tell the user the result in your own words.",
+  custom: "The user made their own tools (names start with my_ or pc_; pc_ ones run on their PC). Use one when the user asks for what it does, or when it clearly helps with the page they're on; the tool's answer comes back to you, so tell the user the result in your own words.",
   screen: "Screen help: when the user asks what is on their screen, what they are looking at, or needs help with something in another app, call look_at_screen first (you get the app they were using, not Albatross). Describe what you see in plain words, then call show_on_screen with the numbers of the few things that matter and a short label for each, so the user sees them lit up on their real screen. Never invent a number. You point; you do not click for them (Jarvis does that).",
   song: "Songs: when the user wants a real song (with singing) or an AI-made track, call make_song with style tags and lyrics with [verse]/[chorus] markers (or [instrumental]); it takes a minute or two. Quick editable music without singing is make_music.",
   graph: "Charts: when the user wants a graph or chart, call make_chart (look the numbers up first if you don't know them).",
@@ -3202,7 +3308,7 @@ async function chat(model, opts = {}) {
     // charts, chances, notes, music and songs: tools the model picks itself
     await refreshSong();
     const extraTools = !guestMode && toolsOk && window.agentChatTools ? CHAT_TOOLS.filter(t => routeOn(t.key) && (!t.need || window[t.need])) : [];
-    if (!guestMode && toolsOk) extraTools.push(...chromeCustomTools());
+    if (!guestMode && toolsOk) { extraTools.push(...chromeCustomTools()); if (window.agentChatTools && toolOn("agent")) extraTools.push(...await hostCustomTools()); }
     if (extraTools.length) {
       const prevSong = [...conv.messages].reverse().map((m) => (m.blocks || []).find((b) => b.type === "music" && b.song?.spec)).find(Boolean)?.song;
       system = (system ? system + "\n\n" : "") + [...new Set(extraTools.map(t => t.key))].map(k => CHAT_TOOLS_HINT[k]).join("\n")
@@ -6749,8 +6855,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.1";
+const APP_VERSION = "2026-11-16.2";
 const WHATS_NEW = [
+  ["2026-11-16.2", ["Your own tools on the PC: add a web service or a text for the AI in Settings → Tools → Your tools, or put scripts and open-source MCP tool servers in the PC's tools folder. They work in every chat while you're connected, in the Chrome sidebar too."]],
   ["2026-11-16.1", ["The Chrome extension now has My tools: make your own tools for the AI (JavaScript that runs on the page you're on, or a text for it to follow), test them, export and import them. The Minecraft redstone tool has been archived."]],
   ["2026-11-15.10", ["Voice conversations are better: a new living circle that moves with your voice and with the AI's voice (blue while listening, purple thinking, amber looking things up, green speaking), the AI says things while it works (\"let me think about that\", \"that needs me to think longer\", \"let me look that up\", \"I found something on wikipedia.org\"), reads the answer sentence by sentence as it is written, and starts with \"According to ...\" when it used the web."]],
   ["2026-11-15.9", ["While the AI is thinking, its thoughts sit at the bottom of the reply and move to the top when it is done. Every circuit it makes in one reply is a draft under the thoughts, each one fully usable (newest open, older ones folded)."]],

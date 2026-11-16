@@ -517,6 +517,61 @@ window.albatrossSelfTest = async function (w) {
     if (!o.card) bad.push("the card isn't on the page");
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
+  await tryIt("tools on the PC: offered to the model as pc_..., run on the PC, shown as a card, and listed in Settings → Tools → Your tools", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const NL = String.fromCharCode(10), origApi = chatApi, origCaps = getCaps, origPc = window.pcCall, out = {};
+      const stream = (parts) => new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); for (const p of parts) c.enqueue(e.encode(JSON.stringify(p) + NL)); c.close(); } }));
+      const bodies = [], pc = [];
+      const script = [[{ message: { role: "assistant", content: "", tool_calls: [{ function: { name: "pc_weather", arguments: { city: "Berlin" } } }] } }, { done: true }],
+        [{ message: { role: "assistant", content: "It is sunny in Berlin." } }, { done: true }]];
+      let n = 0;
+      window.chatApi = async (body) => { bodies.push(JSON.parse(JSON.stringify(body))); return stream(script[n++] || [{ message: { role: "assistant", content: "?" } }, { done: true }]); };
+      window.getCaps = async () => ["completion", "tools"];
+      window.pcCall = async (path, body) => {
+        pc.push(path);
+        if (path === "/agent/mytools/list") return { tools: [{ name: "pc_weather", description: "Gets the weather for a city", kind: "http", source: "website", schema: { type: "object", properties: { city: { type: "string", description: "The city" } }, required: ["city"] } }, { name: "pc_files_read", description: "Reads a file", kind: "mcp", source: "files", schema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } }], servers: [{ name: "files", state: "ready", error: "", tools: 1 }], dir: "C:/host/my-tools" };
+        if (path === "/agent/mytools/run") return { result: "Berlin: sunny, 18 C" };
+        throw new Error("not stubbed: " + path);
+      };
+      hostTools.at = 0;
+      setView("chat"); await new Promise(r => setTimeout(r, 150));
+      try {
+        current.messages.push({ role: "user", content: "What is the weather in Berlin?" });
+        try { await chat("fake-model"); } catch (e) { out.err = String(e && e.stack || e).slice(0, 300); } await new Promise(r => setTimeout(r, 200));
+        const m = current.messages[current.messages.length - 1];
+        const fns = (bodies[0] && bodies[0].tools || []).map(t => t.function);
+        const wx = fns.find(f => f.name === "pc_weather");
+        out.offered = !!wx && wx.parameters.required.join() === "city" && wx.parameters.properties.city.type === "string" && fns.some(f => f.name === "pc_files_read");
+        out.block = (m.blocks || []).some(b => b.type === "mytool" && b.name === "pc_weather" && b.result === "Berlin: sunny, 18 C" && !b.active);
+        out.back = JSON.stringify(bodies[1] ? bodies[1].messages : "").includes("Berlin: sunny");
+        out.ran = pc.includes("/agent/mytools/run");
+        current.messages.splice(-2, 2);
+        // Settings → Tools → Your tools…
+        hostTools.at = 0; document.querySelector("#ptOpen").click(); await new Promise(r => setTimeout(r, 400));
+        const dlg = document.querySelector("#ptDlg");
+        out.dlgOpen = dlg.open; out.cards = dlg.querySelectorAll(".pt-card").length; out.editBtns = dlg.querySelectorAll(".pt-card button").length;
+        out.servers = /files \(1 tools\)/.test(document.querySelector("#ptServers").textContent);
+        document.querySelector("#ptNew").click(); await new Promise(r => setTimeout(r, 50));
+        out.editorShown = !document.querySelector("#ptEdit").hidden && document.querySelector("#ptListView").hidden;
+        document.querySelector("#ptKind").value = "prompt"; document.querySelector("#ptKind").onchange();
+        out.kindFields = [...dlg.querySelectorAll("[data-k]")].map(f => f.dataset.k + ":" + (f.hidden ? "hidden" : "shown")).join();
+        dlg.close();
+      } finally { window.chatApi = origApi; window.getCaps = origCaps; window.pcCall = origPc; hostTools.at = 0; hostTools.list = []; hostTools.info = null; saveChats(); }
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.err) bad.push("chat threw " + o.err);
+    if (!o.offered) bad.push("the PC tools weren't offered with their forms");
+    if (!o.block) bad.push("no tool card with the result");
+    if (!o.back) bad.push("the result didn't go back to the model");
+    if (!o.ran) bad.push("the PC wasn't asked to run it");
+    if (!o.dlgOpen || o.cards !== 2) bad.push("the Settings dialog doesn't list the tools");
+    if (o.editBtns !== 1) bad.push("only tools made on the website can be edited (got " + o.editBtns + " edit buttons)");
+    if (!o.servers) bad.push("tool servers aren't shown");
+    if (!o.editorShown) bad.push("New tool doesn't open the editor");
+    if (o.kindFields !== "http:hidden,prompt:shown") bad.push("the kind switch shows the wrong fields: " + o.kindFields);
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
   await tryIt("voice conversation: names its sources, has things to say while it works, reads the answer as it is written, and the circle draws",async () => {
     const o = JSON.parse(await w.eval(`(() => {
       const V = voiceTest, out = {};

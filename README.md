@@ -163,6 +163,14 @@ Give a tool a name, say what it does (the AI reads that to decide when to use it
 - A page tool can read and change the page, like a bookmarklet. Only add tools you wrote or trust.
 - The Minecraft redstone tool was taken out of the app on 2026-11-16 and is kept in `archive/redstone/` (see its README to put it back).
 
+## Your own tools on the PC (and open-source tools)
+
+Tools that live on your PC show up in the chat on any device connected to it (the website, the app, the Chrome sidebar), for you only: guests never get them. The AI sees them as `pc_name`, and every use shows as a small card in the chat.
+
+- **Make one on the website:** Settings → Tools → **Your tools…**. A tool is a **text** for the AI to follow, or a **call to a web address** (a weather service, your own API, a webhook), with inputs the AI fills in. Test it before you save. Tools made here can only call public https addresses (never this PC or your home network) and can never run a program.
+- **Programs go in a folder on the PC:** `host/my-tools/` (made on the first run; see `host/tools-examples/`). A `.json` file plus a `.js` file is a **script tool**; `mcp.json` connects **MCP servers**. Because only you can put files there, the website can't start a program on your PC. Changes are picked up by themselves.
+- **Open-source tools:** MCP (Model Context Protocol) is the open standard most tool collections use: files, memory, git, databases, search and thousands more. Browse the [official MCP Registry](https://registry.modelcontextprotocol.io), the [reference servers](https://github.com/modelcontextprotocol/servers), [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) or [mcpservers.org](https://mcpservers.org), and add one to `mcp.json`. An MCP server is a program that runs on your PC with your rights: read what it does first, and give file servers only the folders they need.
+
 ## Accounts: your chats and lists stay yours
 
 Chats live on the PC. While you're signed in (Settings → Account), your chats and lists are kept **per account**: in `%LOCALAPPDATA%\Albatross\Chats\accounts\<account>` on the PC, and under that account on each device. Signing in with the same account on another device shows the same chats; other accounts, and devices that aren't signed in, don't see them. Devices that aren't signed in share the chats directly in `Chats\`, as before.

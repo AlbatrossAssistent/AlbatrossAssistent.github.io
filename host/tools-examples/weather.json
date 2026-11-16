@@ -1,0 +1,8 @@
+{
+  "name": "weather",
+  "description": "Gets the current weather for a city, as one short line.",
+  "kind": "http",
+  "method": "GET",
+  "url": "https://wttr.in/{{city}}?format=3",
+  "params": [{ "name": "city", "type": "string", "description": "The city, like Berlin", "required": true }]
+}

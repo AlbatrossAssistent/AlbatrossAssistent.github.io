@@ -22,6 +22,8 @@ jobs:
           node-version: 20
       - name: Smoke test (the app in headless Chrome)
         run: node test/smoke.js
+      - name: Tools on the PC (host/mytools.js)
+        run: node test/mytools.js
   deploy:
     needs: test
     if: github.repository == 'AlbatrossAssistent/AlbatrossAssistent.github.io'
