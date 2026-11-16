@@ -2691,8 +2691,12 @@ async function send(textOverride, opts = {}) {
   if (current && window.listBusy && window.listBusy.has(current.id)) { toast("A list on your PC is writing into this chat. Wait for it (or stop it in List), or write in another chat."); return; }
   const atts = opts.images || attachments, wantImage = opts.image || forceImage;
   let text = (textOverride ?? p.value).trim();
-  const fileTool = !!challengeFile && toolOn("challenge");       // a file from the paperclip that isn't a picture
-  if (!text && fileTool) text = "Find the hidden word, message or flag in this file.";
+  // a file from the paperclip that isn't a picture: investigated (the Challenge tool) only when the message asks for that;
+  // otherwise it is simply part of the message (its text, or its name and size when it isn't text)
+  const ASK_INVESTIGATE = /investigat|hidden (word|message|text|flag)|find the (word|flag|message|secret)|\bflag\b|\bctf\b|challenge|puzzle|steganograph|decode|decrypt|untersuch|versteckt/i;
+  const fileTool = !!challengeFile && toolOn("challenge") && ASK_INVESTIGATE.test(text);
+  const plainFile = !!challengeFile && !fileTool ? challengeFile : null;
+  if (!text && plainFile) text = "Here is a file: " + plainFile.name + ". What's in it?";
   if (!text && !atts.length) return;
   if (!connected) { await connect(); if (!connected) return; }
   // Pictures: a new one goes to the chosen image model. Changing a picture (an attached photo, or a follow-up
@@ -2718,8 +2722,9 @@ async function send(textOverride, opts = {}) {
   if (!model) { toast("Pick a model first"); return; }
 
   const fileForTool = fileTool ? challengeFile : null;
-  const userMsg = { role: "user", content: text, images: atts.length ? atts.slice() : undefined, file: fileForTool ? { name: fileForTool.name, size: fileForTool.size } : undefined };
-  if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; if (fileTool) challengeFile = null; renderAttachments(); }
+  const anyFile = fileForTool || plainFile;
+  const userMsg = { role: "user", content: text, images: atts.length ? atts.slice() : undefined, file: anyFile ? { name: anyFile.name, size: anyFile.size } : undefined, ...(plainFile ? { fileText: fileAsText(plainFile) } : {}) };
+  if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; if (anyFile) challengeFile = null; renderAttachments(); }
   setForceImage(false);
   const firstMessage = !current.messages.some(m => !m.isEvent);
   run = { chat: current, visited: new Map() };
@@ -3375,7 +3380,7 @@ async function chat(model, opts = {}) {
     const msgs = conv.messages.filter(m => !m.isError && !m.isEvent).map(m => {
       if (m.genImage !== undefined) return { role: "assistant", content: `(I made a picture for that${m.genImage ? ", picture #" + ++picN : ""}: ${m.prompt || m.asked || ""})` };
       const n = Array.isArray(m.images) ? m.images.length : 0, first = picN + 1; picN += n;
-      return { role: m.role, content: (n ? `[Picture${n > 1 ? "s" : ""} #${first}${n > 1 ? "–#" + picN : ""} attached]\n` : "") + m.content, ...(m.images ? { images: m.images } : {}) };
+      return { role: m.role, content: (n ? `[Picture${n > 1 ? "s" : ""} #${first}${n > 1 ? "–#" + picN : ""} attached]\n` : "") + m.content + (m.fileText ? String.fromCharCode(10) + String.fromCharCode(10) + m.fileText : ""), ...(m.images ? { images: m.images } : {}) };
     });
     if (picN) system = (system ? system + "\n\n" : "") + `This chat has ${picN} picture${picN > 1 ? "s" : ""}, numbered #1 to #${picN} in order (the user's attached pictures and pictures made here, oldest first; each message says which numbers it carries). To show a picture in your answer, write [[pic:N]] where it belongs, for example "This banana is ripe: [[pic:2]]". Whenever you talk about one particular picture (which is good, which is bad, which one you mean), show it that way.`;
     if (system) msgs.unshift({ role: "system", content: system });
@@ -4175,6 +4180,15 @@ function codeCard(b) {
   return w;
 }
 
+// A file that goes with a message: its text (when it is text), else its name and size, so the model knows it's there
+function fileAsText(f) {
+  const head = "[Attached file: " + f.name + ", " + fsize(f.size) + "]";
+  const bytes = f.bytes.subarray(0, 120000);
+  let odd = 0; for (let i = 0; i < Math.min(bytes.length, 8000); i++) { const b = bytes[i]; if (b === 0 || (b < 32 && b !== 9 && b !== 10 && b !== 13)) odd++; }
+  if (odd > Math.min(bytes.length, 8000) * .02) return head + " (not a text file, so its contents aren't shown here. If the user wants it searched for hidden words or messages, they can ask you to investigate it.)";
+  const text = new TextDecoder("utf-8").decode(bytes);
+  return head + String.fromCharCode(10) + text + (f.size > bytes.length ? String.fromCharCode(10) + "[…the file goes on; only the first part is shown]" : "");
+}
 // ---------- Challenge ----------
 let challengeFile = null;                                           // { name, size, bytes } of the file to investigate
 async function setChallengeFile(f) {
@@ -4821,10 +4835,7 @@ function setBusy(b) {
 // ======================================================================
 function addFiles(files) {
   for (const f of files) {
-    if (!f.type.startsWith("image/")) {            // not a picture: a puzzle file for the Challenge tool
-      if (!toolOn("challenge")) { toast("The Challenge tool is switched off in Settings → Tools"); continue; }
-      setChallengeFile(f); continue;
-    }
+    if (!f.type.startsWith("image/")) { setChallengeFile(f); continue; }     // not a picture: goes with the message (investigated only when asked)
     if (f.size > 20e6) { toast("Image too large (max 20 MB)"); continue; }
     const r = new FileReader();
     r.onload = () => { attachments.push(String(r.result).split(",")[1]); renderAttachments(); };
@@ -7091,8 +7102,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.7";
+const APP_VERSION = "2026-11-16.8";
 const WHATS_NEW = [
+  ["2026-11-16.8", ["Files you attach no longer start an investigation by themselves: a text file simply goes with your message. Ask for it (investigate, find the hidden word, flag, decode...) and the Challenge tool digs in as before."]],
   ["2026-11-16.7", ["The model wallpaper's letters now use Inter Tight (the open font closest to Apple's SF Pro), light up from the top when you open a new chat, and a soft sheen of light passes over them now and then."]],
   ["2026-11-16.6", ["The MacBook Pro look is redrawn: smooth glossy ribbons of light on near-black, bold letters, a deep band through the middle and a soft glow."]],
   ["2026-11-16.5", ["Model wallpapers now draw the name in tall letters of light streaks, like the MacBook Pro artwork (Letters: Plain switches back). A new chat is an empty screen, and the sidebar folds away completely (the menu button at the top left brings it back; Settings → Appearance can keep the icon strip)."]],
