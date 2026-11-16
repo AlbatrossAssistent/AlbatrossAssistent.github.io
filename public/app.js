@@ -4928,59 +4928,63 @@ function drawWallArt(text, w) {
   const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, W, H);
   // the letters' box: the space right of the sidebar
   const areaL = sr * DPR + W * .03, areaR = W * .97, areaW = areaR - areaL;
-  const hFrac = { s: .34, m: .56, l: .78 }[w.size] || .56;
-  const font = '700 200px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
-  const m = document.createElement("canvas").getContext("2d"); m.font = font;
+  const hFrac = { s: .36, m: .6, l: .8 }[w.size] || .6;
+  const font = '800 200px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
+  const m = document.createElement("canvas").getContext("2d"); m.font = font; try { m.letterSpacing = "-6px"; } catch {}
   const mt = m.measureText(text), tw = Math.max(1, mt.actualBoundingBoxLeft + mt.actualBoundingBoxRight), th = Math.max(1, mt.actualBoundingBoxAscent + mt.actualBoundingBoxDescent);
-  const boxH = H * hFrac, sy = boxH / th, sx = Math.min(sy * .78, (areaW * .96) / tw);   // tall and a little condensed, never wider than the space
+  const boxH = H * hFrac, sy = boxH / th, sx = Math.min(sy * .7, (areaW * .96) / tw);      // tall, condensed, never wider than the space
   const boxW = tw * sx;
   const x0 = w.pos === "left" ? areaL + W * .01 : areaL + (areaW - boxW) / 2;
   const y0 = w.pos === "center" ? (H - boxH) / 2 : H - boxH - Math.min(H * .3, 150 * DPR + H * .06);
-  // the mask, smeared vertically
+  // the shape of the letters
   const mask = document.createElement("canvas"); mask.width = W; mask.height = H;
-  const mc = mask.getContext("2d");
-  const one = document.createElement("canvas"); one.width = W; one.height = H;
-  const oc = one.getContext("2d"); oc.font = font; oc.fillStyle = "#fff";
-  oc.setTransform(sx, 0, 0, sy, x0 + mt.actualBoundingBoxLeft * sx, y0 + mt.actualBoundingBoxAscent * sy); oc.fillText(text, 0, 0);
-  const run = 2;                          // crisp edges, like the artwork
-  mc.drawImage(one, 0, 0);
-  // the field of light: one line per column of pixels, in runs of 1 to 3
-  const field = document.createElement("canvas"); field.width = W; field.height = H;
-  const fc = field.getContext("2d");
-  const rnd = (() => { let s = 0; for (const ch of text + w.id) s = (s * 31 + ch.charCodeAt(0)) >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); })();
-  const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
-  const hi = dark ? [255, 255, 255] : mix(ink, [0, 0, 0], .25), lo = dark ? mix(ink, [20, 30, 60], .35) : mix(ink, [255, 255, 255], .45);
-  const top = y0 - boxH * .05, bot = y0 + boxH * 1.08;
-  const deep = dark ? mix(ink, [6, 10, 24], .86) : mix(ink, [255, 255, 255], .62);     // the letters are solid: a deep base under the light
-  fc.fillStyle = "rgb(" + deep.join(",") + ")"; fc.fillRect(0, top, W, bot - top);
-  for (let x = Math.floor(x0 - run); x < x0 + boxW + run; ) {
-    const wpx = 1 + Math.floor(rnd() * 4), b = .62 + rnd() * .38, tint = rnd();
-    let col = mix(hi, lo, tint * .7);
-    if (rnd() < .012) col = [[255, 90, 60], [255, 170, 60], [255, 220, 120]][Math.floor(rnd() * 3)];       // the odd thread of colour
-    if (rnd() < .07) { x += wpx; continue; }                                                                  // a gap: the deep base shows
-    const dip = .45 + rnd() * .2, g = fc.createLinearGradient(0, top, 0, bot), rgba = (a) => "rgba(" + col.join(",") + "," + Math.max(0, Math.min(1, a * b)).toFixed(3) + ")";
-    g.addColorStop(0, rgba(.0)); g.addColorStop(.05, rgba(1)); g.addColorStop(dip - .22, rgba(.85)); g.addColorStop(dip, rgba(.04 + rnd() * .12));
-    g.addColorStop(Math.min(.94, dip + .2), rgba(.75)); g.addColorStop(.97, rgba(.95)); g.addColorStop(1, rgba(0));
-    fc.fillStyle = g; fc.fillRect(x, top, wpx, bot - top);
-    x += wpx;
+  const mc = mask.getContext("2d"); mc.font = font; try { mc.letterSpacing = "-6px"; } catch {} mc.fillStyle = "#fff";
+  mc.setTransform(sx, 0, 0, sy, x0 + mt.actualBoundingBoxLeft * sx, y0 + mt.actualBoundingBoxAscent * sy); mc.fillText(text, 0, 0);
+  // The light: ribbons 3 to 16 pixels wide, each shaded across like a folded ribbon (a bright middle, a dark seam at its edges)
+  // and down its length from icy white through a deep navy band and back to light, each with its own brightness, tint and
+  // band; now and then a fine thread of colour. Worked out pixel by pixel inside the letters' box only.
+  const bx = Math.max(0, Math.floor(x0 - 4)), by = Math.max(0, Math.floor(y0 - 4)), bw = Math.min(W - bx, Math.ceil(boxW + 8)), bh = Math.min(H - by, Math.ceil(boxH + 8));
+  if (bw < 2 || bh < 2) return;
+  const shape = mc.getImageData(bx, by, bw, bh).data, img = ctx.createImageData(bw, bh), px = img.data;
+  let seed = 7; for (const ch of text + w.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  const tintHi = dark ? mix([246, 250, 255], ink, .18) : mix([28, 36, 58], ink, .25);       // the bright end of the light
+  const tintMid = dark ? mix([132, 160, 210], ink, .35) : mix([90, 110, 150], ink, .3);
+  const deep = dark ? mix([8, 14, 34], ink, .06) : mix([222, 228, 238], ink, .1);           // the band through the middle
+  const ribbons = [];
+  for (let x = 0; x < bw; ) {
+    const thread = rnd() < .03, wd = thread ? Math.max(1, Math.round(DPR)) : Math.round((5 + rnd() * rnd() * 26) * DPR);
+    ribbons.push({ x, wd, thread, b: .78 + rnd() * .22, t: rnd(), dip: .56 + rnd() * .16, dw: .12 + rnd() * .1, depth: .88 + rnd() * .12,
+      col: thread ? [[255, 92, 58], [255, 168, 64], [255, 214, 120]][Math.floor(rnd() * 3)] : null });
+    x += wd;
   }
-  fc.globalCompositeOperation = "destination-in"; fc.drawImage(mask, 0, 0); fc.globalCompositeOperation = "source-over";
-  // a soft glow under it, then the letters
-  ctx.save(); ctx.filter = "blur(" + Math.round(26 * DPR) + "px)"; ctx.globalAlpha = dark ? .22 : .14; ctx.drawImage(field, 0, 0); ctx.restore();
-  ctx.save(); ctx.filter = "blur(" + (.45 * DPR).toFixed(2) + "px)"; ctx.drawImage(field, 0, 0); ctx.restore();
-}
-function paintWallBox() {
-  const w = wallCfg(), grid = $("#wallGrid");
-  $("#wallBox").hidden = S.bgStyle !== "wall";
-  if (!grid.children.length) for (const [id, label] of wallList()) {
-    const b = document.createElement("button"); b.type = "button"; b.className = "wp-sw"; b.dataset.wall = id; b.setAttribute("role", "radio"); b.title = label;
-    const s = document.createElement("span"); s.textContent = label; b.append(s);
-    b.onclick = () => { S.wall = { ...wallCfg(), id }; saveSettings(); applyAppearance(); paintWallBox(); };
-    grid.append(b);
+  for (const r of ribbons) {
+    const hiC = r.col || mix(tintHi, tintMid, r.t * .75);
+    for (let yy = 0; yy < bh; yy++) {
+      const v = (yy + by - y0) / boxH;                                 // 0 at the top of the letters, 1 at the bottom
+      const band = Math.exp(-((v - r.dip) * (v - r.dip)) / (2 * r.dw * r.dw)) * r.depth;
+      const lift = v < .12 ? 1 + (.12 - v) * 1.2 : 1;                  // the tops catch the most light
+      const c = mix(hiC, deep, Math.min(1, band));
+      for (let xx = r.x; xx < r.x + r.wd && xx < bw; xx++) {
+        const i = (yy * bw + xx) * 4, a = shape[i + 3];
+        if (!a) continue;
+        const u = r.wd > 1 ? (xx - r.x + .5) / r.wd : .5;
+        const shade = r.thread ? 1 : (.62 + .38 * Math.sin(Math.PI * u)) * (u < .06 || u > .94 ? .55 : 1);
+        const k = Math.min(1.15, r.b * shade * lift);
+        const kk = dark ? k : 2 - k;                                     // light mode: dark ribbons that lighten at their seams
+        px[i] = Math.min(255, dark ? c[0] * kk : c[0] + (255 - c[0]) * (kk - 1) * .6);
+        px[i + 1] = Math.min(255, dark ? c[1] * kk : c[1] + (255 - c[1]) * (kk - 1) * .6);
+        px[i + 2] = Math.min(255, dark ? c[2] * kk : c[2] + (255 - c[2]) * (kk - 1) * .6);
+        px[i + 3] = a;
+      }
+    }
   }
-  grid.querySelectorAll(".wp-sw").forEach(b => b.setAttribute("aria-checked", String(b.dataset.wall === w.id)));
-  $("#wallLook").value = w.look; $("#wallText").value = w.name; $("#wallStyle").value = w.style; $("#wallSize").value = w.size; $("#wallPos").value = w.pos; $("#wallCustom").value = w.custom;
-  $("#wallCustomRow").hidden = w.name !== "custom";
+  const art = document.createElement("canvas"); art.width = W; art.height = H; art.getContext("2d").putImageData(img, bx, by);
+  // a soft glow under the letters, the way the light spills on a dark screen
+  ctx.save(); ctx.filter = "blur(" + Math.round(34 * DPR) + "px)"; ctx.globalAlpha = dark ? .3 : .1; ctx.drawImage(art, 0, 0); ctx.restore();
+  ctx.drawImage(art, 0, 0);
+  if (dark) { ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.filter = "blur(" + Math.round(3 * DPR) + "px)"; ctx.globalAlpha = .28; ctx.drawImage(art, 0, 0); ctx.restore(); }   // a little bloom: the light seems to shine
 }
 for (const [el, key] of [["#wallText", "name"], ["#wallStyle", "style"], ["#wallSize", "size"], ["#wallPos", "pos"], ["#wallLook", "look"]]) $(el).onchange = e => { S.wall = { ...wallCfg(), [key]: e.target.value }; saveSettings(); paintWall(); paintWallBox(); };
 $("#wallCustom").oninput = e => { S.wall = { ...wallCfg(), custom: e.target.value }; saveSettings(); paintWall(); };
@@ -7001,8 +7005,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.5";
+const APP_VERSION = "2026-11-16.6";
 const WHATS_NEW = [
+  ["2026-11-16.6", ["The MacBook Pro look is redrawn: smooth glossy ribbons of light on near-black, bold letters, a deep band through the middle and a soft glow."]],
   ["2026-11-16.5", ["Model wallpapers now draw the name in tall letters of light streaks, like the MacBook Pro artwork (Letters: Plain switches back). A new chat is an empty screen, and the sidebar folds away completely (the menu button at the top left brings it back; Settings → Appearance can keep the icon strip)."]],
   ["2026-11-16.4", ["Model wallpapers: six quiet backgrounds (Mist, Dusk, Glow, Meadow, Ocean, Graphite) with your model's name in big Apple-style letters, without tags like :12b. Settings → Appearance → Background → Model wallpaper: pick one, the size, the position, or your own text."]],
   ["2026-11-16.3", ["Your tools now has a list of ready-made open-source tool servers (memory, files, sequential thinking, git) to copy into the PC's tools folder."]],
