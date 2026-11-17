@@ -13,10 +13,22 @@ const crypto = require("crypto");
 const { spawn, execFile } = require("child_process");
 const WebSocket = require("ws");
 
-const COMFY_DIR = process.env.COMFY_DIR || [
-  path.join(__dirname, "..", "..", "ComfyUI", "ComfyUI_windows_portable"), // C:\Burrow\app\host -> C:\Burrow\ComfyUI
-  "D:\\ComfyUI\\ComfyUI_windows_portable",
-].find((d) => fs.existsSync(d)) || "D:\\ComfyUI\\ComfyUI_windows_portable";
+// Where ComfyUI is. The Windows app runs the host from its own install folder (AppData\Local\Programs\albatross-desktop\...),
+// where there is no ComfyUI next to it, so the usual places are looked at too: next to the Burrow folder, C:\Burrow, the user
+// folder, LocalAppData\Albatross, and the root of every drive.
+const COMFY_DIR = process.env.COMFY_DIR || (() => {
+  const home = require("os").homedir(), local = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+  const tries = [
+    path.join(__dirname, "..", "..", "ComfyUI", "ComfyUI_windows_portable"), // C:\Burrow\app\host -> C:\Burrow\ComfyUI
+    "C:\\Burrow\\ComfyUI\\ComfyUI_windows_portable",
+    path.join(local, "Albatross", "ComfyUI", "ComfyUI_windows_portable"),
+    path.join(home, "ComfyUI", "ComfyUI_windows_portable"),
+    path.join(home, "Desktop", "ComfyUI_windows_portable"),
+    path.join(home, "Downloads", "ComfyUI_windows_portable"),
+    ...["C", "D", "E", "F"].flatMap((d) => [d + ":\\ComfyUI\\ComfyUI_windows_portable", d + ":\\ComfyUI_windows_portable"]),
+  ];
+  return tries.find((d) => { try { return fs.existsSync(path.join(d, "python_embeded", "python.exe")); } catch { return false; } }) || tries.find((d) => fs.existsSync(d)) || "D:\\ComfyUI\\ComfyUI_windows_portable";
+})();
 const COMFY = (process.env.COMFY_URL || "http://127.0.0.1:8188").replace(/\/+$/, "");
 const M = (...p) => path.join(COMFY_DIR, "ComfyUI", "models", ...p);
 // The models Albatross knows how to run. Each is offered only if all its files are there.

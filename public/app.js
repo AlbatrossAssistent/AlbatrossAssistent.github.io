@@ -7278,8 +7278,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-17.1";
+const APP_VERSION = "2026-11-17.2";
 const WHATS_NEW = [
+  ["2026-11-17.2", ["Pictures work again in the Windows app: it couldn't find the picture engine (ComfyUI) from its install folder, so your image model didn't show."]],
   ["2026-11-17.1", ["The AI can read PDFs you attach. Files it can't read (Word, Excel, PowerPoint, OpenDocument, EPUB, RTF, scanned PDFs) open a pop-up with a converter: it turns them into text right there (scans are read by your PC), shows a preview, and you can download the text."]],
   ["2026-11-16.8", ["Files you attach no longer start an investigation by themselves: a text file simply goes with your message. Ask for it (investigate, find the hidden word, flag, decode...) and the Challenge tool digs in as before."]],
   ["2026-11-16.7", ["The model wallpaper's letters now use Inter Tight (the open font closest to Apple's SF Pro), light up from the top when you open a new chat, and a soft sheen of light passes over them now and then."]],
