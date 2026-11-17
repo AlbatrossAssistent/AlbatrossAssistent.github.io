@@ -181,6 +181,22 @@ async function handle(method, p, body, note, opts) {
   if (opts && opts.ollama) OLLAMA = opts.ollama;
   let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
   try {
+    // a file attached in the chat that the AI can't read as it is (a scan, a Word file ...): its text, read here (with the Windows
+    // text reader for scans and pictures of pages). The file is written to a temp folder only for the reading, then deleted.
+    if (p === "/agent/docs/convert") {
+      const name = String(j.name || "file"), ext = path.extname(name).toLowerCase();
+      if (!EXT.test("x" + ext)) return [400, { error: "This kind of file can't be converted on the PC." }];
+      const buf = Buffer.from(String(j.b64 || ""), "base64");
+      if (!buf.length || buf.length > MAX_BYTES) return [400, { error: "The file is empty or too big (40 MB at most)." }];
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "alb-conv-")), file = path.join(tmp, "file" + ext);
+      try {
+        fs.writeFileSync(file, buf);
+        const parts = await extract(file);
+        const text = parts.map((x) => (x.page && parts.length > 1 ? "[" + (ext === ".pptx" ? "Slide " : "Page ") + x.page + "]\n" : "") + x.text).join("\n\n").trim();
+        note && note("Converted " + name.slice(0, 60) + " to text" + (parts.some((x) => x.ocr) ? " (read from a scan)" : ""));
+        return [200, { text: text.slice(0, 400000), ocr: parts.some((x) => x.ocr), pages: parts.length }];
+      } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} }
+    }
     if (p === "/agent/docs/status") {
       loadIndex(); const files = Object.values(index.files);
       return [200, { folders: config().folders, home: os.homedir(), model: MODEL, scans: OCR_ON, scanned: files.filter((x) => x.scan).length, hasModel: await hasModel(), files: files.filter((x) => x.chunks.length).length, failed: files.filter((x) => x.error).length, passages: files.reduce((n, x) => n + x.chunks.length, 0), ...state }];

@@ -953,7 +953,7 @@ window.moveSharedChats = async () => {
 // shared: without the account (only for moving the shared chats into it)
 // How long a request to the PC may take before we give up (so nothing keeps "loading" forever when the PC is busy, asleep or
 // offline). Jobs that are slow by nature get longer.
-const PC_SLOW = /^\/agent\/(docs\/(pull|index)|upscale\/run|kokoro\/try|run|print|upload|mail\/send)|^\/browser\/(open|act|start)|^\/pc\/(shutdown|sleep)/;
+const PC_SLOW = /^\/agent\/(docs\/(pull|index|convert)|upscale\/run|kokoro\/try|run|print|upload|mail\/send)|^\/browser\/(open|act|start)|^\/pc\/(shutdown|sleep)/;
 async function pcCall(path, body, method = "POST", shared = false) {
   if (ACCT_PATHS.test(path) && !shared) {
     const t = await acctToken();
@@ -4180,9 +4180,178 @@ function codeCard(b) {
   return w;
 }
 
+// ---------- Reading attached files: PDFs directly, and a converter for the ones the AI can't read as they are ----------
+// PDF: its text is read right here in the browser (vendor/pdfjs). Word, PowerPoint, Excel, OpenDocument, EPUB and RTF files are
+// turned into text here too, on request (the pop-up below). A scan (a PDF without text) goes to the PC, whose text reader (OCR)
+// reads what is printed on the pages. Old Office formats (.doc, .xls, .ppt) can't be read without Office.
+const CONV_KINDS = { docx: "a Word document", pptx: "a PowerPoint presentation", xlsx: "an Excel spreadsheet", odt: "an OpenDocument text", odp: "an OpenDocument presentation", ods: "an OpenDocument spreadsheet", epub: "an e-book (EPUB)", rtf: "a Rich Text document" };
+const OLD_OFFICE = { doc: "Word", xls: "Excel", ppt: "PowerPoint" };
+const fileExt = (name) => ((String(name).match(/\.([a-z0-9]+)$/i) || [])[1] || "").toLowerCase();
+function looksText(bytes) {
+  const n = Math.min(bytes.length, 8000); let odd = 0;
+  for (let i = 0; i < n; i++) { const b = bytes[i]; if (b === 0 || (b < 32 && b !== 9 && b !== 10 && b !== 13)) odd++; }
+  return odd <= n * .02;
+}
+let pdfjsLib = null;
+async function pdfPagesInBrowser(bytes) {
+  if (!pdfjsLib) {
+    pdfjsLib = await import(new URL("vendor/pdfjs/pdf.min.mjs", document.baseURI).href);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("vendor/pdfjs/pdf.worker.min.mjs", document.baseURI).href;
+  }
+  const doc = await pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+  const pages = [];
+  try {
+    for (let i = 1; i <= Math.min(doc.numPages, 400); i++) {
+      const tc = await (await doc.getPage(i)).getTextContent();
+      pages.push(tc.items.map((it) => it.str + (it.hasEOL ? "\n" : "")).join(" ").replace(/[ \t]+/g, " ").trim());
+    }
+    return { pages, total: doc.numPages };
+  } finally { doc.destroy(); }
+}
+// what the file is to the AI: ok (text it can read), convert (Office and friends), scan (a PDF without text), old, broken or binary
+async function prepareFile(cf) {
+  const ext = fileExt(cf.name);
+  cf.status = "binary";
+  if (ext === "pdf") {
+    try {
+      const { pages, total } = await pdfPagesInBrowser(cf.bytes);
+      const letters = pages.join("").replace(/\s+/g, "").length;
+      cf.pages = total;
+      if (letters >= 30 * Math.min(pages.length, 3)) { cf.text = pages.map((t, i) => "[Page " + (i + 1) + "]\n" + t).join("\n\n") + (total > pages.length ? "\n\n[…the PDF has " + total + " pages; only the first " + pages.length + " were read]" : ""); cf.status = "ok"; }
+      else cf.status = "scan";
+    } catch (e) { cf.status = /password/i.test(e && e.message) ? "locked" : "broken"; }
+  }
+  else if (CONV_KINDS[ext]) cf.status = "convert";
+  else if (OLD_OFFICE[ext]) cf.status = "old";
+  else if (looksText(cf.bytes)) cf.status = "ok";
+  return cf;
+}
+// a zip file's entries that "want" picks, as text (Office and OpenDocument files are zips of XML)
+async function unzipText(u8, want) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), out = {};
+  let end = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { end = i; break; }
+  if (end < 0) throw new Error("This file isn't what its name says (it can't be opened).");
+  let p = dv.getUint32(end + 16, true);
+  for (let k = 0, n = dv.getUint16(end + 10, true); k < n && p + 46 <= u8.length; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), size = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+    p += 46 + nl + xl + cl;
+    if (!want(name) || (method !== 0 && method !== 8)) continue;
+    const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true), raw = u8.subarray(start, start + size);
+    const bytes = method === 8 ? new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer()) : raw;
+    out[name] = new TextDecoder().decode(bytes);
+  }
+  return out;
+}
+const xmlDoc = (s) => new DOMParser().parseFromString(s, "application/xml");
+// the text of every paragraph-like element, one per line
+function xmlParas(xml, tags) {
+  const d = xmlDoc(xml), lines = [];
+  const walk = (el) => {
+    for (const c of el.children) {
+      if (tags.includes(c.tagName)) lines.push(c.textContent.replace(/\s+/g, " ").trim());
+      else walk(c);
+    }
+  };
+  walk(d.documentElement);
+  return lines.filter(Boolean).join("\n");
+}
+const byNumber = (a, b) => parseInt(a.match(/(\d+)\.xml$/)[1]) - parseInt(b.match(/(\d+)\.xml$/)[1]);
+async function convertInBrowser(cf) {
+  const ext = fileExt(cf.name), u8 = cf.bytes;
+  if (ext === "docx") { const z = await unzipText(u8, (n) => n === "word/document.xml"); return xmlParas(z["word/document.xml"] || "", ["w:p"]); }
+  if (ext === "pptx") {
+    const z = await unzipText(u8, (n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
+    return Object.keys(z).sort(byNumber).map((n, i) => "[Slide " + (i + 1) + "]\n" + xmlParas(z[n], ["a:p"])).join("\n\n");
+  }
+  if (ext === "xlsx") {
+    const z = await unzipText(u8, (n) => n === "xl/sharedStrings.xml" || /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+    const shared = z["xl/sharedStrings.xml"] ? [...xmlDoc(z["xl/sharedStrings.xml"]).getElementsByTagName("si")].map((s) => s.textContent) : [];
+    return Object.keys(z).filter((n) => /worksheets/.test(n)).sort(byNumber).map((n, i) => {
+      const rows = [...xmlDoc(z[n]).getElementsByTagName("row")].slice(0, 3000).map((r) => [...r.getElementsByTagName("c")].map((c) => {
+        const v = c.getElementsByTagName("v")[0], t = c.getAttribute("t");
+        return t === "s" && v ? shared[+v.textContent] || "" : t === "inlineStr" ? c.textContent : v ? v.textContent : "";
+      }).join("\t"));
+      return "[Sheet " + (i + 1) + "]\n" + rows.join("\n");
+    }).join("\n\n");
+  }
+  if (ext === "odt" || ext === "odp" || ext === "ods") {
+    const z = await unzipText(u8, (n) => n === "content.xml");
+    return xmlParas(z["content.xml"] || "", ["text:p", "text:h"]);
+  }
+  if (ext === "epub") {
+    const z = await unzipText(u8, (n) => /\.x?html?$/i.test(n));
+    return Object.keys(z).sort().map((n) => { const d = new DOMParser().parseFromString(z[n], "text/html"); return (d.body ? d.body.innerText || d.body.textContent : "").replace(/\n{3,}/g, "\n\n").trim(); }).filter(Boolean).join("\n\n");
+  }
+  if (ext === "rtf") {
+    let s = new TextDecoder("latin1").decode(u8);
+    s = s.replace(/\\'([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/\{\\\*[^{}]*\}/g, "").replace(/\\(par|line)\b ?/g, "\n").replace(/\\tab\b ?/g, "\t")
+      .replace(/\\[a-z]+-?\d* ?/gi, "").replace(/[{}]/g, "");
+    return s.replace(/\n{3,}/g, "\n\n").trim();
+  }
+  throw new Error("This kind of file can't be converted here.");
+}
+// on the PC: its text reader reads scans (and everything above)
+async function convertOnPC(cf) {
+  const r = await pcCall("/agent/docs/convert", { name: cf.name, b64: bytesToB64(cf.bytes) });
+  return { text: String(r.text || ""), ocr: !!r.ocr };
+}
+
+// ---------- the pop-up: "The AI can't read this file yet" ----------
+let convFile = null, convText = "";
+function openConvert(cf) {
+  convFile = cf; convText = "";
+  const ext = fileExt(cf.name), dlg = $("#convDlg"), pcOk = connected && !guestMode;
+  $("#convName").textContent = cf.name + " · " + fsize(cf.size);
+  $("#convOut").hidden = true; $("#convUse").hidden = true; $("#convSave").hidden = true; $("#convErr").textContent = "";
+  const go = $("#convGo"); go.hidden = false; go.disabled = false;
+  const msg = {
+    convert: `This is ${CONV_KINDS[ext]}. The AI reads text, so it has to be converted first. That happens right here, on this device.`,
+    scan: "This PDF has no text in it: it's a scan, or photos of pages. Your PC can read what is printed on the pages (OCR) and turn it into text.",
+    old: `This is an old ${OLD_OFFICE[ext]} file (.${ext}), which can only be read with ${OLD_OFFICE[ext]} itself. Open it there, save it as .${ext}x or as a PDF, and attach that instead.`,
+    locked: "This PDF is protected with a password, so it can't be read. Open it, save or print it as a new PDF without the password, and attach that.",
+    broken: "This PDF couldn't be opened. It may be damaged, or not really a PDF.",
+    binary: `The AI can't read this kind of file${ext ? " (." + ext + ")" : ""}, and it can't be converted to text. You can still send it and ask the AI to investigate it (for hidden words or messages), or remove it.`,
+  }[cf.status] || "";
+  $("#convMsg").textContent = msg;
+  if (cf.status === "convert") go.textContent = "Convert to text";
+  else if (cf.status === "scan") { go.textContent = "Read it on my PC"; if (!pcOk) { go.disabled = true; $("#convErr").textContent = "Connect to your PC first (with the Albatross host running): its text reader does this."; } }
+  else go.hidden = true;
+  if (!dlg.open) dlg.showModal();
+}
+$("#convGo").onclick = async () => {
+  const cf = convFile, go = $("#convGo"); if (!cf) return;
+  go.disabled = true; const label = go.textContent; go.textContent = cf.status === "scan" ? "Reading the pages…" : "Converting…"; $("#convErr").textContent = "";
+  try {
+    let text, ocr = false;
+    if (cf.status === "scan") ({ text, ocr } = await convertOnPC(cf));
+    else { try { text = await convertInBrowser(cf); } catch (e) { if (connected && !guestMode) text = (await convertOnPC(cf)).text; else throw e; } }
+    text = String(text || "").trim();
+    if (!text) throw new Error(cf.status === "scan" ? "No text could be read from the pages." : "There's no text in this file.");
+    convText = text;
+    const out = $("#convOut"); out.hidden = false;
+    out.textContent = text.slice(0, 1800) + (text.length > 1800 ? "\n…" : "");
+    $("#convMsg").textContent = `Done: ${text.length.toLocaleString()} characters of text${ocr ? ", read from the pages" : ""}. Here is the start of it.`;
+    $("#convUse").hidden = false; $("#convSave").hidden = false; go.hidden = true;
+  } catch (e) { $("#convErr").textContent = "Couldn't convert it: " + e.message; go.disabled = false; go.textContent = label; }
+};
+$("#convUse").onclick = () => {
+  if (!convFile || !convText) return;
+  convFile.text = convText; convFile.status = "ok"; convFile.converted = true;
+  $("#convDlg").close(); renderAttachments(); $("#prompt").focus();
+  toast("The text of " + convFile.name + " goes with your message");
+};
+$("#convSave").onclick = () => { if (convText) download(convFile.name.replace(/\.[^.]+$/, "") + ".txt", new Blob([convText], { type: "text/plain;charset=utf-8" })); };
+$("#convKeep").onclick = () => $("#convDlg").close();
+$("#convDrop").onclick = () => { if (challengeFile === convFile) challengeFile = null; $("#convDlg").close(); renderAttachments(); };
+
 // A file that goes with a message: its text (when it is text), else its name and size, so the model knows it's there
 function fileAsText(f) {
-  const head = "[Attached file: " + f.name + ", " + fsize(f.size) + "]";
+  const head = "[Attached file: " + f.name + ", " + fsize(f.size) + (f.converted ? ", converted to text" : "") + "]";
+  if (f.text) return head + String.fromCharCode(10) + f.text.slice(0, 120000) + (f.text.length > 120000 ? String.fromCharCode(10) + "[…the file goes on; only the first part is shown]" : "");
   const bytes = f.bytes.subarray(0, 120000);
   let odd = 0; for (let i = 0; i < Math.min(bytes.length, 8000); i++) { const b = bytes[i]; if (b === 0 || (b < 32 && b !== 9 && b !== 10 && b !== 13)) odd++; }
   if (odd > Math.min(bytes.length, 8000) * .02) return head + " (not a text file, so its contents aren't shown here. If the user wants it searched for hidden words or messages, they can ask you to investigate it.)";
@@ -4194,8 +4363,12 @@ let challengeFile = null;                                           // { name, s
 async function setChallengeFile(f) {
   if (!f) return;
   if (f.size > 50 * 1024 * 1024) return toast("Files up to 50 MB, please");
-  challengeFile = { name: f.name, size: f.size, bytes: new Uint8Array(await f.arrayBuffer()) };
+  const cf = challengeFile = { name: f.name, size: f.size, bytes: new Uint8Array(await f.arrayBuffer()), status: "reading" };
   renderAttachments(); $("#prompt").focus();
+  await prepareFile(cf);                               // a PDF is read now; a file the AI can't read opens the converter
+  if (challengeFile !== cf) return;
+  renderAttachments();
+  if (cf.status !== "ok") openConvert(cf);
 }
 const bytesToB64 = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); };
 const CH_ARGS = ["offset", "length", "min", "n", "text", "pattern", "method", "key", "name", "channels", "regex"];
@@ -4857,7 +5030,10 @@ function renderAttachments() {
     if (challengeFile) {
       const d = document.createElement("div"); d.className = "att file";
       d.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span><b></b><small></small></span><button aria-label="Remove file">×</button>';
-      d.querySelector("b").textContent = challengeFile.name; d.querySelector("small").textContent = fsize(challengeFile.size);
+      const cf = challengeFile, st = cf.status;
+      d.querySelector("b").textContent = cf.name;
+      d.querySelector("small").textContent = fsize(cf.size) + (st === "reading" ? " · reading…" : st === "ok" ? (cf.pages ? " · " + cf.pages + " page" + (cf.pages > 1 ? "s" : "") : "") + (cf.converted ? " · converted to text" : "") : st ? " · the AI can't read it · tap to see why" : "");
+      if (st && st !== "ok" && st !== "reading") { d.classList.add("att-warn"); d.style.cursor = "pointer"; d.title = "Why the AI can't read it, and how to convert it"; d.onclick = (e) => { if (!e.target.closest("button")) openConvert(cf); }; }
       d.querySelector("button").onclick = () => { challengeFile = null; renderAttachments(); };
       el.appendChild(d);
     }
@@ -7102,8 +7278,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-16.8";
+const APP_VERSION = "2026-11-17.1";
 const WHATS_NEW = [
+  ["2026-11-17.1", ["The AI can read PDFs you attach. Files it can't read (Word, Excel, PowerPoint, OpenDocument, EPUB, RTF, scanned PDFs) open a pop-up with a converter: it turns them into text right there (scans are read by your PC), shows a preview, and you can download the text."]],
   ["2026-11-16.8", ["Files you attach no longer start an investigation by themselves: a text file simply goes with your message. Ask for it (investigate, find the hidden word, flag, decode...) and the Challenge tool digs in as before."]],
   ["2026-11-16.7", ["The model wallpaper's letters now use Inter Tight (the open font closest to Apple's SF Pro), light up from the top when you open a new chat, and a soft sheen of light passes over them now and then."]],
   ["2026-11-16.6", ["The MacBook Pro look is redrawn: smooth glossy ribbons of light on near-black, bold letters, a deep band through the middle and a soft glow."]],

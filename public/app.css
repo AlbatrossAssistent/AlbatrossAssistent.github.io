@@ -2493,3 +2493,6 @@ body:not(.chat-empty) #wallArt { opacity: .2; }              /* behind a convers
 /* the streak look sits on near-black (dark) or a clean Apple grey-white (light), with only a breath of the wallpaper's colour */
 html[data-walllook="streaks"][data-theme="dark"] #wall { background: radial-gradient(70% 55% at 50% 52%, rgba(var(--wp-ink), .07), transparent 72%), #020203; }
 html[data-walllook="streaks"][data-theme="light"] #wall { background: radial-gradient(70% 55% at 50% 52%, rgba(var(--wp-ink), .06), transparent 72%), #f5f5f7; }
+
+/* an attached file the AI can't read: tap it for the converter */
+.att.file.att-warn small { color: #ff9500; }

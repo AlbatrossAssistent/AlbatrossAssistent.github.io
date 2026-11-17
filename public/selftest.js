@@ -632,6 +632,71 @@ window.albatrossSelfTest = async function (w) {
     if (o.custom !== "Hello") bad.push("own text didn't show: " + o.custom);
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
+  await tryIt("attached files: a PDF is read, a scan and a Word file open the converter, the converted text goes with the message", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const NL = String.fromCharCode(10), out = {}, enc = new TextEncoder(), wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const pdf = (body) => { const s = "BT /F1 24 Tf 20 60 Td (" + body + ") Tj ET"; return enc.encode(["%PDF-1.4", "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj", "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+        "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj",
+        "4 0 obj << /Length " + (body ? s.length : 0) + " >> stream", body ? s : "", "endstream endobj", "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj", "trailer << /Root 1 0 R >>", "%%EOF"].join(NL)); };
+      const zip = async (files) => {
+        const parts = [], cen = []; let off = 0;
+        for (const [name, text] of files) {
+          const n = enc.encode(name), d = enc.encode(text), lh = new Uint8Array(30 + n.length), lv = new DataView(lh.buffer);
+          lv.setUint32(0, 0x04034b50, true); lv.setUint32(18, d.length, true); lv.setUint32(22, d.length, true); lv.setUint16(26, n.length, true); lh.set(n, 30);
+          const ch = new Uint8Array(46 + n.length), cv = new DataView(ch.buffer);
+          cv.setUint32(0, 0x02014b50, true); cv.setUint32(20, d.length, true); cv.setUint32(24, d.length, true); cv.setUint16(28, n.length, true); cv.setUint32(42, off, true); ch.set(n, 46);
+          parts.push(lh, d); cen.push(ch); off += lh.length + d.length;
+        }
+        const size = cen.reduce((a, c) => a + c.length, 0), e = new Uint8Array(22), ev = new DataView(e.buffer);
+        ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true); ev.setUint32(12, size, true); ev.setUint32(16, off, true);
+        return new Uint8Array(await new Blob([...parts, ...cen, e]).arrayBuffer());
+      };
+      try {
+        const p1 = pdf("Hello PDF world"), c1 = await prepareFile({ name: "a.pdf", size: p1.length, bytes: p1 });
+        out.pdf = c1.status + "|" + (c1.text || "").includes("Hello PDF world") + "|" + c1.pages;
+        const p2 = pdf(""), c2 = await prepareFile({ name: "scan.pdf", size: p2.length, bytes: p2 });
+        out.scan = c2.status;
+        out.binary = (await prepareFile({ name: "x.bin", size: 3000, bytes: new Uint8Array(3000) })).status;
+        out.text = (await prepareFile({ name: "notes.txt", size: 5, bytes: enc.encode("hello") })).status;
+        out.old = (await prepareFile({ name: "old.doc", size: 5, bytes: new Uint8Array(5) })).status;
+        // a Word file: the pop-up converts it
+        const docx = await zip([["word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>First line</w:t></w:r></w:p><w:p><w:r><w:t>Second line</w:t></w:r></w:p></w:body></w:document>']]);
+        await setChallengeFile(new File([docx], "notes.docx"));
+        const dlg = document.querySelector("#convDlg");
+        out.popup = dlg.open && /Word document/.test(document.querySelector("#convMsg").textContent) && !document.querySelector("#convGo").hidden;
+        out.chip = /can't read it/.test(document.querySelector(".att.file small")?.textContent || "");
+        document.querySelector("#convGo").click(); await wait(300);
+        out.preview = document.querySelector("#convOut").textContent;
+        document.querySelector("#convUse").click();
+        out.used = !dlg.open && challengeFile && challengeFile.converted && challengeFile.text === "First line" + NL + "Second line";
+        out.forModel = fileAsText(challengeFile).includes("converted to text") && fileAsText(challengeFile).includes("Second line");
+        // a pptx and an xlsx convert too
+        const pptx = await zip([["ppt/slides/slide2.xml", '<p:sld xmlns:p="p" xmlns:a="a"><a:p><a:r><a:t>Two</a:t></a:r></a:p></p:sld>'], ["ppt/slides/slide1.xml", '<p:sld xmlns:p="p" xmlns:a="a"><a:p><a:r><a:t>One</a:t></a:r></a:p></p:sld>']]);
+        out.pptx = (await convertInBrowser({ name: "d.pptx", bytes: pptx })).replace(/[^A-Za-z0-9]+/g, " ").trim();
+        const xlsx = await zip([["xl/sharedStrings.xml", '<sst><si><t>Name</t></si><si><t>Ann</t></si></sst>'], ["xl/worksheets/sheet1.xml", '<worksheet><sheetData><row><c t="s"><v>0</v></c><c><v>42</v></c></row><row><c t="s"><v>1</v></c></row></sheetData></worksheet>']]);
+        out.xlsx = (await convertInBrowser({ name: "t.xlsx", bytes: xlsx })).replace(/[^A-Za-z0-9]+/g, " ").trim();
+        // a file nothing can read: the pop-up says so and can remove it
+        await setChallengeFile(new File([new Uint8Array(3000)], "data.bin"));
+        out.binPopup = dlg.open && document.querySelector("#convGo").hidden && /investigate/.test(document.querySelector("#convMsg").textContent);
+        document.querySelector("#convDrop").click();
+        out.removed = !dlg.open && challengeFile === null;
+      } finally { const d = document.querySelector("#convDlg"); if (d.open) d.close(); challengeFile = null; renderAttachments(); }
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.pdf !== "ok|true|1") bad.push("the PDF wasn't read: " + o.pdf);
+    if (o.scan !== "scan") bad.push("a PDF without text isn't seen as a scan: " + o.scan);
+    if (o.binary !== "binary" || o.text !== "ok" || o.old !== "old") bad.push("kinds: " + [o.binary, o.text, o.old].join(","));
+    if (!o.popup) bad.push("the pop-up didn't open for a Word file");
+    if (!o.chip) bad.push("the attachment doesn't say the AI can't read it");
+    if (!/First line/.test(o.preview || "")) bad.push("the converter's preview is wrong: " + o.preview);
+    if (!o.used) bad.push("the converted text wasn't attached");
+    if (!o.forModel) bad.push("the model doesn't get the converted text");
+    if (o.pptx !== "Slide 1 One Slide 2 Two") bad.push("pptx: " + o.pptx);
+    if (o.xlsx !== "Sheet 1 Name 42 Ann") bad.push("xlsx: " + o.xlsx);
+    if (!o.binPopup || !o.removed) bad.push("an unreadable file: pop-up " + o.binPopup + ", removed " + o.removed);
+    return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
+  });
   await tryIt("voice conversation: names its sources, has things to say while it works, reads the answer as it is written, and the circle draws",async () => {
     const o = JSON.parse(await w.eval(`(() => {
       const V = voiceTest, out = {};
