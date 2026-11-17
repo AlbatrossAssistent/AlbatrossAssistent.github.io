@@ -55,7 +55,10 @@ const MODELS = {
     details: { family: "omnigen2", parameter_size: "4B", format: "comfyui", edit: true },   // edit: takes reference pictures
   },
 };
-const MODEL = "qwen-image-2.1:comfyui";   // the default when a request names no (or an unknown) picture model
+const QWEN = "qwen-image-2.1:comfyui", ZIMAGE = "z-image-turbo:comfyui";
+// the default when a request names no (or an unknown) picture model: Z-Image Turbo when it is installed (it fits the graphics card whole, so it is
+// much quicker), else Qwen-Image. Pictures that edit a picture are sent to a model that can edit by the website.
+const defaultModel = () => (hasFiles(ZIMAGE) ? ZIMAGE : QWEN);
 const hasPython = () => fs.existsSync(path.join(COMFY_DIR, "python_embeded", "python.exe"));
 const hasFiles = (name) => Object.values(MODELS[name].files).every(([dir, f]) => fs.existsSync(M(dir, f)));
 const installed = () => hasPython() && Object.keys(MODELS).some(hasFiles);
@@ -266,7 +269,7 @@ setInterval(async () => {
 async function generate(body, emit, signal, log) {
   idleLog = log;
   if (body.keepMinutes) setKeep(body.keepMinutes);
-  const name = isComfy(body.model) ? body.model : MODEL;
+  const name = isComfy(body.model) ? body.model : defaultModel();
   busy++;
   try {
     // out of the time frame, or another picture model than last time (it has to come from disk anyway, and the old one would
@@ -288,7 +291,7 @@ async function generate(body, emit, signal, log) {
   } finally { busy--; lastUsed = Date.now(); }
 }
 async function generateOnce(body, emit, signal, log) {
-  const name = isComfy(body.model) ? body.model : MODEL;
+  const name = isComfy(body.model) ? body.model : defaultModel();
   if (!hasPython() || !hasFiles(name)) throw new Error(`${name} isn't fully installed on this PC`);
   const t0 = Date.now();
   const status = (text) => emit({ model: name, status: text, done: false });
@@ -440,7 +443,7 @@ const state = () => ({ loaded, model: lastModel, keepMinutes: keepMinutes(), idl
 
 // Size of the model files ComfyUI loads, for the loading percentage.
 function bytes(model) {
-  const m = MODELS[model] || MODELS[MODEL];
+  const m = MODELS[model] || MODELS[defaultModel()];
   let t = 0;
   for (const [dir, f] of Object.values(m.files)) { try { t += fs.statSync(M(dir, f)).size; } catch {} }
   return t;
@@ -668,4 +671,4 @@ async function upscaleHandle(p, body) {
   return [404, { error: "Unknown sharpen request" }];
 }
 
-module.exports = { upscaleHandle, upscaleInstalled, _test: { fetchResumable, upscaleWorkflow }, songInstalled, songState, makeSong, serveSong, songHandle, MODEL, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };
+module.exports = { upscaleHandle, upscaleInstalled, _test: { fetchResumable, upscaleWorkflow }, songInstalled, songState, makeSong, serveSong, songHandle, get MODEL() { return defaultModel(); }, isComfy, models, generate, free, release, setKeep, state, installed, bytes, warm, retireOutdated };

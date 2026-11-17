@@ -688,6 +688,9 @@ function pickImageModel() { const l = imageModels(); return (l.find(m => m.name 
 function fillImgModels() {
   const sel = $("#imgModel"); if (!sel) return;
   const l = imageModels();
+  // Z-Image Turbo fits the graphics card whole (Qwen-Image swaps parts in and out), so the first time it shows up it becomes the model
+  // for new pictures; edits still go to a model that can edit. Change it any time in Settings → Image.
+  if (!S.zImageDefault && l.some(m => m.name === "z-image-turbo:comfyui")) { S.zImageDefault = true; S.imageModel = "z-image-turbo:comfyui"; if (S.pickedImage) S.pickedImage = ""; saveSettings(); toast("Z-Image Turbo is now your picture model: quicker, and it fits your graphics card."); }
   sel.innerHTML = l.length ? "" : '<option value="">No image model on the connected PC</option>';
   for (const m of l) { const o = document.createElement("option"); o.value = m.name; o.textContent = m.name; sel.appendChild(o); }
   sel.value = pickImageModel();
@@ -7278,8 +7281,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-17.2";
+const APP_VERSION = "2026-11-17.3";
 const WHATS_NEW = [
+  ["2026-11-17.3", ["Z-Image Turbo is installed and becomes the model for new pictures (it fits the graphics card whole, so it's much quicker); edits still use Qwen Image. Change it in Settings → Image."]],
   ["2026-11-17.2", ["Pictures work again in the Windows app: it couldn't find the picture engine (ComfyUI) from its install folder, so your image model didn't show."]],
   ["2026-11-17.1", ["The AI can read PDFs you attach. Files it can't read (Word, Excel, PowerPoint, OpenDocument, EPUB, RTF, scanned PDFs) open a pop-up with a converter: it turns them into text right there (scans are read by your PC), shows a preview, and you can download the text."]],
   ["2026-11-16.8", ["Files you attach no longer start an investigation by themselves: a text file simply goes with your message. Ask for it (investigate, find the hidden word, flag, decode...) and the Challenge tool digs in as before."]],
