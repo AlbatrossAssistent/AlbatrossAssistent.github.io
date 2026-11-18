@@ -30,8 +30,8 @@ const panelOnClick = () => chrome.sidePanel.setPanelBehavior({ openPanelOnAction
 panelOnClick();
 // "Follow my tab": the AI's tab is the one you're looking at in the window with the sidebar
 async function followTab() {
-  if (!st.follow || panelWin == null) return;
-  const [t] = await chrome.tabs.query({ active: true, windowId: panelWin });
+  if (!st.follow) return;
+  const [t] = await chrome.tabs.query(panelWin != null ? { active: true, windowId: panelWin } : { active: true, lastFocusedWindow: true });
   if (!t || t.id === st.tab) return;
   await detach(); st.tab = t.id; save(); sendState();
 }
@@ -142,6 +142,7 @@ async function run(m) {
     return { tab: await tabInfo(), vp: await viewport(t.id) };
   }
   if (m.type === "cdp") {
+    if (!(await tabInfo())) await followTab();
     const t = await agentTab(false);
     if (!t) throw new Error("The Agent has no tab in Chrome yet: open a page first (browser_open).");
     await attach(t.id);

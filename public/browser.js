@@ -139,8 +139,23 @@ function wire() {
   };
   $("#bvTabsBtn").onclick = () => { $("#bvTabs").hidden = !$("#bvTabs").hidden; renderTabs(); };
   $("#bvMsg").onclick = () => { if (/closed/.test($("#bvMsg").textContent)) open(); };
+  $("#bvFoot").onclick = () => { if (/Downloaded/i.test($("#bvFoot").textContent) && window.pcFilesOpen) window.pcFilesOpen("browse"); };
   $("#bvDOk").onclick = () => call("/browser/dialog", { accept: true, text: $("#bvDIn").hidden ? undefined : $("#bvDIn").value }).then(paint).catch(() => {});
   $("#bvDNo").onclick = () => call("/browser/dialog", { accept: false }).then(paint).catch(() => {});
+  scr.addEventListener("dragover", (e) => { if (e.dataTransfer && e.dataTransfer.types.includes("Files")) e.preventDefault(); });
+  scr.addEventListener("drop", (e) => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    e.preventDefault();
+    if (f.size > 25 * 1024 * 1024) return toast("Files up to 25 MB can be dropped into the browser");
+    const fr = new FileReader();
+    fr.onload = () => {
+      const b64 = String(fr.result || "").split(",")[1] || "";
+      toast("Uploading " + f.name + " into the page…");
+      call("/browser/upload", { name: f.name, b64, mime: f.type || "" }).then(() => toast("Inserted " + f.name)).catch((err) => toast(err.message));
+    };
+    fr.readAsDataURL(f);
+  });
 
   // mouse: press, move, release like on the PC. Touch: tap = click, drag = scroll.
   let ptr = null;

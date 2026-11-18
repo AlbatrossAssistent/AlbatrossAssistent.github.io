@@ -2726,6 +2726,7 @@ async function send(textOverride, opts = {}) {
 
   const fileForTool = fileTool ? challengeFile : null;
   const anyFile = fileForTool || plainFile;
+  if (anyFile && anyFile.bytes) window.lastChatFile = { name: anyFile.name, size: anyFile.size, b64: bytesToB64(anyFile.bytes) };
   const userMsg = { role: "user", content: text, images: atts.length ? atts.slice() : undefined, file: anyFile ? { name: anyFile.name, size: anyFile.size } : undefined, ...(plainFile ? { fileText: fileAsText(plainFile) } : {}) };
   if (textOverride === undefined) { p.value = ""; autosize(); attachments = []; if (anyFile) challengeFile = null; renderAttachments(); }
   setForceImage(false);
@@ -2760,10 +2761,26 @@ async function agentJob(model, text, task) {
   return window.runAgentTool ? window.runAgentTool(model, text, task) : chat(model);
 }
 
+window.chatUploadFile = function (spec) {
+  const s = String(spec || "").trim(), low = s.toLowerCase();
+  const f = window.lastChatFile;
+  if (f && (!s || low === "attached" || low === "file" || low === f.name.toLowerCase() || low.endsWith(":" + f.name.toLowerCase()) || low.endsWith("/" + f.name.toLowerCase()))) return f;
+  const pm = /^(?:#|(?:pic|bild|image|photo):?\s*#?)(\d+)$/i.exec(s);
+  const pics = typeof current !== "undefined" && current ? chatPics(current) : [];
+  const pic = pm ? pics[Number(pm[1]) - 1] : (pics.length && /^(attached|picture|image|photo|bild|foto)$/i.test(s) ? pics[pics.length - 1] : null);
+  if (pic && pic.src) {
+    const dm = /^data:([^;,]+);base64,(.+)$/s.exec(pic.src);
+    const b64 = dm ? dm[2] : pic.src, mime = dm ? dm[1] : "image/jpeg";
+    const ext = mime === "image/png" ? ".png" : mime === "image/webp" ? ".webp" : mime === "image/gif" ? ".gif" : ".jpg";
+    return { name: "picture-" + (pm ? pm[1] : pics.length) + ext, b64, mime };
+  }
+  return null;
+};
+
 // What the chat model is told about the app: a short description and the list of its tools (the switched-on ones, and which
 // are switched off). When a message asks for one of them, the app hands it to that tool by itself (routeTool).
 const TOOL_LIST = [
-  ["agent", "Work on your PC", "works on the user's PC: prints files, reads, writes, sorts and moves files, reads and sends mail (each mail is approved by the user), uses websites in the browser on the PC, and writes and runs programs, websites and games (saved in PC files → Code projects, shown in the Code tab)"],
+  ["agent", "Work on your PC", "works on the user's PC: prints files, reads, writes, sorts and moves files, reads and sends mail (each mail is approved by the user), interacts with websites in the browser on the PC (clicks, fills forms, uploads/inserts files, downloads files), and writes and runs programs, websites and games (saved in PC files → Code projects, shown in the Code tab)"],
   ["music", "Music", "composes short pieces (chords, melody, bass, drums) that play in the chat and download as MIDI for GarageBand or as WAV"],
   ["notes", "Notes", "the user's notes and lists (bullets, numbered, checklists, priorities, text)"],
   ["slides", "Slides", "presentations with speaker notes, downloadable for PowerPoint"],
@@ -3400,7 +3417,7 @@ async function chat(model, opts = {}) {
       const t = window.EMBED_CHROME && window.chromeTab;
       if (window.EMBED_CHROME) sys += "\nYou are Albatross in the user's Chrome sidebar: help with the web page they're on and with browsing. You can also use their files on the PC and your own folder (agent:): keep useful things there, like page summaries or notes, when they ask or it clearly helps. The sidebar is narrow: answer short.";
       if (t && t.url && agentKit.groups.includes("browser")) sys += `\nThe user is chatting in the Albatross sidebar of their Chrome and is looking at this page right now: "${t.title}" (${t.url}). "This page", "this tab", "here" or "this" mean that page. ` +
-        (t.follow ? "Your browser tools work in exactly that tab: use browser_read to read it, browser_click / browser_type to act there. Don't open another page unless asked." : "To read it, use browser_open with that address (your browser tools work in a tab of your own).");
+        (t.follow ? "Your browser tools work in exactly that tab: use browser_read to read it, browser_click / browser_type / browser_upload / browser_download / browser_key / browser_scroll to act there. Don't open another page unless asked." : "To read or interact with it, use browser_open with that address (your browser tools work in a tab of your own).");
       msgs[0]?.role === "system" ? (msgs[0].content += "\n\n" + sys) : msgs.unshift({ role: "system", content: sys });
     }
     const rounds = deckOn ? (effort === "max" ? 70 : 45) : effort === "max" ? 30 : agentKit ? 16 : 6;
@@ -3648,7 +3665,7 @@ const TOOLISH = {
 };
 TOOLISH.music = W("music|musik|songs?|lied\\p{L}*|melod\\p{L}*|beats?|tunes?|jingle|soundtrack|compose|komponier\\p{L}*|instrumental|lo-?fi|garage ?band|midi");
 TOOLISH.notes = W("notes?|notiz\\p{L}*|lists?|liste\\p{L}*|to-?dos?|todo-?liste|shopping|einkauf\\p{L}*|merk\\p{L}*|write (?:it |that )?down|aufschreiben|tick (?:it |that )?off|abhaken");
-TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|browser|webpage|web ?page|website|url|https?|html|javascript|run (?:this|the|my) code");
+TOOLISH.agent = W("e-?mails?|inbox|mailbox|mail|print(?:er|ing|s)?|drucke\\p{L}*|files?|folders?|datei\\p{L}*|ordner|workspace|browse|browser|chrome|webpage|web ?page|website|webseite|url|https?|upload\\p{L}*|download\\p{L}*|hochladen|herunterladen|html|javascript|run (?:this|the|my) code");
 // asking for a program, website or game to be made: that's the Agent's job too (it writes the files and runs them)
 TOOLISH.agentCode = new RegExp("(?<![\\p{L}\\p{N}])(?:write|build|create|make|generate|code|program|develop|implement|schreib\\p{L}*|erstell\\p{L}*|programmier\\p{L}*|bau\\p{L}*)(?![\\p{L}\\p{N}])[^.?!]{0,60}(?<![\\p{L}\\p{N}])(?:program|script|app|application|website|web ?page|game|bot|tool|html|python|javascript|node|java|c\\+\\+|css|api|function|class|code|programm|skript|webseite|spiel)(?![\\p{L}\\p{N}])", "iu");
 TOOLISH.docs = W("documents?|docs?|dokument\\p{L}*|unterlagen|pdfs?|docx|pptx|xlsx|skript\\p{L}*|hefter|mitschrift\\p{L}*|arbeitsbl[aä]tt\\p{L}*|handouts?|worksheets?|my notes|meine[nm]? notizen|according to|laut|in (?:my|meinen?) \\p{L}+|what did (?:we|i) (?:learn|write|have)|was haben wir");
@@ -3659,7 +3676,7 @@ const ROUTE_ABOUT = {
   slides: "they want a presentation, slide deck or keynote made",
   graph: "they want a chart or graph drawn from numbers or real data",
   chances: "they ask how likely something is (chances, odds, probability) or want a prediction or forecast of how something will develop",
-  agent: "they want a job done with their own stuff on the PC or their accounts: read or summarize their email inbox, or send an email; look in, sort, move, read, create or edit files and folders on the PC; read a specific web page, or use a website in the browser on their PC (search on a site, click through it, fill in a form); print a file; or have a program, script, website, game or app made or changed (the Agent writes the files and runs them). Not for general questions or for explaining code",
+  agent: "they want a job done with their own stuff on the PC or their accounts: read or summarize their email inbox, or send an email; look in, sort, move, read, create or edit files and folders on the PC; read a specific web page, or interact with a website in the browser on their PC (search on a site, click through it, fill in a form, upload/insert a file, download a file); print a file; or have a program, script, website, game or app made or changed (the Agent writes the files and runs them). Not for general questions or for explaining code",
 };
 // Decides, for a message that smells like a tool, whether it really needs one. One short answer from the model
 // (no thinking), with its own little bubble so the wait is never silent. Returns { tool, task } or { aborted }.
@@ -7281,8 +7298,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-17.3";
+const APP_VERSION = "2026-11-18.1";
 const WHATS_NEW = [
+  ["2026-11-18.1", ["The AI can now upload and download files in the browser, choose from dropdowns, and press keys"]],
   ["2026-11-17.3", ["Z-Image Turbo is installed and becomes the model for new pictures (it fits the graphics card whole, so it's much quicker); edits still use Qwen Image. Change it in Settings → Image."]],
   ["2026-11-17.2", ["Pictures work again in the Windows app: it couldn't find the picture engine (ComfyUI) from its install folder, so your image model didn't show."]],
   ["2026-11-17.1", ["The AI can read PDFs you attach. Files it can't read (Word, Excel, PowerPoint, OpenDocument, EPUB, RTF, scanned PDFs) open a pop-up with a converter: it turns them into text right there (scans are read by your PC), shows a preview, and you can download the text."]],

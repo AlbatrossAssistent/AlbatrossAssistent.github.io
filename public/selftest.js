@@ -763,6 +763,61 @@ window.albatrossSelfTest = async function (w) {
     if ((all.match(/It was finished in 1889/g) || []).length !== 1) bad.push("a sentence was read twice or not at all");
     return bad.length ? bad.join(" | ") + " " + JSON.stringify(o) : true;
   });
+  await tryIt("browser interaction tools: upload/insert files, download files, select dropdowns, press keys, and format page state", async () => {
+    const o = JSON.parse(await w.eval(`(async () => {
+      const origPc = window.pcCall, origSide = window.sideOpen, calls = [], out = {};
+      window.sideOpen = () => {};
+      const samplePage = {
+        url: "https://example.org/form", title: "Upload & Download", text: "Form page", scrolled: 0, pageHeight: 900, windowHeight: 800,
+        tabs: [{ id: "t1", title: "Upload & Download", url: "https://example.org/form", active: true }, { id: "t2", title: "Other", url: "https://example.org/other", active: false }],
+        downloads: [{ name: "guide.pdf", state: "completed", spec: "all:Browser downloads/guide.pdf", size: 20480 }],
+        elements: [
+          { n: 1, kind: "input:file", label: "Upload document", accept: ".pdf,.txt", value: "notes.txt" },
+          { n: 2, kind: "select", label: "Format", value: "PDF", options: ["PDF", "CSV", "JSON"] },
+          { n: 3, kind: "input:checkbox", label: "Agree to terms", checked: true },
+          { n: 4, kind: "link", label: "Download report", download: true, href: "https://example.org/report.pdf" },
+        ],
+      };
+      window.pcCall = async (p, body) => {
+        calls.push([p, body]);
+        if (p === "/browser/read" || p === "/browser/open") return samplePage;
+        if (p === "/browser/upload") return { ok: true, file: body.name || "notes.txt", spec: "agent:notes.txt", size: 128, on: "Upload document", page: samplePage };
+        if (p === "/browser/download") return { ok: true, name: "report.pdf", spec: body.path || "all:Browser downloads/report.pdf", size: 4096, mime: "application/pdf", page: samplePage };
+        if (p === "/browser/act") return { ok: true, ...(body.action === "type" ? { selected: body.text } : {}), page: samplePage };
+        throw new Error("unexpected " + p);
+      };
+      try {
+        const kit = agentChatTools("upload my file to the website and download the pdf");
+        out.groups = kit.groups.sort().join(",");
+        out.hasTools = ["browser_open", "browser_read", "browser_click", "browser_type", "browser_upload", "browser_download", "browser_key", "browser_scroll", "list_files"].every((n) => kit.names.has(n));
+        out.sys = /browser_upload/.test(kit.system) && /browser_download/.test(kit.system) && /\[\[file:PATH\]\]/.test(kit.system);
+        const block = { type: "agent", inline: true, active: true, goal: "test", steps: [], plan: [], pending: null };
+        const ctrl = new AbortController();
+        out.read = await agentChatRun("browser_read", {}, ctrl.signal, block, () => {});
+        window.lastChatFile = { name: "attached.txt", size: 12, b64: "aGVsbG8gd29ybGQ=" };
+        out.up = await agentChatRun("browser_upload", { path: "attached.txt", n: 1 }, ctrl.signal, block, () => {});
+        out.dl = await agentChatRun("browser_download", { n: 4, path: "agent:report.pdf" }, ctrl.signal, block, () => {});
+        out.sel = await agentChatRun("browser_type", { n: 2, text: "CSV" }, ctrl.signal, block, () => {});
+        out.key = await agentChatRun("browser_key", { key: "Escape" }, ctrl.signal, block, () => {});
+        out.calls = calls;
+        out.steps = block.steps.map((s) => s.act && s.act.t).filter(Boolean).join(",");
+      } finally {
+        window.pcCall = origPc; window.sideOpen = origSide; delete window.lastChatFile;
+      }
+      return JSON.stringify(out);
+    })()`));
+    const bad = [];
+    if (o.groups !== "browser,files") bad.push("groups: " + o.groups);
+    if (!o.hasTools) bad.push("missing browser/file tools");
+    if (!o.sys) bad.push("system prompt missing browser upload/download instructions");
+    if (!/accepts: \.pdf,\.txt/.test(o.read) || !/options: "PDF", "CSV", "JSON"/.test(o.read) || !/\[checked\]/.test(o.read) || !/Saved to all:Browser downloads\/guide\.pdf/.test(o.read) || !/Open tabs:/.test(o.read)) bad.push("pageForModel: " + o.read.slice(0, 250));
+    if (!/Uploaded "attached\.txt"/.test(o.up) || o.calls[1][1].b64 !== "aGVsbG8gd29ybGQ=") bad.push("upload: " + o.up);
+    if (!/Downloaded "report\.pdf"/.test(o.dl) || !/\[\[file:agent:report\.pdf\]\]/.test(o.dl)) bad.push("download: " + o.dl);
+    if (!/Selected "CSV"/.test(o.sel)) bad.push("select: " + o.sel);
+    if (!/Pressed Escape/.test(o.key)) bad.push("key: " + o.key);
+    if (o.steps !== "read,upload,download,select,key") bad.push("step tiles: " + o.steps);
+    return bad.length ? bad.join(" | ") : true;
+  });
   await sleep(300);
   R.errors = (w.__errs || []).slice(0, 20);
   return R;

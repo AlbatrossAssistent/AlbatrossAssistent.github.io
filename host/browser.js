@@ -10,11 +10,68 @@ const path = require("path");
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
 const ext = require("./browserext");
+const agentFiles = require("./agent");
 
 const PROFILE = process.env.ALBATROSS_BROWSER_PROFILE || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Albatross", "Browser");
 const DOWNLOADS = path.join(path.resolve(process.env.ALBATROSS_FILES || path.join(os.homedir(), "Downloads", "Albatross")), "Browser downloads");
 const PORT = Number(process.env.ALBATROSS_BROWSER_PORT) || 9339;
 const IDLE_MS = 15 * 60e3;   // nobody watching for this long: Chrome is closed to free memory
+
+const MIME_EXT = { "text/plain": ".txt", "text/markdown": ".md", "application/json": ".json", "text/csv": ".csv", "text/html": ".html", "text/css": ".css", "text/javascript": ".js", "application/javascript": ".js", "application/pdf": ".pdf", "application/zip": ".zip", "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp", "image/bmp": ".bmp", "image/svg+xml": ".svg", "audio/mpeg": ".mp3", "audio/wav": ".wav", "video/mp4": ".mp4" };
+const EXT_MIME = { txt: "text/plain", md: "text/markdown", json: "application/json", csv: "text/csv", html: "text/html", htm: "text/html", css: "text/css", js: "text/javascript", py: "text/x-python", xml: "text/xml", pdf: "application/pdf", zip: "application/zip", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml", mp3: "audio/mpeg", wav: "audio/wav", mp4: "video/mp4", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation" };
+const mimeOfName = (n) => EXT_MIME[path.extname(String(n || "")).slice(1).toLowerCase()] || "application/octet-stream";
+function safeFileName(n, mime = "") {
+  let base = path.basename(String(n || "").split(/[?#]/)[0]).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/^\.+/, "").replace(/[. ]+$/, "").trim().slice(0, 160);
+  if (!base || /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(base)) base = "download";
+  if (!path.extname(base) && mime) {
+    const ext = MIME_EXT[String(mime).split(";")[0].trim().toLowerCase()];
+    if (ext) base += ext;
+  }
+  return base;
+}
+function freeFilePath(dir, name) {
+  fs.mkdirSync(dir, { recursive: true });
+  const ext = path.extname(name), stem = name.slice(0, name.length - ext.length);
+  let p = path.join(dir, name);
+  for (let i = 2; fs.existsSync(p); i++) p = path.join(dir, `${stem} (${i})${ext}`);
+  return p;
+}
+function findPcFile(spec) {
+  const raw = String(spec || "").trim();
+  if (!raw) throw new Error("Give a file path to upload (like agent:notes.txt or all:photo.jpg).");
+  const candidates = [raw];
+  if (!/^(all|code|agent|ai|pictures|received):/i.test(raw)) {
+    candidates.push("agent:" + raw, "all:" + raw, "all:Browser downloads/" + raw, "pictures:" + raw, "code:" + raw);
+  } else if (/^(agent|ai):/i.test(raw)) {
+    const rel = raw.replace(/^(agent|ai):\/*/i, "");
+    candidates.push("all:" + rel, "all:Browser downloads/" + rel, "pictures:" + rel, "code:" + rel);
+  }
+  for (const c of candidates) {
+    try {
+      const r = agentFiles.resolve(c);
+      const st = fs.statSync(r.full);
+      if (st.isFile()) return { full: r.full, spec: r.spec, name: path.basename(r.full), size: st.size, mime: mimeOfName(r.full) };
+    } catch {}
+  }
+  throw new Error(`File not found on the PC: "${raw}". Check the file name with list_files (in agent:, all:, pictures: or code:).`);
+}
+function findDownloadedFile(d) {
+  try {
+    if (d.filePath && fs.existsSync(d.filePath)) {
+      const st = fs.statSync(d.filePath);
+      return { name: path.basename(d.filePath), full: d.filePath, size: st.size };
+    }
+    const entries = fs.readdirSync(DOWNLOADS, { withFileTypes: true })
+      .filter((e) => e.isFile() && !/\.(crdownload|tmp|part)$/i.test(e.name))
+      .map((e) => { const full = path.join(DOWNLOADS, e.name), st = fs.statSync(full); return { name: e.name, full, size: st.size, mtime: st.mtimeMs }; })
+      .sort((a, b) => b.mtime - a.mtime);
+    const fresh = entries.find((e) => e.mtime >= (d.at || 0) - 2500);
+    if (fresh) return fresh;
+    const exact = entries.find((e) => e.name === d.name);
+    if (exact) return exact;
+  } catch {}
+  return null;
+}
 
 function chromePath() {
   const pf = [process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"], process.env.LOCALAPPDATA].filter(Boolean);
@@ -25,6 +82,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const B = {
   proc: null, ws: null, id: 0, pend: new Map(), sessions: new Map(), active: null, starting: null,
   frame: null, seq: 0, tabs: [], nav: { url: "", title: "", back: false, fwd: false }, loading: false, dialog: null, download: "",
+  downloads: new Map(), recentDownloads: [], fileChooser: null, lastDialog: null,
   vp: { w: 1280, h: 800, dpr: 1, mobile: false }, ua: "", watchers: 0, lastUse: Date.now(), waiters: [], quality: 60, note: () => {},
 };
 const wake = () => { for (const w of B.waiters.splice(0)) w(); };
@@ -110,11 +168,32 @@ function onMessage(raw) {
     case "Page.frameNavigated": if (mine && !p.frame.parentId) updateNav(); break;
     case "Page.javascriptDialogOpening": if (mine) { B.dialog = { type: p.type, message: String(p.message || "").slice(0, 1000), prompt: p.defaultPrompt || "" }; wake(); } break;
     case "Page.javascriptDialogClosed": if (mine) { B.dialog = null; wake(); } break;
-    case "Browser.downloadWillBegin": B.download = "Downloading " + p.suggestedFilename + "…"; wake(); break;
-    case "Browser.downloadProgress":
-      if (p.state === "completed") { B.download = "Downloaded to PC files → Browser downloads"; B.note("Browser: a download finished"); wake(); }
-      else if (p.state === "canceled") { B.download = "Download cancelled"; wake(); }
+    case "Page.fileChooserOpened": if (mine) { B.fileChooser = { backendNodeId: p.backendNodeId, mode: p.mode || "selectSingle", at: Date.now() }; } break;
+    case "Browser.downloadWillBegin": {
+      const name = safeFileName(p.suggestedFilename || "download");
+      B.download = "Downloading " + name + "…";
+      B.downloads.set(p.guid, { guid: p.guid, name, url: p.url || "", state: "inProgress", received: 0, total: 0, at: Date.now() });
+      wake(); break;
+    }
+    case "Browser.downloadProgress": {
+      const d = B.downloads.get(p.guid) || { guid: p.guid, name: "download", url: "", at: Date.now() };
+      d.received = p.receivedBytes || d.received || 0;
+      d.total = p.totalBytes || d.total || 0;
+      d.state = p.state || d.state;
+      if (p.filePath) d.filePath = p.filePath;
+      B.downloads.set(p.guid, d);
+      if (p.state === "completed") {
+        const found = findDownloadedFile(d);
+        if (found) { d.name = found.name; d.full = found.full; d.size = found.size; }
+        d.spec = "all:Browser downloads/" + d.name;
+        d.doneAt = Date.now();
+        B.recentDownloads.unshift(d); B.recentDownloads.length = Math.min(B.recentDownloads.length, 20);
+        B.download = `Downloaded ${d.name} → PC files › Browser downloads`;
+        B.note("Browser: downloaded " + d.name);
+        wake();
+      } else if (p.state === "canceled") { d.doneAt = Date.now(); B.download = "Download cancelled"; wake(); }
       break;
+    }
   }
 }
 async function refreshTabs() {
@@ -148,7 +227,12 @@ async function activate(id) {
   const old = cur(); if (old && B.active !== id) await send("Page.stopScreencast", {}, old).catch(() => {});
   B.active = id;
   let s = B.sessions.get(id);
-  if (!s) { s = (await send("Target.attachToTarget", { targetId: id, flatten: true })).sessionId; B.sessions.set(id, s); await send("Page.enable", {}, s); }
+  if (!s) {
+    s = (await send("Target.attachToTarget", { targetId: id, flatten: true })).sessionId;
+    B.sessions.set(id, s);
+    await send("Page.enable", {}, s);
+    await send("Page.setInterceptFileChooserDialog", { enabled: true }, s).catch(() => {});
+  }
   await send("Target.activateTarget", { targetId: id }).catch(() => {});
   B.dialog = null;
   await applyViewport(s); await startCast(s); await updateNav();
@@ -166,7 +250,8 @@ function fixUrl(u) {
   if (/^localhost(:\d+)?(\/.*)?$/i.test(u)) return "http://" + u;
   return "https://www.google.com/search?q=" + encodeURIComponent(u);
 }
-const KEYS = { Enter: [13, "Enter", "\r"], Backspace: [8, "Backspace"], Tab: [9, "Tab"], Escape: [27, "Escape"], Delete: [46, "Delete"], ArrowLeft: [37, "ArrowLeft"], ArrowUp: [38, "ArrowUp"], ArrowRight: [39, "ArrowRight"], ArrowDown: [40, "ArrowDown"], Home: [36, "Home"], End: [35, "End"], PageUp: [33, "PageUp"], PageDown: [34, "PageDown"], F5: [116, "F5"] };
+const KEY_ALIAS = { " ": "Space", Spacebar: "Space", Esc: "Escape", Return: "Enter", Up: "ArrowUp", Down: "ArrowDown", Left: "ArrowLeft", Right: "ArrowRight", Del: "Delete", PgUp: "PageUp", PgDn: "PageDown" };
+const KEYS = { Enter: [13, "Enter", "\r"], Backspace: [8, "Backspace"], Tab: [9, "Tab"], Escape: [27, "Escape"], Space: [32, "Space", " "], Delete: [46, "Delete"], ArrowLeft: [37, "ArrowLeft"], ArrowUp: [38, "ArrowUp"], ArrowRight: [39, "ArrowRight"], ArrowDown: [40, "ArrowDown"], Home: [36, "Home"], End: [35, "End"], PageUp: [33, "PageUp"], PageDown: [34, "PageDown"], F5: [116, "F5"] };
 async function input(j, D = pcD) {
   const mods = (j.alt ? 1 : 0) | (j.ctrl ? 2 : 0) | (j.meta ? 4 : 0) | (j.shift ? 8 : 0);
   const x = Number(j.x) || 0, y = Number(j.y) || 0, button = ["left", "right", "middle"].includes(j.button) ? j.button : "left";
@@ -179,29 +264,96 @@ async function input(j, D = pcD) {
     case "wheel": await mouse("mouseWheel", { deltaX: Number(j.dx) || 0, deltaY: Number(j.dy) || 0 }); break;
     case "text": if (j.text) await D.send("Input.insertText", { text: String(j.text).slice(0, 5000) }); break;
     case "key": {
-      let k = KEYS[j.key];
-      if (!k && /^[a-z0-9]$/i.test(j.key || "")) { const c = j.key.toUpperCase(); k = [c.charCodeAt(0), /\d/.test(c) ? "Digit" + c : "Key" + c]; }
+      const keyName = KEY_ALIAS[j.key] || j.key;
+      let k = KEYS[keyName];
+      if (!k && /^[a-z0-9]$/i.test(keyName || "")) { const c = keyName.toUpperCase(); k = [c.charCodeAt(0), /\d/.test(c) ? "Digit" + c : "Key" + c]; }
       if (!k) break;
       const [vk, code, text] = k;
-      await D.send("Input.dispatchKeyEvent", { type: text && !mods ? "keyDown" : "rawKeyDown", key: j.key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods, ...(text && !mods ? { text, unmodifiedText: text } : {}) });
-      await D.send("Input.dispatchKeyEvent", { type: "keyUp", key: j.key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods });
+      const domKey = keyName === "Space" ? " " : keyName;
+      await D.send("Input.dispatchKeyEvent", { type: text && !mods ? "keyDown" : "rawKeyDown", key: domKey, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods, ...(text && !mods ? { text, unmodifiedText: text } : {}) });
+      await D.send("Input.dispatchKeyEvent", { type: "keyUp", key: domKey, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods });
       break;
     }
   }
 }
-// ---------- for the AI: read the page as text with numbered things to click or type into, and act on a number ----------
+// ---------- for the AI: read the page as text with numbered things to click, type into, upload to or download ----------
 const READ_JS = `(() => {
-  const vis = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 2 && r.height > 2 && s.visibility !== "hidden" && s.display !== "none" && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; };
+  const vis = (e) => {
+    if (e.tagName === "INPUT" && e.type === "file" && !e.disabled) return true;
+    const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+    return r.width > 2 && r.height > 2 && s.visibility !== "hidden" && s.display !== "none" && Number(s.opacity) !== 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
+  };
   document.querySelectorAll("[data-alb]").forEach((e) => e.removeAttribute("data-alb"));
-  const els = [...document.querySelectorAll('a[href],button,input:not([type=hidden]),textarea,select,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=option],[contenteditable=true],summary')].filter(vis).slice(0, 80);
+  const sel = 'a[href],button,input:not([type=hidden]),textarea,select,[role=button],[role=link],[role=tab],[role=menuitem],[role=checkbox],[role=switch],[role=radio],[role=option],[role=combobox],[role=listbox],[role=searchbox],[role=textbox],[contenteditable]:not([contenteditable=false]),summary,[download],canvas,img[src],video[src],audio[src]';
+  const raw = [...document.querySelectorAll(sel)].filter((e) => {
+    if (!vis(e)) return false;
+    if (e.tagName === "IMG") { const r = e.getBoundingClientRect(); if (r.width < 48 || r.height < 48 || e.closest("a[href],button,[role=button]")) return false; }
+    return true;
+  });
+  const fileInputs = raw.filter((e) => e.tagName === "INPUT" && e.type === "file");
+  const els = raw.slice(0, 120);
+  for (const fi of fileInputs) if (!els.includes(fi) && els.length < 125) els.push(fi);
+  const clean = (s, n = 80) => String(s || "").replace(/\\s+/g, " ").trim().slice(0, n);
+  const labelOf = (e) => {
+    const tag = e.tagName.toLowerCase(), type = (e.type || "").toLowerCase();
+    const aria = e.getAttribute("aria-label") || (e.getAttribute("aria-labelledby") && document.getElementById(e.getAttribute("aria-labelledby"))?.innerText) || "";
+    const lbl = (e.labels && e.labels[0] && e.labels[0].innerText) || (tag === "input" && e.closest("label")?.innerText) || "";
+    if (tag === "select") return clean(aria || lbl || e.getAttribute("placeholder") || e.title || e.name || e.id || "Dropdown");
+    if (tag === "input" && (type === "checkbox" || type === "radio")) return clean(aria || lbl || e.title || e.name || e.id || type);
+    if (tag === "input" && type === "file") {
+      const near = e.closest("label,button,[role=button],form,div")?.innerText || "";
+      return clean(aria || lbl || e.title || e.getAttribute("placeholder") || near || e.name || "Upload file");
+    }
+    if (tag === "input" || tag === "textarea") return clean(aria || lbl || e.getAttribute("placeholder") || e.title || e.name || e.value || "");
+    if (tag === "img") return clean(e.alt || e.title || aria || (e.src && e.src.split("/").pop().split("?")[0]) || "image");
+    return clean(aria || e.innerText || e.value || e.getAttribute("placeholder") || e.title || e.alt || e.querySelector?.("img[alt]")?.alt || e.name || "");
+  };
   const elements = els.map((e, i) => {
     e.setAttribute("data-alb", String(i + 1));
-    const label = (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || e.title || e.alt || e.name || "").replace(/\\s+/g, " ").trim().slice(0, 80);
-    return { n: i + 1, kind: e.tagName.toLowerCase() === "a" ? "link" : e.tagName.toLowerCase() === "input" ? "input:" + (e.type || "text") : e.tagName.toLowerCase(), label, href: e.href ? String(e.href).slice(0, 120) : undefined };
+    const tag = e.tagName.toLowerCase(), type = (e.type || "text").toLowerCase(), role = (e.getAttribute("role") || "").toLowerCase();
+    const kind = tag === "a" ? "link" : tag === "input" ? "input:" + type : e.isContentEditable ? "editable" : role && (tag === "div" || tag === "span" || tag === "li") ? role : tag;
+    const item = { n: i + 1, kind, label: labelOf(e) };
+    if (tag === "a" && e.href) item.href = String(e.href).slice(0, 200);
+    if ((tag === "img" || tag === "video" || tag === "audio") && (e.currentSrc || e.src)) item.src = String(e.currentSrc || e.src).slice(0, 200);
+    if (e.hasAttribute("download")) item.download = true;
+    if (tag === "select") {
+      const selOpt = e.selectedOptions && e.selectedOptions[0];
+      item.value = clean(selOpt ? selOpt.text || selOpt.value : e.value, 60);
+      item.options = [...(e.options || [])].slice(0, 15).map((o) => clean(o.text || o.value, 50)).filter(Boolean);
+    } else if (tag === "input" && (type === "checkbox" || type === "radio")) {
+      item.checked = !!e.checked;
+    } else if (role === "checkbox" || role === "switch" || role === "radio") {
+      item.checked = e.getAttribute("aria-checked") === "true";
+    } else if (tag === "input" && type === "file") {
+      if (e.accept) item.accept = clean(e.accept, 60);
+      if (e.files && e.files.length) item.value = [...e.files].map((f) => f.name).join(", ");
+    } else if ((tag === "input" && !/^(button|submit|reset|image|password)$/.test(type)) || tag === "textarea") {
+      if (e.value) item.value = clean(e.value, 80);
+    } else if (e.isContentEditable) {
+      const t = clean(e.innerText, 80); if (t && t !== item.label) item.value = t;
+    }
+    return item;
   });
-  return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : "").replace(/\\n{3,}/g, "\\n\\n").slice(0, 6000), elements, scrolled: Math.round(scrollY), pageHeight: document.documentElement.scrollHeight, windowHeight: innerHeight };
+  let scrolled = Math.round(scrollY), pageHeight = document.documentElement.scrollHeight;
+  if (pageHeight <= innerHeight + 5 && document.body) {
+    const sc = [...document.querySelectorAll("main,section,article,div")].find((x) => x.scrollHeight > x.clientHeight + 40 && x.clientHeight > innerHeight * 0.4 && /(auto|scroll)/.test(getComputedStyle(x).overflowY));
+    if (sc) { scrolled = Math.round(sc.scrollTop); pageHeight = sc.scrollHeight; }
+  }
+  return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : "").replace(/\\n{3,}/g, "\\n\\n").slice(0, 6000), elements, scrolled, pageHeight, windowHeight: innerHeight };
 })()`;
+async function clearDialogForAi(D = pcD, accept = true, promptText) {
+  const dlg = D === pcD ? B.dialog : ext.status().dialog;
+  if (!dlg) return null;
+  try {
+    await D.send("Page.handleJavaScriptDialog", { accept: !!accept, ...(promptText != null ? { promptText: String(promptText) } : {}) });
+    if (D === pcD) B.dialog = null;
+    await sleep(120);
+  } catch {}
+  B.lastDialog = { ...dlg, handled: accept ? "accepted" : "dismissed", at: Date.now() };
+  return B.lastDialog;
+}
 async function evalJs(expression, D = pcD) {
+  await clearDialogForAi(D);
   const r = await D.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
   if (r.exceptionDetails) throw new Error("The page didn't answer: " + (r.exceptionDetails.text || "error"));
   return r.result ? r.result.value : null;
@@ -209,29 +361,78 @@ async function evalJs(expression, D = pcD) {
 async function settle(ms = 10000, D = pcD) {   // wait until the page has loaded (or give up quietly)
   const end = Date.now() + ms; await sleep(400);
   while (D.loading() && Date.now() < end) await sleep(200);
+  if (D === pcD) {
+    const dlEnd = Date.now() + 12000;
+    while (Date.now() < dlEnd && [...B.downloads.values()].some((d) => d.state === "inProgress" && Date.now() - d.at < 30000)) await sleep(250);
+  }
   await sleep(300);
 }
-async function readPage(D = pcD) { return evalJs(READ_JS, D); }
+async function readPage(D = pcD) {
+  const p = (await evalJs(READ_JS, D)) || { url: "", title: "", text: "", elements: [], scrolled: 0, pageHeight: 0, windowHeight: 0 };
+  const recent = B.recentDownloads.filter((d) => Date.now() - (d.doneAt || d.at || 0) < 60000).slice(0, 5)
+    .map((d) => ({ name: d.name, state: d.state, spec: d.spec, size: d.size || 0 }));
+  if (recent.length) p.downloads = recent;
+  if (B.lastDialog && Date.now() - B.lastDialog.at < 15000) { p.dialog = B.lastDialog; B.lastDialog = null; }
+  if (D === pcD && B.tabs.length > 1) p.tabs = B.tabs.map((t) => ({ id: t.id, title: t.title || t.url, url: t.url, active: t.id === B.active }));
+  return p;
+}
+async function ensureNumbered(D = pcD) {
+  const has = await evalJs('!!document.querySelector("[data-alb]")', D).catch(() => false);
+  if (!has) await evalJs(READ_JS, D).catch(() => {});
+}
+const SCROLL_JS = (dir, n) => `(() => {
+  const k = ${dir === "up" ? -0.8 : 0.8};
+  const el = ${n ? `document.querySelector('[data-alb="${Math.round(Number(n))}"]')` : "null"};
+  if (el) {
+    let sc = el;
+    while (sc && sc !== document.body && !(sc.scrollHeight > sc.clientHeight + 10 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+    if (sc && sc !== document.body) { sc.scrollBy(0, k * sc.clientHeight); return true; }
+    el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+    return true;
+  }
+  const y0 = scrollY; scrollBy(0, k * innerHeight);
+  if (Math.abs(scrollY - y0) > 2) return true;
+  const box = [...document.querySelectorAll("main,section,article,div")].find((x) => x.scrollHeight > x.clientHeight + 40 && x.clientHeight > innerHeight * 0.4 && /(auto|scroll)/.test(getComputedStyle(x).overflowY));
+  if (box) { box.scrollBy(0, k * box.clientHeight); return true; }
+  return false;
+})()`;
 // In your own Chrome the Agent's tab is usually in the background, where Chrome holds back mouse and keyboard events: clicks and
 // typing are done inside the page instead (the same events a site sees from a real click; values set so React & co. notice them).
 const DOM_ACT = (j) => `(() => {
   const e = document.querySelector('[data-alb="${Math.round(Number(j.n))}"]'); if (!e) return null;
-  const label = (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || "").replace(/\\s+/g, " ").trim().slice(0, 80);
-  const action = ${JSON.stringify(j.action)}, text = ${JSON.stringify(String(j.text || ""))}, clear = ${j.clear !== false}, submit = ${!!j.submit};
+  const label = (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || e.title || e.name || "").replace(/\\s+/g, " ").trim().slice(0, 80);
+  const action = ${JSON.stringify(j.action)}, text = ${JSON.stringify(String(j.text ?? j.value ?? ""))}, clear = ${j.clear !== false}, submit = ${!!j.submit};
   if (action === "type" && e.type === "password") return { password: true, label };
-  e.scrollIntoView({ block: "center", inline: "center" });
+  e.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
   try { e.focus({ preventScroll: true }); } catch {}
   if (action === "click") {
+    if (e.tagName === "A" && e.target === "_blank" && e.href && !/^javascript:/i.test(e.href)) e.removeAttribute("target");
     const o = { bubbles: true, cancelable: true, view: window, button: 0 };
     e.dispatchEvent(new PointerEvent("pointerdown", o)); e.dispatchEvent(new MouseEvent("mousedown", o));
     e.dispatchEvent(new PointerEvent("pointerup", o)); e.dispatchEvent(new MouseEvent("mouseup", o));
     e.click();
     return { ok: true, label };
   }
-  if (e.isContentEditable) { if (clear) document.execCommand("selectAll"); document.execCommand("insertText", false, text); }
-  else {
-    const proto = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : e instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
-    Object.getOwnPropertyDescriptor(proto, "value").set.call(e, (clear ? "" : e.value) + text);
+  if (e instanceof HTMLSelectElement || action === "select") {
+    if (!(e instanceof HTMLSelectElement)) return { notSelect: true, label };
+    const want = text.trim(), low = want.toLowerCase(), opts = [...e.options];
+    const pick = opts.find((o) => o.value === want || o.text.trim() === want)
+      || opts.find((o) => o.value.toLowerCase() === low || o.text.trim().toLowerCase() === low)
+      || opts.find((o) => o.text.trim().toLowerCase().includes(low) || o.value.toLowerCase().includes(low));
+    if (!pick) return { badOption: true, label, options: opts.slice(0, 15).map((o) => o.text.trim() || o.value) };
+    e.selectedIndex = opts.indexOf(pick); e.value = pick.value;
+    e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true }));
+    return { ok: true, label, selected: pick.text.trim() || pick.value };
+  }
+  if (e.isContentEditable) {
+    if (clear) { try { document.execCommand("selectAll"); } catch {} e.innerText = ""; }
+    if (!document.execCommand("insertText", false, text)) e.innerText = (clear ? "" : e.innerText) + text;
+    e.dispatchEvent(new Event("input", { bubbles: true }));
+  } else {
+    const proto = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const set = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    const next = (clear ? "" : e.value) + text;
+    if (set) set.call(e, next); else e.value = next;
     e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true }));
   }
   if (submit) {
@@ -241,37 +442,376 @@ const DOM_ACT = (j) => `(() => {
   }
   return { ok: true, label };
 })()`;
+async function navStep(action, D = pcD) {
+  if (action === "reload") await D.send("Page.reload", {});
+  else if (action === "back" || action === "forward") {
+    const h = await D.send("Page.getNavigationHistory", {}), e = h.entries[h.currentIndex + (action === "back" ? -1 : 1)];
+    if (!e) throw new Error(`Can't go ${action}: no page in history.`);
+    await D.send("Page.navigateToHistoryEntry", { entryId: e.id });
+  }
+  await settle(6000, D);
+  return { ok: true, key: action };
+}
 async function domAct(j, D) {
-  if (j.action === "scroll") { await evalJs(`scrollBy(0, ${j.direction === "up" ? -0.8 : 0.8} * innerHeight)`, D); await sleep(400); return { ok: true }; }
+  if (j.action === "scroll") { await evalJs(SCROLL_JS(j.direction, j.n), D); await sleep(400); return { ok: true }; }
+  if (j.action === "key") {
+    const rawKey = String(j.key || "").trim();
+    if (/^(back|forward|reload)$/i.test(rawKey)) return navStep(rawKey.toLowerCase(), D);
+    const keyName = KEY_ALIAS[rawKey] || rawKey;
+    if (j.n != null) await ensureNumbered(D);
+    await evalJs(`(() => {
+      const n = ${j.n != null ? Math.round(Number(j.n)) : 0};
+      const el = (n && document.querySelector('[data-alb="' + n + '"]')) || document.activeElement || document.body;
+      if (el && el.focus) try { el.focus({ preventScroll: true }); } catch {}
+      const key = ${JSON.stringify(keyName === "Space" ? " " : keyName)}, code = ${JSON.stringify((KEYS[keyName] && KEYS[keyName][1]) || keyName)}, vk = ${(KEYS[keyName] && KEYS[keyName][0]) || 0};
+      const o = { key, code, keyCode: vk, which: vk, bubbles: true, cancelable: true };
+      const go = el.dispatchEvent(new KeyboardEvent("keydown", o));
+      el.dispatchEvent(new KeyboardEvent("keypress", o));
+      el.dispatchEvent(new KeyboardEvent("keyup", o));
+      if (go && key === "Enter" && el.form) { try { el.form.requestSubmit(); } catch { el.form.submit(); } }
+    })()`, D);
+    await sleep(300); await settle(4000, D);
+    return { ok: true, key: keyName };
+  }
+  await ensureNumbered(D);
   const r = await evalJs(DOM_ACT(j), D);
   if (!r) throw new Error(`There is no number ${Math.round(Number(j.n))} on the page any more. Read the page again.`);
   if (r.password) throw new Error("Passwords are never typed by the AI. Ask the user to type it in their Chrome themselves.");
+  if (r.badOption) throw new Error(`No option "${j.text ?? j.value}" in "${r.label}". Options: ${(r.options || []).join(", ")}`);
   await sleep(500); await settle(6000, D);
-  return { ok: true, on: r.label };
+  return { ok: true, on: r.label, ...(r.selected ? { selected: r.selected } : {}) };
 }
 async function act(j, D = pcD) {
+  if (j.action === "upload") return uploadFile(j, D);
+  if (j.action === "download") return downloadFromBrowser(j, D);
   if (D.dom) return domAct(j, D);
-  if (j.action === "scroll") { const v = D.vp(); await input({ t: "wheel", x: Math.round(v.w / 2), y: Math.round(v.h / 2), dy: (j.direction === "up" ? -0.8 : 0.8) * v.h }, D); await sleep(500); return { ok: true }; }
+  if (j.action === "scroll") {
+    const moved = await evalJs(SCROLL_JS(j.direction, j.n), D).catch(() => false);
+    if (!moved) { const v = D.vp(); await input({ t: "wheel", x: Math.round(v.w / 2), y: Math.round(v.h / 2), dy: (j.direction === "up" ? -0.8 : 0.8) * v.h }, D); }
+    await sleep(500); return { ok: true };
+  }
+  if (j.action === "key") {
+    const rawKey = String(j.key || "").trim();
+    if (/^(back|forward|reload)$/i.test(rawKey)) return navStep(rawKey.toLowerCase(), D);
+    const keyName = KEY_ALIAS[rawKey] || rawKey;
+    const dlg = D === pcD ? B.dialog : ext.status().dialog;
+    if (dlg && (keyName === "Enter" || keyName === "Escape")) { await clearDialogForAi(D, keyName === "Enter"); return { ok: true, key: keyName }; }
+    if (j.n != null) {
+      await ensureNumbered(D);
+      await evalJs(`(() => { const e = document.querySelector('[data-alb="${Math.round(Number(j.n))}"]'); if (e) { e.scrollIntoView({ block: "center", inline: "center", behavior: "instant" }); try { e.focus({ preventScroll: true }); } catch {} } })()`, D);
+    }
+    await input({ t: "key", key: keyName }, D);
+    await sleep(250); await settle(4000, D);
+    return { ok: true, key: keyName };
+  }
+  await ensureNumbered(D);
   const n = Math.round(Number(j.n));
-  const r = await evalJs(`(() => { const e = document.querySelector('[data-alb="${n}"]'); if (!e) return null; e.scrollIntoView({ block: "center", inline: "center" }); const b = e.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), password: e.type === "password", label: (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || "").trim().slice(0, 80) }; })()`, D);
+  if (j.action === "select") return domAct({ ...j, action: "select" }, D);
+  const r = await evalJs(`(() => {
+    const e = document.querySelector('[data-alb="${n}"]'); if (!e) return null;
+    e.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+    const b = e.getBoundingClientRect();
+    const x = Math.round(b.left + b.width / 2), y = Math.round(b.top + b.height / 2);
+    const hit = b.width > 0 && b.height > 0 ? document.elementFromPoint(x, y) : null;
+    const covered = !hit || (hit !== e && !e.contains(hit) && !hit.contains(e));
+    window.__albClicked = false;
+    e.addEventListener("click", () => { window.__albClicked = true; }, { once: true, capture: true });
+    return { x, y, covered, isSelect: e instanceof HTMLSelectElement, password: e.type === "password", label: (e.getAttribute("aria-label") || e.innerText || e.value || e.placeholder || e.title || e.name || "").replace(/\\s+/g, " ").trim().slice(0, 80) };
+  })()`, D);
   if (!r) throw new Error(`There is no number ${n} on the page any more. Read the page again.`);
   if (j.action === "type" && r.password) throw new Error("Passwords are never typed by the AI. Ask the user to type it in the Browser themselves.");
-  await sleep(150);
-  await input({ t: "click", x: r.x, y: r.y }, D);
+  if (r.isSelect && j.action === "type") return domAct(j, D);
+  await sleep(100);
+  if (j.action === "click") {
+    if (r.covered) return domAct(j, D);
+    await input({ t: "click", x: r.x, y: r.y }, D);
+    if (!(await evalJs("!!window.__albClicked", D).catch(() => true))) await evalJs(DOM_ACT(j), D);
+  } else if (!r.covered) {
+    await input({ t: "click", x: r.x, y: r.y }, D);
+  }
   if (j.action === "type") {
-    await sleep(120);
-    if (j.clear !== false) { await input({ t: "key", key: "a", ctrl: true }, D); await input({ t: "key", key: "Backspace" }, D); }
-    await input({ t: "text", text: String(j.text || "") }, D);
+    await sleep(80);
+    // Focus and set/clear inside the element itself so Ctrl+A never selects the whole page if a click missed
+    await evalJs(DOM_ACT({ ...j, submit: false }), D);
     if (j.submit) await input({ t: "key", key: "Enter" }, D);
   }
   await settle(6000, D);
   return { ok: true, on: r.label };
+}
+
+// ---------- uploading (inserting) a file from the PC into the browser, and downloading a file from the browser to the PC ----------
+async function uploadFile(j, D = pcD) {
+  let file;
+  if (j.b64) {
+    const buf = Buffer.from(String(j.b64), "base64");
+    if (buf.length > 25 * 1024 * 1024) throw new Error("Files up to 25 MB can be uploaded from the chat.");
+    const name = safeFileName(j.name || "upload.bin", j.mime);
+    const dir = path.join(agentFiles.ROOTS.agent.dir, "Uploads");
+    fs.mkdirSync(dir, { recursive: true });
+    const full = path.join(dir, name);
+    fs.writeFileSync(full, buf);
+    file = { full, spec: "agent:Uploads/" + name, name, size: buf.length, mime: j.mime || mimeOfName(name) };
+  } else {
+    file = findPcFile(j.path || j.spec);
+  }
+  await clearDialogForAi(D);
+  if (j.n != null) await ensureNumbered(D);
+  const n = j.n != null && j.n !== "" ? Math.round(Number(j.n)) : 0;
+  try {
+    const prep = await evalJs(`(() => {
+      window.__albTargetInput = null;
+      window.__albDropTarget = null;
+      window.__albChangeFired = false;
+      if (!HTMLInputElement.prototype.__albOrigClick) HTMLInputElement.prototype.__albOrigClick = HTMLInputElement.prototype.click;
+      HTMLInputElement.prototype.click = function () {
+        if (this.type === "file") { window.__albTargetInput = this; return; }
+        return HTMLInputElement.prototype.__albOrigClick.apply(this, arguments);
+      };
+      const n = ${n};
+      const e = n ? document.querySelector('[data-alb="' + n + '"]') : null;
+      if (n && !e) return { missing: true };
+      const labelOf = (x) => x ? (x.getAttribute("aria-label") || x.innerText || x.value || x.placeholder || x.title || x.name || "file input").replace(/\\s+/g, " ").trim().slice(0, 80) : "file input";
+      if (e) {
+        e.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+        if (e.tagName === "INPUT" && e.type === "file") window.__albTargetInput = e;
+        else if (e.tagName === "LABEL" && e.control && e.control.type === "file") window.__albTargetInput = e.control;
+        else if (e.querySelector && e.querySelector("input[type=file]")) window.__albTargetInput = e.querySelector("input[type=file]");
+        else {
+          const o = { bubbles: true, cancelable: true, view: window, button: 0 };
+          e.dispatchEvent(new PointerEvent("pointerdown", o)); e.dispatchEvent(new MouseEvent("mousedown", o));
+          e.dispatchEvent(new PointerEvent("pointerup", o)); e.dispatchEvent(new MouseEvent("mouseup", o));
+          try { e.click(); } catch {}
+          if (!window.__albTargetInput) {
+            const scope = e.closest("label,form,div,section,main") || document;
+            window.__albTargetInput = scope.querySelector("input[type=file]:not([disabled])") || document.querySelector("input[type=file]:not([disabled])");
+          }
+          window.__albDropTarget = e;
+        }
+      } else {
+        window.__albTargetInput = document.querySelector("input[type=file]:not([disabled])") || document.querySelector("input[type=file]");
+        window.__albDropTarget = document.activeElement || document.body;
+      }
+      if (window.__albTargetInput) window.__albTargetInput.addEventListener("change", () => { window.__albChangeFired = true; }, { once: true });
+      return { hasInput: !!window.__albTargetInput, hasDrop: !!window.__albDropTarget, label: labelOf(e || window.__albTargetInput || window.__albDropTarget) };
+    })()`, D);
+    if (prep && prep.missing) throw new Error(`There is no number ${n} on the page any more. Read the page again.`);
+    let setOk = false;
+    if (prep && prep.hasInput) {
+      try {
+        const obj = await D.send("Runtime.evaluate", { expression: "window.__albTargetInput", returnByValue: false });
+        if (obj && obj.result && obj.result.objectId) {
+          await D.send("DOM.setFileInputFiles", { objectId: obj.result.objectId, files: [file.full] });
+          setOk = await evalJs("!!(window.__albTargetInput && window.__albTargetInput.files && window.__albTargetInput.files.length)", D);
+        }
+      } catch {}
+    } else if (D === pcD && B.fileChooser && Date.now() - B.fileChooser.at < 30000) {
+      try {
+        await D.send("DOM.setFileInputFiles", { backendNodeId: B.fileChooser.backendNodeId, files: [file.full] });
+        B.fileChooser = null; setOk = true;
+      } catch {}
+    }
+    // Fallback / drop-zone delivery using DataTransfer + File inside the page (also ensures input/change events fire)
+    if (!setOk || (prep && prep.hasInput)) {
+      const canInline = !setOk && file.size <= 25 * 1024 * 1024;
+      const b64 = canInline ? fs.readFileSync(file.full).toString("base64") : "";
+      const doneInDom = await evalJs(`(() => {
+        const inp = window.__albTargetInput, drop = window.__albDropTarget;
+        let dt = null;
+        if (${JSON.stringify(b64)}) {
+          const bin = atob(${JSON.stringify(b64)}), u8 = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          const f = new File([u8], ${JSON.stringify(file.name)}, { type: ${JSON.stringify(file.mime)}, lastModified: Date.now() });
+          dt = new DataTransfer(); dt.items.add(f);
+        }
+        if (inp) {
+          if (dt && (!inp.files || !inp.files.length)) inp.files = dt.files;
+          if (!window.__albChangeFired) {
+            inp.dispatchEvent(new Event("input", { bubbles: true }));
+            inp.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          return !!(inp.files && inp.files.length);
+        }
+        if (drop && dt) {
+          for (const t of ["dragenter", "dragover", "drop"]) {
+            drop.dispatchEvent(new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: dt }));
+          }
+          try { drop.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt })); } catch {}
+          return true;
+        }
+        return false;
+      })()`, D);
+      if (doneInDom) setOk = true;
+    }
+    if (!setOk) throw new Error("No file input or upload area was found on the page. Click the page's upload button first or give its element number n.");
+    B.note(`Browser: uploaded ${file.name}`);
+    await settle(6000, D);
+    return { ok: true, file: file.name, spec: file.spec, size: file.size, on: (prep && prep.label) || "page" };
+  } finally {
+    await evalJs("if (HTMLInputElement.prototype.__albOrigClick) HTMLInputElement.prototype.click = HTMLInputElement.prototype.__albOrigClick; delete window.__albTargetInput; delete window.__albDropTarget;", D).catch(() => {});
+  }
+}
+
+function saveDownloadedBuffer(buf, rawName, mime, destSpec) {
+  const cleanName = safeFileName(rawName, mime);
+  const dlFull = freeFilePath(DOWNLOADS, cleanName);
+  fs.writeFileSync(dlFull, buf);
+  const savedName = path.basename(dlFull);
+  let spec = "all:Browser downloads/" + savedName, finalName = savedName;
+  if (destSpec) {
+    const r = agentFiles.resolve(destSpec, { write: true });
+    fs.mkdirSync(path.dirname(r.full), { recursive: true });
+    fs.writeFileSync(r.full, buf);
+    spec = r.spec; finalName = path.basename(r.full);
+  }
+  const entry = { guid: "manual-" + Date.now(), name: finalName, spec, size: buf.length, state: "completed", at: Date.now(), doneAt: Date.now() };
+  B.recentDownloads.unshift(entry); B.recentDownloads.length = Math.min(B.recentDownloads.length, 20);
+  B.download = `Downloaded ${ savedName } → PC files › Browser downloads`;
+  B.note("Browser: downloaded " + finalName);
+  wake();
+  return { ok: true, name: finalName, spec, size: buf.length, mime: mime || mimeOfName(finalName) };
+}
+
+async function fetchUrlFromBrowser(targetUrl, D = pcD) {
+  // 1) Try inside the page first so blob:, data: and same-site authenticated downloads work directly
+  try {
+    const inPage = await evalJs(`(async () => {
+      const r = await fetch(${JSON.stringify(targetUrl)}, { credentials: "include" });
+      if (!r.ok) return { error: "HTTP " + r.status };
+      const disp = r.headers.get("content-disposition") || "";
+      const m = /filename\\*?=(?:UTF-8''|")?([^";\\r\\n]+)/i.exec(disp);
+      const fname = m ? decodeURIComponent(m[1].trim().replace(/^["']|["']$/g, "")) : "";
+      const type = (r.headers.get("content-type") || "").split(";")[0].trim();
+      const blob = await r.blob();
+      if (blob.size > 30 * 1024 * 1024) return { tooBig: true };
+      const b64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1] || ""); fr.onerror = rej; fr.readAsDataURL(blob); });
+      return { ok: true, b64, mime: type || blob.type || "", name: fname };
+    })()`, D);
+    if (inPage && inPage.ok && inPage.b64) return { buf: Buffer.from(inPage.b64, "base64"), mime: inPage.mime, name: inPage.name };
+  } catch {}
+  // 2) Fallback: fetch from Node using the browser's cookies for that URL (bypasses CORS and handles cross-origin CDNs)
+  if (!/^https?:\/\//i.test(targetUrl)) return null;
+  let cookieHeader = "";
+  try {
+    const c = await D.send("Network.getCookies", { urls: [targetUrl] });
+    if (c && Array.isArray(c.cookies) && c.cookies.length) cookieHeader = c.cookies.map((x) => `${x.name}=${x.value}`).join("; ");
+  } catch {}
+  const res = await fetch(targetUrl, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(30000),
+    headers: { ...(B.ua ? { "User-Agent": B.ua } : {}), ...(cookieHeader ? { Cookie: cookieHeader } : {}) },
+  });
+  if (!res.ok) throw new Error("Download returned HTTP " + res.status);
+  const disp = res.headers.get("content-disposition") || "";
+  const m = /filename\*?=(?:UTF-8''|")?([^";\r\n]+)/i.exec(disp);
+  const fname = m ? decodeURIComponent(m[1].trim().replace(/^["']|["']$/g, "")) : "";
+  const mime = (res.headers.get("content-type") || "").split(";")[0].trim();
+  const ab = await res.arrayBuffer();
+  if (ab.byteLength > 100 * 1024 * 1024) throw new Error("Download is larger than 100 MB.");
+  return { buf: Buffer.from(ab), mime, name: fname || path.basename(new URL(res.url || targetUrl).pathname) };
+}
+
+async function downloadFromBrowser(j, D = pcD) {
+  await clearDialogForAi(D);
+  fs.mkdirSync(DOWNLOADS, { recursive: true });
+  const destSpec = j.path ? String(j.path).trim() : "";
+  const wantName = destSpec ? path.basename(destSpec.split(":").pop()) : "";
+  let info = null;
+  if (j.n != null && j.n !== "") {
+    await ensureNumbered(D);
+    const n = Math.round(Number(j.n));
+    info = await evalJs(`(() => {
+      const e = document.querySelector('[data-alb="${n}"]'); if (!e) return null;
+      const tag = e.tagName.toLowerCase();
+      const label = (e.getAttribute("aria-label") || e.innerText || e.alt || e.title || e.value || "").replace(/\\s+/g, " ").trim().slice(0, 80);
+      if (tag === "canvas") { try { return { tag, label: label || "canvas.png", dataUrl: e.toDataURL("image/png") }; } catch {} }
+      const sub = e.querySelector && e.querySelector("a[href],img[src],video[src],audio[src],source[src]");
+      const href = e.href || e.currentSrc || e.src || (sub && (sub.href || sub.currentSrc || sub.src)) || "";
+      const dl = e.getAttribute("download") || (sub && sub.getAttribute && sub.getAttribute("download")) || "";
+      return { tag, label, href: String(href || ""), download: dl, isMedia: /^(img|video|audio|source)$/.test(tag) || e.hasAttribute("download") };
+    })()`, D);
+    if (!info) throw new Error(`There is no number ${n} on the page any more. Read the page again.`);
+  }
+  const targetUrl = String(j.url || (info && (info.dataUrl || info.href)) || "").trim();
+  // 1) data: URL or <canvas>
+  if (targetUrl.startsWith("data:")) {
+    const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(targetUrl);
+    if (!m) throw new Error("Invalid data URL");
+    const mime = m[1] || "application/octet-stream";
+    const buf = m[2] ? Buffer.from(m[3], "base64") : Buffer.from(decodeURIComponent(m[3]), "utf8");
+    return saveDownloadedBuffer(buf, wantName || (info && (info.download || info.label)) || "download", mime, destSpec);
+  }
+  // 2) blob: URL or direct media/file URL (when no button click is needed)
+  const looksLikeFileUrl = /^blob:/i.test(targetUrl) || (info && info.isMedia) || (!j.n && /^https?:\/\//i.test(targetUrl))
+    || /\.(pdf|zip|csv|json|xml|txt|md|png|jpe?g|gif|webp|svg|bmp|mp3|wav|mp4|docx?|xlsx?|pptx?|odt|ods|odp|rtf|epub)(\?|$)/i.test(targetUrl);
+  if (targetUrl && looksLikeFileUrl) {
+    const got = await fetchUrlFromBrowser(targetUrl, D).catch(() => null);
+    if (got && got.buf) {
+      const name = wantName || (info && info.download) || got.name || path.basename(targetUrl.split(/[?#]/)[0]) || (info && info.label) || "download";
+      return saveDownloadedBuffer(got.buf, name, got.mime, destSpec);
+    }
+  }
+  // 3) Click element n to trigger a download (catches both JS <a download> blobs and native Chrome downloads)
+  if (j.n != null && j.n !== "") {
+    const dlStart = Date.now();
+    await evalJs(`(() => {
+      window.__albDlCaptured = null;
+      if (!HTMLAnchorElement.prototype.__albOrigClick) HTMLAnchorElement.prototype.__albOrigClick = HTMLAnchorElement.prototype.click;
+      if (!URL.__albOrigCreate) URL.__albOrigCreate = URL.createObjectURL;
+      if (!URL.__albOrigRevoke) URL.__albOrigRevoke = URL.revokeObjectURL;
+      URL.createObjectURL = function () { const u = URL.__albOrigCreate.apply(this, arguments); window.__albDlCaptured = { href: u, download: (window.__albDlCaptured && window.__albDlCaptured.download) || "" }; return u; };
+      URL.revokeObjectURL = function (u) { setTimeout(() => { try { URL.__albOrigRevoke.call(URL, u); } catch {} }, 5000); };
+      HTMLAnchorElement.prototype.click = function () {
+        if (this.hasAttribute("download") || /^blob:|^data:/i.test(this.href || "")) {
+          window.__albDlCaptured = { href: this.href, download: this.getAttribute("download") || this.download || "" };
+          if (/^blob:|^data:/i.test(this.href || "")) return;
+        }
+        return HTMLAnchorElement.prototype.__albOrigClick.apply(this, arguments);
+      };
+    })()`, D).catch(() => {});
+    try {
+      await act({ action: "click", n: j.n }, D);
+      const cap = await evalJs("window.__albDlCaptured", D).catch(() => null);
+      if (cap && cap.href) {
+        if (cap.href.startsWith("data:")) return downloadFromBrowser({ url: cap.href, path: destSpec }, D);
+        const got = await fetchUrlFromBrowser(cap.href, D).catch(() => null);
+        if (got && got.buf) return saveDownloadedBuffer(got.buf, wantName || cap.download || got.name || "download", got.mime, destSpec);
+      }
+      // Wait if a native Chrome download started
+      if (D === pcD) {
+        const waitEnd = Date.now() + 20000;
+        while (Date.now() < waitEnd && [...B.downloads.values()].some((d) => d.at >= dlStart - 100 && d.state === "inProgress")) await sleep(250);
+        const doneDl = B.recentDownloads.find((d) => !String(d.guid).startsWith("manual-") && (d.at || 0) >= dlStart - 100 && d.state === "completed");
+        if (doneDl) {
+          let spec = doneDl.spec, finalName = doneDl.name;
+          if (destSpec && doneDl.full && fs.existsSync(doneDl.full)) {
+            const r = agentFiles.resolve(destSpec, { write: true });
+            fs.mkdirSync(path.dirname(r.full), { recursive: true });
+            fs.copyFileSync(doneDl.full, r.full);
+            spec = r.spec; finalName = path.basename(r.full);
+          }
+          return { ok: true, name: finalName, spec, size: doneDl.size || 0, mime: mimeOfName(finalName) };
+        }
+      }
+    } finally {
+      await evalJs("if (HTMLAnchorElement.prototype.__albOrigClick) HTMLAnchorElement.prototype.click = HTMLAnchorElement.prototype.__albOrigClick; if (URL.__albOrigCreate) URL.createObjectURL = URL.__albOrigCreate; if (URL.__albOrigRevoke) URL.revokeObjectURL = URL.__albOrigRevoke; delete window.__albDlCaptured;", D).catch(() => {});
+    }
+  }
+  // 4) Final fallback: if we have an http(s) URL (from j.url or element n's href), fetch and save it
+  if (targetUrl && /^https?:\/\//i.test(targetUrl)) {
+    const got = await fetchUrlFromBrowser(targetUrl, D);
+    if (got && got.buf) {
+      const name = wantName || (info && info.download) || got.name || path.basename(new URL(targetUrl).pathname) || "download";
+      return saveDownloadedBuffer(got.buf, name, got.mime, destSpec);
+    }
+  }
+  throw new Error("Couldn't download a file from that element. Check the element number with browser_read or give a direct url.");
 }
 // Private: a separate session like an incognito window. Nothing it sees is written to the profile (no history, cookies, logins),
 // and switching it off throws the whole session away.
 async function setPrivate(on) {
   if (on && !B.priv) {
     B.priv = (await send("Target.createBrowserContext", { disposeOnDetach: false })).browserContextId;
+    await send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: DOWNLOADS, browserContextId: B.priv, eventsEnabled: true }).catch(() => {});
     await newTab("https://www.google.com/");
   } else if (!on && B.priv) {
     const ctx = B.priv; B.priv = null; B.privOld = ctx;
@@ -441,7 +981,7 @@ async function handle(method, p, body, note) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   try {
     // the Browser view on your own Chrome (mirror): handled before anything starts the hidden browser
-    if (j.via === "ext" && !["/browser/open", "/browser/read", "/browser/act"].includes(p)) { const r = await extHandle(p, j); if (r) return [200, r]; }
+    if (j.via === "ext" && !["/browser/open", "/browser/read", "/browser/act", "/browser/upload", "/browser/download"].includes(p)) { const r = await extHandle(p, j); if (r) return [200, r]; }
     if (p === "/browser/start" || p === "/browser/viewport") {
       if (j.w) B.vp = { w: Math.max(240, Math.min(2560, Math.round(j.w))), h: Math.max(240, Math.min(2000, Math.round(j.h))), dpr: Math.max(1, Math.min(2, Number(j.dpr) || 1)), mobile: !!j.mobile };
       if (j.quality) B.quality = Math.max(30, Math.min(90, Math.round(j.quality)));
@@ -453,11 +993,13 @@ async function handle(method, p, body, note) {
     if (p === "/browser/stop") { await stop(); return [200, { closed: true }]; }
     if (p === "/browser/clearhistory") { const n = await clearHistory(); B.note("Browser: history cleared"); return [200, { cleared: n }]; }
     if (p === "/browser/ext") { ext.listen(B.note); return [200, await ext.handle(j)]; }
-    // the Agent set to "My Chrome": the same reading and clicking, in your Chrome through the extension (the hidden browser isn't started)
-    if (j.via === "ext" && (p === "/browser/open" || p === "/browser/read" || p === "/browser/act")) {
+    // the Agent set to "My Chrome": the same reading, clicking, file insertion and downloads, in your Chrome through the extension
+    if (j.via === "ext" && (p === "/browser/open" || p === "/browser/read" || p === "/browser/act" || p === "/browser/upload" || p === "/browser/download")) {
       const D = ext.driver;
       if (p === "/browser/open") { const u = fixUrl(j.url); if (!u) return [400, { error: "That address can't be opened here." }]; await D.open(u); await settle(10000, D); return [200, await readPage(D)]; }
       if (p === "/browser/read") return [200, await readPage(D)];
+      if (p === "/browser/upload") { const r = await uploadFile(j, D); return [200, { ...r, page: await readPage(D) }]; }
+      if (p === "/browser/download") { const r = await downloadFromBrowser(j, D); return [200, { ...r, page: await readPage(D) }]; }
       const r = await act(j, D); return [200, { ...r, page: await readPage(D) }];
     }
     await start();
@@ -480,6 +1022,8 @@ async function handle(method, p, body, note) {
     if (p === "/browser/search") return [200, await searchIn(pcD, (u) => newTab(u), j.query)];
     if (p === "/browser/open") { const u = fixUrl(j.url); if (!u) return [400, { error: "That address can't be opened here." }]; await send("Page.navigate", { url: u }, cur()); await settle(); return [200, await readPage()]; }
     if (p === "/browser/read") return [200, await readPage()];
+    if (p === "/browser/upload") { const r = await uploadFile(j); return [200, { ...r, page: await readPage() }]; }
+    if (p === "/browser/download") { const r = await downloadFromBrowser(j); return [200, { ...r, page: await readPage() }]; }
     if (p === "/browser/act") { const r = await act(j); return [200, { ...r, page: await readPage() }]; }
     if (p === "/browser/dialog") { const s = cur(); await send("Page.handleJavaScriptDialog", { accept: !!j.accept, promptText: j.text != null ? String(j.text) : undefined }, s); B.dialog = null; wake(); return [200, state()]; }
   } catch (e) { return [400, { error: e.message }]; }
