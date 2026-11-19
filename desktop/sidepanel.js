@@ -206,19 +206,41 @@ function create({ BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcu
     const r = panelRect();
     if (r && p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height) throw new Error("That point is on the Albatross panel itself; I don't click there.");
   }
+  // ---------- moving the mouse yourself stops the AI ----------
+  // While it works, the cursor should only move where the AI put it. Every 80 ms the cursor is compared with that spot; if it
+  // wandered off by more than a few pixels, that was you, and the AI stops at once. While the AI moves the mouse itself (a click
+  // or scroll in progress) and while it waits for your answer in the panel, nothing is checked.
+  const watch = { timer: 0, base: null, acting: false, paused: false };
+  const cursor = () => screen.getCursorScreenPoint();
+  function watchStart() {
+    clearInterval(watch.timer);
+    watch.base = cursor(); watch.acting = false; watch.paused = false;
+    watch.timer = setInterval(() => {
+      if (!running || watch.acting || watch.paused || !watch.base) return;
+      const p = cursor();
+      if (Math.hypot(p.x - watch.base.x, p.y - watch.base.y) > 6) { log("Side panel: you moved the mouse, the AI stopped"); stopRun("mouse"); }
+    }, 80);
+  }
+  const watchStop = () => { clearInterval(watch.timer); watch.timer = 0; watch.base = null; };
+  // the AI moved the cursor to p (physical pixels): that is where it should stay until the next move
+  const movedTo = (p) => { watch.base = screen.screenToDipPoint({ x: Math.round(p.x), y: Math.round(p.y) }); };
+  async function moving(p, fn) {
+    watch.acting = true;
+    try { await fn(); } finally { movedTo(p); watch.acting = false; }
+  }
   async function act(a) {
     if (!running) throw new Error("Stopped.");
     const kind = String(a.action || "");
     if (kind === "click" || kind === "double_click" || kind === "right_click") {
       const p = pointFor(a); guard(p);
-      await input.click(p.x, p.y, kind === "right_click" ? "right" : "left", kind === "double_click" ? 2 : 1);
+      await moving(p, () => input.click(p.x, p.y, kind === "right_click" ? "right" : "left", kind === "double_click" ? 2 : 1));
       return `${kind.replace("_", " ")} on ${p.what}`;
     }
     if (kind === "scroll") {
       const p = a.n != null || a.x != null ? pointFor(a) : last ? { x: last.rect.x + last.rect.w / 2, y: last.rect.y + last.rect.h / 2, what: "the window" } : null;
       if (!p) throw new Error("Look at the screen first."); guard(p);
       const amt = (String(a.direction) === "up" ? 1 : -1) * Math.max(1, Math.min(15, Number(a.amount) || 5));
-      await input.scroll(p.x, p.y, amt);
+      await moving(p, () => input.scroll(p.x, p.y, amt));
       return `scrolled ${amt > 0 ? "up" : "down"} on ${p.what}`;
     }
     if (kind === "type") {
@@ -243,13 +265,14 @@ function create({ BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcu
     }
     throw new Error(`"${kind}" isn't something I can do.`);
   }
-  function stopRun() {
+  function stopRun(reason) {
     if (!running) return;
     running = false;
+    watchStop();
     try { globalShortcut.unregister("CommandOrControl+Alt+X"); } catch {}
     for (const ac of chats.values()) ac.abort();
     if (win && !win.isDestroyed()) win.setFocusable(true);
-    send("control-stopped");
+    send("control-stopped", reason || "");
   }
 
   ipcMain.handle("panel-models", async () => { try { return { models: await models() }; } catch (e) { return { error: e.message }; } });
@@ -272,13 +295,16 @@ function create({ BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcu
   ipcMain.handle("control-start", () => {
     if (!screenHelp.available()) return { error: "Controlling the PC needs the Albatross app for Windows." };
     running = true;
-    try { globalShortcut.register("CommandOrControl+Alt+X", () => stopRun()); } catch {}
+    try { globalShortcut.register("CommandOrControl+Alt+X", () => stopRun("keys")); } catch {}
     // while the AI works, the panel never takes the keyboard: what it types goes to the app it works in, not here
     if (win && !win.isDestroyed()) win.setFocusable(false);
+    watchStart();
     log("Side panel: the AI is controlling the PC");
     return { ok: true };
   });
   ipcMain.handle("control-stop", () => { stopRun(); return true; });
+  // the panel waits for your Allow or answer: you need the mouse for that, so it doesn't count as "stop" meanwhile
+  ipcMain.handle("control-watch", (_e, on) => { watch.paused = !on; if (on) watch.base = cursor(); return true; });
   ipcMain.handle("control-look", async (_e, opts) => { if (!running) return { error: "Stopped." }; try { return await look(opts || {}); } catch (e) { return { error: e.message }; } });
   ipcMain.handle("control-act", async (_e, a) => { try { return { done: await act(a || {}) }; } catch (e) { return { error: e.message }; } });
   ipcMain.handle("control-point", async (_e, items) => screenHelp.show(items || [], 4));

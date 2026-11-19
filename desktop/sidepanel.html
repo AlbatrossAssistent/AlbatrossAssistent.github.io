@@ -173,7 +173,7 @@
     <div class="intro" id="cIntro">
       <h2>Let the AI do it</h2>
       <p>Say what should happen. The AI looks at the screen, then clicks and types in your apps, one step at a time, until it's done. You see every step here.</p>
-      <div class="warnbox" id="cWarn">Keep your hands off the mouse while it works. Stop it any time with the Stop button or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd>. It asks you before anything that sends, buys or deletes.</div>
+      <div class="warnbox" id="cWarn">To stop it, just move your mouse (or press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd>). It asks you before anything that sends, buys or deletes.</div>
       <div class="ideas" id="cIdeas"></div>
     </div>
   </div>
@@ -394,7 +394,7 @@ Rules:
 - If something doesn't work twice, try another way. When the task is finished, or can't be done, call done with a short summary.
 - Write any text for the user in ${LANG} unless the user wrote in another language.`;
 
-let controlRunning = false, cStopAsked = false;
+let controlRunning = false, cStopAsked = false, cStopWhy = "";
 const cThread = $("#cThread");
 function cScroll() { cThread.scrollTop = cThread.scrollHeight; }
 function cStep(icon, what, why, cls = "") {
@@ -412,7 +412,7 @@ function cUi(on) {
   const live = $("#cLive"); if (live) live.remove();
   if (on) {
     const l = document.createElement("div"); l.className = "live"; l.id = "cLive";
-    l.innerHTML = '<span class="pulse"></span><span>The AI is using your PC</span><span class="sp"></span><button type="button">Stop</button>';
+    l.innerHTML = '<span class="pulse"></span><span>The AI is using your PC · move the mouse to stop</span><span class="sp"></span><button type="button">Stop</button>';
     l.querySelector("button").onclick = cStop;
     cThread.prepend(l);
   }
@@ -438,7 +438,8 @@ function cAskCard(card, kind, question) {
     }
     body.appendChild(acts); cScroll();
     cAskCard.cancel = () => done("stop");
-    function done(v) { if (kind !== "confirm") P.window("nofocus"); cAskCard.cancel = null; acts.remove(); body.querySelector("input")?.remove(); resolve(v); }
+    P.control.watch(false);     // you need the mouse to answer: moving it doesn't stop the AI now
+    function done(v) { if (v !== "stop") P.control.watch(true); if (kind !== "confirm") P.window("nofocus"); cAskCard.cancel = null; acts.remove(); body.querySelector("input")?.remove(); resolve(v); }
   });
 }
 function describe(name, a) {
@@ -456,7 +457,7 @@ async function cStop() {
   if (ask.current) P.abort(ask.current);
   await P.control.stop();
 }
-P.control.onStopped(() => { cStopAsked = true; if (cAskCard.cancel) cAskCard.cancel(); });
+P.control.onStopped((why) => { cStopAsked = true; cStopWhy = why || cStopWhy; if (cAskCard.cancel) cAskCard.cancel(); });
 async function cRun() {
   if (controlRunning) return cStop();
   const task = $("#cText").value.trim(); if (!task) { $("#cText").focus(); return; }
@@ -465,7 +466,7 @@ async function cRun() {
   if (!acts(m)) { cStep("bad", `${m.name} can't use tools.`, "Pick a model marked \"tools\" above (qwen3-vl can also see the screen, which helps a lot).", "bad"); return; }
   const st = await P.control.start();
   if (st.error) { cStep("bad", st.error, "", "bad"); return; }
-  cStopAsked = false;
+  cStopAsked = false; cStopWhy = "";
   $("#cIntro").hidden = true;
   cThread.querySelectorAll(".step, .task").forEach((n) => n.remove());
   cUi(true);
@@ -535,7 +536,7 @@ async function cRun() {
       else { card.querySelector(".what").textContent = res.done.charAt(0).toUpperCase() + res.done.slice(1); reply("Done: " + res.done + ". Look at the next view to check it worked."); }
       await new Promise((ok) => setTimeout(ok, name === "open" ? 1800 : 700));     // let the app react before the next look
     }
-    if (!finished && cStopAsked) cStep("bad", "Stopped", "You stopped the AI.", "bad");
+    if (!finished && cStopAsked) cStep("bad", "Stopped", cStopWhy === "mouse" ? "You moved the mouse, so the AI stopped. Start it again to go on." : "You stopped the AI.", "bad");
     else if (!finished) cStep("bad", "Stopped after " + MAX_STEPS + " steps", "That's the most one task may take. Start it again to go on.", "bad");
   } finally {
     await P.control.stop();

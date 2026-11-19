@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("albatrossPanel", {
     look: (opts) => ipcRenderer.invoke("control-look", opts),
     act: (a) => ipcRenderer.invoke("control-act", a),
     point: (items) => ipcRenderer.invoke("control-point", items),
-    onStopped: (fn) => ipcRenderer.on("control-stopped", () => fn()),
+    watch: (on) => ipcRenderer.invoke("control-watch", !!on),
+    onStopped: (fn) => ipcRenderer.on("control-stopped", (_e, reason) => fn(reason)),
   },
 });
