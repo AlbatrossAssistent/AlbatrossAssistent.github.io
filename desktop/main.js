@@ -6,7 +6,7 @@
 //  - lives in the tray next to the clock; can start with Windows (then it starts hidden, so the host is ready for your phone)
 //  - can make the host start when the PC boots, before anyone signs in (control center → Start at boot)
 //  - updates itself: new versions come from GitHub, download in the background and install when the app restarts
-const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, nativeTheme, dialog, ipcMain, Notification, screen } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, nativeTheme, dialog, ipcMain, Notification, screen, desktopCapturer, globalShortcut } = require("electron");
 const { execFile } = require("child_process");
 let autoUpdater = null; try { autoUpdater = require("electron-updater").autoUpdater; } catch {}
 const path = require("path");
@@ -25,7 +25,7 @@ const HIDDEN_MARK = path.join(DATA, ".relaunch-hidden");
 let hidden = process.argv.includes("--hidden");
 try { if (fs.existsSync(HIDDEN_MARK)) { fs.unlinkSync(HIDDEN_MARK); hidden = true; } } catch {}
 let win = null, splash = null, splashReady = null, tray = null, quitting = false, update = null, starting = true;     // update: { version, ready }
-let screenHelp = null, health = null;     // screen help (looks at the desktop, draws the frames) and the slowdown warning: set up once the app is ready
+let screenHelp = null, health = null, sidePanel = null;     // screen help (looks at the desktop, draws the frames), the slowdown warning and the side panel: set up once the app is ready
 
 // "Albatross.exe --selftest": only runs the self-check against the host on this PC, prints the result and exits (1 = problems)
 const SELFTEST_ONLY = process.argv.includes("--selftest");
@@ -153,6 +153,7 @@ function makeTray() {
   tray.setToolTip("Albatross");
   const menu = () => Menu.buildFromTemplate([
     { label: "Open Albatross", click: () => show() },
+    { label: "Side panel (explain, control my PC)", accelerator: "CommandOrControl+Alt+Space", registerAccelerator: false, click: () => sidePanel && sidePanel.toggle() },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin, click: (i) => { app.setLoginItemSettings({ openAtLogin: i.checked, args: ["--hidden"] }); tray.setContextMenu(menu()); } },
     { label: "Slowdown warnings", type: "checkbox", checked: !health || health.enabled(), click: (i) => { if (health) health.setEnabled(i.checked); } },
@@ -295,6 +296,11 @@ function setUpHelpers() {
   ipcMain.handle("screen-look", (_e, opts) => screenHelp.look(opts || {}));
   ipcMain.handle("screen-show", (_e, items, seconds) => screenHelp.show(items, seconds));
   ipcMain.handle("screen-clear", () => { screenHelp.clear(); return true; });
+  // the side panel: explain what you pick on the screen, or let the AI work the mouse and keyboard (desktop/sidepanel.js)
+  sidePanel = require("./sidepanel").create({ BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcut, assetsDir: __dirname, panel: PANEL, dataDir: DATA, screenHelp,
+    input: require("./pcinput").create({ log }), showMain: () => show(), log });
+  ipcMain.handle("panel-open", () => { sidePanel.open(); return true; });
+  try { globalShortcut.register("CommandOrControl+Alt+Space", () => sidePanel.toggle()); } catch {}
   health = require("./health").create({ BrowserWindow, screen, ipcMain, assetsDir: __dirname, panel: PANEL, dataDir: DATA, showMain: () => show(), log });
   health.start();
   makeTray.refresh && makeTray.refresh();
@@ -346,4 +352,5 @@ app.whenReady().then(async () => {
   }
 });
 app.on("window-all-closed", (e) => { /* keep running in the tray */ });
-app.on("before-quit", () => { quitting = true; });
+app.on("before-quit", () => { quitting = true; if (sidePanel) { sidePanel.stop(); sidePanel.release(); } });
+app.on("will-quit", () => { try { globalShortcut.unregisterAll(); } catch {} });

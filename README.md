@@ -139,6 +139,17 @@ Only one model is kept in GPU memory at a time: before a chat or image, the host
 
 The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDATA%\Albatross\monitor-window`), started on the signed-in desktop by the desktop helper, so someone has to be signed in. **Close window** in the website closes it; on the PC, Alt+F4 does too. Videos play with sound by themselves. MP4 and WebM files work best; some YouTube videos don't allow being shown outside YouTube, and the Monitor then says so.
 
+## Side panel: explain anything on the screen, or let the AI control the PC
+
+The Windows app has a **side panel** that sits at the edge of the screen next to your other apps (Home → **Side panel**, the tray menu, or **Ctrl+Alt+Space**). It takes its strip of the screen like the taskbar does, so maximized windows end where it starts (Settings ⚙ in the panel: left or right side, or let it float over the other windows instead).
+
+- **Explain:** press **Box** and drag a rectangle, or **Circle** and draw around something freehand. The AI explains what you picked (a chart, an error, a word, a button), or answers the question you typed first. Ask follow-up questions in the same box. The screen freezes while you pick (Esc cancels); the AI gets the part you picked, plus the whole screen small with that place marked, so it knows which app it's in. Needs a model that can see pictures (qwen3-vl, gemma3, gemma4).
+- **Control my PC:** say what should happen ("open Notepad and write a shopping list"). The AI looks at the window in front (its picture and a numbered list of what can be clicked, from Windows' UI Automation), then clicks, types, presses keys, scrolls or opens programs, one step at a time, and looks again after each step, until it's done (at most 40 steps). Every step shows in the panel, with a short glow on the screen where it clicks. Needs a model that can use tools; one that can also see (qwen3-vl, gemma4) works much better.
+  - **Stop** any time with the Stop button or **Ctrl+Alt+X**. Keep your hands off the mouse while it works.
+  - Steps that send, post, buy, pay or delete wait for your **Allow**. Tick **Ask before every step** to approve each click and key.
+  - It never clicks on the panel itself, never types passwords (it asks you instead), and the panel never takes the keyboard while it works, so what it types goes to the app it works in.
+- Everything stays on this PC: the pictures go to the AI on your own PC through the host, nothing to any server.
+
 ## List: several requests in a row
 
 **List** (a tab of the side panel on the right, next to Browser, Agent and Code; the List button in the sidebar opens it) takes several requests at once and runs them **on the PC**, one after the other, for example a picture 3 times, then a text model writing about them. It keeps going when the website is closed or the phone sleeps. The results go into **the chat that is open** (they appear there as they come), or into a new chat if you pick *Into: a new chat*. While a list writes into a chat, that chat waits for it before you can write in it yourself. A chat kept only on this device gets a new chat on the PC instead.

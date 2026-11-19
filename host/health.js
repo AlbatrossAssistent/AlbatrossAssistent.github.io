@@ -25,13 +25,19 @@ function ollamaIssues(ps) {
   }
   return out;
 }
+// Graphics memory that Albatross itself holds (the chat model Ollama has loaded, the picture engine) is not a problem: a loaded
+// model is supposed to fill the card, and "it's full" would then only describe Albatross working. It only counts as full when
+// other programs take a real share of it, so a model can't fit next to them.
+const OURS = /^(ollama|ollama_llama_server|llama-server|python)$/i;
 function gpuIssues(g) {
   if (!g) return [];
   const out = [], pct = g.total ? g.used / g.total : 0;
-  if (pct >= 0.93) {
-    const who = (g.apps || []).slice(0, 3).map((a) => `${a.name} ${gb(a.mem)}`).join(", ");
-    const comfy = (g.apps || []).some((a) => /python|comfy/i.test(a.name) && a.mem > 1.5e9);
-    out.push({ id: "gpu-full", level: "warn", title: "Graphics memory is almost full", detail: `${gb(g.used)} of ${gb(g.total)} is in use${who ? " (" + who + ")" : ""}. New models then load slowly or run on the processor.`, ...(comfy ? { fix: { id: "free-gpu", label: "Free the picture engine's memory" } } : {}) });
+  const listed = (g.apps || []).filter((a) => OURS.test(a.name)).reduce((s, a) => s + (a.mem || 0), 0);
+  const ours = Math.min(g.used, Math.max(listed, (g.ollama || 0) + (g.comfy || 0)));
+  const others = g.used - ours;
+  if (pct >= 0.93 && others >= g.total * 0.25) {
+    const who = (g.apps || []).filter((a) => !OURS.test(a.name) && a.mem > 0).slice(0, 3).map((a) => `${a.name} ${gb(a.mem)}`).join(", ");
+    out.push({ id: "gpu-full", level: "warn", title: "Other programs fill the graphics memory", detail: `${gb(g.used)} of ${gb(g.total)} is in use, ${gb(others)} of it by other programs${who ? " (" + who + ")" : ""}${ours > 0.5e9 ? `; Albatross's own model takes ${gb(ours)}, which is normal` : ""}. New models then load slowly or run on the processor. Closing a game or another AI program frees it.` });
   }
   if (g.temp >= 87) out.push({ id: "gpu-hot", level: "warn", title: `The graphics card is hot (${g.temp} °C)`, detail: "It slows itself down to cool off. Check that the PC's fans are running and the vents are clear." });
   else if (g.throttle & 0x60) out.push({ id: "gpu-throttle", level: "warn", title: "The graphics card is holding back", detail: "Windows or the card is limiting its speed (heat or power). Answers will be slower than usual." });
@@ -52,6 +58,16 @@ function cpuIssues(pct, top) {
 }
 
 // --- gathering
+// Who holds how much graphics memory, from Windows itself (the "GPU Process Memory" counters). nvidia-smi can't say this on
+// Windows ([N/A] for every program), and Ollama's /api/ps doesn't always list a runner that is still holding a model.
+async function gpuByProcess() {
+  if (process.platform !== "win32") return [];
+  const ps = String.raw`$ErrorActionPreference = 'SilentlyContinue'; (Get-Counter '\GPU Process Memory(*)\Dedicated Usage').CounterSamples | Where-Object { $_.CookedValue -gt 50MB } | ForEach-Object { $id = [int]($_.InstanceName -replace '^pid_(\d+)_.*', '$1'); $p = Get-Process -Id $id; '' + $p.ProcessName + '|' + [int64]$_.CookedValue }`;
+  const out = await sh("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], 8000);
+  const by = {};
+  for (const line of out.split(/\r?\n/)) { const [name, mem] = line.trim().split("|"); if (name && +mem > 0) by[name] = (by[name] || 0) + +mem; }
+  return Object.entries(by).map(([name, mem]) => ({ name, mem })).sort((a, b) => b.mem - a.mem);
+}
 let lastCpu = null, lastResult = null, lastAt = 0, powerCache = { at: 0, v: "" };
 function cpuNow() {
   const t = os.cpus().reduce((a, c) => { for (const k in c.times) a.total += c.times[k]; a.idle += c.times.idle; return a; }, { total: 0, idle: 0 });
@@ -63,15 +79,21 @@ async function topProcesses(by) {
   return (await sh("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], 6000)).trim().split(/\r?\n/).filter(Boolean).join(", ");
 }
 async function gather() {
-  const [ps, gpuRaw, appsRaw] = await Promise.all([
+  const [ps, gpuRaw, appsRaw, comfyStats] = await Promise.all([
     fetch(OLLAMA + "/api/ps", { signal: AbortSignal.timeout(3000) }).then((r) => r.json()).catch(() => null),
+    // ComfyUI (the picture engine Albatross starts) says how much graphics memory it holds; nothing answers when it isn't running
     nvidia(["--query-gpu=memory.used,memory.total,temperature.gpu,clocks_throttle_reasons.active", "--format=csv,noheader,nounits"]),
     nvidia(["--query-compute-apps=process_name,used_memory", "--format=csv,noheader,nounits"]),
+    fetch((process.env.COMFY_URL || "http://127.0.0.1:8188").replace(/\/+$/, "") + "/system_stats", { signal: AbortSignal.timeout(1500) }).then((r) => r.json()).catch(() => null),
   ]);
   let gpu = null;
   const m = /^\s*(\d+),\s*(\d+),\s*(\d+),\s*(0x[0-9a-f]+|\d+)/i.exec(gpuRaw);
   if (m) gpu = { used: +m[1] * 1048576, total: +m[2] * 1048576, temp: +m[3], throttle: parseInt(m[4], m[4].startsWith("0x") ? 16 : 10) || 0,
-    apps: appsRaw.trim().split(/\r?\n/).map((l) => { const [n, mem] = l.split(/,\s*/); return { name: (n || "").split(/[\\/]/).pop().replace(/\.exe$/i, ""), mem: (+mem || 0) * 1048576 }; }).filter((a) => a.name).sort((a, b) => b.mem - a.mem) };
+    apps: appsRaw.trim().split(/\r?\n/).map((l) => { const [n, mem] = l.split(/,\s*/); return { name: (n || "").split(/[\\/]/).pop().replace(/\.exe$/i, ""), mem: (+mem || 0) * 1048576 }; }).filter((a) => a.name).sort((a, b) => b.mem - a.mem),
+    ollama: ((ps && ps.models) || []).reduce((s, x) => s + (Number(x.size_vram) || 0), 0),
+    comfy: ((comfyStats && comfyStats.devices) || []).reduce((s, d) => s + (Number(d.torch_vram_total) || 0), 0) };
+  // only worth asking when the card is nearly full
+  if (gpu && gpu.total && gpu.used / gpu.total >= 0.93) { const real = await gpuByProcess(); if (real.length) gpu.apps = real; }
   const mem = { free: os.freemem(), total: os.totalmem(), top: "" };
   if (mem.free < 1.2e9 || 1 - mem.free / mem.total > 0.94) mem.top = await topProcesses("mem");
   let disk = null;

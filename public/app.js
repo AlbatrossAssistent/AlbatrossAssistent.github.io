@@ -5662,6 +5662,8 @@ function setView(v, opt) {
   if ((v === "browser" || v === "agent") && window.sideClose) window.sideClose();   // the full-size page instead of the side panel
   if (v === "jarvis" && pcLocked) { ensureUnlocked("Jarvis").then(ok => ok && setView("jarvis", opt)); return; }
   const wasHome = document.body.classList.contains("home-view");
+  // remembered, so the next start opens here again instead of on Home (only places that make sense to come back to)
+  if (!(opt && opt.restoring)) store.set("lastView", ["home", "chat", "notes", "mail", "hub", "monitor"].includes(v) ? v : "chat");
   document.body.classList.toggle("home-view", v === "home");
   if (wasHome && v !== "home") setTimeout(() => window.wallAnim && window.wallAnim.enter(), 0);
   document.body.classList.toggle("jarvis-view", v === "jarvis");
@@ -5692,7 +5694,7 @@ function setView(v, opt) {
 }
 const isHome = () => document.body.classList.contains("home-view");
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
-let homeJarvisRaf = 0, homeAgent = null;
+let homeJarvisRaf = 0;
 function startHomeJarvis(canvas) {
   cancelAnimationFrame(homeJarvisRaf);
   if (!window.createOrb) return;
@@ -5706,112 +5708,150 @@ function startHomeJarvis(canvas) {
   };
   homeJarvisRaf = requestAnimationFrame(frame);
 }
+// Home is a hub: no sidebars, no top bar, just everything Albatross can do, in groups, and a box to ask the AI right away.
 function renderHome() {
   const name = !guestMode && S.files.name ? ", " + S.files.name : "";
   const home = $("#home");
+  const svg = (d) => `<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
   const I = {
-    beam: '<svg class="i" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-8-8-4z"/></svg>',
-    connect: '<svg class="i" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
-    pc: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/></svg>',
-    jarvis: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/></svg>',
-    install: '<svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>',
-    guest: '<svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-    print: '<svg class="i" viewBox="0 0 24 24"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7zM17 11h.01"/></svg>',
+    image: TYPE_ICON.image || svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
+    beam: svg('<path d="M21 3L10 14M21 3l-7 18-4-8-8-4z"/>'),
+    connect: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
+    pc: svg('<rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4"/>'),
+    power: svg('<path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/>'),
+    jarvis: svg('<circle cx="12" cy="12" r="9"/><path d="M9 10.5v2M15 10.5v2" stroke-width="2.4"/>'),
+    install: svg('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
+    guest: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+    print: svg('<path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7z"/>'),
+    browser: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
+    code: svg('<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>'),
+    hub: svg('<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>'),
+    monitor: svg('<rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/>'),
+    mail: svg('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>'),
+    notes: svg('<path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/>'),
+    list: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 5.5l1 1 2-2M4 11.5l1 1 2-2M4 17.5l1 1 2-2"/>'),
+    panel: svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M15 4v16"/><path d="M6.5 9.5c0-1.4 1.5-2.5 3.2-2.5s3 1.1 3 2.5-1.4 2.5-3 2.5" stroke-dasharray="2 1.8"/><path d="M7 15l2 2 3.5-4"/>'),
+    cc: svg('<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>'),
+    search: svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
+    settings: ($("#openSettings svg") || {}).outerHTML || svg('<circle cx="12" cy="12" r="3"/>'),
   };
-  const online = connected ? (remotePC() ? "Online · power and status" : "This PC · power and status") : "Not connected";
-  const allTiles = [
-    ["chat", TYPE_ICON.chat, "Chat", "Ask, write, plan, code, draw"],
-    ["beam", I.beam, "Beam", "Send files to your devices and contacts"],
-    ["connect", I.connect, "Connect", "Use a PC with its code"],
-    ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected"],
-    ["power", '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>', "Power", "Sleep, shut down, turn on"],
-    ["guest", I.guest, "Guest mode", "Guest code & AI recaps of guest chats"],
-    ["browser", '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>', "Browser", "Chrome on your PC, on any device"],
-    ["codeplayer", '<svg class="i" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>', "Code player", "Run HTML and JavaScript"],
-    ["pcfiles", ICON_FILES, "PC files", "Code projects, pictures, received files"],
-    ["jarvis", I.jarvis, "Jarvis", "Your assistant on the PC"],
-    ["hub", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>', "Hub", "Big buttons to control your PC: media, programs, Jarvis"],
-    ["monitor", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/></svg>', "Monitor", "A picture or video full screen on your PC's screen"],
-    ["mail", '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>', "Mail", "Read, write and answer your mail"],
-    ["print", I.print, "Print a file", "Choose a file and a printer, then print"],
-    ["notes", '<svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/></svg>', "Notes", "Lists, to-dos and thoughts"],
-    ["settings", $("#openSettings svg").outerHTML, "Settings", "Models, tools, look"],
+  const desk = !!window.albatrossDesktop, panelOk = desk && !!window.albatrossDesktop.openPanel;
+  // [key, icon, title, what it does, only for: "" | "owner" (not guests) | "desk" (the Windows app)]
+  const groups = [
+    ["Talk & create", "#0A84FF", [
+      ["chat", TYPE_ICON.chat, "Chat", "Ask, write, plan, code; it can work on your PC"],
+      ["image", I.image, "New picture", "Describe it, the AI draws it"],
+      ["jarvis", I.jarvis, "Jarvis", "Talk to your assistant out loud", "owner"],
+      ["notes", I.notes, "Notes", "Lists, to-dos and thoughts", "owner"],
+      ["mail", I.mail, "Mail", "Read, write and answer mail", "owner"],
+      ["list", I.list, "List", "Several requests in a row, on the PC", "owner"],
+      ["codeplayer", I.code, "Code player", "Run HTML and JavaScript"],
+    ]],
+    ["Your PC", "#FF9F0A", [
+      ["sidepanel", I.panel, "Side panel", "Circle anything on screen to have it explained, or let the AI control the PC", "desk"],
+      ["hub", I.hub, "Hub", "Big buttons: media, volume, programs", "owner"],
+      ["monitor", I.monitor, "Monitor", "A picture or video full screen on the PC", "owner"],
+      ["browser", I.browser, "Browser", "Chrome on your PC, from any device", "owner"],
+      ["pcfiles", ICON_FILES, "PC files", "Projects, pictures, received files", "owner"],
+      ["print", I.print, "Print", "A file on one of your printers", "owner"],
+      ["beam", I.beam, "Beam", "Send files to your devices and contacts", "owner"],
+      ["pcstatus", I.pc, "PC status", connected ? "Load, graphics card, network" : "Not connected", "owner"],
+      ["power", I.power, "Power", "Sleep, shut down, turn on", "owner"],
+    ]],
+    ["Connections & setup", "#30D158", [
+      ["connect", I.connect, "Connect", "Use a PC with its code"],
+      ["guest", I.guest, "Guest mode", "A guest code and recaps of guest chats", "owner"],
+      ["cc", I.cc, "Control center", "Host, models, start at boot", "desk"],
+      ["settings", I.settings, "Settings", "Models, tools, look"],
+      ["install", I.install, "Get the app", "On your phone, tablet or PC"],
+    ]],
   ];
-  if (!isAppWindow()) allTiles.push(["install", I.install, "Get the app", "On your phone, tablet or PC"]);
-  const tiles = guestMode ? allTiles.filter(([k]) => ["chat", "connect", "codeplayer", "settings", "install"].includes(k)) : allTiles;
-  const quickKeys = guestMode ? ["chat", "connect"] : ["beam", "mail", "print", "notes"];
-  const quickTiles = tiles.filter(([k]) => quickKeys.includes(k));
-  const moreTiles = tiles.filter(([k]) => !quickKeys.includes(k));
-  const guestNotice = guestMode ? `<div class="guest-banner" style="margin:0 0 18px;border-radius:14px"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span><b>Guest mode</b> · Private &amp; PC items are off. After each chat, the AI writes a recap for the PC's owner including every file made by the PC (never files you attach). <b>Generated pictures are saved on the host PC and can be seen by its owner.</b></span></div>` : "";
-  home.innerHTML = `<div class="home-world">
-    <div class="home-hero"><canvas class="home-jarvis" aria-hidden="true"></canvas>${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}<span class="home-kicker">${guestMode ? "CONNECTED TO YOUR AI" : "YOUR OWN AI · YOUR OWN PC"}</span><h1></h1><p>${guestMode ? "A little space to think, make, and explore with this PC's AI." : "A private world for thinking, making, and getting things done. AI when you want it. You in control, always."}</p><div class="home-hero-actions"><button class="home-cta" data-go="chat">${TYPE_ICON.chat}<span>Start a conversation</span><b aria-hidden="true">→</b></button><button class="home-cta manual-jump" type="button" data-scroll="homeManual"><span>Manual tools</span><b aria-hidden="true">↓</b></button></div></div>
+  const show = ([k, , , , only]) => (only === "desk" ? !guestMode && (k === "sidepanel" ? panelOk : desk) : only === "owner" ? !guestMode : k === "install" ? !isAppWindow() : true);
+  const tile = ([k, ic, t, sub]) => `<button class="hh-tile" type="button" data-go="${k}"><span class="hh-ic">${ic}</span><span class="hh-tx"><strong>${esc(t)}</strong><small>${esc(sub)}</small></span></button>`;
+  const guestNotice = guestMode ? `<div class="hh-note"><b>Guest mode</b> · Private &amp; PC items are off. After each chat, the AI writes a recap for the PC's owner, including every file made by the PC (never files you attach). <b>Generated pictures are saved on the host PC and can be seen by its owner.</b></div>` : "";
+  home.innerHTML = `<div class="hh">
+    <header class="hh-top">
+      <span class="hh-brand">${LOGO.replace("<svg ", '<svg aria-hidden="true" ')}Albatross</span>
+      <button class="hh-status" type="button" data-go="${guestMode ? "connect" : "pcstatus"}" title="Connection"><span class="dot"></span><span class="hh-st"></span></button>
+      <span class="hh-sp"></span>
+      <button class="hh-icon" type="button" data-go="search" title="Search chats" aria-label="Search chats">${I.search}</button>
+      <button class="hh-icon" type="button" data-go="settings" title="Settings" aria-label="Settings">${I.settings}</button>
+    </header>
+    <section class="hh-hero">
+      <canvas class="home-jarvis" aria-hidden="true"></canvas>
+      <span class="hh-kicker"></span>
+      <h1>What shall we do?</h1>
+      <form class="hh-ask" autocomplete="off">
+        <textarea rows="1" placeholder="${guestMode ? "Ask this PC's AI anything…" : "Ask anything, or tell it what to do on your PC…"}" aria-label="Ask Albatross"></textarea>
+        <button type="submit" class="hh-send" aria-label="Start the chat" title="Start the chat"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      </form>
+      <div class="hh-recent" id="homeRecent"></div>
+    </section>
     ${guestNotice}
-    <section class="home-section manual-section" id="homeManual">
-      <div class="home-section-head"><div><span class="home-kicker">YOUR TOOLS · YOUR CALL</span><h2>${guestMode ? "Quick starts" : "Do it yourself, or ask the AI."}</h2></div><p>${guestMode ? "Choose a tool to continue." : "Take every step yourself with a tool, or tell the Agent and it does it for you."}</p></div>
-      <div class="${guestMode ? "" : "manual-split"}"><div class="home-actions">${quickTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div>${guestMode ? "" : '<div id="homeAiSlot"></div>'}</div>
+    ${groups.map(([title, color, items]) => { const list = items.filter(show); return list.length ? `<section class="hh-group" style="--g:${color}"><h2>${esc(title)}</h2><div class="hh-grid">${list.map(tile).join("")}</div></section>` : ""; }).join("")}
+    <section class="hh-cards">
+      <div class="home-card hh-card"><h3>At a glance</h3><div id="homeStatus"></div></div>
+      ${desk ? `<div class="home-card hh-card desk-card"><h3>This PC</h3><p>The host, Ollama and the control center are part of this app.</p><div class="row"><button class="btn primary small" type="button" data-desk="cc">Control center</button><button class="btn small" type="button" data-desk="upd">Check for updates</button></div><small class="desk-ver" id="deskVer"></small></div>` : ""}
     </section>
-    <section class="home-feature" aria-label="AI modes">
-      <div class="home-feature-copy"><span class="home-kicker">YOUR PRIVATE AI SPACE</span><h2>Dream it.<br>Make it real.</h2><p>Chat, create, and let the AI work on your PC: files, mail, the web, code. You approve anything that matters.</p></div>
-      <div class="home-feature-actions">
-        <button class="home-feature-btn primary" data-go="chat"><span class="hi">${TYPE_ICON.chat}</span><span><strong>Open AI chat</strong><small>Ask, write, plan, code or create</small></span><b aria-hidden="true">→</b></button>
-      </div>
-    </section>
-    <div class="home-grid">
-      ${window.albatrossDesktop ? `<div class="home-card desk-card"><h3>This PC</h3><p>Albatross runs on this PC: the host, Ollama and the control center are part of this app.</p><div class="row"><button class="btn primary small" type="button" data-desk="cc">Control center</button><button class="btn small" type="button" data-desk="upd">Check for updates</button></div><small class="desk-ver" id="deskVer"></small></div>` : ""}
-      <div class="home-card"><h3>At a glance</h3><div id="homeStatus"></div></div>
-      <div class="home-card"><h3>Recent conversations</h3><div class="recent" id="homeRecent"></div></div>
-    </div>
-    <details class="home-more" open><summary>More to explore</summary><div class="home-actions">${moreTiles.map(([k, ic, t, sub]) => `<button class="home-action" data-go="${k}"><span class="hi">${ic}</span><strong>${t}</strong><small>${esc(sub)}</small></button>`).join("")}</div></details>
   </div>`;
-  home.querySelector(".home-hero h1").innerHTML = "Your ideas.<br><span>Your universe.</span>";
-  home.querySelector(".home-hero .home-kicker").textContent = greeting() + name + " · YOUR OWN AI";
+  home.querySelector(".hh-kicker").textContent = greeting() + name;
   startHomeJarvis(home.querySelector(".home-jarvis"));
-  // the Agent chat next to the manual tools: made once and moved into each new Home, so a running request keeps going
-  const aiSlot = home.querySelector("#homeAiSlot");
-  if (aiSlot && window.agentPanel) {
-    if (!homeAgent) homeAgent = window.agentPanel(document.createElement("div"), { title: "Ask Albatross", sub: "It can write and send mail, print, sort files and look things up. Sending and printing wait for your OK.", placeholder: "What should it do?", ideas: ["Sum up my unread mail", "Write a mail to … that says …", "Print the newest PDF I sent to my PC"] });
-    aiSlot.replaceWith(homeAgent.root);
-  }
-  home.querySelector("[data-scroll='homeManual']").onclick = () => $("#homeManual").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  if (desk) wireDeskCard(home);
+  // the box: what you type becomes a new chat
+  const form = home.querySelector(".hh-ask"), ta = form.querySelector("textarea");
+  ta.oninput = () => { ta.style.height = "auto"; ta.style.height = Math.min(180, ta.scrollHeight) + "px"; ta.style.overflowY = ta.scrollHeight > 180 ? "auto" : "hidden"; };
+  ta.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const text = ta.value.trim();
+    newChat("chat", "", false); setView("chat");
+    if (!text) { setTimeout(() => $("#prompt").focus(), 30); return; }
+    const p = $("#prompt"); p.value = text; p.dispatchEvent(new Event("input", { bubbles: true }));
+    setTimeout(() => $("#send").click(), 30);
+  };
   const jvTile = home.querySelector('[data-go="jarvis"]'); if (jvTile) jvTile.dataset.needsPc = "1";
-  if (window.albatrossDesktop) wireDeskCard(home);
   home.querySelectorAll("[data-go]").forEach(b => (b.onclick = () => {
     const g = b.dataset.go;
     if (g === "chat") { newChat("chat", "", false); setView("chat"); }
+    else if (g === "image") { newChat("image", "", false); setView("chat"); }
+    else if (g === "search") { setView("chat"); $("#sidebar").classList.add("open"); setTimeout(() => $("#search").focus(), 60); }
+    else if (g === "sidepanel") { window.albatrossDesktop.openPanel(); toast("The side panel is open at the edge of your screen (Ctrl+Alt+Space)"); }
+    else if (g === "cc") openControlCenter();
+    else if (g === "list") $("#goList").click();
     else if (g === "beam") openFiles();
     else if (g === "connect") openConnect();
     else if (g === "pcstatus") setView("pc", { tab: "status" });
     else if (g === "power") setView("pc", { tab: "power" });
     else if (g === "guest") setView("pc", { tab: "guest" });
     else if (g === "jarvis") setView("jarvis");
-    else if (g === "agent") { setView("chat"); newChat("chat"); }
     else if (g === "print") openPrint();
     else if (g === "notes") setView("notes");
     else if (g === "mail") setView("mail");
     else if (g === "hub") setView("hub");
     else if (g === "monitor") setView("monitor");
     else if (g === "browser") setView("browser");
-    else if (g === "codeplayer") {
-      if (guestMode) { setView("chat"); window.codeSide && window.codeSide("html", "<!doctype html>\n<html>\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h1>Hello!</h1>\n</body>\n</html>", true, { name: "index.html" }); }
-      else { setView("chat"); window.codeSide && window.codeSide("html", "<!doctype html>\n<html>\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h1>Hello!</h1>\n</body>\n</html>", true, { name: "index.html" }); }
-    }
+    else if (g === "codeplayer") { setView("chat"); window.codeSide && window.codeSide("html", "<!doctype html>\n<html>\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h1>Hello!</h1>\n</body>\n</html>", true, { name: "index.html" }); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
     else if (g === "install") openInstall();
     else openSettings();
   }));
+  // the last few chats, as chips under the box
   const rec = $("#homeRecent");
-  const list = chats.filter(c => c.messages.length).sort((a, b) => b.updated - a.updated).slice(0, 6);
-  if (!list.length) rec.innerHTML = '<div class="empty-note">No chats yet. Start one above.</div>';
+  const list = chats.filter(c => c.messages.length).sort((a, b) => b.updated - a.updated).slice(0, 5);
+  if (list.length) rec.insertAdjacentHTML("beforeend", '<span class="hh-rl">Continue</span>');
   for (const c of list) {
-    const b = document.createElement("button");
+    const b = document.createElement("button"); b.type = "button";
     b.innerHTML = `<span class="ti">${chatType(c) === "image" ? TYPE_ICON.image : TYPE_ICON.chat}</span><span class="tt"></span><small></small>`;
     b.querySelector(".tt").textContent = c.title; b.querySelector("small").textContent = ago(c.updated);
     b.onclick = () => openChat(c);
     rec.appendChild(b);
   }
   renderHomeStatus();
+  setTimeout(() => { if (isHome() && !matchMedia("(pointer: coarse)").matches) ta.focus({ preventScroll: true }); }, 60);
 }
 function renderHomeStatus() {
+  // the connection pill at the top of Home follows the same status
+  const st = document.querySelector(".hh-status"); if (st) { st.querySelector(".dot").className = "dot " + $("#dot").className.replace("dot", "").trim(); st.querySelector(".hh-st").textContent = $("#statusText").textContent; }
   const el = $("#homeStatus"); if (!el) return;
   const rows = [
     ["AI", $("#dot").className.replace("dot", "").trim(), $("#statusText").textContent],
@@ -7298,8 +7338,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-18.1";
+const APP_VERSION = "2026-11-19.1";
 const WHATS_NEW = [
+  ["2026-11-19.1", ["Home is now a hub: no sidebars, a box to ask the AI right away, and every tool in groups","Albatross opens where you left it instead of on Home every time","Windows app: a side panel next to your apps that explains anything you box or circle on the screen, or controls the PC for you (Ctrl+Alt+Space)","The slowdown warning no longer says graphics memory is full when it's only Albatross's own loaded model"]],
   ["2026-11-18.1", ["The AI can now upload and download files in the browser, choose from dropdowns, and press keys"]],
   ["2026-11-17.3", ["Z-Image Turbo is installed and becomes the model for new pictures (it fits the graphics card whole, so it's much quicker); edits still use Qwen Image. Change it in Settings → Image."]],
   ["2026-11-17.2", ["Pictures work again in the Windows app: it couldn't find the picture engine (ComfyUI) from its install folder, so your image model didn't show."]],
@@ -7499,7 +7540,11 @@ if (!(store.get("termsAccepted", "") >= TERMS_VERSION)) {   // ISO dates: accept
   $("#termsGo").onclick = () => { store.set("termsAccepted", TERMS_VERSION); store.set("termsAcceptedAt", new Date().toISOString()); d.close(); };
   setTimeout(() => d.showModal(), S.intro ? 3400 : 300);
 }
-setView("home");
+// Albatross opens where you left it (the chat you were in, Notes, Mail ...), not on Home every time; Home is one click away.
+// Only the very first start, or when there's nothing to come back to, shows Home.
+{ const last = store.get("lastView", "home");
+  if (last === "chat" && !(current && current.messages && current.messages.length) && !chats.some((c) => c.messages.length)) setView("home", { restoring: true });
+  else setView(["home", "chat", "notes", "mail", "hub", "monitor"].includes(last) ? last : "home", { restoring: true }); }
 // the Chrome sidebar starts in a sidebar chat (never in one of the normal app's chats)
 if (window.EMBED_CHROME && (!current || current.src !== "chrome")) newChat("chat");
 { const go = new URLSearchParams(location.search).get("go");

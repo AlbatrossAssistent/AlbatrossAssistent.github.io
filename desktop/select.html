@@ -1,0 +1,126 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Albatross select</title>
+<!-- The selection overlay: a still picture of this display, dimmed. Drag a box, or draw a circle freehand around what you mean.
+     The part you picked is cut out of the still picture right here (so it is exactly what you saw) and handed to the side panel. -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; cursor: crosshair; user-select: none; -webkit-user-select: none; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  #shot { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #dim { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+  .hint { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 6px; border-radius: 999px;
+    background: rgba(22, 24, 30, .9); color: #f4f5f8; font-size: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); border: 1px solid rgba(255, 255, 255, .14); cursor: default; z-index: 2; }
+  .hint button { font: inherit; border: 0; border-radius: 999px; padding: 7px 14px; background: transparent; color: inherit; cursor: pointer; display: flex; gap: 7px; align-items: center; }
+  .hint button:hover { background: rgba(255, 255, 255, .1); }
+  .hint button.on { background: #0a84ff; color: #fff; }
+  .hint svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .hint kbd { font: inherit; font-size: 11px; opacity: .7; border: 1px solid currentColor; border-radius: 5px; padding: 0 5px; }
+  .hint .sep { width: 1px; height: 20px; background: rgba(255, 255, 255, .16); }
+  .hint .esc { opacity: .75; padding: 0 10px 0 4px; }
+  body.drawing .hint { opacity: .25; pointer-events: none; transition: opacity .2s; }
+</style>
+<body>
+<canvas id="shot"></canvas>
+<canvas id="dim"></canvas>
+<div class="hint" id="hint">
+  <button type="button" data-mode="box"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2" stroke-dasharray="3 2.5"/></svg>Box <kbd>B</kbd></button>
+  <button type="button" data-mode="lasso"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7" stroke-dasharray="2.5 2.2"/><path d="M15.2 19.8l4.6-4.6 1.8 1.8-4.6 4.6h-1.8z"/></svg>Circle <kbd>C</kbd></button>
+  <span class="sep"></span><span class="esc">Esc to cancel</span>
+</div>
+<script>
+const shot = document.getElementById("shot"), dim = document.getElementById("dim"), hint = document.getElementById("hint");
+const sctx = shot.getContext("2d"), dctx = dim.getContext("2d");
+let img = null, mode = "box", ratio = 1, pts = [], down = false, start = null, cur = null;
+
+function setMode(m) { mode = m; for (const b of hint.querySelectorAll("button")) b.classList.toggle("on", b.dataset.mode === m); reset(); }
+for (const b of hint.querySelectorAll("button")) b.onclick = (e) => { e.stopPropagation(); setMode(b.dataset.mode); };
+hint.addEventListener("pointerdown", (e) => e.stopPropagation());
+function size() {
+  const W = innerWidth, H = innerHeight, d = devicePixelRatio || 1;
+  for (const c of [shot, dim]) { c.width = Math.round(W * d); c.height = Math.round(H * d); }
+  sctx.setTransform(d, 0, 0, d, 0, 0); dctx.setTransform(d, 0, 0, d, 0, 0);
+  if (img) sctx.drawImage(img, 0, 0, W, H);
+  paint();
+}
+function reset() { pts = []; start = cur = null; down = false; document.body.classList.remove("drawing"); paint(); }
+function path(ctx) {
+  ctx.beginPath();
+  if (mode === "box" && start && cur) ctx.rect(Math.min(start.x, cur.x), Math.min(start.y, cur.y), Math.abs(cur.x - start.x), Math.abs(cur.y - start.y));
+  else if (mode === "lasso" && pts.length > 1) { ctx.moveTo(pts[0].x, pts[0].y); for (const p of pts) ctx.lineTo(p.x, p.y); if (!down) ctx.closePath(); }
+}
+function paint() {
+  const W = innerWidth, H = innerHeight;
+  dctx.clearRect(0, 0, W, H);
+  dctx.fillStyle = "rgba(0, 0, 0, .42)"; dctx.fillRect(0, 0, W, H);
+  const has = (mode === "box" && start && cur) || (mode === "lasso" && pts.length > 1);
+  if (!has) return;
+  // the picked part shows bright, the rest stays dim
+  dctx.save(); path(dctx); dctx.closePath(); dctx.globalCompositeOperation = "destination-out"; dctx.fillStyle = "#000"; dctx.fill(); dctx.restore();
+  dctx.save(); path(dctx); dctx.lineWidth = 2.5; dctx.strokeStyle = "#0a84ff"; dctx.shadowColor = "rgba(10, 132, 255, .8)"; dctx.shadowBlur = 10; dctx.stroke(); dctx.restore();
+}
+addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  down = true; document.body.classList.add("drawing");
+  start = cur = { x: e.clientX, y: e.clientY }; pts = [start];
+  dim.setPointerCapture?.(e.pointerId);
+  paint();
+});
+addEventListener("pointermove", (e) => {
+  if (!down) return;
+  cur = { x: e.clientX, y: e.clientY };
+  if (mode === "lasso") { const l = pts[pts.length - 1]; if (Math.hypot(cur.x - l.x, cur.y - l.y) > 2) pts.push(cur); }
+  paint();
+});
+addEventListener("pointerup", (e) => {
+  if (!down) return;
+  down = false;
+  const box = bounds();
+  if (!box || box.w < 8 || box.h < 8) { reset(); return; }   // a click, not a selection: try again
+  paint(); finish(box);
+});
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape") window.albatrossSelect.cancel();
+  else if (e.key === "b" || e.key === "B") setMode("box");
+  else if (e.key === "c" || e.key === "C") setMode("lasso");
+});
+addEventListener("resize", size);
+addEventListener("contextmenu", (e) => { e.preventDefault(); window.albatrossSelect.cancel(); });
+
+function bounds() {
+  const list = mode === "box" ? (start && cur ? [start, cur] : []) : pts;
+  if (list.length < 2) return null;
+  const xs = list.map((p) => p.x), ys = list.map((p) => p.y);
+  const x = Math.max(0, Math.min(...xs)), y = Math.max(0, Math.min(...ys));
+  return { x, y, w: Math.min(innerWidth, Math.max(...xs)) - x, h: Math.min(innerHeight, Math.max(...ys)) - y };
+}
+// cut the picked part out of the still picture: full detail for the box; for a circle, what lies outside it is faded, and the line
+// you drew stays visible, so the AI sees exactly what you meant. Plus the whole screen, small, with the place marked, for context.
+function finish(box) {
+  const pad = mode === "lasso" ? 10 : 0;
+  const bx = Math.max(0, box.x - pad), by = Math.max(0, box.y - pad), bw = Math.min(innerWidth - bx, box.w + pad * 2), bh = Math.min(innerHeight - by, box.h + pad * 2);
+  const sx = bx * ratio, sy = by * ratio, sw = bw * ratio, sh = bh * ratio;
+  const k = Math.min(1, 1600 / Math.max(sw, sh));
+  const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+  const g = c.getContext("2d");
+  g.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  if (mode === "lasso") {
+    const s = (p) => ({ x: (p.x - bx) * ratio * k, y: (p.y - by) * ratio * k });
+    const lp = () => { g.beginPath(); const p0 = s(pts[0]); g.moveTo(p0.x, p0.y); for (const p of pts) { const q = s(p); g.lineTo(q.x, q.y); } g.closePath(); };
+    g.save(); g.beginPath(); g.rect(0, 0, c.width, c.height); lp(); g.fillStyle = "rgba(255, 255, 255, .62)"; g.fill("evenodd"); g.restore();
+    g.save(); lp(); g.lineWidth = Math.max(2, 3 * k * ratio); g.strokeStyle = "#ff2d55"; g.stroke(); g.restore();
+  }
+  const ck = Math.min(1, 1280 / img.width);
+  const ctxC = document.createElement("canvas"); ctxC.width = Math.round(img.width * ck); ctxC.height = Math.round(img.height * ck);
+  const cg = ctxC.getContext("2d"); cg.drawImage(img, 0, 0, ctxC.width, ctxC.height);
+  const f = ratio * ck; cg.lineWidth = 3; cg.strokeStyle = "#ff2d55";
+  if (mode === "lasso") { cg.beginPath(); cg.moveTo(pts[0].x * f, pts[0].y * f); for (const p of pts) cg.lineTo(p.x * f, p.y * f); cg.closePath(); cg.stroke(); }
+  else cg.strokeRect(box.x * f, box.y * f, box.w * f, box.h * f);
+  const b64 = (cv, q) => cv.toDataURL("image/jpeg", q).split(",")[1];
+  window.albatrossSelect.done({ mode, crop: b64(c, .9), context: b64(ctxC, .8), thumb: c.toDataURL("image/jpeg", .8), w: c.width, h: c.height,
+    rect: { x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.w), h: Math.round(box.h) } });
+}
+window.albatrossSelect.onStart((info) => {
+  const im = new Image();
+  im.onload = () => { img = im; ratio = im.width / innerWidth; size(); setMode(info.mode === "lasso" ? "lasso" : "box"); };
+  im.src = info.image;
+});
+</script>

@@ -33,7 +33,7 @@ public class SL {
   }
 }
 "@
-$skipTitles = @('Program Manager', 'Windows Input Experience', 'NVIDIA GeForce Overlay', 'Microsoft Text Input Application', 'Settings Window', 'Albatross overlay', 'Albatross warning')
+$skipTitles = @('Program Manager', 'Windows Input Experience', 'NVIDIA GeForce Overlay', 'Microsoft Text Input Application', 'Settings Window', 'Albatross overlay', 'Albatross warning', 'Albatross panel', 'Albatross select')
 $skipProcs = @('Albatross', 'TextInputHost', 'SearchHost', 'StartMenuExperienceHost', 'ShellExperienceHost', 'LockApp')
 $procCache = @{}
 function Proc-Name([uint32]$id) { if (-not $procCache.ContainsKey($id)) { $procCache[$id] = try { (Get-Process -Id $id -ErrorAction Stop).ProcessName } catch { '' } }; return $procCache[$id] }
@@ -65,7 +65,7 @@ $b64 = [Convert]::ToBase64String($ms.ToArray()); $ms.Dispose()
 $json = Get-Elements $pick.H $Limit | Out-String
 $els = @(); if ($json.Trim()) { $parsed = ConvertFrom-Json $json; $els = @($parsed) }
 Write-Output (ConvertTo-Json -Compress -Depth 6 -InputObject @{
-  window = @{ title = $pick.Title; proc = $pick.Proc; x = $x0; y = $y0; w = $w; h = $h }
+  window = @{ hwnd = $pick.H; title = $pick.Title; proc = $pick.Proc; x = $x0; y = $y0; w = $w; h = $h }
   screen = @{ w = $sw; h = $sh }
   image = @{ b64 = $b64; w = $tw; h = $th; scale = $scale }
   elements = $els

@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("albatrossDesktop", {
   screenLook: (opts) => ipcRenderer.invoke("screen-look", opts),
   screenShow: (items, seconds) => ipcRenderer.invoke("screen-show", items, seconds),
   screenClear: () => ipcRenderer.invoke("screen-clear"),
+  // the side panel next to your other apps: explain what you pick on the screen, or let the AI control the PC
+  openPanel: () => ipcRenderer.invoke("panel-open"),
   // the slowdown warning in front of other apps
   healthPopup: () => ipcRenderer.invoke("health-get"),
   setHealthPopup: (on) => ipcRenderer.invoke("health-set", !!on),});

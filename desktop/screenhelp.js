@@ -29,7 +29,7 @@ function create({ BrowserWindow, screen, scriptDir, assetsDir, log = () => {} })
         const elements = (j.elements || []).map((e, i) => ({ n: i + 1, kind: KIND[e.t] || String(e.t || "").toLowerCase(), name: String(e.n || ""), x: e.x, y: e.y, w: e.w, h: e.h, px: e.px, py: e.py, src: e.s || "ui", actions: e.a || "" }));
         lastLook = { at: Date.now(), window: j.window, screen: j.screen, elements };
         const list = elements.map((e) => `${e.n} ${e.kind} '${e.name.replace(/\s+/g, " ").slice(0, 60) || "(no name)"}'${e.src === "ocr" ? " (read from the screen)" : ""}`).join("; ");
-        resolve({ ok: true, title: j.window.title, proc: j.window.proc, rect: j.window, image: j.image, elements, list });
+        resolve({ ok: true, title: j.window.title, proc: j.window.proc, hwnd: j.window.hwnd || 0, rect: j.window, image: j.image, elements, list });
       });
     });
   }

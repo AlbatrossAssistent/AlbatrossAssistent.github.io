@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Albatross panel</title>
+<!-- The side panel ("monitor tool"). Explain: pick a part of the screen with a box or a freehand circle, and the AI explains it or answers
+     your question about it. Control: the AI works the mouse and keyboard on your PC until the task is done. -->
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --fg: #0b0c0f; --muted: #5d6573; --line: rgba(0, 0, 0, .09); --soft: rgba(0, 0, 0, .045); --soft2: rgba(0, 0, 0, .07);
+    --accent: #007aff; --accent-fg: #fff; --accent-soft: rgba(0, 122, 255, .11); --ok: #1fa855; --warn: #c98a0b; --bad: #d93a2b; --shadow: 0 8px 26px rgba(20, 30, 50, .10);
+    --code: rgba(0, 0, 0, .05); color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0c0f; --panel: #15171c; --fg: #f3f4f6; --muted: #a0a6b2; --line: rgba(255, 255, 255, .10); --soft: rgba(255, 255, 255, .055); --soft2: rgba(255, 255, 255, .09);
+      --accent: #0a84ff; --accent-soft: rgba(10, 132, 255, .18); --ok: #3ddc84; --warn: #f2c14e; --bad: #ff6b5e; --shadow: 0 10px 30px rgba(0, 0, 0, .4); --code: rgba(255, 255, 255, .07); color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; border-left: 1px solid var(--line); }
+  body.left { border-left: 0; border-right: 1px solid var(--line); }
+  button, select, textarea, input { font: inherit; color: inherit; }
+  svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* the bar at the top: drag the panel? no, it is docked; it just carries the name and the window buttons */
+  .top { display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px 14px; -webkit-app-region: drag; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; letter-spacing: -.01em; flex: 1; min-width: 0; }
+  .brand .logo { width: 22px; height: 22px; display: grid; place-items: center; color: var(--fg); flex: none; }
+  .brand .logo svg { width: 22px; height: 22px; }
+  .wbtn { -webkit-app-region: no-drag; width: 30px; height: 30px; border: 0; border-radius: 9px; background: transparent; display: grid; place-items: center; cursor: pointer; color: var(--muted); }
+  .wbtn:hover { background: var(--soft2); color: var(--fg); }
+  .wbtn.x:hover { background: #e5484d; color: #fff; }
+  .wbtn svg.i { width: 16px; height: 16px; }
+
+  .seg { display: flex; gap: 4px; margin: 2px 12px 10px; padding: 4px; border-radius: 12px; background: var(--soft); }
+  .seg button { flex: 1; border: 0; border-radius: 9px; padding: 7px 8px; background: transparent; cursor: pointer; display: flex; gap: 7px; align-items: center; justify-content: center; font-weight: 550; color: var(--muted); }
+  .seg button.on { background: var(--panel); color: var(--fg); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+  .seg button svg.i { width: 16px; height: 16px; }
+
+  .modelrow { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; font-size: 12.5px; color: var(--muted); }
+  .modelrow select { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--panel); border-radius: 9px; padding: 5px 8px; font-size: 12.5px; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--soft2); white-space: nowrap; }
+  .tag.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 12px; scrollbar-width: thin; }
+
+  /* Explain: the two ways to pick */
+  .pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 14px; }
+  .pick button { border: 1px solid var(--line); background: var(--panel); border-radius: 16px; padding: 18px 12px 14px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; box-shadow: var(--shadow); transition: transform .12s, border-color .12s; }
+  .pick button:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .pick button svg.i { width: 34px; height: 34px; stroke-width: 1.6; color: var(--accent); }
+  .pick b { font-weight: 600; }
+  .pick small { color: var(--muted); font-size: 12px; text-align: center; line-height: 1.35; }
+  .intro h2 { font-size: 19px; letter-spacing: -.02em; margin: 6px 0 4px; }
+  .intro p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+  .ideas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .ideas button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 11px; cursor: pointer; font-size: 12.5px; color: var(--muted); }
+  .ideas button:hover { color: var(--fg); border-color: var(--accent); }
+
+  .msg { margin: 10px 0; }
+  .msg.me { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .msg.me .shot { max-width: 92%; max-height: 220px; border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); object-fit: contain; background: var(--panel); }
+  .msg.me .q { background: var(--accent); color: var(--accent-fg); padding: 7px 12px; border-radius: 16px 16px 4px 16px; max-width: 92%; white-space: pre-wrap; word-break: break-word; }
+  .msg.ai { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 13px; box-shadow: var(--shadow); word-break: break-word; }
+  .msg.ai.err { border-color: color-mix(in srgb, var(--bad) 45%, transparent); color: var(--bad); }
+  .md p { margin: 0 0 8px; } .md p:last-child { margin-bottom: 0; }
+  .md ul, .md ol { margin: 4px 0 8px; padding-left: 20px; } .md li { margin: 2px 0; }
+  .md h3, .md h4 { margin: 10px 0 4px; font-size: 14.5px; }
+  .md code { background: var(--code); padding: 1px 5px; border-radius: 5px; font: 12.5px Consolas, "Cascadia Mono", monospace; }
+  .md pre { background: var(--code); padding: 9px 11px; border-radius: 10px; overflow-x: auto; margin: 6px 0 8px; }
+  .md pre code { background: none; padding: 0; }
+  .think { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+  .dots::after { content: ""; animation: dots 1.2s steps(4) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+
+  /* the box at the bottom */
+  .composer { padding: 10px 12px 12px; border-top: 1px solid var(--line); background: var(--bg); }
+  .field { display: flex; flex-direction: column; border: 1px solid var(--line); background: var(--panel); border-radius: 16px; padding: 8px 8px 6px 12px; box-shadow: var(--shadow); }
+  .field:focus-within { border-color: var(--accent); }
+  .field textarea { border: 0; outline: 0; resize: none; background: transparent; min-height: 22px; max-height: 160px; padding: 2px 0; line-height: 1.45; }
+  .field .row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+  .field .row .sp { flex: 1; }
+  .tbtn { border: 0; background: transparent; border-radius: 9px; padding: 5px 9px; cursor: pointer; display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; }
+  .tbtn:hover { background: var(--soft2); color: var(--fg); }
+  .send { width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; cursor: pointer; }
+  .send:disabled { opacity: .4; cursor: default; }
+  .send.stop { background: var(--fg); color: var(--bg); }
+  .note { font-size: 11.5px; color: var(--muted); margin: 7px 2px 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  kbd { font: 11px Consolas, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 4px; background: var(--panel); }
+
+  /* Control: the steps */
+  .task { font-weight: 600; margin: 8px 0 2px; font-size: 15px; }
+  .step { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: flex-start; animation: in .25s ease both; }
+  @keyframes in { from { opacity: 0; transform: translateY(4px); } }
+  .step .ic { width: 26px; height: 26px; border-radius: 8px; background: var(--soft2); display: grid; place-items: center; flex: none; margin-top: 1px; }
+  .step .ic svg.i { width: 15px; height: 15px; }
+  .step.run .ic { background: var(--accent-soft); color: var(--accent); }
+  .step.bad .ic { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+  .step.fin .ic { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .step .body { flex: 1; min-width: 0; }
+  .step .what { font-weight: 550; }
+  .step .why { color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
+  .step .acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 13px; cursor: pointer; font-size: 13px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .btn.danger { color: var(--bad); }
+  .step input { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; background: var(--panel); }
+  .opts { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .warnbox { border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 12px; padding: 9px 11px; font-size: 12.5px; margin: 6px 0 10px; }
+  .live { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; background: var(--accent); color: #fff; border-radius: 12px; padding: 8px 12px; margin: 4px 0 8px; font-size: 13px; box-shadow: var(--shadow); }
+  .live .pulse { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .live .sp { flex: 1; }
+  .live button { border: 0; background: rgba(255, 255, 255, .22); color: #fff; border-radius: 999px; padding: 4px 11px; cursor: pointer; font-weight: 600; }
+
+  .settings { margin: 0 12px 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font-size: 13px; display: grid; gap: 8px; }
+  .settings label { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  .settings select { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 3px 6px; }
+</style>
+<body>
+<div class="top">
+  <div class="brand"><span class="logo"><svg viewBox="0 0 28 28" fill="currentColor"><path fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg></span><span>Albatross</span></div>
+  <button class="wbtn" id="wApp" title="Open the Albatross app"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/></svg></button>
+  <button class="wbtn" id="wSet" title="Panel settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  <button class="wbtn" id="wMin" title="Minimize"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+  <button class="wbtn x" id="wClose" title="Close the panel"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</div>
+<div class="settings" id="settings" hidden>
+  <label>Side of the screen <select id="optSide"><option value="right">Right</option><option value="left">Left</option></select></label>
+  <label>Make room (other windows end at the panel) <input type="checkbox" id="optReserve"></label>
+</div>
+<div class="seg" role="tablist">
+  <button role="tab" data-tab="explain"><svg class="i" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7" stroke-dasharray="2.5 2.2"/><path d="M15.2 19.8l4.6-4.6 1.8 1.8-4.6 4.6h-1.8z"/></svg>Explain</button>
+  <button role="tab" data-tab="control"><svg class="i" viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg>Control my PC</button>
+</div>
+<div class="modelrow"><span>Model</span><select id="model"></select><span class="tag" id="modelTag"></span></div>
+
+<!-- Explain -->
+<section class="view" id="vExplain">
+  <div class="scroll" id="xThread">
+    <div class="intro" id="xIntro">
+      <h2>What's that on my screen?</h2>
+      <p>Pick anything: a chart, an error message, a word, a button. The AI explains it. Type a question first if you want something specific.</p>
+      <div class="pick">
+        <button type="button" data-pick="box"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2" stroke-dasharray="3.2 2.6"/></svg><b>Drag a box</b><small>Around a rectangle area</small></button>
+        <button type="button" data-pick="lasso"><svg class="i" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7" stroke-dasharray="2.5 2.2"/><path d="M15.2 19.8l4.6-4.6 1.8 1.8-4.6 4.6h-1.8z"/></svg><b>Circle it</b><small>Draw around it freehand</small></button>
+      </div>
+      <div class="ideas" id="xIdeas"></div>
+    </div>
+  </div>
+  <div class="composer">
+    <div class="field">
+      <textarea id="xText" rows="1" placeholder="Ask about it (optional)…"></textarea>
+      <div class="row">
+        <button class="tbtn" type="button" data-pick="box" title="Drag a box around something"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2" stroke-dasharray="3.2 2.6"/></svg>Box</button>
+        <button class="tbtn" type="button" data-pick="lasso" title="Draw a circle around something"><svg class="i" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7" stroke-dasharray="2.5 2.2"/><path d="M15.2 19.8l4.6-4.6 1.8 1.8-4.6 4.6h-1.8z"/></svg>Circle</button>
+        <button class="tbtn" type="button" id="xNew" title="Start over" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New</button>
+        <span class="sp"></span>
+        <button class="send" id="xSend" title="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      </div>
+    </div>
+    <div class="note" id="xNote">Then drag over the screen. <kbd>Esc</kbd> cancels.</div>
+  </div>
+</section>
+
+<!-- Control -->
+<section class="view" id="vControl" hidden>
+  <div class="scroll" id="cThread">
+    <div class="intro" id="cIntro">
+      <h2>Let the AI do it</h2>
+      <p>Say what should happen. The AI looks at the screen, then clicks and types in your apps, one step at a time, until it's done. You see every step here.</p>
+      <div class="warnbox" id="cWarn">Keep your hands off the mouse while it works. Stop it any time with the Stop button or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd>. It asks you before anything that sends, buys or deletes.</div>
+      <div class="ideas" id="cIdeas"></div>
+    </div>
+  </div>
+  <div class="composer">
+    <div class="field">
+      <textarea id="cText" rows="2" placeholder="What should I do on your PC?"></textarea>
+      <div class="row">
+        <label class="tbtn" title="The AI waits for your OK before every click and key"><input type="checkbox" id="cAsk"> Ask before every step</label>
+        <span class="sp"></span>
+        <button class="send" id="cSend" title="Start"><svg class="i" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+      </div>
+    </div>
+    <div class="note" id="cNote"></div>
+  </div>
+</section>
+
+<script>
+"use strict";
+const P = window.albatrossPanel;
+const $ = (s) => document.querySelector(s);
+const store = { get(k, d) { try { const v = localStorage.getItem("panel." + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem("panel." + k, JSON.stringify(v)); } catch {} } };
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const LANG = (() => { try { return new Intl.DisplayNames(["en"], { type: "language" }).of((navigator.language || "en").split("-")[0]); } catch { return "English"; } })();
+const ICON = {
+  look: '<svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  click: '<svg class="i" viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg>',
+  type: '<svg class="i" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>',
+  done: '<svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-11"/></svg>',
+  bad: '<svg class="i" viewBox="0 0 24 24"><path d="M12 8v5M12 16.5h.01"/><circle cx="12" cy="12" r="9"/></svg>',
+  ask: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4M12 17h.01"/></svg>',
+  wait: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+};
+
+// ---------- a little Markdown: paragraphs, lists, headings, bold, italics, code ----------
+function md(src) {
+  const blocks = String(src || "").replace(/\r/g, "").split(/```/);
+  let out = "";
+  blocks.forEach((b, i) => {
+    if (i % 2) { out += "<pre><code>" + esc(b.replace(/^[\w+-]*\n/, "")) + "</code></pre>"; return; }
+    const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>");
+    let list = null;
+    for (const raw of b.split("\n")) {
+      const line = raw.trimEnd();
+      const ul = /^\s*[-*•]\s+(.*)$/.exec(line), ol = /^\s*\d+[.)]\s+(.*)$/.exec(line), h = /^#{1,4}\s+(.*)$/.exec(line);
+      if (ul || ol) { const t = ul ? "ul" : "ol"; if (list !== t) { if (list) out += `</${list}>`; out += `<${t}>`; list = t; } out += "<li>" + inline((ul || ol)[1]) + "</li>"; continue; }
+      if (list) { out += `</${list}>`; list = null; }
+      if (h) out += "<h4>" + inline(h[1]) + "</h4>";
+      else if (line.trim()) out += "<p>" + inline(line) + "</p>";
+    }
+    if (list) out += `</${list}>`;
+  });
+  return out;
+}
+const grow = (ta) => { ta.style.height = "auto"; ta.style.height = Math.min(160, ta.scrollHeight) + "px"; };
+
+// ---------- window, settings, tabs ----------
+$("#wClose").onclick = () => P.window("close");
+$("#wMin").onclick = () => P.window("minimize");
+$("#wApp").onclick = () => P.window("app");
+$("#wSet").onclick = () => { $("#settings").hidden = !$("#settings").hidden; };
+P.config().then((c) => {
+  $("#optSide").value = c.side; $("#optReserve").checked = !!c.reserve; document.body.classList.toggle("left", c.side === "left");
+  if (!c.desktop) $("#cNote").textContent = "Controlling the PC needs the Albatross app for Windows.";
+});
+$("#optSide").onchange = (e) => { P.config({ side: e.target.value }); document.body.classList.toggle("left", e.target.value === "left"); };
+$("#optReserve").onchange = (e) => P.config({ reserve: e.target.checked });
+function setTab(t) {
+  for (const b of document.querySelectorAll(".seg button")) b.classList.toggle("on", b.dataset.tab === t);
+  $("#vExplain").hidden = t !== "explain"; $("#vControl").hidden = t !== "control";
+  store.set("tab", t); paintModelTag();
+  (t === "explain" ? $("#xText") : $("#cText")).focus();
+}
+for (const b of document.querySelectorAll(".seg button")) b.onclick = () => { if (!controlRunning) setTab(b.dataset.tab); };
+
+// ---------- models: one that can see pictures for Explain; one that can use tools for Control ----------
+let MODELS = [];
+const modelInfo = () => MODELS.find((m) => m.name === $("#model").value) || { name: $("#model").value, caps: [] };
+const sees = (m) => m.caps.includes("vision"), acts = (m) => m.caps.includes("tools");
+function paintModelTag() {
+  const m = modelInfo(), tab = store.get("tab", "explain"), tag = $("#modelTag");
+  const good = tab === "explain" ? sees(m) : acts(m);
+  tag.className = "tag" + (good ? " ok" : "");
+  tag.textContent = tab === "explain" ? (sees(m) ? "sees pictures" : "can't see pictures") : acts(m) ? (sees(m) ? "tools + sight" : "tools only") : "no tools";
+  tag.title = tab === "explain" ? (sees(m) ? "" : "Explaining needs a model that can see pictures, like qwen3-vl or gemma3.") : acts(m) ? "" : "Controlling the PC needs a model that can use tools, like qwen3-vl or qwen3.";
+}
+async function loadModels() {
+  const r = await P.models();
+  const sel = $("#model");
+  if (r.error || !r.models.length) { sel.innerHTML = `<option value="">${esc(r.error || "No models on this PC yet")}</option>`; paintModelTag(); return; }
+  MODELS = r.models;
+  // what can see and act first, then what can see, then the rest
+  const rank = (m) => (sees(m) ? 2 : 0) + (acts(m) ? 1 : 0);
+  const sorted = [...MODELS].sort((a, b) => rank(b) - rank(a));
+  sel.innerHTML = sorted.map((m) => `<option value="${esc(m.name)}">${esc(m.name)}${sees(m) ? " · sees" : ""}${acts(m) ? " · tools" : ""}</option>`).join("");
+  const saved = store.get("model", "");
+  sel.value = MODELS.some((m) => m.name === saved) ? saved : sorted[0].name;
+  paintModelTag();
+}
+$("#model").onchange = () => { store.set("model", $("#model").value); paintModelTag(); };
+
+// ---------- the AI: one streamed answer, shown in el ----------
+let chatSeq = 0;
+const listeners = new Map();
+P.onChunk((id, part) => { const fn = listeners.get(id); if (fn) fn(part); });
+async function ask(body, onPart) {
+  const id = "c" + (++chatSeq) + "-" + Date.now();
+  listeners.set(id, onPart || (() => {}));
+  ask.current = id;
+  try { return await P.chat(id, body); } finally { listeners.delete(id); if (ask.current === id) ask.current = null; }
+}
+const thinkOff = (m) => (m.caps.includes("thinking") ? { think: false } : {});
+
+// ======================================================================
+// Explain
+// ======================================================================
+const EXPLAIN_SYSTEM = () => `You are Albatross, a helpful assistant in a side panel on the user's Windows PC. The user picked a part of their screen.
+The first picture is the part they picked${""} (if they drew a circle, everything outside their red line is faded: what they mean is inside it).
+The second picture is their whole screen, small, with the same place marked in red, so you know where it is and in which app.
+If they asked a question, answer it about what they picked. Without a question, explain what it is and what it means in plain words: what it is, what it says or shows, and anything useful to know or do about it.
+Be clear and short (a few sentences or a short list), no preamble, don't describe the red mark itself. Answer in the language of the user's question; without a question, in ${LANG}.`;
+let xMsgs = [], xBusy = false;
+const xThread = $("#xThread");
+function xScroll() { xThread.scrollTop = xThread.scrollHeight; }
+function xBubbleMe(thumb, q) {
+  const d = document.createElement("div"); d.className = "msg me";
+  if (thumb) { const im = new Image(); im.className = "shot"; im.src = thumb; im.alt = "The part of the screen you picked"; d.appendChild(im); }
+  if (q) { const b = document.createElement("div"); b.className = "q"; b.textContent = q; d.appendChild(b); }
+  xThread.appendChild(d); xScroll();
+}
+function xBusyUi(on) {
+  xBusy = on;
+  const s = $("#xSend"); s.classList.toggle("stop", on); s.title = on ? "Stop" : "Send";
+  s.innerHTML = on ? '<svg class="i" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>' : '<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+}
+async function xAnswer() {
+  const m = modelInfo();
+  const el = document.createElement("div"); el.className = "msg ai md"; el.innerHTML = '<span class="think"><span class="dots">Looking</span></span>';
+  xThread.appendChild(el); xScroll();
+  let text = "", thinking = false;
+  xBusyUi(true);
+  const r = await ask({ model: m.name, messages: [{ role: "system", content: EXPLAIN_SYSTEM() }, ...xMsgs], ...thinkOff(m), options: { temperature: 0.3, num_ctx: 8192 } }, (part) => {
+    if (part.thinking && !text && !thinking) { thinking = true; el.innerHTML = '<span class="think"><span class="dots">Thinking</span></span>'; }
+    if (part.content) { text += part.content; el.innerHTML = md(text); xScroll(); }
+  });
+  xBusyUi(false);
+  if (r.error) { el.className = "msg ai err"; el.textContent = r.error; xMsgs.pop(); return; }
+  if (r.aborted && !text) { el.remove(); return; }
+  if (!text) el.innerHTML = '<p class="think">(No answer.)</p>';
+  xMsgs.push({ role: "assistant", content: text });
+}
+async function xPick(mode) {
+  if (xBusy) return;
+  const m = modelInfo();
+  if (!m.name) return xError("There is no model on this PC yet. Add one in the Albatross app first.");
+  if (!sees(m)) return xError(`${m.name} can't see pictures. Pick a model marked "sees" above (for example qwen3-vl or gemma3), or add one in the Albatross app.`);
+  const q = $("#xText").value.trim();
+  const r = await P.select(mode);
+  if (!r || r.cancelled) return;
+  if (r.error) return xError(r.error);
+  $("#xText").value = ""; grow($("#xText"));
+  $("#xIntro").hidden = true; $("#xNew").hidden = false;
+  // a new pick starts a new topic: earlier pictures aren't sent again (they'd only slow the model down)
+  xMsgs = xMsgs.map((x) => (x.images ? { role: x.role, content: x.content } : x));
+  xBubbleMe(r.thumb, q);
+  xMsgs.push({ role: "user", content: q || "Explain what I picked.", images: [r.crop, r.context] });
+  await xAnswer();
+}
+function xError(t) { const el = document.createElement("div"); el.className = "msg ai err"; el.textContent = t; $("#xIntro").hidden = true; $("#xNew").hidden = false; xThread.appendChild(el); xScroll(); }
+async function xSend() {
+  if (xBusy) { if (ask.current) P.abort(ask.current); return; }
+  const q = $("#xText").value.trim();
+  if (!xMsgs.length) return xPick("box");           // nothing picked yet: the question goes with the next pick
+  if (!q) return;
+  $("#xText").value = ""; grow($("#xText"));
+  xBubbleMe(null, q);
+  xMsgs.push({ role: "user", content: q });
+  await xAnswer();
+}
+for (const b of document.querySelectorAll("[data-pick]")) b.onclick = () => xPick(b.dataset.pick);
+$("#xSend").onclick = xSend;
+$("#xText").oninput = (e) => grow(e.target);
+$("#xText").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); xSend(); } };
+$("#xNew").onclick = () => { if (xBusy) return; xMsgs = []; xThread.querySelectorAll(".msg").forEach((n) => n.remove()); $("#xIntro").hidden = false; $("#xNew").hidden = true; $("#xText").focus(); };
+for (const idea of ["What does this mean?", "Translate this", "Is this safe to click?", "How do I fix this error?", "Summarize this"]) {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = idea;
+  b.onclick = () => { $("#xText").value = idea; xPick("box"); };
+  $("#xIdeas").appendChild(b);
+}
+
+// ======================================================================
+// Control: the AI looks, acts, looks again ... until it says it's done
+// ======================================================================
+const MAX_STEPS = 40;
+const fn = (name, description, properties, required = []) => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required } } });
+const RISKY = { type: "boolean", description: "true if this step sends, posts, buys, pays, deletes, or can't be undone; the user is asked first" };
+const WHY = { type: "string", description: "A few words: why this step" };
+const TOOLS = [
+  fn("click", "Click something in the window. Prefer n (a number from the list). Only if it isn't in the list, give x and y in the picture's pixels.", {
+    n: { type: "integer", description: "The number of the thing from the list" }, x: { type: "number" }, y: { type: "number" },
+    button: { type: "string", enum: ["left", "right"] }, double: { type: "boolean", description: "Double-click (opening files, selecting a word)" }, why: WHY, risky: RISKY }, ["why"]),
+  fn("type", "Type text into what has the keyboard focus (click the text field first).", { text: { type: "string" }, enter: { type: "boolean", description: "Press Enter after typing" }, why: WHY, risky: RISKY }, ["text", "why"]),
+  fn("keys", "Press a key or a key combination, like enter, tab, esc, ctrl+s, ctrl+l, alt+f4, win, pagedown.", { keys: { type: "string" }, why: WHY, risky: RISKY }, ["keys", "why"]),
+  fn("scroll", "Scroll the window, or the thing n, up or down.", { direction: { type: "string", enum: ["up", "down"] }, amount: { type: "integer", description: "Notches, 1 to 15 (default 5)" }, n: { type: "integer" }, why: WHY }, ["direction", "why"]),
+  fn("open", "Open a program by its name (through the Start menu) or a web address (https://...) in the browser.", { target: { type: "string" }, why: WHY }, ["target", "why"]),
+  fn("wait", "Wait for something to load.", { seconds: { type: "number", description: "1 to 10" }, why: WHY }, ["seconds"]),
+  fn("ask_user", "Ask the user something you need to know to go on (a choice, a detail, a password they must type themselves). Don't ask for permission for normal steps.", { question: { type: "string" } }, ["question"]),
+  fn("done", "The task is finished (or can't be done). Say what you did, or why it can't be done.", { summary: { type: "string" }, success: { type: "boolean" } }, ["summary"]),
+];
+const CONTROL_SYSTEM = (vision) => `You are Albatross, controlling the user's Windows PC with the mouse and keyboard to do the task they gave you.
+After each of your steps you get a fresh look at the window in front: its title, ${vision ? "a picture of it, and " : ""}a numbered list of the things in it you can click or type into (with their kind and name).
+Rules:
+- Do exactly one step per answer, by calling one tool. Then wait for the next look to see what happened.
+- Click things by their number n from the list. Only use x, y (pixels in the picture) when the thing isn't in the list.
+- To type, first click the text field, then use type. Use keys for shortcuts (ctrl+l focuses a browser's address bar).
+- To start a program, use open. To switch to another open window, use keys alt+tab or open it again.
+- Never touch the Albatross panel. Never type passwords or payment details yourself: ask_user instead.
+- Mark a step risky when it sends, posts, buys, pays or deletes something. The user is then asked first.
+- If something doesn't work twice, try another way. When the task is finished, or can't be done, call done with a short summary.
+- Write any text for the user in ${LANG} unless the user wrote in another language.`;
+
+let controlRunning = false, cStopAsked = false;
+const cThread = $("#cThread");
+function cScroll() { cThread.scrollTop = cThread.scrollHeight; }
+function cStep(icon, what, why, cls = "") {
+  const d = document.createElement("div"); d.className = "step " + cls;
+  d.innerHTML = `<span class="ic">${ICON[icon] || ICON.click}</span><div class="body"><div class="what"></div><div class="why"></div></div>`;
+  d.querySelector(".what").textContent = what; d.querySelector(".why").textContent = why || "";
+  cThread.appendChild(d); cScroll();
+  return d;
+}
+function cUi(on) {
+  controlRunning = on;
+  $("#cText").disabled = on; $("#model").disabled = on;
+  const s = $("#cSend"); s.classList.toggle("stop", on); s.title = on ? "Stop" : "Start";
+  s.innerHTML = on ? '<svg class="i" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>' : '<svg class="i" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+  const live = $("#cLive"); if (live) live.remove();
+  if (on) {
+    const l = document.createElement("div"); l.className = "live"; l.id = "cLive";
+    l.innerHTML = '<span class="pulse"></span><span>The AI is using your PC</span><span class="sp"></span><button type="button">Stop</button>';
+    l.querySelector("button").onclick = cStop;
+    cThread.prepend(l);
+  }
+}
+// waits for the user's answer on a step card: "yes" / "skip" / "stop", or the text they typed
+function cAskCard(card, kind, question) {
+  return new Promise((resolve) => {
+    const body = card.querySelector(".body"), acts = document.createElement("div"); acts.className = "acts";
+    if (kind === "confirm") {
+      const ok = Object.assign(document.createElement("button"), { className: "btn primary", textContent: "Allow" });
+      const skip = Object.assign(document.createElement("button"), { className: "btn", textContent: "Skip this step" });
+      const stop = Object.assign(document.createElement("button"), { className: "btn danger", textContent: "Stop" });
+      ok.onclick = () => done("yes"); skip.onclick = () => done("skip"); stop.onclick = () => done("stop");
+      acts.append(ok, skip, stop);
+    } else {
+      const inp = document.createElement("input"); inp.placeholder = "Your answer";
+      const ok = Object.assign(document.createElement("button"), { className: "btn primary", textContent: "Answer" });
+      const stop = Object.assign(document.createElement("button"), { className: "btn danger", textContent: "Stop" });
+      ok.onclick = () => done(inp.value.trim() || "(no answer)"); stop.onclick = () => done("stop");
+      inp.onkeydown = (e) => { if (e.key === "Enter") ok.click(); };
+      body.appendChild(inp); acts.append(ok, stop);
+      P.window("focus"); setTimeout(() => inp.focus(), 80);
+    }
+    body.appendChild(acts); cScroll();
+    cAskCard.cancel = () => done("stop");
+    function done(v) { if (kind !== "confirm") P.window("nofocus"); cAskCard.cancel = null; acts.remove(); body.querySelector("input")?.remove(); resolve(v); }
+  });
+}
+function describe(name, a) {
+  if (name === "click") return [a.double ? "Double-click" : a.button === "right" ? "Right-click" : "Click", "click"];
+  if (name === "type") return [`Type "${String(a.text || "").slice(0, 80)}"${a.enter ? " + Enter" : ""}`, "type"];
+  if (name === "keys") return [`Press ${a.keys}`, "type"];
+  if (name === "scroll") return [`Scroll ${a.direction || "down"}`, "click"];
+  if (name === "open") return [`Open ${a.target}`, "click"];
+  if (name === "wait") return [`Wait ${a.seconds || 2} s`, "wait"];
+  return [name, "click"];
+}
+async function cStop() {
+  cStopAsked = true;
+  if (cAskCard.cancel) cAskCard.cancel();
+  if (ask.current) P.abort(ask.current);
+  await P.control.stop();
+}
+P.control.onStopped(() => { cStopAsked = true; if (cAskCard.cancel) cAskCard.cancel(); });
+async function cRun() {
+  if (controlRunning) return cStop();
+  const task = $("#cText").value.trim(); if (!task) { $("#cText").focus(); return; }
+  const m = modelInfo();
+  if (!m.name) { cStep("bad", "There is no model on this PC yet.", "Add one in the Albatross app first.", "bad"); return; }
+  if (!acts(m)) { cStep("bad", `${m.name} can't use tools.`, "Pick a model marked \"tools\" above (qwen3-vl can also see the screen, which helps a lot).", "bad"); return; }
+  const st = await P.control.start();
+  if (st.error) { cStep("bad", st.error, "", "bad"); return; }
+  cStopAsked = false;
+  $("#cIntro").hidden = true;
+  cThread.querySelectorAll(".step, .task").forEach((n) => n.remove());
+  cUi(true);
+  const t = document.createElement("div"); t.className = "task"; t.textContent = task; cThread.appendChild(t);
+  const vision = sees(m), askEach = $("#cAsk").checked;
+  const msgs = [{ role: "system", content: CONTROL_SYSTEM(vision) }, { role: "user", content: "The task: " + task }];
+  let finished = false, lastSeen = "";
+  try {
+    for (let k = 1; k <= MAX_STEPS && !cStopAsked; k++) {
+      // look
+      const lookCard = cStep("look", "Looking at the screen…", "", "run");
+      const look = await P.control.look();
+      if (cStopAsked) { lookCard.remove(); break; }
+      lookCard.classList.remove("run");
+      let seen;
+      if (look.error) { seen = "Couldn't look at the screen: " + look.error; lookCard.querySelector(".what").textContent = look.error; }
+      else {
+        seen = `Step ${k}. The window in front is "${look.title}" (${look.proc}).` + (vision ? ` Its picture (${look.w}×${look.h} pixels) is attached.` : "") + ` Things in it, by number: ${look.list || "(none found" + (vision ? ": use x, y from the picture" : "") + ")"}`;
+        lookCard.querySelector(".what").textContent = "Looked at " + (look.title || look.proc);
+        lookCard.querySelector(".why").textContent = look.count + " things found";
+        if (lastSeen && lastSeen === look.title + look.list) lookCard.querySelector(".why").textContent += " · nothing changed";
+        lastSeen = look.title + look.list;
+      }
+      // only the newest picture goes along: older ones would only fill the model's memory
+      for (const x of msgs) delete x.images;
+      msgs.push({ role: "user", content: seen, ...(vision && look.image && look.image.b64 ? { images: [look.image.b64] } : {}) });
+      // think
+      const thinkCard = cStep("ask", "Deciding the next step…", "", "run");
+      let said = "";
+      const r = await ask({ model: m.name, messages: msgs, tools: TOOLS, ...thinkOff(m), options: { temperature: 0.2, num_ctx: 16384 } }, (part) => { if (part.content) { said += part.content; thinkCard.querySelector(".why").textContent = said.slice(-300); } });
+      thinkCard.remove();
+      if (cStopAsked || r.aborted) break;
+      if (r.error) { cStep("bad", "The AI stopped with an error", r.error, "bad"); break; }
+      const call = (r.tool_calls || [])[0];
+      if (!call) {
+        // no step, only words: it's finished, or it's stuck; either way the user reads it
+        cStep("done", "Finished", (r.content || "").trim() || "The AI stopped without saying why.", "fin"); finished = true; break;
+      }
+      const name = call.function && call.function.name, args = (call.function && call.function.arguments) || {};
+      msgs.push({ role: "assistant", content: r.content || "", tool_calls: [call] });
+      const reply = (content) => msgs.push({ role: "tool", tool_name: name, content });
+      if (name === "done") { cStep(args.success === false ? "bad" : "done", args.success === false ? "Couldn't finish" : "Done", args.summary || "", args.success === false ? "bad" : "fin"); finished = true; break; }
+      if (name === "ask_user") {
+        const card = cStep("ask", "The AI asks:", args.question || "", "run");
+        const ans = await cAskCard(card, "answer"); card.classList.remove("run");
+        if (ans === "stop" || cStopAsked) break;
+        card.querySelector(".why").textContent = (args.question || "") + "\n→ " + ans;
+        reply("The user answered: " + ans); continue;
+      }
+      if (name === "wait") { const s = Math.max(1, Math.min(10, Number(args.seconds) || 2)); cStep("wait", `Waiting ${s} s`, args.why || ""); await new Promise((ok) => setTimeout(ok, s * 1000)); reply(`Waited ${s} seconds.`); continue; }
+      const [label, icon] = describe(name, args);
+      const card = cStep(icon, label, args.why || "", "run");
+      if (askEach || args.risky) {
+        if (args.risky) card.querySelector(".why").textContent = (args.why || "") + "\nThis step may send, buy or delete something.";
+        if (name === "click" && args.n != null) P.control.point([{ n: args.n, label: label }]);
+        const ok = await cAskCard(card, "confirm");
+        if (ok === "stop" || cStopAsked) { card.classList.remove("run"); break; }
+        if (ok === "skip") { card.classList.remove("run"); card.classList.add("bad"); card.querySelector(".why").textContent = "Skipped by you"; reply("The user didn't allow this step. Do something else, or call done."); continue; }
+      } else if (name === "click" && args.n != null) {
+        P.control.point([{ n: args.n, label: label }]);      // a short glow where it clicks, so you can follow along
+        await new Promise((ok) => setTimeout(ok, 450));
+      }
+      const action = name === "click" ? (args.double ? "double_click" : args.button === "right" ? "right_click" : "click") : name;
+      const res = await P.control.act({ ...args, action });
+      card.classList.remove("run");
+      if (res.error) { card.classList.add("bad"); card.querySelector(".why").textContent = res.error; reply("That didn't work: " + res.error); }
+      else { card.querySelector(".what").textContent = res.done.charAt(0).toUpperCase() + res.done.slice(1); reply("Done: " + res.done + ". Look at the next view to check it worked."); }
+      await new Promise((ok) => setTimeout(ok, name === "open" ? 1800 : 700));     // let the app react before the next look
+    }
+    if (!finished && cStopAsked) cStep("bad", "Stopped", "You stopped the AI.", "bad");
+    else if (!finished) cStep("bad", "Stopped after " + MAX_STEPS + " steps", "That's the most one task may take. Start it again to go on.", "bad");
+  } finally {
+    await P.control.stop();
+    cUi(false);
+  }
+}
+$("#cSend").onclick = cRun;
+$("#cText").oninput = (e) => grow(e.target);
+$("#cText").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); cRun(); } };
+$("#cAsk").checked = store.get("askEach", false);
+$("#cAsk").onchange = (e) => store.set("askEach", e.target.checked);
+for (const idea of ["Open Notepad and write a shopping list for pasta", "Turn on dark mode in Windows' settings", "Search the weather for tomorrow in my browser"]) {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = idea;
+  b.onclick = () => { $("#cText").value = idea; grow($("#cText")); $("#cText").focus(); };
+  $("#cIdeas").appendChild(b);
+}
+
+setTab(store.get("tab", "explain"));
+loadModels();
+</script>

@@ -11,17 +11,13 @@ window.albatrossSelfTest = async function (w) {
   for (const v of ["home", "chat", "notes", "mail", "hub", "monitor", "agent", "jarvis", "pc", "browser"]) {
     await tryIt("open page: " + v, async () => { w.setView(v); await sleep(120); return true; });
   }
-  await tryIt("home has the chat (no Agent mode) and manual task shortcuts", () => {
+  await tryIt("home is a hub: no sidebars, an ask box, and every tool as a tile", () => {
     w.setView("home");
-    return !!d.querySelector(".home-feature [data-go=chat]") && !d.querySelector("[data-go=agent]")
-      && !!d.querySelector(".home-action[data-go=beam]") && !!d.querySelector(".home-action[data-go=mail]")
-      && !!d.querySelector(".home-action[data-go=print]")
-      && !!d.querySelector(".home-hero h1") && !!d.querySelector("#homeManual")
-      && !!d.querySelector(".home-hero [data-scroll=homeManual]")
-      && !!(d.querySelector("#homeManual").compareDocumentPosition(d.querySelector(".home-feature")) & w.Node.DOCUMENT_POSITION_FOLLOWING)
-      && d.querySelector("#homeManual .home-action").getBoundingClientRect().top < w.innerHeight
-      && d.querySelectorAll("#homeManual .home-action").length === 4 && !!d.querySelector("#homeManual .ai-panel textarea")
-      && d.querySelector(".home-more").open && !!d.querySelector(".home-action[data-go=jarvis]");
+    const hidden = (sel) => { const e = d.querySelector(sel); return !e || w.getComputedStyle(e).display === "none"; };
+    return hidden("#sidebar") && hidden("main > .topbar") && hidden("#sidePanel")
+      && !!d.querySelector(".hh-ask textarea") && !!d.querySelector(".hh-hero h1") && !d.querySelector("[data-go=agent]")
+      && ["chat", "image", "beam", "mail", "print", "jarvis", "notes", "hub", "monitor", "browser", "connect", "settings"].every((k) => !!d.querySelector(".hh-tile[data-go=" + k + "]"))
+      && d.querySelector(".hh-ask").getBoundingClientRect().top < w.innerHeight;
   });
   await tryIt("background is a restrained night sky", () => {
     w.dispatchEvent(new w.MouseEvent("pointermove", { clientX: 120, clientY: 240 }));
@@ -71,7 +67,7 @@ window.albatrossSelfTest = async function (w) {
   await tryIt("no WhatsApp section; Print is a manual dialog, not the Agent", async () => {
     w.setView("home"); await sleep(80);
     if (d.querySelector("#waForm") || /whatsapp/i.test(d.querySelector("#home").textContent)) return "WhatsApp still on the home page";
-    d.querySelector('.home-action[data-go=print]').click(); await sleep(150);
+    d.querySelector('.hh-tile[data-go=print]').click(); await sleep(150);
     const dlg = d.querySelector("#printDlg"), ok = dlg.open && !d.body.classList.contains("agent-view") && !!d.querySelector("#prPrinter") && d.querySelector("#prGo").disabled;
     ev('prChoose({ name: "letter.pdf", size: 1234, blob: new Blob(["x"]), from: "This device" })');
     const chosen = !d.querySelector("#prChosen").hidden && /letter.pdf/.test(d.querySelector("#prChosen").textContent);
