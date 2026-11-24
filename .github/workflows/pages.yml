@@ -36,7 +36,8 @@ jobs:
       - name: Collect the site files
         run: |
           mkdir _site
-          cp index.html terms.html privacy.html legal.css _site/
+          cp index.html terms.html privacy.html contact.html legal.css og.png sitemap.xml robots.txt _site/
+          cp -r guides _site/guides
           cp -r public _site/public
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
