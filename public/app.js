@@ -7338,8 +7338,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-19.1";
+const APP_VERSION = "2026-11-24.1";
 const WHATS_NEW = [
+  ["2026-11-24.1", ["Website: guides, a contact page, share image and search data"]],
   ["2026-11-19.1", ["Home is now a hub: no sidebars, a box to ask the AI right away, and every tool in groups","Albatross opens where you left it instead of on Home every time","Windows app: a side panel next to your apps that explains anything you box or circle on the screen, or controls the PC for you (Ctrl+Alt+Space)","The slowdown warning no longer says graphics memory is full when it's only Albatross's own loaded model"]],
   ["2026-11-18.1", ["The AI can now upload and download files in the browser, choose from dropdowns, and press keys"]],
   ["2026-11-17.3", ["Z-Image Turbo is installed and becomes the model for new pictures (it fits the graphics card whole, so it's much quicker); edits still use Qwen Image. Change it in Settings → Image."]],

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choosing an AI model for your graphics card — Albatross</title>
+<!-- SEO (tools/site.js) -->
+<link rel="canonical" href="https://albatrossassistent.github.io/guides/choosing-a-model.html">
+<meta name="description" content="Which local AI model to run with Albatross and Ollama for your GPU: how graphics memory limits model size, and good picks for 4, 8, 12 and 16+ GB cards.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Albatross">
+<meta property="og:title" content="Choosing an AI model for your graphics card">
+<meta property="og:description" content="Which local AI model to run with Albatross and Ollama for your GPU: how graphics memory limits model size, and good picks for 4, 8, 12 and 16+ GB cards.">
+<meta property="og:url" content="https://albatrossassistent.github.io/guides/choosing-a-model.html">
+<meta property="og:image" content="https://albatrossassistent.github.io/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Albatross: your own AI, on your own PC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Choosing an AI model for your graphics card">
+<meta name="twitter:description" content="Which local AI model to run with Albatross and Ollama for your GPU: how graphics memory limits model size, and good picks for 4, 8, 12 and 16+ GB cards.">
+<meta name="twitter:image" content="https://albatrossassistent.github.io/og.png">
+<link rel="apple-touch-icon" href="https://albatrossassistent.github.io/public/icon-180.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://albatrossassistent.github.io/#org","name":"Albatross","url":"https://albatrossassistent.github.io/","logo":"https://albatrossassistent.github.io/public/icon-512.png","sameAs":["https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io"],"contactPoint":{"@type":"ContactPoint","contactType":"customer support","url":"https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io/issues","availableLanguage":["English","German"]}},{"@type":"TechArticle","headline":"Choosing an AI model for your graphics card","description":"Which local AI model to run with Albatross and Ollama for your GPU: how graphics memory limits model size, and good picks for 4, 8, 12 and 16+ GB cards.","url":"https://albatrossassistent.github.io/guides/choosing-a-model.html","mainEntityOfPage":"https://albatrossassistent.github.io/guides/choosing-a-model.html","image":"https://albatrossassistent.github.io/og.png","datePublished":"2026-11-24","dateModified":"2026-11-24","inLanguage":"en","author":{"@id":"https://albatrossassistent.github.io/#org"},"publisher":{"@id":"https://albatrossassistent.github.io/#org"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Albatross","item":"https://albatrossassistent.github.io/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://albatrossassistent.github.io/guides/"},{"@type":"ListItem","position":3,"name":"Choosing an AI model for your graphics card","item":"https://albatrossassistent.github.io/guides/choosing-a-model.html"}]}]}</script>
+<!-- /SEO -->
+<link rel="icon" href="../public/icon.svg">
+<link rel="stylesheet" href="../legal.css">
+</head>
+<body>
+<nav class="nav"><a class="brand" href=".././"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>Albatross</a><span class="sp"></span><a href="../guides/">Guides</a><a href="../contact.html">Contact</a><a class="btn" href="../public/">Open app</a></nav>
+<main class="doc">
+<p class="meta"><a href="./">Guides</a> · Updated 2026-11-24</p>
+<h1>Choosing an AI model for your graphics card</h1>
+<p class="lead">Local models come in sizes, measured in billions of parameters (the "8b" or "14b" in their names). Bigger models answer better but need more graphics memory (VRAM). The trick is picking the largest model that still fits entirely on your card.</p>
+<h2>Why graphics memory matters</h2>
+<p>A model runs fast when all of it fits in your graphics card's memory. If it doesn't, Ollama moves part of it to the normal memory and the processor, and answers get many times slower. As a rough guide for the usual 4-bit versions Ollama downloads, a model needs a bit more than half a gigabyte of VRAM per billion parameters, plus some room for the conversation.</p>
+<h2>Good picks by card</h2>
+<ul>
+  <li><b>No dedicated GPU or 4 GB:</b> models around 1 to 4 billion parameters, such as <code>gemma3:4b</code> or <code>qwen3:4b</code>. Fine for short answers and summaries.</li>
+  <li><b>8 GB:</b> 7 to 8 billion parameters, such as <code>qwen3:8b</code> or <code>llama3.1:8b</code>. A big step up for writing and coding help.</li>
+  <li><b>12 GB:</b> up to about 14 billion, such as <code>qwen3:14b</code>. The sweet spot for many people.</li>
+  <li><b>16 GB and more:</b> 20 to 32 billion parameter models for the best quality at home.</li>
+</ul>
+<h2>Thinking models</h2>
+<p>Some models think before they answer. Albatross shows the thinking live and lets you choose how hard a model should think. More thinking means better answers to hard questions, but a longer wait.</p>
+<h2>One model at a time</h2>
+<p>Albatross keeps one model in memory at a time and shows which one is loaded. Switching models takes a few seconds while the new one loads; the button <b>Free GPU memory</b> empties the card when you want it for a game.</p>
+<h2>Pictures</h2>
+<p>Image models run through ComfyUI next to Ollama. Albatross makes sure only one heavy model uses the card at once, so a picture and a chat model don't fight over memory.</p>
+<p>Ready to try one? Follow <a href="set-up-your-own-ai.html">the setup guide</a>.</p>
+<h2>More guides</h2>
+<ul><li><a href="set-up-your-own-ai.html">How to set up your own private AI on a Windows PC</a></li><li><a href="use-from-your-phone.html">How to use your own AI from your phone, anywhere</a></li><li><a href="how-the-encryption-works.html">How Albatross keeps your AI chats private</a></li></ul>
+<p>Questions? <a href="../contact.html">Get in touch</a>.</p>
+</main>
+<footer class="foot"><span>© 2026 Albatross</span><span class="sp"></span><a href="../guides/">Guides</a><a href="../contact.html">Contact</a><a href="../terms.html">Terms of Use</a><a href="../privacy.html">Privacy Policy</a><a href=".././">Home</a></footer>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to set up your own private AI on a Windows PC — Albatross</title>
+<!-- SEO (tools/site.js) -->
+<link rel="canonical" href="https://albatrossassistent.github.io/guides/set-up-your-own-ai.html">
+<meta name="description" content="Step by step: install Albatross, let it set up Ollama, download a first model and chat with an AI that runs entirely on your own computer.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Albatross">
+<meta property="og:title" content="How to set up your own private AI on a Windows PC">
+<meta property="og:description" content="Step by step: install Albatross, let it set up Ollama, download a first model and chat with an AI that runs entirely on your own computer.">
+<meta property="og:url" content="https://albatrossassistent.github.io/guides/set-up-your-own-ai.html">
+<meta property="og:image" content="https://albatrossassistent.github.io/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Albatross: your own AI, on your own PC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to set up your own private AI on a Windows PC">
+<meta name="twitter:description" content="Step by step: install Albatross, let it set up Ollama, download a first model and chat with an AI that runs entirely on your own computer.">
+<meta name="twitter:image" content="https://albatrossassistent.github.io/og.png">
+<link rel="apple-touch-icon" href="https://albatrossassistent.github.io/public/icon-180.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://albatrossassistent.github.io/#org","name":"Albatross","url":"https://albatrossassistent.github.io/","logo":"https://albatrossassistent.github.io/public/icon-512.png","sameAs":["https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io"],"contactPoint":{"@type":"ContactPoint","contactType":"customer support","url":"https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io/issues","availableLanguage":["English","German"]}},{"@type":"TechArticle","headline":"How to set up your own private AI on a Windows PC","description":"Step by step: install Albatross, let it set up Ollama, download a first model and chat with an AI that runs entirely on your own computer.","url":"https://albatrossassistent.github.io/guides/set-up-your-own-ai.html","mainEntityOfPage":"https://albatrossassistent.github.io/guides/set-up-your-own-ai.html","image":"https://albatrossassistent.github.io/og.png","datePublished":"2026-11-24","dateModified":"2026-11-24","inLanguage":"en","author":{"@id":"https://albatrossassistent.github.io/#org"},"publisher":{"@id":"https://albatrossassistent.github.io/#org"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Albatross","item":"https://albatrossassistent.github.io/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://albatrossassistent.github.io/guides/"},{"@type":"ListItem","position":3,"name":"How to set up your own private AI on a Windows PC","item":"https://albatrossassistent.github.io/guides/set-up-your-own-ai.html"}]}]}</script>
+<!-- /SEO -->
+<link rel="icon" href="../public/icon.svg">
+<link rel="stylesheet" href="../legal.css">
+</head>
+<body>
+<nav class="nav"><a class="brand" href=".././"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>Albatross</a><span class="sp"></span><a href="../guides/">Guides</a><a href="../contact.html">Contact</a><a class="btn" href="../public/">Open app</a></nav>
+<main class="doc">
+<p class="meta"><a href="./">Guides</a> · Updated 2026-11-24</p>
+<h1>How to set up your own private AI on a Windows PC</h1>
+<p class="lead">Albatross turns a Windows PC into your own AI server. The AI models run on your graphics card, your chats stay on your devices, and nothing is sent to an AI company. This guide takes you from nothing to your first answer in about fifteen minutes, most of which is the model download.</p>
+<h2>What you need</h2>
+<ul>
+  <li>A Windows 10 or 11 PC. An NVIDIA graphics card with 8 GB of memory or more makes answers fast; without one, smaller models still work, just slower.</li>
+  <li>Some free disk space: a typical model is 2 to 10 GB.</li>
+  <li>An internet connection for the downloads. After that, chatting on the PC itself works offline.</li>
+</ul>
+<h2>1. Install the Windows app</h2>
+<p>Download <a href="https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io/releases/latest">the latest Albatross installer</a> from GitHub and run it. It installs for your user only, so it doesn't need admin rights, and puts Albatross in the Start menu and next to the clock.</p>
+<p>On the first start, Albatross checks for <b>Ollama</b>, the free engine that runs the AI models. If it's missing, Albatross downloads and installs it by itself. Then it starts the <b>host</b>: the small background part that connects your devices, runs the models and does the work on the PC. The opening screen shows each step as it happens.</p>
+<h2>2. Download a first model</h2>
+<p>Open <b>Settings → Installed models</b>. Albatross suggests models that fit common graphics cards. Good first choices:</p>
+<ul>
+  <li><b>qwen3:14b</b>: very capable, for cards with about 12 GB of memory.</li>
+  <li><b>qwen3:8b</b> or <b>llama3.1:8b</b>: for 8 GB cards.</li>
+  <li><b>gemma3:4b</b>: small and quick, for weaker PCs and laptops.</li>
+</ul>
+<p>The download runs in the background with a progress bar. Models are stored by Ollama, not inside Albatross, so other Ollama apps can use them too. See <a href="choosing-a-model.html">choosing a model for your graphics card</a> for more detail.</p>
+<h2>3. Start chatting</h2>
+<p>Pick the model at the top of the chat and write your first message. Reasoning models show their thinking live while they work. Every chat can have its own instructions, and you can let a chat search the web when you want current information.</p>
+<h2>4. Optional: start at boot</h2>
+<p>Albatross starts with Windows by default and waits quietly in the tray. If you want your phone to reach the PC even before anyone signs in, turn on <b>Start at boot</b> on the <b>Host</b> page. Windows asks once for admin rights and your password, because the host then runs as a background task.</p>
+<h2>Next steps</h2>
+<ul>
+  <li><a href="use-from-your-phone.html">Use your AI from your phone, anywhere</a></li>
+  <li><a href="how-the-encryption-works.html">How Albatross keeps your chats private</a></li>
+</ul>
+<h2>More guides</h2>
+<ul><li><a href="use-from-your-phone.html">How to use your own AI from your phone, anywhere</a></li><li><a href="how-the-encryption-works.html">How Albatross keeps your AI chats private</a></li><li><a href="choosing-a-model.html">Choosing an AI model for your graphics card</a></li></ul>
+<p>Questions? <a href="../contact.html">Get in touch</a>.</p>
+</main>
+<footer class="foot"><span>© 2026 Albatross</span><span class="sp"></span><a href="../guides/">Guides</a><a href="../contact.html">Contact</a><a href="../terms.html">Terms of Use</a><a href="../privacy.html">Privacy Policy</a><a href=".././">Home</a></footer>
+</body>
+</html>

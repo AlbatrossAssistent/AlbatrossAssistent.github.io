@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Albatross keeps your AI chats private — Albatross</title>
+<!-- SEO (tools/site.js) -->
+<link rel="canonical" href="https://albatrossassistent.github.io/guides/how-the-encryption-works.html">
+<meta name="description" content="Where your data goes when you use Albatross: what stays on your devices, what the relay server sees, and how the end-to-end encryption with your code works.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Albatross">
+<meta property="og:title" content="How Albatross keeps your AI chats private">
+<meta property="og:description" content="Where your data goes when you use Albatross: what stays on your devices, what the relay server sees, and how the end-to-end encryption with your code works.">
+<meta property="og:url" content="https://albatrossassistent.github.io/guides/how-the-encryption-works.html">
+<meta property="og:image" content="https://albatrossassistent.github.io/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Albatross: your own AI, on your own PC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How Albatross keeps your AI chats private">
+<meta name="twitter:description" content="Where your data goes when you use Albatross: what stays on your devices, what the relay server sees, and how the end-to-end encryption with your code works.">
+<meta name="twitter:image" content="https://albatrossassistent.github.io/og.png">
+<link rel="apple-touch-icon" href="https://albatrossassistent.github.io/public/icon-180.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://albatrossassistent.github.io/#org","name":"Albatross","url":"https://albatrossassistent.github.io/","logo":"https://albatrossassistent.github.io/public/icon-512.png","sameAs":["https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io"],"contactPoint":{"@type":"ContactPoint","contactType":"customer support","url":"https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io/issues","availableLanguage":["English","German"]}},{"@type":"TechArticle","headline":"How Albatross keeps your AI chats private","description":"Where your data goes when you use Albatross: what stays on your devices, what the relay server sees, and how the end-to-end encryption with your code works.","url":"https://albatrossassistent.github.io/guides/how-the-encryption-works.html","mainEntityOfPage":"https://albatrossassistent.github.io/guides/how-the-encryption-works.html","image":"https://albatrossassistent.github.io/og.png","datePublished":"2026-11-24","dateModified":"2026-11-24","inLanguage":"en","author":{"@id":"https://albatrossassistent.github.io/#org"},"publisher":{"@id":"https://albatrossassistent.github.io/#org"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Albatross","item":"https://albatrossassistent.github.io/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://albatrossassistent.github.io/guides/"},{"@type":"ListItem","position":3,"name":"How Albatross keeps your AI chats private","item":"https://albatrossassistent.github.io/guides/how-the-encryption-works.html"}]}]}</script>
+<!-- /SEO -->
+<link rel="icon" href="../public/icon.svg">
+<link rel="stylesheet" href="../legal.css">
+</head>
+<body>
+<nav class="nav"><a class="brand" href=".././"><svg viewBox="0 0 28 28"><path fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>Albatross</a><span class="sp"></span><a href="../guides/">Guides</a><a href="../contact.html">Contact</a><a class="btn" href="../public/">Open app</a></nav>
+<main class="doc">
+<p class="meta"><a href="./">Guides</a> · Updated 2026-11-24</p>
+<h1>How Albatross keeps your AI chats private</h1>
+<p class="lead">Most AI chat apps send every message to a company's servers. Albatross runs the AI on your own PC, and everything between your devices is encrypted with a key only those devices have. This page explains exactly what that means.</p>
+<h2>What stays with you</h2>
+<ul>
+  <li><b>The AI itself:</b> models run on your PC's graphics card through Ollama. Cloud AI models are blocked.</li>
+  <li><b>Your chats and pictures:</b> saved in your browser and on your PC, not on a server.</li>
+  <li><b>Your encryption key:</b> the second half of your 16-character code. It is never sent anywhere.</li>
+</ul>
+<h2>The relay server</h2>
+<p>Your phone usually can't reach your PC directly, because home routers block incoming connections. So both connect out to a small relay server, which passes messages between them. The relay sees that a message goes to your PC, when and how big it is, and your IP address, but it can't read or change the content.</p>
+<h2>How the encryption works</h2>
+<p>Each request is sealed with <b>AES-GCM</b> using a key derived from the second half of your code. The PC answers in numbered, sealed pieces, so nothing can be dropped, swapped or added on the way without your device noticing. Because only your devices know the key, the relay just forwards data it cannot open. If you ever share your code by mistake, make a new one in the control center: the old code stops working at once.</p>
+<h2>Accounts are optional</h2>
+<p>You can use Albatross without signing in. If you sign in with Google or email, your settings sync between devices; your PC code and power link are only stored encrypted with a passphrase you choose, which nobody can recover for you.</p>
+<h2>Open source</h2>
+<p>All of this can be checked: the app, the host and the relay server are <a href="https://github.com/AlbatrossAssistent/AlbatrossAssistent.github.io">public on GitHub</a>. Details for lawyers are in the <a href="../privacy.html">privacy policy</a>.</p>
+<h2>More guides</h2>
+<ul><li><a href="set-up-your-own-ai.html">How to set up your own private AI on a Windows PC</a></li><li><a href="use-from-your-phone.html">How to use your own AI from your phone, anywhere</a></li><li><a href="choosing-a-model.html">Choosing an AI model for your graphics card</a></li></ul>
+<p>Questions? <a href="../contact.html">Get in touch</a>.</p>
+</main>
+<footer class="foot"><span>© 2026 Albatross</span><span class="sp"></span><a href="../guides/">Guides</a><a href="../contact.html">Contact</a><a href="../terms.html">Terms of Use</a><a href="../privacy.html">Privacy Policy</a><a href=".././">Home</a></footer>
+</body>
+</html>

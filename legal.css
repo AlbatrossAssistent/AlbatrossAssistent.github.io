@@ -26,3 +26,8 @@ a { color: var(--fg); }
 .foot { width: min(900px, calc(100vw - 32px)); margin: 0 auto 30px; display: flex; flex-wrap: wrap; gap: 12px 22px; color: var(--muted); font-size: 13.5px; }
 .foot a { color: var(--muted); text-decoration: none; }
 .foot a:hover { color: var(--fg); }
+.doc .guides { list-style: none; padding: 0; display: grid; gap: 12px; }
+.doc .guides li { margin: 0; padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.05); border: 1px solid var(--edge); color: var(--muted); }
+.doc .guides a { text-decoration: none; }
+.doc .meta a { color: var(--muted); }
+.doc h1 { line-height: 1.15; margin-top: 4px; }
