@@ -4,6 +4,7 @@
 //   node tools/bump.js "What changed, in one sentence" ["Another line" ...]
 const fs = require("fs"), path = require("path");
 const P = path.join(__dirname, "..", "public");
+require("./quiet")(20);          // a release follows: tests, builds and a host restart; the Windows app stays out of sight
 const lines = process.argv.slice(2).map((s) => s.trim()).filter(Boolean);
 if (!lines.length) { console.error('usage: node tools/bump.js "what changed" ["more" ...]'); process.exit(2); }
 let js = fs.readFileSync(path.join(P, "app.js"), "utf8");

@@ -5,6 +5,7 @@
 // (answer rendering, maths and symbols, the code player's bundler, music, notes, the hub, the tool router's word lists).
 const http = require("http"), fs = require("fs"), path = require("path"), os = require("os");
 const { spawn } = require("child_process");
+if (process.platform === "win32") require("../tools/quiet")(15);     // the Windows app stays out of sight while this runs
 
 const ROOT = path.join(__dirname, "..", "public");
 const CHROME = process.env.CHROME || [

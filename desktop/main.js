@@ -29,8 +29,19 @@ let screenHelp = null, health = null, sidePanel = null;     // screen help (look
 
 // "Albatross.exe --selftest": only runs the self-check against the host on this PC, prints the result and exits (1 = problems)
 const SELFTEST_ONLY = process.argv.includes("--selftest");
-if (!SELFTEST_ONLY && !app.requestSingleInstanceLock()) { app.quit(); }
-app.on("second-instance", () => show());
+// quiet mode (tools/quiet.js): while Albatross is being worked on (tests, builds, host restarts), the app stays out of sight: no
+// window from a second start, no slowdown warning, no notifications
+const QUIET_FILE = path.join(DATA, ".quiet-until");
+const quiet = () => { try { return Number(fs.readFileSync(QUIET_FILE, "utf8")) > Date.now(); } catch { return false; } };
+// a copy started from the source folder (development, tests) has its own profile, so it never collides with the installed app
+if (!app.isPackaged) app.setPath("userData", path.join(app.getPath("appData"), "Albatross-dev"));
+if (!SELFTEST_ONLY && !app.requestSingleInstanceLock({ hidden })) { app.quit(); }
+// another start while Albatross runs opens the window, but only when you started it: not a hidden start (Windows sign-in, the
+// relaunch after a quiet update), not a self-check, not during quiet mode
+app.on("second-instance", (_e, argv, _cwd, data) => {
+  if ((data && data.hidden) || argv.includes("--hidden") || argv.includes("--selftest") || quiet()) return;
+  show();
+});
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const reachable = (url, ms = 1500) => fetch(url, { signal: AbortSignal.timeout(ms) }).then((r) => r.status < 500, () => false);
@@ -232,7 +243,7 @@ function startUpdates() {
     update = { version: i.version, ready: true }; tell();
     if (starting) return;                                   // the start takes care of it (updating screen)
     if (!win || win.isDestroyed() || !win.isVisible()) return installUpdate({ hidden: true });    // in the tray: right away, quietly
-    if (Notification.isSupported()) { const n = new Notification({ title: "Albatross " + i.version + " is ready", body: "Click to update now (takes a few seconds), or it updates when you close the window." }); n.on("click", () => installUpdate()); n.show(); }
+    if (!quiet() && Notification.isSupported()) { const n = new Notification({ title: "Albatross " + i.version + " is ready", body: "Click to update now (takes a few seconds), or it updates when you close the window." }); n.on("click", () => installUpdate()); n.show(); }
   });
   autoUpdater.on("error", (e) => noteUpdateError(e));
   autoUpdater.on("update-not-available", () => clearUpdateError());
@@ -271,7 +282,7 @@ async function runSelfTest(reason) {
     let old = ""; try { old = fs.readFileSync(SELFTEST_LOG, "utf8"); } catch {}
     fs.writeFileSync(SELFTEST_LOG, (old + lines.join("\r\n") + "\r\n").slice(-200e3));   // keeps the newest runs
   } catch {}
-  if ((bad || reason === "tray") && Notification.isSupported()) {
+  if ((bad || reason === "tray") && (reason === "tray" || !quiet()) && Notification.isSupported()) {
     const n = new Notification({ title: bad ? `Albatross ${app.getVersion()}: the self-check found ${bad} problem${bad > 1 ? "s" : ""}` : "Albatross self-check: all good",
       body: bad ? "Something may not work right. Click to see what failed." : `All ${r.checks.length} checks passed.` });
     n.on("click", () => shell.openPath(SELFTEST_LOG));
@@ -301,7 +312,7 @@ function setUpHelpers() {
     input: require("./pcinput").create({ log }), showMain: () => show(), log });
   ipcMain.handle("panel-open", () => { sidePanel.open(); return true; });
   try { globalShortcut.register("CommandOrControl+Alt+Space", () => sidePanel.toggle()); } catch {}
-  health = require("./health").create({ BrowserWindow, screen, ipcMain, assetsDir: __dirname, panel: PANEL, dataDir: DATA, showMain: () => show(), log });
+  health = require("./health").create({ BrowserWindow, screen, ipcMain, assetsDir: __dirname, panel: PANEL, dataDir: DATA, showMain: () => show(), quiet, log });
   health.start();
   makeTray.refresh && makeTray.refresh();
 }

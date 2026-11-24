@@ -6,7 +6,7 @@
 const path = require("path");
 const fs = require("fs");
 
-function create({ BrowserWindow, screen, ipcMain, assetsDir, panel, dataDir, showMain = () => {}, log = () => {}, every = 20000, needStreak = 2 }) {
+function create({ BrowserWindow, screen, ipcMain, assetsDir, panel, dataDir, showMain = () => {}, quiet = () => false, log = () => {}, every = 20000, needStreak = 2 }) {
   const FILE = path.join(dataDir, "health.json");
   let cfg = { enabled: true, snooze: {} };
   try { cfg = { ...cfg, ...JSON.parse(fs.readFileSync(FILE, "utf8")) }; } catch {}
@@ -37,7 +37,7 @@ function create({ BrowserWindow, screen, ipcMain, assetsDir, panel, dataDir, sho
   async function poll() {
     if (busy) return; busy = true;
     try {
-      if (!enabled()) { hide(); return; }
+      if (!enabled() || quiet()) { hide(); streak = {}; return; }      // quiet mode: Albatross is being worked on (tools/quiet.js)
       let issues = [];
       try {
         const r = await fetch(panel + "/health", { signal: AbortSignal.timeout(8000) });
