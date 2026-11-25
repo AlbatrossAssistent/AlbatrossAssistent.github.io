@@ -211,7 +211,10 @@ function installUpdate(opts = {}) {
   try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(UPDATE_TARGET, update.version); } catch {}     // checked at the next start: did it really install?
   if (opts.hidden) { try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(HIDDEN_MARK, "1"); } catch {} }
   else showUpdating("Installing version " + update.version + "… Albatross opens again by itself.", null);
-  setTimeout(() => autoUpdater.quitAndInstall(true, true), opts.hidden ? 0 : 1200);
+  // the host started at boot runs with admin rights and holds the install folder; the installer can't end it, ending its task
+  // can (this app runs as you, which is enough). The new version starts the host again right after.
+  const go = () => autoUpdater.quitAndInstall(true, true);
+  execFile("schtasks", ["/End", "/TN", "Burrow host"], { windowsHide: true, timeout: 8000 }, () => setTimeout(go, opts.hidden ? 300 : 1200));
 }
 function updateAtStart() {
   if (!canUpdate()) return Promise.resolve(false);
