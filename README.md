@@ -41,10 +41,11 @@ It prints your code, e.g. `K7QM-4XPT-9F2C-HW3D`, plus a link. Keep that window o
 - A **control center** window opens (http://127.0.0.1:4747, only reachable from this PC). It shows the code in big letters, whether the server and Ollama are running, which models are in GPU memory, and every incoming message live. Add `--no-panel` to skip it.
 - On Windows the PC **won't go to sleep** while the host runs. No power settings are changed; it's a request that ends when the host stops. The screen can still turn off, and closing a laptop lid still sleeps it.
 - `burrow-host.bat` starts Ollama if it isn't running, then starts the host.
+- **Host on this device** (Settings → Connection): on the PC that runs Albatross, this switch connects the app to Albatross on that same PC and puts it online, so your other devices reach it with its code. It's remembered: every start connects and goes online again. Switching it off takes the PC offline; connecting somewhere else with a code switches it off.
 
 ### Updates of the Windows app
 
-Releases are made by GitHub Actions (`.github/workflows/desktop.yml`): when `desktop/package.json` gets a new version on `main`, a Windows machine runs the smoke test, builds the installer and publishes it as a GitHub release. The installed apps find it by themselves and update: right away when Albatross is only in the tray, otherwise when you pick **Restart to update** or close the window. To release, bump the version and push. A version that is already released is skipped; **Run workflow** on the Actions page starts it by hand.
+Releases are made by GitHub Actions (`.github/workflows/desktop.yml`): when `desktop/package.json` gets a new version on `main`, the smoke test runs on Linux, then a Windows machine builds the installer and publishes it as a GitHub release. The installed apps find it by themselves and update: right away when Albatross is only in the tray, otherwise from the **Update now** pop-up (the app closes, installs and opens again), **Restart to update** in the tray, or when you close the window. Inside the app, the website's "newer version" pop-up doesn't appear: the app's pages come with the app, so only a new app version updates them. To release, bump the version and push. A version that is already released is skipped; **Run workflow** on the Actions page starts it by hand.
 
 ### Start at boot (Windows)
 

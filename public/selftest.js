@@ -128,6 +128,10 @@ window.albatrossSelfTest = async function (w) {
     w.gateShow(false); await sleep(20);
     return wasHidden && shown && g.hidden && w.getComputedStyle(d.querySelector("main")).visibility !== "hidden";
   });
+  await tryIt("Settings → Connection has the 'Host on this device' switch, off unless switched on", async () => {
+    const sw = d.getElementById("hostSelf");
+    return !!sw && sw.type === "checkbox" && sw.checked === !!(w.JSON.parse(w.localStorage.getItem("burrow.settings") || "{}").hostSelf) && !!d.getElementById("hostSelfSub");
+  });
   await tryIt("QR codes: the maker draws a code, and every connect link has a QR button", async () => {
     const svg = w.qrSvg && w.qrSvg("https://albatrossassistent.github.io/#code=K7QM-4XPT-9F2C-HW3D");
     const m = w.qrMatrix && w.qrMatrix("https://albatrossassistent.github.io/#code=K7QM-4XPT-9F2C-HW3D");

@@ -2601,3 +2601,7 @@ body.gated #sidebar, body.gated main, body.gated #sidePanel { visibility: hidden
 .gate-msg { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
 .gate-msg.bad { color: var(--danger); }
 .gate-row .btn { border-radius: 10px; box-shadow: none; }
+
+/* Settings → Connection: host on this device */
+.host-self { margin-bottom: 14px; }
+.host-self small.bad { color: var(--danger); }

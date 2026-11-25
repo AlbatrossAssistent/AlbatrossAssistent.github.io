@@ -464,6 +464,7 @@ function playIntro(mode = {}) {
 }
 // a new version: the updating screen, the new files fetched ahead (with the bar), then the reload
 async function updateNow(version) {
+  if (window.albatrossDesktop) return desktopUpdateNow();
   for (const d of $$("dialog[open]")) d.close();          // open windows would sit above the updating screen
   const ui = playIntro({ update: version || "the newest" });
   try {
@@ -622,6 +623,7 @@ async function connect(quiet) {
       loadOwnerGuestInfo();
     }
     setTimeout(pickupJobs, 2000);      // a picture the PC finished while this device was away
+    if (S.hostSelf && !guestMode) setTimeout(hostSelfOnline, 300);
     if (window.EMBED_CHROME) sidebarModel();
     return true;
   } catch (e) {
@@ -629,6 +631,7 @@ async function connect(quiet) {
     connected = false; models = []; loadedInfo = []; updateLoadedPill();
     fillModelSelect(); renderModelTable();
     setStatus("bad", S.conn.mode === "remote" ? "Remote device not reachable" : "Can't reach Ollama");
+    if (S.hostSelf) hostSelfOnline();
     if (document.body.classList.contains("home-view")) renderHome();
     updatePowerBox(false);
     if (!quiet) showConnHelp(e.message);
@@ -2560,6 +2563,20 @@ function openControlCenter() {
   document.body.appendChild(o);
 }
 window.openControlCenter = openControlCenter;
+// The Windows app's pages come with the app, so reloading them changes nothing: "Update now" installs the newest app version
+// instead (downloads it first if needed, then the app closes, installs and opens again by itself).
+let deskWantsInstall = false;
+async function desktopUpdateNow() {
+  const d = window.albatrossDesktop;
+  const v = await d.version().catch(() => ({}));
+  if (v.update && v.update.ready) { toast("Installing Albatross " + v.update.version + "… it opens again by itself."); return d.installUpdate(); }
+  deskWantsInstall = true;
+  toast("Downloading the new version of Albatross… it installs by itself when it's ready.");
+  const r = await d.checkUpdate().catch((e) => ({ error: e.message }));
+  if (r.error) { deskWantsInstall = false; return toast("Couldn't update: " + r.error, { action: "OK" }); }
+  if (!r.latest || r.latest === r.current) { deskWantsInstall = false; toast("The Windows app is on the newest version (" + r.current + ").", { action: "OK" }); }
+  paintDeskVer();
+}
 async function paintDeskVer() {
   const el = document.getElementById("deskVer"); if (!el || !window.albatrossDesktop) return;
   try { const v = await window.albatrossDesktop.version(); el.textContent = "App " + v.app + (v.update ? (v.update.ready ? " · update " + v.update.version + " ready, restart to install" : " · downloading update " + v.update.version + "…") : ""); } catch {}
@@ -2573,12 +2590,19 @@ function wireDeskCard(root) {
     up.disabled = true; up.textContent = "Checking…";
     const r = await window.albatrossDesktop.checkUpdate();
     up.disabled = false; up.textContent = "Check for updates";
-    toast(r.error ? "Couldn't check: " + r.error : r.latest && r.latest !== r.current ? "Albatross " + r.latest + " is downloading, it installs when the app restarts" : "Albatross is up to date (" + r.current + ")");
+    const found = !r.error && r.latest && r.latest !== r.current;
+    if (found) deskWantsInstall = true;
+    toast(r.error ? "Couldn't check: " + r.error : found ? "Albatross " + r.latest + " is downloading: it installs by itself when it's ready" : "Albatross is up to date (" + r.current + ")");
     paintDeskVer();
   };
   paintDeskVer();
 }
-if (window.albatrossDesktop) window.albatrossDesktop.onUpdate((u) => { if (u && u.ready) toast("Albatross " + u.version + " is ready: it installs the next time the app starts (or Home → This PC)"); paintDeskVer(); });
+if (window.albatrossDesktop) window.albatrossDesktop.onUpdate((u) => {
+  paintDeskVer();
+  if (!u || !u.ready) return;
+  if (deskWantsInstall) { deskWantsInstall = false; toast("Installing Albatross " + u.version + "… it opens again by itself."); return window.albatrossDesktop.installUpdate(); }
+  updatePop("Albatross " + u.version + " is ready", ["Updating takes a few seconds: the app closes, installs the new version and opens again by itself.", "Or later: it updates when you close the window."], [["Later", null, false], ["Update now", () => window.albatrossDesktop.installUpdate(), true]]);
+});
 // an update that failed (the check, the download, or an install that never happened): the app says so instead of staying quiet
 if (window.albatrossDesktop && window.albatrossDesktop.onUpdateError) { const upErr = (e) => { if (e && e.message) toast("Albatross couldn't update: " + e.message, { action: "OK" }); }; window.albatrossDesktop.onUpdateError(upErr); setTimeout(() => window.albatrossDesktop.lastUpdateError().then(upErr).catch(() => {}), 9000); }
 
@@ -5423,6 +5447,7 @@ async function useConn(c) {
   const seq = ++connSeq;
   const sec = connSecrets()[c.id] || {};
   S.conn.mode = c.mode; S.conn.url = c.url; S.conn.relay = c.relay; S.conn.code = c.mode === "remote" ? sec.code || "" : S.conn.code;
+  hostSelfOffIfRemote();
   for (const k of ["powerUrl", "wakeHost", "wakePort", "wakeMac"]) { if (sec[k]) store.set(k, sec[k]); else store.del(k); }
   saveSettings(); applyAppearance();
   $("#ollamaUrl").value = S.conn.url; $("#codeInput").value = S.conn.code; $("#relayUrl").value = S.conn.relay; setConnCards(S.conn.mode);
@@ -5446,8 +5471,49 @@ $("#saveConnBtn").onclick = () => {
   store.set("connSecrets", sec); saveSettings();
   $("#saveConnName").value = ""; renderSavedConns(); toast(name + " saved");
 };
+// ---------- Host on this device ----------
+// On: this device is the host. It connects to Albatross on itself (the host at 127.0.0.1:4747, which the Windows app runs) and
+// puts it online, so phones and other devices reach it with its code. Remembered: every start connects and goes online again.
+// Off: it stops hosting (goes offline). Connecting somewhere else with a code switches it off.
+const HOST_SELF_TEXT = "This device runs Albatross for your other devices: it connects to itself and goes online, so your phone reaches it with its code. It does this by itself every time it starts.";
+function hostSelfSay(t, bad) { const s = $("#hostSelfSub"); if (!s) return; s.textContent = t || HOST_SELF_TEXT; s.classList.toggle("bad", !!bad); }
+function hostSelfLocal() {
+  if (S.conn.mode === "local" && isLocalOllama()) return false;
+  S.conn.mode = "local"; S.conn.url = "http://localhost:11434"; saveSettings();
+  $("#ollamaUrl").value = S.conn.url; setConnCards("local");
+  return true;
+}
+let hostSelfBusy = false;
+async function hostSelfOnline() {
+  if (!S.hostSelf || hostSelfBusy) return;
+  if (S.conn.mode === "remote") return hostSelfOffIfRemote();     // opened with someone's code link: that wins
+  if (!viaHost) return hostSelfSay(window.albatrossDesktop ? "Albatross isn't running on this device right now. Restart the app (tray icon → Quit, then open it)." : "Albatross isn't running on this device. Install and open the Albatross app for Windows here, then switch this on again.", true);
+  hostSelfBusy = true;
+  try {
+    let st = await pcCall("/pc/host", null, "GET");
+    if (!st.online) st = await pcCall("/pc/host", { action: "online", on: true });
+    for (let i = 0; i < 10 && st.connection !== "online"; i++) { hostSelfSay("Going online…"); await new Promise((r) => setTimeout(r, 1500)); st = await pcCall("/pc/host", null, "GET"); }
+    hostSelfSay(st.connection === "online" ? "Hosting: this device is online. Your other devices connect with its code (below, or PC → Codes)." : "Hosting, but the Albatross server isn't reachable yet: it keeps trying.", st.connection !== "online");
+    loadOwnerGuestInfo();
+  } catch (e) { hostSelfSay(/Unknown|404/.test(e.message) ? "Albatross on this device is too old for this: update it." : "Couldn't go online: " + e.message, true); }
+  finally { hostSelfBusy = false; }
+}
+$("#hostSelf").checked = !!S.hostSelf;
+$("#hostSelf").onchange = async (e) => {
+  S.hostSelf = e.target.checked; saveSettings();
+  if (!S.hostSelf) {
+    hostSelfSay("");
+    if (viaHost && S.conn.mode === "local") { try { await pcCall("/pc/host", { action: "online", on: false }); toast("Stopped hosting: other devices can't reach this one anymore"); } catch (err) { toast(err.message); } }
+    return;
+  }
+  hostSelfSay("Connecting to Albatross on this device…");
+  if (hostSelfLocal() || !viaHost) { await connect(true); checkSearch(); checkHost(); }
+  await hostSelfOnline();
+};
+function hostSelfOffIfRemote() { if (S.conn.mode === "remote" && S.hostSelf) { S.hostSelf = false; saveSettings(); $("#hostSelf").checked = false; hostSelfSay(""); } }
 $("#connectBtn").onclick = async () => {
   S.conn.mode = $("#connectBtn").dataset.mode || "local";
+  hostSelfOffIfRemote();
   S.conn.url = $("#ollamaUrl").value.trim() || "http://localhost:11434";
   S.conn.code = formatCode($("#codeInput").value);
   S.conn.relay = $("#relayUrl").value.trim().replace(/\/+$/, "") || DEFAULT_SERVER;
@@ -7397,8 +7463,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-25.4";
+const APP_VERSION = "2026-11-25.5";
 const WHATS_NEW = [
+  ["2026-11-25.5", ["Settings → Connection → Host on this device: this device connects to itself and goes online by itself, every start","In the Windows app, Update now installs the new app version (it closes, installs and opens again) instead of reloading the old pages"]],
   ["2026-11-25.4", ["Signing in is needed now: the app opens on a sign-in screen (Google or email) instead of the opening animation","Guests who are signed in get their own folder for their pictures","The Windows app now updates by itself after every new version (releases are built automatically)"]],
   ["2026-11-25.3", ["Your files are kept per account now: pictures, the AI's folder, code and files sent with Beam go into the account's own folder; guests get theirs","Guest chat summaries look at the pictures the PC made, with a model that can see them","QR codes to connect: next to every connect link in Settings, on the PC page and in the control center"]],
   ["2026-11-25.2", ["Home is a plain launcher now: one box to ask the AI or find a tool (type its name, press Enter), the tools as a list, your recent chats next to it","The side panel looks plainer, and updates of the Windows app no longer fail with 'Failed to uninstall old application files'"]],
@@ -7563,6 +7630,7 @@ async function checkLive() {
   if (typeof cfg.notice === "string" && cfg.notice.trim() && store.get("liveNotice", "") !== cfg.notice) {
     store.set("liveNotice", cfg.notice); updatePop("Albatross", [cfg.notice.trim()], [["OK", null, true]]);
   }
+  if (window.albatrossDesktop) return;                 // the Windows app tells about its own new versions (onUpdate above)
   const tooOld = typeof cfg.minVersion === "string" && newerVersion(cfg.minVersion, APP_VERSION);
   const behind = j.version && newerVersion(j.version, APP_VERSION);
   if ((tooOld || behind) && !updateOffered) {
@@ -7615,6 +7683,7 @@ if (window.EMBED_CHROME && (!current || current.src !== "chrome")) newChat("chat
 { const go = new URLSearchParams(location.search).get("go");
   if (go === "chat") { newChat("chat", "", false); setView("chat"); } else if (go === "pc") setView("pc", { tab: "status" }); else if (go === "jarvis") setView("jarvis"); }
 if (S.files.name) peerConnect();
+if (S.hostSelf && !urlCode) hostSelfLocal();        // hosting: always this device itself
 checkHost();
 connect();
 checkSearch();
