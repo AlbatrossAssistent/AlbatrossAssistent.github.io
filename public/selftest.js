@@ -11,13 +11,20 @@ window.albatrossSelfTest = async function (w) {
   for (const v of ["home", "chat", "notes", "mail", "hub", "monitor", "remote", "agent", "jarvis", "pc", "browser"]) {
     await tryIt("open page: " + v, async () => { w.setView(v); await sleep(120); return true; });
   }
-  await tryIt("home is a hub: no sidebars, an ask box, and every tool as a tile", () => {
-    w.setView("home");
+  await tryIt("home is a launcher: no sidebars, one box that finds tools or asks the AI, every tool listed", async () => {
+    w.setView("home"); await sleep(60);
     const hidden = (sel) => { const e = d.querySelector(sel); return !e || w.getComputedStyle(e).display === "none"; };
-    return hidden("#sidebar") && hidden("main > .topbar") && hidden("#sidePanel")
-      && !!d.querySelector(".hh-ask textarea") && !!d.querySelector(".hh-hero h1") && !d.querySelector("[data-go=agent]")
-      && ["chat", "image", "beam", "mail", "print", "jarvis", "notes", "hub", "monitor", "browser", "connect", "settings"].every((k) => !!d.querySelector(".hh-tile[data-go=" + k + "]"))
-      && d.querySelector(".hh-ask").getBoundingClientRect().top < w.innerHeight;
+    const all = ["chat", "image", "beam", "mail", "print", "jarvis", "notes", "hub", "monitor", "remote", "browser", "connect", "settings"].every((k) => !!d.querySelector(".hm-row[data-go=" + k + "]"));
+    const ta = d.querySelector(".hm-cmd textarea");
+    ta.value = "remo"; ta.dispatchEvent(new w.Event("input")); await sleep(20);
+    const shown = [...d.querySelectorAll(".hm-row")].filter((r) => !r.hidden).map((r) => r.dataset.go);
+    const picked = d.querySelector(".hm-row.on");
+    ta.value = "how tall is the eiffel tower"; ta.dispatchEvent(new w.Event("input")); await sleep(20);
+    const sentence = [...d.querySelectorAll(".hm-row")].every((r) => !r.hidden) && !d.querySelector(".hm-row.on");
+    ta.value = ""; ta.dispatchEvent(new w.Event("input"));
+    return hidden("#sidebar") && hidden("main > .topbar") && hidden("#sidePanel") && all && !d.querySelector("[data-go=agent]")
+      && shown.length === 1 && shown[0] === "remote" && picked && picked.dataset.go === "remote" && sentence
+      && ta.getBoundingClientRect().top < w.innerHeight || JSON.stringify({ shown, sentence });
   });
   await tryIt("background is a restrained night sky", () => {
     w.dispatchEvent(new w.MouseEvent("pointermove", { clientX: 120, clientY: 240 }));
@@ -31,6 +38,7 @@ window.albatrossSelfTest = async function (w) {
   });
   await tryIt("light background shapes fall, collide and can be dragged", async () => {
     Object.defineProperty(d, "hidden", { configurable: true, get: () => false });
+    w.setView("chat");      // Home keeps a plain background; the shapes are behind the chat and the other pages
     ev('S.theme = "light"; applyAppearance()');
     const tiles = [...d.querySelectorAll("#orbs i")], mid = (t) => { const r = t.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
     const starts = tiles.map((t) => mid(t)[1]);
@@ -67,7 +75,7 @@ window.albatrossSelfTest = async function (w) {
   await tryIt("no WhatsApp section; Print is a manual dialog, not the Agent", async () => {
     w.setView("home"); await sleep(80);
     if (d.querySelector("#waForm") || /whatsapp/i.test(d.querySelector("#home").textContent)) return "WhatsApp still on the home page";
-    d.querySelector('.hh-tile[data-go=print]').click(); await sleep(150);
+    d.querySelector('.hm-row[data-go=print]').click(); await sleep(150);
     const dlg = d.querySelector("#printDlg"), ok = dlg.open && !d.body.classList.contains("agent-view") && !!d.querySelector("#prPrinter") && d.querySelector("#prGo").disabled;
     ev('prChoose({ name: "letter.pdf", size: 1234, blob: new Blob(["x"]), from: "This device" })');
     const chosen = !d.querySelector("#prChosen").hidden && /letter.pdf/.test(d.querySelector("#prChosen").textContent);
@@ -107,10 +115,10 @@ window.albatrossSelfTest = async function (w) {
   await tryIt("music builds a song and a MIDI file", async () => { const s = w.musicTest.buildSong({ title: "t", bpm: 120, bars: 2, tracks: [{ name: "p", instrument: "piano", loop: true, notes: "(C4/0.5 E4/0.5)x2 [C4 E4 G4]/2" }], drums: { kick: "x...", snare: "", clap: "", hat: "", openhat: "" } }); const b = await w.musicTest.midiFile(s).arrayBuffer(); return b.byteLength > 50 && new TextDecoder().decode(new Uint8Array(b).slice(0, 4)) === "MThd"; });
   await tryIt("remote desktop draws its screen, keys and controls, and has a Home tile", async () => {
     w.setView("remote"); await sleep(120);
-    const ok = !!d.querySelector("#rdStage #rdImg") && d.querySelectorAll("#rdKeys [data-combo]").length >= 10 && !!d.querySelector("#rdQual") && !!d.querySelector(".hh-tile, #goRemote")
+    const ok = !!d.querySelector("#rdStage #rdImg") && d.querySelectorAll("#rdKeys [data-combo]").length >= 10 && !!d.querySelector("#rdQual") && !!d.querySelector("#goRemote")
       && w.getComputedStyle(d.querySelector("#remotePage")).display !== "none" && w.getComputedStyle(d.querySelector(".messages")).display === "none";
     w.setView("home"); await sleep(60);
-    return ok && !!d.querySelector(".hh-tile[data-go=remote]") && w.getComputedStyle(d.querySelector("#remotePage")).display === "none";
+    return ok && !!d.querySelector(".hm-row[data-go=remote]") && w.getComputedStyle(d.querySelector("#remotePage")).display === "none";
   });
   await tryIt("monitor draws its cards", async () => { w.setView("monitor"); await sleep(150); return d.querySelectorAll("#monitorPage .home-card").length === 5 && !!d.querySelector("#mlFit button"); });
   await tryIt("list panel parses and adds steps", async () => { d.querySelector("#goList").click(); await sleep(80); const t = d.querySelector("#spList textarea"); if (d.querySelector("#sidePanel").hidden || d.querySelector("#sidePanel").dataset.tab !== "list") return "List tab not open in the side panel"; t.value = "image 3x: a red fox\ntext: a story about it"; t.dispatchEvent(new Event("input")); t.dispatchEvent(new Event("blur")); await sleep(80); const st = ev("S.listDraft"); const into = d.querySelector("#lpInto") && d.querySelector("#lpTarget").textContent; d.querySelector("#goList").click(); if (!into) return "no Into choice"; return st.length === 2 && st[0].kind === "image" && st[0].times === 3 && st[1].kind === "text" && st[0].prompt === "a red fox" || JSON.stringify(st); });

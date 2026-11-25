@@ -41,29 +41,29 @@
   .modelrow { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; font-size: 12.5px; color: var(--muted); }
   .modelrow select { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--panel); border-radius: 9px; padding: 5px 8px; font-size: 12.5px; }
   .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--soft2); white-space: nowrap; }
-  .tag.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .tag.ok { background: transparent; }
 
   .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 12px; scrollbar-width: thin; }
 
   /* Explain: the two ways to pick */
   .pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 14px; }
-  .pick button { border: 1px solid var(--line); background: var(--panel); border-radius: 16px; padding: 18px 12px 14px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; box-shadow: var(--shadow); transition: transform .12s, border-color .12s; }
-  .pick button:hover { border-color: var(--accent); transform: translateY(-1px); }
-  .pick button svg.i { width: 34px; height: 34px; stroke-width: 1.6; color: var(--accent); }
+  .pick button { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 16px 12px 13px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 7px; transition: border-color .12s; }
+  .pick button:hover { border-color: var(--muted); }
+  .pick button svg.i { width: 28px; height: 28px; stroke-width: 1.6; color: var(--fg); }
   .pick b { font-weight: 600; }
   .pick small { color: var(--muted); font-size: 12px; text-align: center; line-height: 1.35; }
   .intro h2 { font-size: 19px; letter-spacing: -.02em; margin: 6px 0 4px; }
-  .intro p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+  .intro p { margin: 4px 0 12px; color: var(--muted); font-size: 13px; line-height: 1.45; }
   .ideas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .ideas button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 11px; cursor: pointer; font-size: 12.5px; color: var(--muted); }
   .ideas button:hover { color: var(--fg); border-color: var(--accent); }
 
   .msg { margin: 10px 0; }
   .msg.me { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .msg.me .shot { max-width: 92%; max-height: 220px; border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); object-fit: contain; background: var(--panel); }
+  .msg.me .shot { max-width: 92%; max-height: 220px; border-radius: 8px; border: 1px solid var(--line); object-fit: contain; background: var(--panel); }
   .msg.me .q { background: var(--accent); color: var(--accent-fg); padding: 7px 12px; border-radius: 16px 16px 4px 16px; max-width: 92%; white-space: pre-wrap; word-break: break-word; }
-  .msg.ai { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 13px; box-shadow: var(--shadow); word-break: break-word; }
+  .msg.ai { padding: 2px 0; word-break: break-word; }
   .msg.ai.err { border-color: color-mix(in srgb, var(--bad) 45%, transparent); color: var(--bad); }
   .md p { margin: 0 0 8px; } .md p:last-child { margin-bottom: 0; }
   .md ul, .md ol { margin: 4px 0 8px; padding-left: 20px; } .md li { margin: 2px 0; }
@@ -77,8 +77,8 @@
 
   /* the box at the bottom */
   .composer { padding: 10px 12px 12px; border-top: 1px solid var(--line); background: var(--bg); }
-  .field { display: flex; flex-direction: column; border: 1px solid var(--line); background: var(--panel); border-radius: 16px; padding: 8px 8px 6px 12px; box-shadow: var(--shadow); }
-  .field:focus-within { border-color: var(--accent); }
+  .field { display: flex; flex-direction: column; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 8px 8px 6px 12px; }
+  .field:focus-within { border-color: var(--muted); }
   .field textarea { border: 0; outline: 0; resize: none; background: transparent; min-height: 22px; max-height: 160px; padding: 2px 0; line-height: 1.45; }
   .field .row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
   .field .row .sp { flex: 1; }
@@ -143,13 +143,11 @@
 <section class="view" id="vExplain">
   <div class="scroll" id="xThread">
     <div class="intro" id="xIntro">
-      <h2>What's that on my screen?</h2>
-      <p>Pick anything: a chart, an error message, a word, a button. The AI explains it. Type a question first if you want something specific.</p>
+      <p>Pick something on the screen and the AI explains it. Type a question first if you have one.</p>
       <div class="pick">
         <button type="button" data-pick="box"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2" stroke-dasharray="3.2 2.6"/></svg><b>Drag a box</b><small>Around a rectangle area</small></button>
         <button type="button" data-pick="lasso"><svg class="i" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7" stroke-dasharray="2.5 2.2"/><path d="M15.2 19.8l4.6-4.6 1.8 1.8-4.6 4.6h-1.8z"/></svg><b>Circle it</b><small>Draw around it freehand</small></button>
       </div>
-      <div class="ideas" id="xIdeas"></div>
     </div>
   </div>
   <div class="composer">
@@ -171,10 +169,7 @@
 <section class="view" id="vControl" hidden>
   <div class="scroll" id="cThread">
     <div class="intro" id="cIntro">
-      <h2>Let the AI do it</h2>
-      <p>Say what should happen. The AI looks at the screen, then clicks and types in your apps, one step at a time, until it's done. You see every step here.</p>
-      <div class="warnbox" id="cWarn">To stop it, just move your mouse (or press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd>). It asks you before anything that sends, buys or deletes.</div>
-      <div class="ideas" id="cIdeas"></div>
+      <p>Say what should happen. The AI works your mouse and keyboard step by step; every step shows up here. Move the mouse to stop it. It asks before anything that sends, buys or deletes, and before every command.</p>
     </div>
   </div>
   <div class="composer">
@@ -357,11 +352,6 @@ $("#xSend").onclick = xSend;
 $("#xText").oninput = (e) => grow(e.target);
 $("#xText").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); xSend(); } };
 $("#xNew").onclick = () => { if (xBusy) return; xMsgs = []; xThread.querySelectorAll(".msg").forEach((n) => n.remove()); $("#xIntro").hidden = false; $("#xNew").hidden = true; $("#xText").focus(); };
-for (const idea of ["What does this mean?", "Translate this", "Is this safe to click?", "How do I fix this error?", "Summarize this"]) {
-  const b = document.createElement("button"); b.type = "button"; b.textContent = idea;
-  b.onclick = () => { $("#xText").value = idea; xPick("box"); };
-  $("#xIdeas").appendChild(b);
-}
 
 // ======================================================================
 // Control: the AI looks, acts, looks again ... until it says it's done
@@ -577,11 +567,6 @@ $("#cText").oninput = (e) => grow(e.target);
 $("#cText").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); cRun(); } };
 $("#cAsk").checked = store.get("askEach", false);
 $("#cAsk").onchange = (e) => store.set("askEach", e.target.checked);
-for (const idea of ["Open Notepad and write a shopping list for pasta", "Turn on dark mode in Windows' settings", "Search the weather for tomorrow in my browser"]) {
-  const b = document.createElement("button"); b.type = "button"; b.textContent = idea;
-  b.onclick = () => { $("#cText").value = idea; grow($("#cText")); $("#cText").focus(); };
-  $("#cIdeas").appendChild(b);
-}
 
 setTab(store.get("tab", "explain"));
 loadModels();
