@@ -21,7 +21,8 @@ jobs:
         with:
           node-version: 20
       - name: Smoke test (the app in headless Chrome)
-        run: node test/smoke.js
+        # one second try: headless Chrome sometimes doesn't finish loading the page ("the test page didn't finish")
+        run: node test/smoke.js || (echo "Trying the smoke test once more" && node test/smoke.js)
       - name: Tools on the PC (host/mytools.js)
         run: node test/mytools.js
   deploy:
