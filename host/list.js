@@ -109,7 +109,7 @@ async function picture(L, s, prompt, rep, ctx) {
   const t0 = Date.now();
   let image = "";
   L.pct = null;
-  const res = await ctx.upstream("POST", "/api/generate", JSON.stringify(body), L.ctrl.signal);
+  const res = await ctx.upstream("POST", "/api/generate", JSON.stringify({ ...body, _space: require("./spaces").spaceOf(ctx.uid) }), L.ctrl.signal);
   await lines(res, (o) => {
     if (o.error) throw new Error(o.error);
     if (o.status) { L.progress = o.status; ctx.changed(); }

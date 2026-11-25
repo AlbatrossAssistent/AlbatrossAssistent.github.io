@@ -2569,3 +2569,12 @@ body.remote-view #typeBadge, body.remote-view #model { display: none !important;
 #rdImg { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
 .rd-msg { position: absolute; inset: 0; display: grid; place-items: center; color: #ddd; font-size: 14px; text-align: center; padding: 20px; }
 .rd-type { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; resize: none; }
+
+/* the "QR code" pop-up for the connect links */
+.qr-dlg { border: 1px solid var(--line); border-radius: 18px; padding: 20px; width: min(340px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); text-align: center; }
+.qr-dlg::backdrop { background: rgba(0,0,0,.45); }
+.qr-dlg h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.qr-dlg .qr-img { width: 240px; height: 240px; margin: 0 auto; border-radius: 10px; overflow: hidden; background: #fff; }
+.qr-dlg .qr-img svg { width: 100%; height: 100%; display: block; }
+.qr-dlg .qr-note { margin: 12px 0 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.qr-dlg .row { display: flex; gap: 8px; justify-content: center; }

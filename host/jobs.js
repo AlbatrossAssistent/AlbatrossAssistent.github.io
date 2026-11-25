@@ -15,6 +15,7 @@ function start({ body, chatId, upstream, note, uid, onGuestDone, path = "/api/ch
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   const id = crypto.randomBytes(9).toString("base64url");
   const ctrl = new AbortController();
+  if (path === "/api/generate") body = JSON.stringify({ ...j, _space: require("./spaces").spaceOf(uid) });    // the picture is saved in the asker's folder
   const job = { id, uid: uid || "", chatId: /^[A-Za-z0-9_-]{1,64}$/.test(String(chatId || "")) ? chatId : "", model: j.model || "", kind: path === "/api/generate" ? "image" : "chat", prompt: String(j.prompt || "").slice(0, 400), image: "", pcFile: null, ctrl, lines: [], chars: 0, done: false, error: "", started: Date.now(), polled: Date.now(), content: "", thinking: "", stats: "", waiters: [] };
   jobs.set(id, job);
   const wake = () => { for (const w of job.waiters.splice(0)) w(); };

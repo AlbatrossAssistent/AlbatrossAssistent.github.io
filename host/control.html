@@ -44,6 +44,11 @@ header .spacer { flex: 1; }
 @keyframes pulse { 50% { opacity: .35; } }
 
 .card { border-radius: 26px; padding: 18px 20px; min-width: 0; }
+.qrbox { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 14px auto 4px; }
+.qrbox[hidden] { display: none; }
+.qrbox .qr { width: 220px; height: 220px; border-radius: 12px; overflow: hidden; background: #fff; }
+.qrbox .qr svg { width: 100%; height: 100%; display: block; }
+.qrbox small { color: var(--muted, #888); font-size: 12px; text-align: center; }
 .card h2 { margin: 0 0 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 10px; }
 .card h2 .spacer { flex: 1; }
 
@@ -154,9 +159,11 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
     <div class="link" style="margin-bottom:4px">🔒 End-to-end encrypted · Guests can chat and make pictures (with an owner visibility warning and AI recap), while PC and private items are off.</div>
     <div class="link" id="link"></div>
     <div class="state" id="heroState"></div>
+    <div class="qrbox" id="guestQr" hidden><div class="qr"></div><small>Scan with a phone's camera to connect as a guest.</small></div>
     <div class="row">
       <button id="copyGuestCode">Copy guest code</button>
       <button id="copyGuestLink">Copy guest link</button>
+      <button id="qrGuest" type="button" aria-expanded="false">QR code</button>
       <button id="newGuestCode">Reset guest code</button>
     </div>
   </section>
@@ -181,10 +188,12 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
       <h2>Admin code <span class="spacer"></span><button class="small" id="showAdminCode" type="button">Show</button></h2>
       <div class="guest-code" id="code" style="user-select:none">••••-••••-••••-••••</div>
       <div class="small" id="adminLink" style="margin-bottom:6px;word-break:break-all" hidden></div>
+      <div class="qrbox" id="adminQr" hidden><div class="qr"></div><small>Full access to this PC: only scan it on your own phone.</small></div>
       <div class="small" id="guestState" style="margin-bottom:10px">Full access to this PC, its files, Jarvis, Browser, Mail, Notes and settings. Hidden by default so only the guest code is visible on screen.</div>
       <div class="row" style="justify-content:flex-start;margin-top:8px">
         <button class="small" id="copyCode">Copy admin code</button>
         <button class="small" id="copyLink">Copy admin link</button>
+        <button class="small" id="qrAdmin" type="button" aria-expanded="false">QR code</button>
         <button class="small" id="newAdminCode">Reset admin code</button>
       </div>
     </div>
@@ -220,6 +229,7 @@ button.small { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
   </section>
 </div>
 
+<script src="/app/qr.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 let S = null, seen = new Set(), first = true, showAdmin = false;
@@ -297,6 +307,7 @@ function render() {
     $("#adminLink").hidden = true;
   }
   $("#showAdminCode").textContent = showAdmin ? "Hide" : "Show";
+  paintQr();
 
   setTile("srv", online ? "ok" : S.connection === "connecting" ? "warn" : "bad",
     online ? "Online" : S.connection === "connecting" ? "Connecting…" : "Reconnecting…",
@@ -485,6 +496,22 @@ $("#showAdminCode").onclick = () => { showAdmin = !showAdmin; render(); };
 $("#copyCode").onclick = (e) => S && S.code && copy(S.code, e.target);
 $("#copyLink").onclick = (e) => S && S.code && copy(S.link || (S.server + "/#code=" + S.code), e.target);
 $("#copyGuestCode").onclick = (e) => S && S.guestCode && copy(S.guestCode, e.target);
+// QR codes of the links: a phone's camera opens the link, and the website connects with the code in it
+var qrLinks = { guest: () => S && S.guestCode ? (S.guestLink || (S.server + "/#code=" + S.guestCode)) : "", admin: () => S && S.code && showAdmin ? (S.link || (S.server + "/#code=" + S.code)) : "" };
+var qrDrawn = { guest: "", admin: "" };
+function paintQr() {
+  if (!qrLinks || !qrDrawn) return;     // a redraw before this part of the page has run
+  for (const k of ["guest", "admin"]) {
+    const box = $("#" + k + "Qr"), btn = $("#qr" + (k === "guest" ? "Guest" : "Admin")), link = qrLinks[k]();
+    if (!box || !btn) continue;
+    if (!link) box.hidden = true;
+    btn.disabled = !link || !window.qrSvg;
+    btn.textContent = box.hidden ? "QR code" : "Hide QR code"; btn.setAttribute("aria-expanded", String(!box.hidden));
+    if (!box.hidden && qrDrawn[k] !== link) { box.querySelector(".qr").innerHTML = window.qrSvg(link); qrDrawn[k] = link; }
+  }
+}
+$("#qrGuest").onclick = () => { $("#guestQr").hidden = !$("#guestQr").hidden; paintQr(); };
+$("#qrAdmin").onclick = () => { $("#adminQr").hidden = !$("#adminQr").hidden; paintQr(); };
 $("#copyGuestLink").onclick = (e) => S && S.guestCode && copy(S.guestLink || (S.server + "/#code=" + S.guestCode), e.target);
 $("#newGuestCode").onclick = async (e) => {
   const btn = e.target, old = btn.textContent;

@@ -75,7 +75,7 @@ function handle(method, p, body, note) {
     let got = 0;
     try { got = Math.min(size, fs.statSync(tmp).size); } catch {}     // left over from before a restart of the host
     const fd = fs.openSync(tmp, got ? "r+" : "w");
-    uploads.set(id, { name, size, got, tmp, fd, time: Date.now() });
+    uploads.set(id, { name, size, got, tmp, fd, time: Date.now(), space: require("./spaces").current() });
     return [200, { id, got }];
   }
   if (method === "POST" && p === "/files/upload-chunk") {
@@ -96,7 +96,8 @@ function handle(method, p, body, note) {
     uploads.delete(j.id);
     fs.closeSync(u.fd);
     if (u.got !== u.size) { fs.unlinkSync(u.tmp); return [400, { error: "The file arrived incomplete. Send it again." }]; }
-    const dest = freePath(RECEIVED, u.name);
+    const into = require("./spaces").baseOf(u.space); fs.mkdirSync(into, { recursive: true });
+    const dest = freePath(into, u.name);
     fs.renameSync(u.tmp, dest);
     finished.set(j.id, { saved: path.basename(dest), time: Date.now() });
     received.unshift({ name: path.basename(dest), size: u.size, time: Date.now() });

@@ -3,8 +3,8 @@
 // - keeps sending files to your PC after the page was closed (best effort: the browser decides how long a worker may run).
 importScripts("xfer.js");
 
-const CACHE = "albatross-shell-v2";
-const SHELL = ["./", "index.html", "app.css", "app.js", "account.js", "network.js", "notes.js", "mail.js", "music.js", "sound.js", "tour.js", "voice.js", "hub.js", "monitor.js", "list.js", "scenes.js", "starfield.js", "orb.js", "xfer.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
+const CACHE = "albatross-shell-v3";
+const SHELL = ["./", "index.html", "app.css", "app.js", "account.js", "network.js", "notes.js", "mail.js", "music.js", "sound.js", "tour.js", "voice.js", "hub.js", "monitor.js", "remote.js", "qr.js", "list.js", "scenes.js", "starfield.js", "orb.js", "xfer.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => Promise.all(SHELL.map((u) => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));

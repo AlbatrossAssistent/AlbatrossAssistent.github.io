@@ -899,7 +899,7 @@ $("#powerBtn").onclick = async () => {
 let offArmed = 0, offPending = 0;
 // Chats, lists and requests that keep running on the PC belong to the signed-in account: they carry its sign-in token (inside
 // the end-to-end encryption), which the PC checks (host/account.js).
-const ACCT_PATHS = /^\/(chats|jobs)\/|^\/pc\/list$/;
+const ACCT_PATHS = /^\/(chats|jobs|pcfiles)\/|^\/pc\/list$|^\/agent\/(list|read|readfile|write|move|mkdir|upload|print|upscale\/)|^\/files\/upload-/;
 let acctReadyOk = false;
 const acctReady = new Promise((res) => { window.acctResolve = () => { acctReadyOk = true; res(true); }; });
 async function acctToken() {
@@ -6031,7 +6031,7 @@ function renderOwnerGuestRecaps() {
     if (r.canDescribe === false) dBtn.title = "This chat's messages weren't saved on the PC (it's from before this feature)";
     aiLine.textContent = r.recapBusy ? `Checking with ${r.busyModel || "the model"} on your PC… (loading it first can take a while; you can close this page)`
       : r.aiError ? "Couldn't describe it: " + r.aiError
-      : r.described ? `AI description by ${r.describedWith}${r.describedAt ? " · " + new Date(r.describedAt).toLocaleString() : ""}${r.stale ? " · the guest wrote more since" : ""}`
+      : r.described ? `AI description by ${r.describedWith}${r.sawPictures ? ` (looked at ${r.sawPictures === 1 ? "the picture" : r.sawPictures + " pictures"})` : ""}${r.describedAt ? " · " + new Date(r.describedAt).toLocaleString() : ""}${r.stale ? " · the guest wrote more since" : ""}`
       : r.canDescribe === false ? "" : "Quick summary. Press Describe to have the selected model check the chat.";
     dBtn.onclick = async () => {
       const sel = $("#model")?.value || S.model || "";
@@ -6109,6 +6109,27 @@ if ($("#pcGuestOn")) $("#pcGuestOn").onchange = async (e) => {
   } catch (err) { toast("Couldn't change guest mode: " + err.message); }
 };
 if ($("#pcCopyGuestCode")) $("#pcCopyGuestCode").onclick = () => ownerGuestState.code ? copy(ownerGuestState.code) : toast("Guest code not loaded yet");
+// "QR code": the link as a code a phone's camera can scan; opening it connects with the code in it (public/qr.js)
+function showQr(link, title, note) {
+  if (!link) return toast("The code isn't loaded yet");
+  if (!window.qrSvg) return toast("QR codes need a newer version of this page: reload it");
+  let d = $("#qrDlg");
+  if (!d) {
+    d = document.createElement("dialog"); d.id = "qrDlg"; d.className = "qr-dlg";
+    d.innerHTML = '<h3></h3><div class="qr-img"></div><p class="qr-note"></p><div class="row"><button class="btn small" type="button" data-copy>Copy link</button><button class="btn small primary" type="button" data-close>Done</button></div>';
+    d.querySelector("[data-close]").onclick = () => d.close();
+    d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
+    document.body.appendChild(d);
+  }
+  d.querySelector("h3").textContent = title;
+  d.querySelector(".qr-img").innerHTML = window.qrSvg(link);
+  d.querySelector(".qr-note").textContent = note;
+  d.querySelector("[data-copy]").onclick = () => copy(link);
+  d.showModal();
+}
+const adminLinkNow = () => { const c = ownerGuestState.adminCode || S.conn.code; return c ? guestShareLink(c) : ""; };
+for (const id of ["pcQrGuest", "connQrGuest"]) if ($("#" + id)) $("#" + id).onclick = () => showQr(ownerGuestState.code ? guestShareLink(ownerGuestState.code) : "", "Guest code", "Scan it with a phone's camera to connect as a guest: chat and pictures, no PC or private items.");
+for (const id of ["pcQrAdmin", "connQrAdmin"]) if ($("#" + id)) $("#" + id).onclick = () => showQr(adminLinkNow(), "Admin code", "Full access to this PC. Only scan it on your own phone, and don't show it to anyone.");
 if ($("#pcCopyGuestLink")) $("#pcCopyGuestLink").onclick = () => ownerGuestState.code ? copy(guestShareLink(ownerGuestState.code)) : toast("Guest code not loaded yet");
 if ($("#connCopyGuestCode")) $("#connCopyGuestCode").onclick = () => ownerGuestState.code ? copy(ownerGuestState.code) : toast("Guest code not loaded yet");
 if ($("#connCopyGuestLink")) $("#connCopyGuestLink").onclick = () => ownerGuestState.code ? copy(guestShareLink(ownerGuestState.code)) : toast("Guest code not loaded yet");
@@ -7349,8 +7370,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-25.2";
+const APP_VERSION = "2026-11-25.3";
 const WHATS_NEW = [
+  ["2026-11-25.3", ["Your files are kept per account now: pictures, the AI's folder, code and files sent with Beam go into the account's own folder; guests get theirs","Guest chat summaries look at the pictures the PC made, with a model that can see them","QR codes to connect: next to every connect link in Settings, on the PC page and in the control center"]],
   ["2026-11-25.2", ["Home is a plain launcher now: one box to ask the AI or find a tool (type its name, press Enter), the tools as a list, your recent chats next to it","The side panel looks plainer, and updates of the Windows app no longer fail with 'Failed to uninstall old application files'"]],
   ["2026-11-25.1", ["Remote desktop: see your PC's screen live on any device and use its mouse and keyboard (Home → Your PC)","Side panel: the AI can now do everything at the PC: hover, drag, hold keys, switch windows, use the clipboard, see the whole screen, and run commands (each one waits for your Allow)"]],
   ["2026-11-24.2", ["The Windows app no longer pops up on its own while Albatross is being updated or tested"]],

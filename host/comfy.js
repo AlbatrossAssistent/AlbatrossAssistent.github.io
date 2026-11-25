@@ -363,7 +363,8 @@ async function generateOnce(body, emit, signal, log) {
     // keep a copy on this PC too (Downloads\Albatross\Pictures), so the PC files menu and the Agent can use it
     let pcFile = null;
     try {
-      const dir = path.join(process.env.ALBATROSS_FILES || path.join(require("os").homedir(), "Downloads", "Albatross"), "Pictures");
+      const sp = require("./spaces"), space = typeof body._space === "string" && /^(Guests|Accounts[\\/][A-Za-z0-9_-]{1,128})?$/.test(body._space) ? body._space : sp.current();
+      const dir = path.join(sp.baseOf(space), "Pictures");
       fs.mkdirSync(dir, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19), tag = String(name).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 24);
       const fname = `${stamp}-${tag}.png`, fullPath = path.join(dir, fname);
@@ -643,7 +644,7 @@ async function upscale(body, log = () => {}) {
     const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
     let pcFile = null;
     try {
-      const dir = path.join(process.env.ALBATROSS_FILES || path.join(os.homedir(), "Downloads", "Albatross"), "Pictures");
+      const sp = require("./spaces"), dir = path.join(sp.baseOf(sp.current()), "Pictures");     // the sharper copy goes next to the asker's pictures
       fs.mkdirSync(dir, { recursive: true });
       const fname = `${new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19)}-sharper-${scale}x.png`, full = path.join(dir, fname);
       fs.writeFileSync(full, png);

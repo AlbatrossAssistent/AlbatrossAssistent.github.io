@@ -120,6 +120,12 @@ window.albatrossSelfTest = async function (w) {
     w.setView("home"); await sleep(60);
     return ok && !!d.querySelector(".hm-row[data-go=remote]") && w.getComputedStyle(d.querySelector("#remotePage")).display === "none";
   });
+  await tryIt("QR codes: the maker draws a code, and every connect link has a QR button", async () => {
+    const svg = w.qrSvg && w.qrSvg("https://albatrossassistent.github.io/#code=K7QM-4XPT-9F2C-HW3D");
+    const m = w.qrMatrix && w.qrMatrix("https://albatrossassistent.github.io/#code=K7QM-4XPT-9F2C-HW3D");
+    return !!svg && /^<svg/.test(svg) && m && m.length === 33 && m[0][0] === true && m[0][7] === false
+      && ["pcQrGuest", "pcQrAdmin", "connQrGuest", "connQrAdmin"].every((id) => !!d.getElementById(id));
+  });
   await tryIt("monitor draws its cards", async () => { w.setView("monitor"); await sleep(150); return d.querySelectorAll("#monitorPage .home-card").length === 5 && !!d.querySelector("#mlFit button"); });
   await tryIt("list panel parses and adds steps", async () => { d.querySelector("#goList").click(); await sleep(80); const t = d.querySelector("#spList textarea"); if (d.querySelector("#sidePanel").hidden || d.querySelector("#sidePanel").dataset.tab !== "list") return "List tab not open in the side panel"; t.value = "image 3x: a red fox\ntext: a story about it"; t.dispatchEvent(new Event("input")); t.dispatchEvent(new Event("blur")); await sleep(80); const st = ev("S.listDraft"); const into = d.querySelector("#lpInto") && d.querySelector("#lpTarget").textContent; d.querySelector("#goList").click(); if (!into) return "no Into choice"; return st.length === 2 && st[0].kind === "image" && st[0].times === 3 && st[1].kind === "text" && st[0].prompt === "a red fox" || JSON.stringify(st); });
   await tryIt("hub draws its tiles", async () => { w.setView("hub"); await sleep(150); return d.querySelectorAll("#hubPage .hub-tile").length > 0; });

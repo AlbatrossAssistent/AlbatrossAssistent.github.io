@@ -47,9 +47,8 @@ function cleanId(id) {
 function isPcMadePath(fullPath) {
   if (!fullPath || typeof fullPath !== "string") return false;
   const resolved = path.resolve(fullPath);
-  const picsRoot = path.resolve(PICS_DIR);
   const codeRoot = path.resolve(codeTool.ROOT);
-  return (resolved.startsWith(picsRoot + path.sep) || resolved.startsWith(codeRoot + path.sep)) && fs.existsSync(resolved);
+  return (require("./spaces").isPicturePath(resolved) || resolved.startsWith(codeRoot + path.sep)) && fs.existsSync(resolved);
 }
 
 function normalizeFile(f) {
@@ -57,7 +56,7 @@ function normalizeFile(f) {
   let fullPath = f.path ? path.resolve(String(f.path)) : "";
   if (!fullPath && f.rel) {
     const rel = String(f.rel).replace(/\\/g, "/");
-    if (rel.startsWith("Pictures/")) fullPath = path.join(PICS_DIR, path.basename(rel));
+    if (rel.startsWith("Pictures/")) { fullPath = path.join(require("./spaces").baseOf("Guests"), "Pictures", path.basename(rel)); if (!fs.existsSync(fullPath)) fullPath = path.join(PICS_DIR, path.basename(rel)); }
     else if (rel.startsWith("Code/")) fullPath = path.join(codeTool.ROOT, ...rel.slice(5).split("/").filter(Boolean));
   }
   if (!isPcMadePath(fullPath)) return null;
@@ -66,7 +65,7 @@ function normalizeFile(f) {
   const ext = path.extname(fullPath).toLowerCase();
   const kind = f.kind || (/^\.(png|jpg|jpeg|webp|gif)$/i.test(ext) ? "image" : "code");
   const name = String(f.name || path.basename(fullPath)).slice(0, 140);
-  const rel = fullPath.startsWith(path.resolve(PICS_DIR))
+  const rel = require("./spaces").isPicturePath(fullPath)
     ? "Pictures/" + path.basename(fullPath)
     : "Code/" + path.relative(path.resolve(codeTool.ROOT), fullPath).replace(/\\/g, "/");
   return {
@@ -178,6 +177,39 @@ async function pickRecapModel(preferredModel, ollamaUrl, isComfy, allowLoad) {
   return "";
 }
 
+// When the chat made pictures, the description is written by a model that can look at them (so it says what is really in
+// them, not only what was asked for). The owner's chosen model is used if it can see; otherwise a model that can see and is
+// already loaded; otherwise (when the owner asked for the description) any installed model that can see. With none, the
+// description is written from the chat and the picture prompts only, as before.
+const capsCache = new Map();
+async function capsOf(model, ollamaUrl) {
+  if (capsCache.has(model)) return capsCache.get(model);
+  let caps = [];
+  try { caps = (await (await fetch(ollamaUrl + "/api/show", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }), signal: AbortSignal.timeout(5000) })).json()).capabilities || []; } catch {}
+  capsCache.set(model, caps);
+  return caps;
+}
+async function pickVisionModel(chosen, ollamaUrl, isComfy, allowLoad) {
+  const ok = (n) => n && !isComfy(n) && !/embed/i.test(n);
+  if (chosen && (await capsOf(chosen, ollamaUrl)).includes("vision")) return chosen;
+  try {
+    const ps = await (await fetch(ollamaUrl + "/api/ps", { signal: AbortSignal.timeout(2000) })).json();
+    for (const n of (ps.models || []).map((m) => m.name).filter(ok)) if ((await capsOf(n, ollamaUrl)).includes("vision")) return n;
+    if (!allowLoad) return "";
+    const tags = await (await fetch(ollamaUrl + "/api/tags", { signal: AbortSignal.timeout(4000) })).json();
+    for (const n of (tags.models || []).map((m) => m.name).filter(ok)) if ((await capsOf(n, ollamaUrl)).includes("vision")) return n;
+  } catch {}
+  return "";
+}
+// up to 4 of the chat's pictures, as base64, small enough for a model (PNG/JPEG/WebP that are still on disk)
+function pictureData(files) {
+  const out = [];
+  for (const f of (files || []).filter((x) => x.kind === "image").slice(-4)) {
+    try { const st = fs.statSync(f.path); if (st.size > 0 && st.size < 15e6 && /\.(png|jpe?g|webp)$/i.test(f.path)) out.push({ name: f.name, b64: fs.readFileSync(f.path).toString("base64") }); } catch {}
+  }
+  return out;
+}
+
 // The owner's "Describe" button (PC tab → Guest chats): reads the chat saved on this PC, so it works after the guest has left,
 // and keeps running here even if the owner closes the page. Loads the owner's chosen model if it isn't in memory yet.
 async function generateAiRecap(entry, ctx, opts = {}) {
@@ -185,7 +217,9 @@ async function generateAiRecap(entry, ctx, opts = {}) {
   const isComfy = ctx?.comfy ? (n) => ctx.comfy.isComfy(n) : () => false;
   const messages = Array.isArray(entry.messages) ? entry.messages : [];
   if (!messages.length) { entry.aiError = "This chat's messages weren't saved on the PC (it's from before this feature)."; save(); ctx?.changed?.(); return; }
-  const model = await pickRecapModel(opts.model, ollamaUrl, isComfy, !!opts.allowLoad);
+  const pics = pictureData(entry.files);
+  const seeing = pics.length ? await pickVisionModel(opts.model || entry.model, ollamaUrl, isComfy, !!opts.allowLoad) : "";
+  const model = seeing || await pickRecapModel(opts.model, ollamaUrl, isComfy, !!opts.allowLoad);
   if (!model) { entry.aiError = "No text model is available on this PC."; save(); ctx?.changed?.(); return; }
   entry.recapBusy = true; entry.busyModel = model; delete entry.aiError;
   ctx?.changed?.();
@@ -196,23 +230,25 @@ async function generateAiRecap(entry, ctx, opts = {}) {
       return `AI: ${String(m.text || "").slice(0, 1200)}${extra}`;
     }).join("\n\n");
     const fileLines = (entry.files || []).map((f) => `- ${f.name} (${f.kind === "image" ? "generated picture" + (f.prompt ? ": " + f.prompt : "") : "file made by PC"})`).join("\n");
-    const prompt = `Write a short, plain-English description (2 to 4 sentences) for the PC owner of this guest chat on their PC. State what the guest asked for or worked on and how the AI answered. Mention anything the owner should know about (inappropriate, harmful or unusual requests) plainly.${fileLines ? "\n\nFiles made by the PC during this chat:\n" + fileLines : ""}\n\nChat transcript:\n${transcript}`;
+    const looked = seeing ? pics : [];
+    const picNote = looked.length ? `\n\nThe ${looked.length === 1 ? "picture" : looked.length + " pictures"} the PC made ${looked.length === 1 ? "is" : "are"} attached (${looked.map((x) => x.name).join(", ")}). Look at ${looked.length === 1 ? "it" : "them"} and say briefly what ${looked.length === 1 ? "it shows" : "they show"}, including anything the owner should know about (nudity, violence, real people, text in the picture).` : "";
+    const prompt = `Write a short, plain-English description (2 to 4 sentences${looked.length ? ", one more for the pictures" : ""}) for the PC owner of this guest chat on their PC. State what the guest asked for or worked on and how the AI answered. Mention anything the owner should know about (inappropriate, harmful or unusual requests) plainly.${fileLines ? "\n\nFiles made by the PC during this chat:\n" + fileLines : ""}${picNote}\n\nChat transcript:\n${transcript}`;
     const res = await fetch(ollamaUrl + "/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model, stream: false, think: false,
-        options: { draft_num_predict: 0, temperature: 0.3, num_predict: 260 },
+        options: { draft_num_predict: 0, temperature: 0.3, num_predict: seeing ? 360 : 260 },
         messages: [
           { role: "system", content: "You write brief, factual descriptions of guest chats for the PC owner. 2 to 4 sentences, plain text, no markdown headings." },
-          { role: "user", content: prompt },
+          { role: "user", content: prompt, ...(seeing ? { images: pics.map((x) => x.b64) } : {}) },
         ],
       }),
       signal: AbortSignal.timeout(opts.allowLoad ? 300000 : 45000),   // loading a big model from disk can take minutes
     });
     const j = await res.json().catch(() => ({}));
     const text = String(j?.message?.content || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-    if (text) { entry.aiRecap = text; entry.aiModel = model; entry.aiAt = Date.now(); entry.recap = text; }
+    if (text) { entry.aiRecap = text; entry.aiModel = model; entry.aiAt = Date.now(); entry.recap = text; entry.sawPictures = seeing ? pics.length : 0; }
     else entry.aiError = j.error ? String(j.error).slice(0, 200) : "The model gave no answer.";
   } catch (e) { entry.aiError = e.name === "TimeoutError" ? "It took too long (the model may still be loading). Try again." : String(e.message || e).slice(0, 200); }
   finally {
@@ -347,6 +383,7 @@ function listForOwner() {
     busyModel: r.busyModel || "",
     described: !!r.aiRecap,
     describedWith: r.aiModel || "",
+    sawPictures: r.sawPictures || 0,
     describedAt: r.aiAt || 0,
     stale: !!(r.aiRecap && r.lastMsgAt && r.aiAt < r.lastMsgAt),
     canDescribe: Array.isArray(r.messages) && r.messages.length > 0,
@@ -402,6 +439,7 @@ function clearRecaps() {
 }
 
 module.exports = {
+  _test: { pictureData: (...a) => pictureData(...a), pickVisionModel: (...a) => pickVisionModel(...a) },
   recordPcFile,
   upsertRecap,
   handleGuestEndpoint,

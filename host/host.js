@@ -192,7 +192,10 @@ const soundfontTool = require("./soundfont");
 const healthTool = require("./health");
 const guestTool = require("./guest");
 const myToolsTool = require("./mytools");
-const agentHandle = (method, p, body) => (p.startsWith("/agent/mytools/") ? myToolsTool.handle(method, p, body, note) : p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : p.startsWith("/agent/voice/") ? voiceTool.handle(method, p, body, note) : p.startsWith("/agent/soundfont/") ? soundfontTool.handle(method, p, body, note) : p.startsWith("/agent/music/") ? comfy.songHandle(p, body) : p.startsWith("/agent/upscale/") ? comfy.upscaleHandle(p, body) : p.startsWith("/agent/searxng/") ? require("./searxng").handle(method, p, body, note) : p.startsWith("/agent/kokoro/") ? require("./kokoro").handle(method, p, body, note) : p.startsWith("/agent/health/") ? healthTool.handle(method, p, body, note, { comfy, ollama: OLLAMA }) : p.startsWith("/agent/docs/") ? docsTool.handle(method, p, body, note, { ollama: OLLAMA }) : agentTools.handle(method, p, body, note));
+const spaces = require("./spaces");
+// the PC files window, the AI's folder, sharper pictures and the like run inside the space of the signed-in account (if any)
+const agentHandle = async (method, p, body) => { const [uid, b] = await account.fromBody(body); return spaces.run(spaces.spaceOf(uid), () => agentHandleIn(method, p, b)); };
+const agentHandleIn = (method, p, body) => (p.startsWith("/agent/mytools/") ? myToolsTool.handle(method, p, body, note) : p.startsWith("/agent/mail/") ? mailTools.handle(method, p, body, note) : p.startsWith("/agent/voice/") ? voiceTool.handle(method, p, body, note) : p.startsWith("/agent/soundfont/") ? soundfontTool.handle(method, p, body, note) : p.startsWith("/agent/music/") ? comfy.songHandle(p, body) : p.startsWith("/agent/upscale/") ? comfy.upscaleHandle(p, body) : p.startsWith("/agent/searxng/") ? require("./searxng").handle(method, p, body, note) : p.startsWith("/agent/kokoro/") ? require("./kokoro").handle(method, p, body, note) : p.startsWith("/agent/health/") ? healthTool.handle(method, p, body, note, { comfy, ollama: OLLAMA }) : p.startsWith("/agent/docs/") ? docsTool.handle(method, p, body, note, { ollama: OLLAMA }) : agentTools.handle(method, p, body, note));
 
 const STATE_FILE = path.join(process.env.ALBATROSS_DATA || __dirname, "host-code.json");
 function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return null; } }
@@ -442,6 +445,9 @@ async function upstream(method, p, body, signal) {
   // Cloud models run on Ollama's servers, not this PC, so messages would leave the house: never pass them on.
   if (isCloud(j?.model)) return Response.json({ error: "Cloud models are turned off on this PC. Pick a local model." }, { status: 403 });
   if (!unload && j?.model && (p === "/api/chat" || p === "/api/generate")) { await onlyThisModel(j.model); watchLoad(j.model); }
+  // whose picture this is (set by jobs.js from the account): only for the picture engine, never passed on to Ollama
+  const space = j && typeof j._space === "string" ? j._space : "";
+  if (j && "_space" in j) { delete j._space; body = JSON.stringify(j); }
   if (comfy.isComfy(j?.model)) {
     if (unload) { await comfy.free(); return Response.json({ model: j.model, done: true, done_reason: "unload" }); }
     if (p === "/api/show") return Response.json({ capabilities: ["image"], details: comfy.models().find((m) => m.name === j.model)?.details || {} });
@@ -451,7 +457,7 @@ async function upstream(method, p, body, signal) {
       return new Response(new ReadableStream({
         async start(c) {
           const emit = (o) => { if (o.total) markLoaded(j.model); c.enqueue(enc.encode(JSON.stringify(o) + "\n")); };
-          try { await comfy.generate(j, emit, signal, (t) => note(t)); }
+          try { await comfy.generate({ ...j, _space: space }, emit, signal, (t) => note(t)); }
           catch (e) { if (e.name === "AbortError") return c.error(e); emit({ error: e.message }); }
           c.close();
         },
@@ -744,7 +750,7 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
   if (typeof p === "string" && p.startsWith("/files/")) schedule.activity();
   if (typeof p === "string" && p.startsWith("/files/")) {
     let status = 500, out;
-    try { [status, out] = files.handle(method, p, body, note); } catch (e) { out = { error: e.message }; note("File transfer failed: " + e.message, "error"); }
+    try { const [uid, b] = await account.fromBody(body); [status, out] = spaces.run(spaces.spaceOf(uid), () => files.handle(method, p, b, note)); } catch (e) { out = { error: e.message }; note("File transfer failed: " + e.message, "error"); }
     reply({ k: "m", s: status, c: "application/json" });
     reply({ k: "d", d: JSON.stringify(out) });
     reply({ k: "e" });

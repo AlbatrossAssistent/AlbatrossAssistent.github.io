@@ -199,3 +199,17 @@ Chats live on the PC. While you're signed in (Settings → Account), your chats 
 - The website sends the account's sign-in token with chat and list requests, inside the end-to-end encryption. The PC checks it against Google's keys (signature, project, expiry) before it uses the account's folder; a token that doesn't check out is refused.
 - The first time you sign in on a device that has chats from before, Albatross offers to **move the shared chats into your account**. The button is also in Settings → Account. They are only removed from the shared space once they are safely in your account.
 - Signing out shows the shared chats again; your account's chats stay with your account.
+
+**Files are kept per account too.** Pictures the AI draws, the AI's own folder, code projects, sharper pictures and files you send with Beam go into the asker's own folder in `Downloads\Albatross`:
+
+| Who | Where |
+| --- | --- |
+| A signed-in account (owner or guest code) | `Accounts\<account>\` (Pictures, AI, Code, received files) |
+| Guests without an account | `Guests\` |
+| The owner without an account | `Downloads\Albatross\` itself, as before |
+
+The PC files window and the AI only see the folder of whoever is asking. The owner's view leaves out the `Accounts` and `Guests` folders and can't reach into them. Guest chat summaries still include the guests' pictures. Files from before this change stay in the shared folder.
+
+**Guest chat summaries look at the pictures.** When a guest chat made pictures, its summary is written by a model that can see them (the owner's chosen model if it can, otherwise a loaded one, otherwise any installed one), so it says what is really in them. The summary notes "looked at N pictures" when it did.
+
+**QR codes.** Settings → Connection, the PC page and the control center have a **QR code** button next to each link. Scan it with a phone's camera to open the link and connect. The admin QR code gives full access, so only scan it on your own phone.

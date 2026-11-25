@@ -16,13 +16,19 @@ const { execFile } = require("child_process");
 const dns = require("dns").promises;
 const net = require("net");
 
-const BASE = path.resolve(process.env.ALBATROSS_FILES || path.join(os.homedir(), "Downloads", "Albatross"));
-const ROOTS = {
-  all: { name: "All files", dir: BASE, write: false },
-  code: { name: "Code projects", dir: path.resolve(process.env.ALBATROSS_CODE || path.join(BASE, "Code")), write: true },
-  agent: { name: "AI folder", dir: path.join(BASE, "AI"), write: true },     // the chat's own folder: anything it wants to keep
-  pictures: { name: "Pictures", dir: path.join(BASE, "Pictures"), write: false },
-};
+const spaces = require("./spaces");
+const BASE = spaces.BASE;
+// the folders, inside the space of whoever is asking (spaces.js): a signed-in account only ever sees its own
+function rootsFor(space) {
+  const base = spaces.baseOf(space);
+  return {
+    all: { name: "All files", dir: base, write: false },
+    code: { name: "Code projects", dir: space ? path.join(base, "Code") : path.resolve(process.env.ALBATROSS_CODE || path.join(base, "Code")), write: true },
+    agent: { name: "AI folder", dir: path.join(base, "AI"), write: true },     // the chat's own folder: anything it wants to keep
+    pictures: { name: "Pictures", dir: path.join(base, "Pictures"), write: false },
+  };
+}
+const ROOTS = rootsFor("");      // the owner's folders (the browser's uploads use them)
 // it used to be called "Agent": moved over once, so nothing the AI saved before is lost
 try { const old = path.join(BASE, "Agent"); if (fs.existsSync(old) && !fs.existsSync(ROOTS.agent.dir)) fs.renameSync(old, ROOTS.agent.dir); } catch {}
 const MAX_TEXT = 400 * 1024, MAX_B64 = 20 * 1024 * 1024, MAX_WRITE = 4 * 1024 * 1024, MAX_ENTRIES = 500;
@@ -36,9 +42,11 @@ function resolve(spec, { write = false } = {}) {
   let rootId = "agent", rel = String(spec == null ? "" : spec).trim();
   const m = /^(all|code|agent|ai|pictures|received):(.*)$/i.exec(rel);
   if (m) { const k = m[1].toLowerCase(); rootId = k === "received" ? "all" : k === "ai" ? "agent" : k; rel = m[2]; }
-  const root = ROOTS[rootId];
+  const space = spaces.current(), root = rootsFor(space)[rootId];
   rel = rel.replace(/\\/g, "/").replace(/^\/+/, "");
   const parts = rel.split("/").filter((x) => x !== "" && x !== ".");
+  // the owner's "All files" doesn't reach into the accounts' and guests' folders
+  if (rootId === "all" && parts.length && spaces.hidden(space, root.dir, parts[0])) throw new Error("That folder belongs to another account.");
   if (parts.length > 10 || rel.length > 260) throw new Error("That path is too long.");
   for (const seg of parts) {
     if (seg === ".." || /[<>:"|?*\u0000-\u001f]/.test(seg) || /[. ]$/.test(seg) || RESERVED.test(seg)) throw new Error(`"${seg}" isn't an allowed name.`);
@@ -68,6 +76,7 @@ function list(spec) {
   const out = [];
   for (const d of ents) {
     if (d.isSymbolicLink() || d.name.startsWith(".") || d.name.endsWith(".albatross-part") || d.name.endsWith(".part")) continue;
+    if (spaces.hidden(spaces.current(), r.full, d.name)) continue;
     let st; try { st = fs.statSync(path.join(r.full, d.name)); } catch { continue; }
     out.push({ name: d.name, dir: d.isDirectory(), size: d.isDirectory() ? 0 : st.size, mtime: st.mtimeMs, mime: d.isDirectory() ? "" : mimeOf(d.name) });
     if (out.length >= MAX_ENTRIES) break;
@@ -154,7 +163,7 @@ async function print(spec, printer) {
   if (pick.offline) throw new Error(`The printer ${pick.name} is offline. Switch it on, or pick another printer.`);
   let outFile = "", savedAs = "";
   if (pick.toFile) {
-    const dir = path.join(BASE, "Printed"); fs.mkdirSync(dir, { recursive: true });
+    const dir = path.join(spaces.baseOf(spaces.current()), "Printed"); fs.mkdirSync(dir, { recursive: true });
     const base = path.basename(r.full).replace(/\.[^.]+$/, ""), ext = /xps/i.test(pick.name) ? ".xps" : ".pdf";
     let n = 0; do { outFile = path.join(dir, base + (n ? ` (${n})` : "") + ext); n++; } while (fs.existsSync(outFile));
     savedAs = "all:Printed/" + path.basename(outFile);
@@ -180,7 +189,7 @@ function upload(j) {
     if (RESERVED.test(name)) name = "file_" + name;
     if (BAD_EXT.test(name)) throw new Error("Programs and scripts can't be printed.");
     if (!PRINTABLE.test(name)) throw new Error("That kind of file can't be printed from here (text, PDF, pictures and Office files can).");
-    const dir = path.join(BASE, "To print"); fs.mkdirSync(dir, { recursive: true });
+    const dir = path.join(spaces.baseOf(spaces.current()), "To print"); fs.mkdirSync(dir, { recursive: true });
     const ext = path.extname(name), stem = name.slice(0, name.length - ext.length);
     let full = path.join(dir, name); for (let i = 2; fs.existsSync(full); i++) full = path.join(dir, `${stem} (${i})${ext}`);
     fs.writeFileSync(full, "");
@@ -264,7 +273,7 @@ async function handle(method, p, body, note) {
   try {
     if (p.startsWith("/pcfiles/code/")) { const r = codeRequest(p, j); return r ? [200, r] : [404, { error: "Unknown request" }]; }
     if (p.startsWith("/pcfiles/") && !(keys.get(j.key) > Date.now())) return [401, { error: codeSet() ? "PC files are locked" : "PC files need a code" }];
-    if (p === "/pcfiles/roots") return [200, { roots: Object.entries(ROOTS).map(([id, r]) => ({ id, name: r.name, write: r.write, exists: fs.existsSync(r.dir) })), base: BASE }];
+    if (p === "/pcfiles/roots") { const sp = spaces.current(); return [200, { roots: Object.entries(rootsFor(sp)).map(([id, r]) => ({ id, name: r.name, write: r.write, exists: fs.existsSync(r.dir) })), base: spaces.baseOf(sp), account: !!sp }]; }
     if (p === "/pcfiles/list") return [200, list(j.spec)];
     if (p === "/pcfiles/read") return [200, read(j.spec, { b64: !!j.b64, max: j.max })];
     if (p === "/pcfiles/trash") { const r = await trash(j.spec); note(`PC files: moved ${r.spec} to the Recycle Bin`); return [200, r]; }
