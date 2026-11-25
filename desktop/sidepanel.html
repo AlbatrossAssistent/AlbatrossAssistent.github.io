@@ -379,6 +379,18 @@ const TOOLS = [
   fn("scroll", "Scroll the window, or the thing n, up or down.", { direction: { type: "string", enum: ["up", "down"] }, amount: { type: "integer", description: "Notches, 1 to 15 (default 5)" }, n: { type: "integer" }, why: WHY }, ["direction", "why"]),
   fn("open", "Open a program by its name (through the Start menu) or a web address (https://...) in the browser.", { target: { type: "string" }, why: WHY }, ["target", "why"]),
   fn("wait", "Wait for something to load.", { seconds: { type: "number", description: "1 to 10" }, why: WHY }, ["seconds"]),
+  fn("move", "Move the mouse over something without clicking (to show a tooltip or open a menu that opens on hover).", { n: { type: "integer" }, x: { type: "number" }, y: { type: "number" }, why: WHY }, ["why"]),
+  fn("drag", "Drag with the mouse held down: from one thing or point to another (move files, select text, move a slider or window).", {
+    from_n: { type: "integer" }, from_x: { type: "number" }, from_y: { type: "number" }, to_n: { type: "integer" }, to_x: { type: "number" }, to_y: { type: "number" },
+    button: { type: "string", enum: ["left", "right"] }, why: WHY, risky: RISKY }, ["why"]),
+  fn("hold_keys", "Hold a key or key combination down for some seconds (games, holding shift), then let go.", { keys: { type: "string" }, seconds: { type: "number", description: "0.05 to 10" }, why: WHY }, ["keys", "seconds", "why"]),
+  fn("see_whole_screen", "From the next look on, see the whole screen (taskbar, every window, notifications) instead of only the window in front. x, y then mean places in the whole-screen picture.", { why: WHY }, ["why"]),
+  fn("see_front_window", "From the next look on, see only the window in front again (sharper).", { why: WHY }, ["why"]),
+  fn("list_windows", "List all open windows (title and program).", { why: WHY }, ["why"]),
+  fn("switch_window", "Bring an open window to the front, by part of its title or its program's name.", { name: { type: "string" }, why: WHY }, ["name", "why"]),
+  fn("clipboard_read", "Read the text on the clipboard (to get text you copied with ctrl+c).", { why: WHY }, ["why"]),
+  fn("clipboard_write", "Put text on the clipboard (then paste it with ctrl+v; quicker than typing long text).", { text: { type: "string" }, why: WHY }, ["text", "why"]),
+  fn("run_command", "Run a PowerShell command on the PC and get its output (files, settings, programs, system information). The user always has to allow it first, so use it when it is clearly the best way.", { command: { type: "string" }, why: WHY }, ["command", "why"]),
   fn("ask_user", "Ask the user something you need to know to go on (a choice, a detail, a password they must type themselves). Don't ask for permission for normal steps.", { question: { type: "string" } }, ["question"]),
   fn("done", "The task is finished (or can't be done). Say what you did, or why it can't be done.", { summary: { type: "string" }, success: { type: "boolean" } }, ["summary"]),
 ];
@@ -388,7 +400,8 @@ Rules:
 - Do exactly one step per answer, by calling one tool. Then wait for the next look to see what happened.
 - Click things by their number n from the list. Only use x, y (pixels in the picture) when the thing isn't in the list.
 - To type, first click the text field, then use type. Use keys for shortcuts (ctrl+l focuses a browser's address bar).
-- To start a program, use open. To switch to another open window, use keys alt+tab or open it again.
+- To start a program, use open. To switch to another open window, use switch_window (list_windows shows them).
+- You can do anything a person at the PC can: hover (move), drag, hold keys, use the clipboard, and see the whole screen (see_whole_screen) when the window in front isn't enough. run_command runs PowerShell and gives you its output; the user is asked first.
 - Never touch the Albatross panel. Never type passwords or payment details yourself: ask_user instead.
 - Mark a step risky when it sends, posts, buys, pays or deletes something. The user is then asked first.
 - If something doesn't work twice, try another way. When the task is finished, or can't be done, call done with a short summary.
@@ -449,6 +462,14 @@ function describe(name, a) {
   if (name === "scroll") return [`Scroll ${a.direction || "down"}`, "click"];
   if (name === "open") return [`Open ${a.target}`, "click"];
   if (name === "wait") return [`Wait ${a.seconds || 2} s`, "wait"];
+  if (name === "move") return ["Move the mouse", "click"];
+  if (name === "drag") return ["Drag", "click"];
+  if (name === "hold_keys") return [`Hold ${a.keys} for ${a.seconds || 1} s`, "type"];
+  if (name === "list_windows") return ["List the open windows", "look"];
+  if (name === "switch_window") return [`Switch to ${a.name}`, "click"];
+  if (name === "clipboard_read") return ["Read the clipboard", "look"];
+  if (name === "clipboard_write") return ["Put text on the clipboard", "type"];
+  if (name === "run_command") return ["Run a command", "type"];
   return [name, "click"];
 }
 async function cStop() {
@@ -473,19 +494,19 @@ async function cRun() {
   const t = document.createElement("div"); t.className = "task"; t.textContent = task; cThread.appendChild(t);
   const vision = sees(m), askEach = $("#cAsk").checked;
   const msgs = [{ role: "system", content: CONTROL_SYSTEM(vision) }, { role: "user", content: "The task: " + task }];
-  let finished = false, lastSeen = "";
+  let finished = false, lastSeen = "", view = "window";
   try {
     for (let k = 1; k <= MAX_STEPS && !cStopAsked; k++) {
       // look
       const lookCard = cStep("look", "Looking at the screen…", "", "run");
-      const look = await P.control.look();
+      const look = await P.control.look({ view });
       if (cStopAsked) { lookCard.remove(); break; }
       lookCard.classList.remove("run");
       let seen;
       if (look.error) { seen = "Couldn't look at the screen: " + look.error; lookCard.querySelector(".what").textContent = look.error; }
       else {
-        seen = `Step ${k}. The window in front is "${look.title}" (${look.proc}).` + (vision ? ` Its picture (${look.w}×${look.h} pixels) is attached.` : "") + ` Things in it, by number: ${look.list || "(none found" + (vision ? ": use x, y from the picture" : "") + ")"}`;
-        lookCard.querySelector(".what").textContent = "Looked at " + (look.title || look.proc);
+        seen = `Step ${k}. The window in front is "${look.title}" (${look.proc}).` + (vision ? (look.view === "screen" ? ` A picture of the whole screen (${look.w}×${look.h} pixels) is attached; x, y mean places in it.` : ` Its picture (${look.w}×${look.h} pixels) is attached.`) : "") + ` Things in the window in front, by number: ${look.list || "(none found" + (vision ? ": use x, y from the picture" : "") + ")"}`;
+        lookCard.querySelector(".what").textContent = (look.view === "screen" ? "Looked at the whole screen · " : "Looked at ") + (look.title || look.proc);
         lookCard.querySelector(".why").textContent = look.count + " things found";
         if (lastSeen && lastSeen === look.title + look.list) lookCard.querySelector(".why").textContent += " · nothing changed";
         lastSeen = look.title + look.list;
@@ -517,9 +538,17 @@ async function cRun() {
         reply("The user answered: " + ans); continue;
       }
       if (name === "wait") { const s = Math.max(1, Math.min(10, Number(args.seconds) || 2)); cStep("wait", `Waiting ${s} s`, args.why || ""); await new Promise((ok) => setTimeout(ok, s * 1000)); reply(`Waited ${s} seconds.`); continue; }
+      if (name === "see_whole_screen" || name === "see_front_window") {
+        view = name === "see_whole_screen" ? "screen" : "window";
+        cStep("look", view === "screen" ? "Looking at the whole screen from now on" : "Looking at the window in front again", args.why || "");
+        reply(view === "screen" ? "Done: the next look shows the whole screen." : "Done: the next look shows the window in front."); continue;
+      }
       const [label, icon] = describe(name, args);
       const card = cStep(icon, label, args.why || "", "run");
-      if (askEach || args.risky) {
+      // a command can change anything on the PC: it always waits for your Allow, and you see the command itself
+      const mustAsk = name === "run_command";
+      if (mustAsk) card.querySelector(".why").textContent = (args.why ? args.why + "\n" : "") + "PowerShell: " + String(args.command || "");
+      if (askEach || args.risky || mustAsk) {
         if (args.risky) card.querySelector(".why").textContent = (args.why || "") + "\nThis step may send, buy or delete something.";
         if (name === "click" && args.n != null) P.control.point([{ n: args.n, label: label }]);
         const ok = await cAskCard(card, "confirm");
@@ -533,7 +562,7 @@ async function cRun() {
       const res = await P.control.act({ ...args, action });
       card.classList.remove("run");
       if (res.error) { card.classList.add("bad"); card.querySelector(".why").textContent = res.error; reply("That didn't work: " + res.error); }
-      else { card.querySelector(".what").textContent = res.done.charAt(0).toUpperCase() + res.done.slice(1); reply("Done: " + res.done + ". Look at the next view to check it worked."); }
+      else { const shown = res.done.length > 280 ? res.done.slice(0, 280) + "…" : res.done; card.querySelector(".what").textContent = shown.charAt(0).toUpperCase() + shown.slice(1); reply("Done: " + res.done + ". Look at the next view to check it worked."); }
       await new Promise((ok) => setTimeout(ok, name === "open" ? 1800 : 700));     // let the app react before the next look
     }
     if (!finished && cStopAsked) cStep("bad", "Stopped", cStopWhy === "mouse" ? "You moved the mouse, so the AI stopped. Start it again to go on." : "You stopped the AI.", "bad");

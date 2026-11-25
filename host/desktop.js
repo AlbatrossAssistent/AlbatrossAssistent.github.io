@@ -123,6 +123,42 @@ async function monOpen({ url, x = 0, y = 0, w = 1280, h = 720 }) {
   return { ok: true, browser: path.basename(exe, ".exe") };
 }
 
+// ---------- remote desktop: its own PowerShell (remotedesk.ps1), so a stream of pictures never holds up the Hub ----------
+const RD = new Set(["screens", "shot", "move", "down", "up", "click", "wheel", "key", "combo", "text"]);
+let rd = null, rdReady = null, rdBuf = "", rdSeq = 0, rdIdle = 0;
+const rdWait = new Map();
+function rdStart() {
+  if (rd && rd.exitCode === null && !rd.killed) return rdReady;
+  rd = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path.join(__dirname, "remotedesk.ps1")], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+  rd.stdout.setEncoding("utf8");
+  rdReady = new Promise((ok, no) => {
+    const t = setTimeout(() => no(new Error("Remote desktop didn't start on the PC.")), 20000);
+    rd.stdout.on("data", (d) => {
+      rdBuf += d; let i;
+      while ((i = rdBuf.indexOf("\n")) >= 0) {
+        const line = rdBuf.slice(0, i).trim(); rdBuf = rdBuf.slice(i + 1);
+        if (line === "@@ready") { clearTimeout(t); ok(); continue; }
+        const m = /^@@(\d+) (.*)$/.exec(line); if (!m) continue;
+        const w = rdWait.get(m[1]); if (!w) continue; rdWait.delete(m[1]); clearTimeout(w.t);
+        let j = {}; try { j = JSON.parse(m[2]); } catch {}
+        j.error ? w.rej(new Error(j.error)) : w.res(j);
+      }
+    });
+    rd.on("exit", () => { clearTimeout(t); no(new Error("Remote desktop stopped on the PC.")); for (const w of rdWait.values()) w.rej(new Error("Remote desktop stopped on the PC.")); rdWait.clear(); rd = null; });
+  });
+  return rdReady;
+}
+async function rdCall(cmd, arg) {
+  if (!RD.has(cmd)) throw new Error("Unknown remote desktop command");
+  await rdStart();
+  clearTimeout(rdIdle); rdIdle = setTimeout(() => { if (rd) try { rd.kill(); } catch {} }, 5 * 60e3);    // nobody watching for 5 minutes: close it
+  const id = String(++rdSeq);
+  return new Promise((res, rej) => {
+    rdWait.set(id, { res, rej, t: setTimeout(() => { rdWait.delete(id); rej(new Error("The PC took too long")); }, 15000) });
+    rd.stdin.write(JSON.stringify({ id, cmd, arg: arg || {} }) + "\n");
+  });
+}
+
 async function run(cmd, arg) {
   if (cmd === "key") { if (!KEYS[arg]) throw new Error("Unknown key"); await press(KEYS[arg]); return { ok: true }; }
   if (cmd === "volume") {
@@ -154,19 +190,20 @@ async function run(cmd, arg) {
   if (cmd === "monclose") { await monKill(); return { ok: true }; }
   if (cmd === "monstate") return { open: (await monPids()).length > 0 };
   if (cmd === "lock") { execFile("rundll32.exe", ["user32.dll,LockWorkStation"], { windowsHide: true }, () => {}); return { ok: true }; }
-  if (cmd === "ping") return { ok: true, pid: process.pid, v: 3 };
+  if (cmd === "rd") return rdCall(String((arg && arg.cmd) || ""), arg && arg.arg);
+  if (cmd === "ping") return { ok: true, pid: process.pid, v: 4 };
   throw new Error("Unknown command");
 }
 
 const server = http.createServer((req, res) => {
   const send = (s, j) => { res.writeHead(s, { "Content-Type": "application/json" }); res.end(JSON.stringify(j)); };
   if (req.method !== "POST" || req.url !== "/do" || req.headers["x-token"] !== TOKEN || req.headers.origin) return send(403, { error: "no" });
-  let body = ""; req.on("data", (d) => { body += d; if (body.length > 1e5) req.destroy(); });
+  let body = ""; req.on("data", (d) => { body += d; if (body.length > 2e5) req.destroy(); });
   req.on("end", async () => { let j = {}; try { j = JSON.parse(body); } catch {} try { send(200, await run(String(j.cmd || ""), j.arg)); } catch (e) { send(400, { error: e.message }); } });
 });
 server.on("error", () => process.exit(0));                     // another helper already runs
 server.listen(PORT, "127.0.0.1", () => {
   fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(INFO, JSON.stringify({ port: PORT, token: TOKEN, pid: process.pid, v: 3 }));
+  fs.writeFileSync(INFO, JSON.stringify({ port: PORT, token: TOKEN, pid: process.pid, v: 4 }));
   shell();
 });

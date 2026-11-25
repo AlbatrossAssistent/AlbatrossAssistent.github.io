@@ -8,7 +8,7 @@ window.albatrossSelfTest = async function (w) {
   const tryIt = async (name, fn) => { try { const v = await fn(); ok(name, v !== false, v === true ? "" : v); } catch (e) { ok(name, false, e.message); } };
   await tryIt("app started (setView, md, S exist)", () => typeof w.setView === "function" && typeof ev("md") === "function" && !!ev("S"));
   await tryIt("app version is set", () => /^\d{4}-\d\d-\d\d\.\d+$/.test(ev("APP_VERSION")) || ev("APP_VERSION"));
-  for (const v of ["home", "chat", "notes", "mail", "hub", "monitor", "agent", "jarvis", "pc", "browser"]) {
+  for (const v of ["home", "chat", "notes", "mail", "hub", "monitor", "remote", "agent", "jarvis", "pc", "browser"]) {
     await tryIt("open page: " + v, async () => { w.setView(v); await sleep(120); return true; });
   }
   await tryIt("home is a hub: no sidebars, an ask box, and every tool as a tile", () => {
@@ -105,6 +105,13 @@ window.albatrossSelfTest = async function (w) {
   await tryIt("maths and arrows render", () => { const h = ev('md("go $\\\\rightarrow$ now -> then :white_check_mark:")'); return /→/.test(h) && /✅/.test(h) || h; });
   await tryIt("code player bundles a project", () => /data:text\/javascript/.test(w.bundleFiles([{ name: "index.html", code: "<script src=\"a.js\"></" + "script>" }, { name: "a.js", code: "console.log(1)" }], 0)));
   await tryIt("music builds a song and a MIDI file", async () => { const s = w.musicTest.buildSong({ title: "t", bpm: 120, bars: 2, tracks: [{ name: "p", instrument: "piano", loop: true, notes: "(C4/0.5 E4/0.5)x2 [C4 E4 G4]/2" }], drums: { kick: "x...", snare: "", clap: "", hat: "", openhat: "" } }); const b = await w.musicTest.midiFile(s).arrayBuffer(); return b.byteLength > 50 && new TextDecoder().decode(new Uint8Array(b).slice(0, 4)) === "MThd"; });
+  await tryIt("remote desktop draws its screen, keys and controls, and has a Home tile", async () => {
+    w.setView("remote"); await sleep(120);
+    const ok = !!d.querySelector("#rdStage #rdImg") && d.querySelectorAll("#rdKeys [data-combo]").length >= 10 && !!d.querySelector("#rdQual") && !!d.querySelector(".hh-tile, #goRemote")
+      && w.getComputedStyle(d.querySelector("#remotePage")).display !== "none" && w.getComputedStyle(d.querySelector(".messages")).display === "none";
+    w.setView("home"); await sleep(60);
+    return ok && !!d.querySelector(".hh-tile[data-go=remote]") && w.getComputedStyle(d.querySelector("#remotePage")).display === "none";
+  });
   await tryIt("monitor draws its cards", async () => { w.setView("monitor"); await sleep(150); return d.querySelectorAll("#monitorPage .home-card").length === 5 && !!d.querySelector("#mlFit button"); });
   await tryIt("list panel parses and adds steps", async () => { d.querySelector("#goList").click(); await sleep(80); const t = d.querySelector("#spList textarea"); if (d.querySelector("#sidePanel").hidden || d.querySelector("#sidePanel").dataset.tab !== "list") return "List tab not open in the side panel"; t.value = "image 3x: a red fox\ntext: a story about it"; t.dispatchEvent(new Event("input")); t.dispatchEvent(new Event("blur")); await sleep(80); const st = ev("S.listDraft"); const into = d.querySelector("#lpInto") && d.querySelector("#lpTarget").textContent; d.querySelector("#goList").click(); if (!into) return "no Into choice"; return st.length === 2 && st[0].kind === "image" && st[0].times === 3 && st[1].kind === "text" && st[0].prompt === "a red fox" || JSON.stringify(st); });
   await tryIt("hub draws its tiles", async () => { w.setView("hub"); await sleep(150); return d.querySelectorAll("#hubPage .hub-tile").length > 0; });

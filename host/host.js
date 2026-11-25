@@ -132,6 +132,8 @@ const pcPower = {
       return [200, await schedule.set(j)];
     }
     // the Hub: media and volume keys, the Start menu's programs, opening a website, locking (done on the desktop by desktop.js)
+    // remote desktop: the mouse and keyboard from another device (the screen itself comes through /pc/deskstream)
+    if (p === "/pc/desk") return remoteDesk.handle(method, body, note);
     if (p === "/pc/apps" || p === "/pc/media" || p === "/pc/launch" || p === "/pc/openurl" || p === "/pc/lockpc" || p === "/pc/volume" || p === "/pc/bright" || p === "/pc/playing") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       if (method === "GET" && p === "/pc/apps") return [200, await pcDesk.call("apps")];
@@ -175,6 +177,7 @@ const pcPower = {
 };
 const jarvis = require("./jarvis");
 const pcDesk = require("./pcdesk");
+const remoteDesk = require("./remotedesk");
 const codeTool = require("./code");
 const chatStore = require("./chats");
 const jobStore = require("./jobs");
@@ -650,6 +653,16 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
     reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
     return send({ type: "end", id });
   }
+  if (p === "/pc/deskstream") {      // guests never get here: /pc/ is closed to them above
+    const ctrl = new AbortController(); running.set(id, ctrl);
+    try {
+      reply({ k: "m", s: 200, c: "application/x-ndjson" });
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      await remoteDesk.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 1.5e6, note);
+      reply({ k: "e" });
+    } catch (e) { try { reply({ k: "d", d: JSON.stringify({ error: e.message }) + "\n" }); reply({ k: "e" }); } catch {} } finally { running.delete(id); }
+    return send({ type: "end", id });
+  }
   if (p === "/browser/stream") {
     const ctrl = new AbortController(); running.set(id, ctrl);
     try {
@@ -1072,6 +1085,7 @@ panel = startPanel({
   chats: async (method, p, body) => { const [uid, b] = await account.fromBody(body); return chatStore.handle(method, p, b, note, uid); },
   agent: (method, p, body) => agentHandle(method, p, body),
   browser: (method, p, body) => browserTool.handle(method, p, body, note),
+  deskStream: (body, write, signal, busy) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return remoteDesk.stream(j, write, signal, busy, note); },
   browserStream: (body, write, signal, busy) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return browserTool.stream(j, write, signal, busy); },
   jobs: async (method, p, body) => { const [uid, b] = await account.fromBody(body); return jobStore.handle(method, p, b, { upstream, note, uid }); },
   jobsStream: (body, write, signal) => { let j = {}; try { j = JSON.parse(body || "{}"); } catch {} return jobStore.stream(j, write, signal); },

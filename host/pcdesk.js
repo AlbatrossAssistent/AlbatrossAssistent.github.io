@@ -37,7 +37,7 @@ function start() {
   return starting;
 }
 // a helper from an older version (after an update) is closed and started again once, so new commands are there
-const HELPER_V = 3;
+const HELPER_V = 4;
 let checked = false;
 async function fresh() {
   if (checked) return; checked = true;

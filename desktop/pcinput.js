@@ -26,6 +26,17 @@ public class AlbInput {
   static void Send(INPUT[] a) { SendInput((uint)a.Length, a, Marshal.SizeOf(typeof(INPUT))); }
   static INPUT M(uint flags, uint data) { var i = new INPUT(); i.type = 0; i.u.mi.flags = flags; i.u.mi.data = data; return i; }
   static INPUT K(ushort vk, ushort scan, uint flags) { var i = new INPUT(); i.type = 1; i.u.ki.vk = vk; i.u.ki.scan = scan; i.u.ki.flags = flags; return i; }
+  public static void Move(int x, int y) { SetCursorPos(x, y); }
+  public static void Press(int x, int y, string button, bool down) {
+    SetCursorPos(x, y); Thread.Sleep(30);
+    uint d = 2; if (button == "right") d = 8; else if (button == "middle") d = 32;
+    Send(new INPUT[] { M(down ? d : d * 2, 0) });
+  }
+  public static void Hold(ushort[] vks, int ms) {
+    foreach (var vk in vks) { Send(new INPUT[] { K(vk, 0, Ext(vk) ? 1u : 0u) }); Thread.Sleep(25); }
+    Thread.Sleep(Math.Max(50, Math.Min(10000, ms)));
+    for (int i = vks.Length - 1; i >= 0; i--) { Send(new INPUT[] { K(vks[i], 0, (Ext(vks[i]) ? 1u : 0u) | 2u) }); Thread.Sleep(25); }
+  }
   public static void Click(int x, int y, string button, int count) {
     SetCursorPos(x, y); Thread.Sleep(60);
     uint down = 2, up = 4; if (button == "right") { down = 8; up = 16; } else if (button == "middle") { down = 32; up = 64; }
@@ -69,6 +80,9 @@ while ($true) {
       "type" { [AlbInput]::Type([string]$a.text) }
       "keys" { [AlbInput]::Keys([uint16[]]@($a.vks)) }
       "focus" { [void][AlbInput]::Focus([long]$a.hwnd) }
+      "move" { [AlbInput]::Move([int]$a.x, [int]$a.y) }
+      "press" { [AlbInput]::Press([int]$a.x, [int]$a.y, [string]$a.button, [bool]$a.down) }
+      "hold" { [AlbInput]::Hold([uint16[]]@($a.vks), [int]$a.ms) }
     }
     [Console]::Out.WriteLine("@@" + $j.id + ' {"ok":true}')
   } catch { [Console]::Out.WriteLine("@@" + $j.id + " " + (ConvertTo-Json -Compress @{ error = $_.Exception.Message })) }
@@ -128,6 +142,14 @@ function create({ log = () => {} } = {}) {
     });
   }
   return {
+    move: (x, y) => call("move", { x: Math.round(x), y: Math.round(y) }),
+    // a drag: press at the start, glide there in small steps (apps notice a drag only when the mouse moves), let go at the end
+    async drag(x1, y1, x2, y2, button = "left") {
+      await call("press", { x: Math.round(x1), y: Math.round(y1), button, down: true });
+      for (let i = 1; i <= 12; i++) await call("move", { x: Math.round(x1 + (x2 - x1) * i / 12), y: Math.round(y1 + (y2 - y1) * i / 12) });
+      await call("press", { x: Math.round(x2), y: Math.round(y2), button, down: false });
+    },
+    hold: (combo, seconds) => call("hold", { vks: parseCombo(combo), ms: Math.round(Math.max(0.05, Math.min(10, Number(seconds) || 1)) * 1000) }),
     click: (x, y, button = "left", count = 1) => call("click", { x: Math.round(x), y: Math.round(y), button, count }),
     scroll: (x, y, amount) => call("scroll", { x: Math.round(x), y: Math.round(y), amount: Math.max(-20, Math.min(20, Math.round(amount) || -3)) }),
     type: (text) => call("type", { text: String(text).slice(0, 4000) }),

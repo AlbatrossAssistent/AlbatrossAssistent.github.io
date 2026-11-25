@@ -13,7 +13,7 @@ const APP_TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript
 // Websites allowed to use the local doorway to Ollama (/ollama/...): the Albatross pages and this PC.
 const ORIGINS = /^https:\/\/(albatrossassistent\.github\.io|burrowgeneral\.github\.io|burrow-uu7e\.onrender\.com)$|^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-function startPanel({ port, getState, actions, files, guestFile, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, monitor, onListening, onBusy }) {
+function startPanel({ port, getState, actions, files, guestFile, load, proxy, jarvis, code, chats, jobs, jobsStream, agent, browser, browserStream, deskStream, monitor, onListening, onBusy }) {
   const clients = new Set();
   const signins = new Map();          // one-time code → { at, cred }   (see /signin below)
   function signin(req, res, host) {
@@ -107,6 +107,13 @@ function startPanel({ port, getState, actions, files, guestFile, load, proxy, ja
       const max = jx[1] === "/pc/monitor" || jx[1] === "/pc/dropchunk" ? 12e6 : 1e5;
       req.on("data", (c) => { body += c; if (body.length > max) req.destroy(); });
       req.on("end", async () => {
+        // remote desktop's pictures: a stream, not one answer
+        if (jx[1] === "/pc/deskstream" && deskStream) {
+          const ac = new AbortController(); res.on("close", () => ac.abort());
+          res.writeHead(200, { ...cors, "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" });
+          try { await deskStream(body, (t) => res.write(t), ac.signal, () => res.writableLength > 1.5e6); } catch (e) { try { res.write(JSON.stringify({ error: e.message }) + "\n"); } catch {} }
+          return res.end();
+        }
         let status = 500, out = {};
         try { [status, out] = await jarvis(req.method, jx[1], body); } catch (e) { status = e.status || 500; out = { error: e.message }; }
         res.writeHead(status, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" });

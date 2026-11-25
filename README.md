@@ -139,6 +139,15 @@ Only one model is kept in GPU memory at a time: before a chat or image, the host
 
 The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDATA%\Albatross\monitor-window`), started on the signed-in desktop by the desktop helper, so someone has to be signed in. **Close window** in the website closes it; on the PC, Alt+F4 does too. Videos play with sound by themselves. MP4 and WebM files work best; some YouTube videos don't allow being shown outside YouTube, and the Monitor then says so.
 
+## Remote desktop: the PC's screen and mouse from any device
+
+**Remote desktop** (Home → Your PC, or the Tools menu) shows the PC's screen live on your phone, tablet or another computer, and lets you use its mouse and keyboard. It goes end-to-end encrypted through your code, like everything else, and only the PC's owner can use it (never guests).
+
+- **Mouse:** click, double-click, right-click, drag and scroll. **Touch:** tap to click, long press or two-finger tap to right-click, drag with one finger, scroll with two.
+- **Keyboard:** click on the screen, then type: every key goes down and up on the PC, so shortcuts and held keys work. On a phone the keyboard button opens the on-screen keyboard. A row of buttons has Esc, Tab, Win, Alt+Tab, Ctrl+C/V/Z/A, Win+D, Alt+F4, Task Manager and the arrows.
+- **Quality:** Auto, Sharp, Normal or Fast (a smaller, quicker picture for slow connections). With several displays, pick which one. Full screen hides everything else.
+- The picture is taken about 8 times a second by the desktop helper on the signed-in desktop (`host/remotedesk.ps1`, so someone has to be signed in); a still screen sends nothing. The PC's control center notes when someone starts and stops viewing.
+
 ## Side panel: explain anything on the screen, or let the AI control the PC
 
 The Windows app has a **side panel** that sits at the edge of the screen next to your other apps (Home → **Side panel**, the tray menu, or **Ctrl+Alt+Space**). It takes its strip of the screen like the taskbar does, so maximized windows end where it starts (Settings ⚙ in the panel: left or right side, or let it float over the other windows instead).
@@ -146,6 +155,7 @@ The Windows app has a **side panel** that sits at the edge of the screen next to
 - **Explain:** press **Box** and drag a rectangle, or **Circle** and draw around something freehand. The AI explains what you picked (a chart, an error, a word, a button), or answers the question you typed first. Ask follow-up questions in the same box. The screen freezes while you pick (Esc cancels); the AI gets the part you picked, plus the whole screen small with that place marked, so it knows which app it's in. Needs a model that can see pictures (qwen3-vl, gemma3, gemma4).
 - **Control my PC:** say what should happen ("open Notepad and write a shopping list"). The AI looks at the window in front (its picture and a numbered list of what can be clicked, from Windows' UI Automation), then clicks, types, presses keys, scrolls or opens programs, one step at a time, and looks again after each step, until it's done (at most 40 steps). Every step shows in the panel, with a short glow on the screen where it clicks. Needs a model that can use tools; one that can also see (qwen3-vl, gemma4) works much better.
   - **To stop it, just move your mouse**: as soon as the cursor goes anywhere the AI didn't put it, it stops at once (Stop and **Ctrl+Alt+X** work too). While the panel waits for your Allow or answer, moving the mouse doesn't count.
+  - It can do everything a person at the PC can: click, double- and right-click, **hover**, **drag**, type, press and **hold** keys, scroll, open programs and web pages, **list and switch windows**, read and fill the **clipboard**, and look at the **whole screen** (taskbar, every window, notifications) instead of only the window in front. It can also **run PowerShell commands** and gets their output back; every command is shown to you and always waits for your **Allow**.
   - Steps that send, post, buy, pay or delete wait for your **Allow**. Tick **Ask before every step** to approve each click and key.
   - It never clicks on the panel itself, never types passwords (it asks you instead), and the panel never takes the keyboard while it works, so what it types goes to the app it works in.
 - Everything stays on this PC: the pictures go to the AI on your own PC through the host, nothing to any server.

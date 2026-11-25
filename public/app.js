@@ -120,7 +120,7 @@ function setGuestMode(on) {
     if ($("#notesStart")) $("#notesStart").hidden = true;
     if ($("#filesDlg")?.open) $("#filesDlg").close();
     if ($("#sidePanel") && ["browser", "agent", "list"].includes($("#sidePanel").dataset.tab) && window.sideClose) window.sideClose();
-    if (["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor"].some(v => document.body.classList.contains(v + "-view"))) {
+    if (["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor", "remote"].some(v => document.body.classList.contains(v + "-view"))) {
       setView("home");
     }
   }
@@ -1169,7 +1169,7 @@ function finishRun() {
 // Light mode: the shapes behind the page grow in number with what the open chat holds (messages, text, pictures); none extra elsewhere
 function shapesForChat() {
   if (typeof polygonField === "undefined" || !polygonField || !polygonField.setAmount) return;
-  const inChat = !["home", "pc", "jarvis", "notes", "mail", "hub", "monitor", "browser", "list"].some((v) => document.body.classList.contains(v + "-view"));
+  const inChat = !["home", "pc", "jarvis", "notes", "mail", "hub", "monitor", "remote", "browser", "list"].some((v) => document.body.classList.contains(v + "-view"));
   const msgs = inChat && current ? current.messages.filter((m) => !m.isEvent) : [];
   const chars = msgs.reduce((n, m) => n + String(m.content || "").length + (m.genImage ? 2500 : 0) + (m.images ? m.images.length * 1500 : 0), 0);
   polygonField.setAmount(msgs.length * .8 + chars / 1200);
@@ -5604,8 +5604,8 @@ $("#goTools").onclick = (e) => {
   e.stopPropagation();
   const old = document.querySelector(".tools-pop"); if (old) { old.remove(); $("#goTools").setAttribute("aria-expanded", "false"); return; }
   const pop = document.createElement("div"); pop.className = "tools-pop"; pop.setAttribute("role", "menu");
-  for (const id of ["goHost", "goJarvis", "goNotes", "goMail", "goHub", "goMonitor", "goList"]) {
-    const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Host|Jarvis|Notes|Mail|Hub|Monitor|List/.test(id))) continue;
+  for (const id of ["goHost", "goJarvis", "goNotes", "goMail", "goHub", "goMonitor", "goRemote", "goList"]) {
+    const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Host|Jarvis|Notes|Mail|Hub|Monitor|Remote|List/.test(id))) continue;
     const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
     b.innerHTML = (src.querySelector("svg") || {}).outerHTML || ""; b.append(src.textContent.trim());
     b.onclick = () => { pop.remove(); $("#goTools").setAttribute("aria-expanded", "false"); src.click(); };
@@ -5655,7 +5655,7 @@ loadImgFields();
 function setView(v, opt) {
   if (v === "agent") v = "chat";     // the Agent mode is gone: the chat itself works on the PC now
   if (window.EMBED_CHROME && v !== "chat") v = "chat";     // the Chrome sidebar is only the chat
-  if (guestMode && ["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor"].includes(v)) {
+  if (guestMode && ["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor", "remote"].includes(v)) {
     toast("Not available in guest mode");
     return;
   }
@@ -5675,15 +5675,18 @@ function setView(v, opt) {
   document.body.classList.toggle("mail-view", v === "mail");
   document.body.classList.toggle("hub-view", v === "hub");
   document.body.classList.toggle("monitor-view", v === "monitor");
+  document.body.classList.toggle("remote-view", v === "remote");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   $("#goNotes").classList.toggle("on", v === "notes");
   $("#goMail").classList.toggle("on", v === "mail");
   $("#goHub").classList.toggle("on", v === "hub");
   $("#goMonitor").classList.toggle("on", v === "monitor");
-  $("#goTools").classList.toggle("on", ["jarvis", "notes", "mail", "hub", "monitor", "list", "pc"].includes(v));
+  $("#goRemote").classList.toggle("on", v === "remote");
+  $("#goTools").classList.toggle("on", ["jarvis", "notes", "mail", "hub", "monitor", "remote", "list", "pc"].includes(v));
   if (v === "hub") window.hubOpen && window.hubOpen(); else window.hubClose && window.hubClose();
   if (v === "monitor") window.monitorOpen && window.monitorOpen(); else window.monitorClose && window.monitorClose();
+  if (v === "remote") window.remoteOpen && window.remoteOpen(); else window.remoteClose && window.remoteClose();
   if (v === "mail") window.mailOpen && window.mailOpen(opt);
   if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
@@ -5731,6 +5734,7 @@ function renderHome() {
     notes: svg('<path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h5"/>'),
     list: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 5.5l1 1 2-2M4 11.5l1 1 2-2M4 17.5l1 1 2-2"/>'),
     panel: svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M15 4v16"/><path d="M6.5 9.5c0-1.4 1.5-2.5 3.2-2.5s3 1.1 3 2.5-1.4 2.5-3 2.5" stroke-dasharray="2 1.8"/><path d="M7 15l2 2 3.5-4"/>'),
+    remote: '<svg class="i" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2.2"/><path d="M8 21h8M12 17v4"/><path d="M9.5 8.5 13 12M13 12v-3M13 12h-3"/></svg>',
     cc: svg('<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>'),
     search: svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
     settings: ($("#openSettings svg") || {}).outerHTML || svg('<circle cx="12" cy="12" r="3"/>'),
@@ -5750,6 +5754,7 @@ function renderHome() {
     ["Your PC", "#FF9F0A", [
       ["sidepanel", I.panel, "Side panel", "Circle anything on screen to have it explained, or let the AI control the PC", "desk"],
       ["hub", I.hub, "Hub", "Big buttons: media, volume, programs", "owner"],
+      ["remote", I.remote, "Remote desktop", "See the PC's screen and use its mouse and keyboard", "owner"],
       ["monitor", I.monitor, "Monitor", "A picture or video full screen on the PC", "owner"],
       ["browser", I.browser, "Browser", "Chrome on your PC, from any device", "owner"],
       ["pcfiles", ICON_FILES, "PC files", "Projects, pictures, received files", "owner"],
@@ -5829,6 +5834,7 @@ function renderHome() {
     else if (g === "mail") setView("mail");
     else if (g === "hub") setView("hub");
     else if (g === "monitor") setView("monitor");
+    else if (g === "remote") setView("remote");
     else if (g === "browser") setView("browser");
     else if (g === "codeplayer") { setView("chat"); window.codeSide && window.codeSide("html", "<!doctype html>\n<html>\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h1>Hello!</h1>\n</body>\n</html>", true, { name: "index.html" }); }
     else if (g === "pcfiles") window.pcFilesOpen && window.pcFilesOpen("browse");
@@ -7284,6 +7290,7 @@ $("#goJarvis").onclick = () => { setView("jarvis"); $("#sidebar").classList.remo
 $("#goNotes").onclick = () => { setView("notes"); $("#sidebar").classList.remove("open"); };
 $("#goMail").onclick = () => { setView("mail"); $("#sidebar").classList.remove("open"); };
 $("#goHub").onclick = () => { setView("hub"); $("#sidebar").classList.remove("open"); };
+$("#goRemote").onclick = () => { setView("remote"); $("#sidebar").classList.remove("open"); };
 $("#goMonitor").onclick = () => { setView("monitor"); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
 $("#menuBtn").onclick = () => { if (S.sideGone && matchMedia("(min-width: 821px)").matches) { S.sideGone = false; saveSettings(); applyRail(); return; } $("#sidebar").classList.toggle("open"); };
@@ -7338,8 +7345,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-24.2";
+const APP_VERSION = "2026-11-25.1";
 const WHATS_NEW = [
+  ["2026-11-25.1", ["Remote desktop: see your PC's screen live on any device and use its mouse and keyboard (Home → Your PC)","Side panel: the AI can now do everything at the PC: hover, drag, hold keys, switch windows, use the clipboard, see the whole screen, and run commands (each one waits for your Allow)"]],
   ["2026-11-24.2", ["The Windows app no longer pops up on its own while Albatross is being updated or tested"]],
   ["2026-11-24.1", ["Website: guides, a contact page, share image and search data"]],
   ["2026-11-19.1", ["Home is now a hub: no sidebars, a box to ask the AI right away, and every tool in groups","Albatross opens where you left it instead of on Home every time","Windows app: a side panel next to your apps that explains anything you box or circle on the screen, or controls the PC for you (Ctrl+Alt+Space)","The slowdown warning no longer says graphics memory is full when it's only Albatross's own loaded model"]],

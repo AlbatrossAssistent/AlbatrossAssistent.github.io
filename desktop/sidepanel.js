@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { execFile } = require("child_process");
+const { clipboard } = require("electron");
 
 const WIDTH = 420;
 
@@ -185,11 +186,40 @@ function create({ BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcu
   // ---------- Control: the AI works the mouse and keyboard ----------
   let last = null;    // the last look: where the window is and how its picture was scaled
   const panelRect = () => (win && !win.isDestroyed() ? screen.dipToScreenRect(null, win.getBounds()) : null);
+  // view "window": the window in front (its picture and what can be clicked in it). view "screen": the same list, but the picture
+  // is the whole display (taskbar, other windows, notifications), and x, y then mean places in that picture.
   async function look(opts = {}) {
     const r = await screenHelp.look(opts);
-    if (r.error) return r;
-    last = { rect: r.rect, scale: (r.image && r.image.scale) || 1, hwnd: r.hwnd, elements: r.elements, title: r.title };
-    return { ok: true, title: r.title, proc: r.proc, list: r.list, image: r.image, count: r.elements.length, w: r.image && r.image.w, h: r.image && r.image.h };
+    if (opts.view !== "screen") {
+      if (r.error) return r;
+      last = { rect: r.rect, scale: (r.image && r.image.scale) || 1, hwnd: r.hwnd, elements: r.elements, title: r.title };
+      return { ok: true, title: r.title, proc: r.proc, list: r.list, image: r.image, count: r.elements.length, w: r.image && r.image.w, h: r.image && r.image.h };
+    }
+    const d = r.error ? screen.getPrimaryDisplay() : screen.getDisplayMatching(screen.screenToDipRect(null, { x: r.rect.x, y: r.rect.y, width: Math.max(1, r.rect.w), height: Math.max(1, r.rect.h) }));
+    const phys = screen.dipToScreenRect(null, d.bounds);
+    const tw = Math.min(1600, phys.width), th = Math.round(tw * phys.height / phys.width);
+    const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: tw, height: th } });
+    const src = sources.find((x) => String(x.display_id) === String(d.id)) || sources[0];
+    if (!src) return { error: "Couldn't take a picture of the screen." };
+    const img = src.thumbnail, size = img.getSize();
+    last = { rect: { x: phys.x, y: phys.y, w: phys.width, h: phys.height }, scale: size.width / phys.width, hwnd: r.error ? 0 : r.hwnd, elements: r.error ? [] : r.elements, title: r.error ? "" : r.title };
+    return { ok: true, view: "screen", title: r.error ? "(the desktop)" : r.title, proc: r.error ? "" : r.proc, list: r.error ? "" : r.list, count: r.error ? 0 : r.elements.length,
+      image: { b64: img.toJPEG(80).toString("base64"), w: size.width, h: size.height }, w: size.width, h: size.height };
+  }
+  // the open windows (title, program, handle), for "which windows are open" and switching between them
+  function windows() {
+    const ps = "Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { '' + [int64]$_.MainWindowHandle + '|' + $_.ProcessName + '|' + $_.MainWindowTitle }";
+    return new Promise((ok) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " + ps], { windowsHide: true, timeout: 15000, maxBuffer: 4e6 }, (err, out) => {
+      ok(String(out || "").split(/\r?\n/).map((l) => l.trim().split("|")).filter((x) => x.length >= 3 && Number(x[0]))
+        .map(([h, proc, ...t]) => ({ hwnd: Number(h), proc, title: t.join("|") })).filter((w) => !/^Albatross (panel|select|overlay|warning)$/.test(w.title)));
+    }));
+  }
+  // a command in PowerShell, as you would type it; the panel always asks you first. Its output goes back to the AI.
+  function runCommand(cmd) {
+    return new Promise((ok) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " + cmd], { windowsHide: true, timeout: 120000, maxBuffer: 8e6, cwd: os.homedir() }, (err, out, errOut) => {
+      const text = (String(out || "") + (errOut ? "\n" + String(errOut) : "")).trim();
+      ok({ code: err ? (err.killed ? "timeout" : err.code ?? 1) : 0, text: text.length > 6000 ? text.slice(0, 3000) + "\n…\n" + text.slice(-3000) : text });
+    }));
   }
   // where on the real screen: a thing from the last look (its click point), or a point in the last picture
   function pointFor(a) {
@@ -262,6 +292,41 @@ function create({ BrowserWindow, screen, ipcMain, desktopCapturer, globalShortcu
       await input.type(t); await new Promise((r) => setTimeout(r, 900));
       await input.keys("enter");
       return `opened ${t} from the Start menu`;
+    }
+    if (kind === "move") {
+      const p = pointFor(a); guard(p);
+      await moving(p, () => input.move(p.x, p.y));
+      return `moved the mouse over ${p.what}`;
+    }
+    if (kind === "drag") {
+      const from = pointFor({ n: a.from_n, x: a.from_x, y: a.from_y }), to = pointFor({ n: a.to_n, x: a.to_x, y: a.to_y });
+      guard(from); guard(to);
+      await moving(to, () => input.drag(from.x, from.y, to.x, to.y, a.button === "right" ? "right" : "left"));
+      return `dragged from ${from.what} to ${to.what}`;
+    }
+    if (kind === "hold_keys") {
+      if (last && last.hwnd) await input.focus(last.hwnd);
+      await input.hold(String(a.keys || ""), a.seconds);
+      return `held ${a.keys} for ${Math.max(0.05, Math.min(10, Number(a.seconds) || 1))} s`;
+    }
+    if (kind === "clipboard_read") { const t = clipboard.readText(); return t ? `the clipboard holds: ${t.length > 4000 ? t.slice(0, 4000) + "…" : t}` : "the clipboard has no text"; }
+    if (kind === "clipboard_write") { clipboard.writeText(String(a.text || "")); return `put ${String(a.text || "").length} characters on the clipboard`; }
+    if (kind === "list_windows") {
+      const list = await windows();
+      return list.length ? "open windows: " + list.map((w) => `"${w.title.slice(0, 80)}" (${w.proc})`).join("; ") : "no windows are open";
+    }
+    if (kind === "switch_window") {
+      const q = String(a.name || "").toLowerCase(); if (!q) throw new Error("Say which window.");
+      const w = (await windows()).find((x) => x.title.toLowerCase().includes(q) || x.proc.toLowerCase().includes(q));
+      if (!w) throw new Error(`No open window matches "${a.name}". Use list_windows to see them.`);
+      await input.focus(w.hwnd);
+      return `switched to "${w.title.slice(0, 80)}"`;
+    }
+    if (kind === "run_command") {
+      const c = String(a.command || "").trim(); if (!c) throw new Error("Say which command.");
+      log("Side panel: the AI runs a command (allowed by you)");
+      const r = await runCommand(c);
+      return `ran the command (exit ${r.code}). Output:\n${r.text || "(nothing)"}`;
     }
     throw new Error(`"${kind}" isn't something I can do.`);
   }
