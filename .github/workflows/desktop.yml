@@ -1,8 +1,9 @@
 # Builds the Windows app and publishes it as a GitHub release whenever its version changes (desktop/package.json), so nobody
 # has to build and upload installers by hand. The installed apps find the new release by themselves (electron-updater) and
 # update: in the tray right away, with the window open after "Restart to update".
-# A version that is already released is skipped; the smoke test has to pass first (it gets one second try, because headless
-# Chrome on CI sometimes doesn't finish loading the page).
+# A version that is already released is skipped. The smoke test runs first, on Linux like the website's deploy (some of its
+# checks behave differently in Chrome on Windows), and gets one second try, because headless Chrome sometimes doesn't finish
+# loading the page; only then is the installer built on Windows.
 name: Windows app release
 on:
   push:
@@ -15,9 +16,11 @@ concurrency:
   group: desktop-release
   cancel-in-progress: false
 jobs:
-  release:
+  check:
     if: github.repository == 'AlbatrossAssistent/AlbatrossAssistent.github.io'
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.ver.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,26 +28,29 @@ jobs:
           node-version: 20
       - name: Is this version released already?
         id: ver
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=$(node -p "require('./desktop/package.json').version")
-          echo "version=$v" >> "$GITHUB_OUTPUT"
           if gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "Version $v is released already."; echo "skip=1" >> "$GITHUB_OUTPUT"; fi
-      - name: Install the host's packages
-        if: steps.ver.outputs.skip != '1'
-        run: npm ci
       - name: Smoke test (the app in headless Chrome)
         if: steps.ver.outputs.skip != '1'
-        shell: bash
         run: node test/smoke.js || (echo "Trying the smoke test once more" && node test/smoke.js)
+  release:
+    needs: check
+    if: needs.check.outputs.skip != '1'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the host's packages
+        run: npm ci
       - name: Install the app's build tools
-        if: steps.ver.outputs.skip != '1'
         working-directory: desktop
         run: npm ci
       - name: Build the installer and publish the release
-        if: steps.ver.outputs.skip != '1'
         working-directory: desktop
         env:
           GH_TOKEN: ${{ github.token }}
