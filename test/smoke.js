@@ -23,6 +23,7 @@ const RECORDER = `<script>window.__errs=[];addEventListener("error",function(e){
 const RUNNER = `<!doctype html><meta charset="utf-8"><pre id="o">waiting</pre><iframe id="f" style="width:1280px;height:800px"></iframe><script src="/selftest.js"></script><script>
 localStorage.setItem("burrow.settings", JSON.stringify({ theme: "dark", intro: false, serverVersion: 2, conn: { mode: "local", url: "http://127.0.0.1:1" } }));
 localStorage.setItem("burrow.termsAccepted", JSON.stringify("2099-01-01"));
+localStorage.setItem("burrow.testNoSignIn", JSON.stringify(true));
 localStorage.setItem("burrow.seenVersion", JSON.stringify("9999-01-01.1"));
 f.src = "/index.html";
 f.onload = () => setTimeout(async () => {

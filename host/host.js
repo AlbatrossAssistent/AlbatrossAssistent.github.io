@@ -700,10 +700,18 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
     let status = 500, out;
     try {
       if (guest) {
-        [status, out] = await jobStore.handle(method, p, body, {
+        // a signed-in guest's pictures go into their own folder (Guests\<account>); the jobs themselves stay "guest" jobs
+        let guid = "", gbody = body;
+        try { [guid, gbody] = await account.fromBody(body); }
+        catch {
+          // a token that doesn't check out: the guest is treated as not signed in, and the token never goes further
+          try { const x = JSON.parse(body || "{}"); delete x._acct; gbody = JSON.stringify(x); } catch { gbody = body; }
+        }
+        [status, out] = await jobStore.handle(method, p, gbody, {
           upstream,
           note: (t) => note("Guest: " + t),
           uid: "guest",
+          space: spaces.guestSpace(guid),
           onGuestDone: ({ chatId, model, body: jBody, content, kind, prompt, pcFile }) => {
             // a picture made for a guest is listed for the owner right away (with its file), even if the guest is gone
             if (kind === "image") {

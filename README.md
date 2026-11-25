@@ -42,6 +42,10 @@ It prints your code, e.g. `K7QM-4XPT-9F2C-HW3D`, plus a link. Keep that window o
 - On Windows the PC **won't go to sleep** while the host runs. No power settings are changed; it's a request that ends when the host stops. The screen can still turn off, and closing a laptop lid still sleeps it.
 - `burrow-host.bat` starts Ollama if it isn't running, then starts the host.
 
+### Updates of the Windows app
+
+Releases are made by GitHub Actions (`.github/workflows/desktop.yml`): when `desktop/package.json` gets a new version on `main`, a Windows machine runs the smoke test, builds the installer and publishes it as a GitHub release. The installed apps find it by themselves and update: right away when Albatross is only in the tray, otherwise when you pick **Restart to update** or close the window. To release, bump the version and push. A version that is already released is skipped; **Run workflow** on the Actions page starts it by hand.
+
 ### Start at boot (Windows)
 
 Flip **Start at boot** in the control center, or double-click `autostart-on.bat`. Windows asks for admin rights and your account password (a Microsoft account's password, not your PIN). Windows Task Scheduler stores the password; Burrow never sees it. From the next restart, Ollama and Burrow start by themselves, even before you sign in. The PC stays locked; Burrow just runs in the background.
@@ -194,6 +198,8 @@ Tools that live on your PC show up in the chat on any device connected to it (th
 
 ## Accounts: your chats and lists stay yours
 
+**Signing in is needed.** When Albatross opens, it asks you to sign in (Google, or email and password) before anything else. A device that was signed in before opens straight away, and signing out brings the sign-in screen back. There's no opening animation anymore.
+
 Chats live on the PC. While you're signed in (Settings → Account), your chats and lists are kept **per account**: in `%LOCALAPPDATA%\Albatross\Chats\accounts\<account>` on the PC, and under that account on each device. Signing in with the same account on another device shows the same chats; other accounts, and devices that aren't signed in, don't see them. Devices that aren't signed in share the chats directly in `Chats\`, as before.
 
 - The website sends the account's sign-in token with chat and list requests, inside the end-to-end encryption. The PC checks it against Google's keys (signature, project, expiry) before it uses the account's folder; a token that doesn't check out is refused.
@@ -204,7 +210,8 @@ Chats live on the PC. While you're signed in (Settings → Account), your chats 
 
 | Who | Where |
 | --- | --- |
-| A signed-in account (owner or guest code) | `Accounts\<account>\` (Pictures, AI, Code, received files) |
+| A signed-in account (admin code) | `Accounts\<account>\` (Pictures, AI, Code, received files) |
+| A signed-in guest (guest code) | `Guests\<account>\` |
 | Guests without an account | `Guests\` |
 | The owner without an account | `Downloads\Albatross\` itself, as before |
 

@@ -5,5 +5,6 @@ window.addEventListener("error", (e) => window.__errs.push((e.message || "error"
 try {
   localStorage.setItem("burrow.settings", JSON.stringify({ theme: "dark", intro: false, serverVersion: 2, conn: { mode: "local", url: "http://127.0.0.1:1" } }));
   localStorage.setItem("burrow.termsAccepted", JSON.stringify("2099-01-01"));
+  localStorage.setItem("burrow.testNoSignIn", JSON.stringify(true));      // the self-check has no account
   localStorage.setItem("burrow.seenVersion", JSON.stringify("9999-01-01.1"));
 } catch {}

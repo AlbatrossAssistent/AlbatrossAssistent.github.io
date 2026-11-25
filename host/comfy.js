@@ -363,7 +363,7 @@ async function generateOnce(body, emit, signal, log) {
     // keep a copy on this PC too (Downloads\Albatross\Pictures), so the PC files menu and the Agent can use it
     let pcFile = null;
     try {
-      const sp = require("./spaces"), space = typeof body._space === "string" && /^(Guests|Accounts[\\/][A-Za-z0-9_-]{1,128})?$/.test(body._space) ? body._space : sp.current();
+      const sp = require("./spaces"), space = typeof body._space === "string" && /^((Guests|Accounts)([\\/][A-Za-z0-9_-]{1,128})?)?$/.test(body._space) ? body._space : sp.current();
       const dir = path.join(sp.baseOf(space), "Pictures");
       fs.mkdirSync(dir, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19), tag = String(name).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 24);

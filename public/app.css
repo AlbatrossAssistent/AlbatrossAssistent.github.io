@@ -2578,3 +2578,26 @@ body.remote-view #typeBadge, body.remote-view #model { display: none !important;
 .qr-dlg .qr-img svg { width: 100%; height: 100%; display: block; }
 .qr-dlg .qr-note { margin: 12px 0 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .qr-dlg .row { display: flex; gap: 8px; justify-content: center; }
+
+/* ---------- the sign-in screen: needed before anything else ---------- */
+#gate { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); overflow-y: auto; }
+#gate[hidden] { display: none; }
+body.gated #sidebar, body.gated main, body.gated #sidePanel { visibility: hidden; }
+.gate-box { width: min(360px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.gate-logo svg { width: 34px; height: 34px; fill: currentColor; }
+.gate-box h1 { margin: 10px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.gate-sub { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+.gate-google { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; font-size: 15px; cursor: pointer; }
+.gate-google:hover { border-color: color-mix(in srgb, var(--fg) 30%, transparent); }
+.gate-google svg { width: 18px; height: 18px; }
+.gate-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; margin: 6px 0; }
+.gate-or::before, .gate-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.gate-box input { height: 42px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; font-size: 15px; padding: 0 12px; }
+.gate-box input:focus { outline: none; border-color: color-mix(in srgb, var(--fg) 35%, transparent); }
+.gate-row { display: flex; gap: 8px; margin-top: 4px; }
+.gate-row .btn { flex: 1; height: 40px; }
+.gate-link { align-self: flex-start; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; padding: 2px 0; cursor: pointer; }
+.gate-link:hover { color: var(--fg); }
+.gate-msg { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.gate-msg.bad { color: var(--danger); }
+.gate-row .btn { border-radius: 10px; box-shadow: none; }

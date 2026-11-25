@@ -120,6 +120,14 @@ window.albatrossSelfTest = async function (w) {
     w.setView("home"); await sleep(60);
     return ok && !!d.querySelector(".hm-row[data-go=remote]") && w.getComputedStyle(d.querySelector("#remotePage")).display === "none";
   });
+  await tryIt("the sign-in screen covers the app until an account is signed in, and goes away with one", async () => {
+    const g = d.getElementById("gate"); if (!g) return "no sign-in screen";
+    const wasHidden = g.hidden;                       // the tests open the app with burrow.testNoSignIn
+    w.gateShow(true); await sleep(20);
+    const shown = !g.hidden && w.getComputedStyle(g).display !== "none" && !!d.getElementById("gateGoogle") && !!d.getElementById("gateEmail") && w.getComputedStyle(d.querySelector("main")).visibility === "hidden";
+    w.gateShow(false); await sleep(20);
+    return wasHidden && shown && g.hidden && w.getComputedStyle(d.querySelector("main")).visibility !== "hidden";
+  });
   await tryIt("QR codes: the maker draws a code, and every connect link has a QR button", async () => {
     const svg = w.qrSvg && w.qrSvg("https://albatrossassistent.github.io/#code=K7QM-4XPT-9F2C-HW3D");
     const m = w.qrMatrix && w.qrMatrix("https://albatrossassistent.github.io/#code=K7QM-4XPT-9F2C-HW3D");

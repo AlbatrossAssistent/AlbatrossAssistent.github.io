@@ -481,8 +481,7 @@ async function updateNow(version) {
   ui.say("Starting the new version…", 100);
   setTimeout(() => location.reload(), 500);
 }
-if (S.intro && !matchMedia("(prefers-reduced-motion: reduce)").matches) playIntro();
-else { $("#splash").style.display = "none"; document.body.classList.remove("intro"); }
+$("#splash").style.display = "none"; document.body.classList.remove("intro");     // no opening animation: straight to the app (or to signing in)
 
 // ======================================================================
 // Connection
@@ -929,7 +928,35 @@ window.onAccountChange = (uid) => {
   }
   window.acctResolve();
   chatSyncSoon(200);
+  gateFollow(uid);
 };
+// ---------- Signing in is needed to use Albatross ----------
+// The sign-in screen covers the app until an account is signed in (Google, or email and password). Its buttons use the same
+// sign-in as Settings → Account (account.js), and it shows the same messages. A device that was signed in last time opens
+// straight away (Firebase confirms it in the background); signing out brings the screen back. If the sign-in service can't
+// be reached, it says so. Tests open the app with "burrow.testNoSignIn" set.
+const gateOff = () => !!store.get("testNoSignIn", false);
+function gateShow(on) {
+  const g = $("#gate"); if (!g) return;
+  g.hidden = !on; document.body.classList.toggle("gated", !!on);
+  if (on) setTimeout(() => { if (!g.hidden && !matchMedia("(pointer: coarse)").matches) $("#gateEmail").focus({ preventScroll: true }); }, 60);
+}
+function gateFollow(uid) { if (!gateOff()) gateShow(!uid); }
+window.gateShow = gateShow;
+{
+  const say = (t, bad) => { const m = $("#gateMsg"); m.hidden = !t; m.textContent = t || ""; m.classList.toggle("bad", !!bad); };
+  // account.js writes its messages into Settings → Account: the same words appear here
+  new MutationObserver(() => { const m = $("#accMsg"); if (!$("#gate").hidden) say(m.hidden ? "" : m.textContent, m.style.color.includes("danger")); }).observe($("#accMsg"), { childList: true, characterData: true, subtree: true, attributes: true });
+  const fill = () => { $("#accEmail").value = $("#gateEmail").value.trim(); $("#accPass").value = $("#gatePass").value; };
+  const ready = () => { if (window.albAcct) return true; say("The sign-in service isn't reachable yet. Check the internet connection and try again.", true); return false; };
+  $("#gateGoogle").onclick = () => { if (ready()) { say(""); $("#accGoogle").click(); } };
+  $("#gateForm").onsubmit = (e) => { e.preventDefault(); if (ready()) { say(""); fill(); $("#accSignIn").click(); } };
+  $("#gateSignUp").onclick = () => { if (!$("#gateForm").reportValidity() || !ready()) return; say(""); fill(); $("#accSignUp").click(); };
+  $("#gateReset").onclick = () => { if (!$("#gateEmail").value.trim()) return say("Enter your email first.", true); if (ready()) { fill(); $("#accReset").click(); } };
+  if (!gateOff() && !acctUid) gateShow(true);
+  // the sign-in service (account.js, from Google) didn't load at all: say so instead of a screen that does nothing
+  setTimeout(() => { if (!$("#gate").hidden && !window.albAcct) say("Can't reach the sign-in service. Check the internet connection, then reload the page.", true); }, 12000);
+}
 // Moves the shared chats (on the PC and on this device) into the signed-in account; they then leave the shared space.
 window.moveSharedChats = async () => {
   if (!acctUid) return toast("Sign in first");
@@ -7370,8 +7397,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-25.3";
+const APP_VERSION = "2026-11-25.4";
 const WHATS_NEW = [
+  ["2026-11-25.4", ["Signing in is needed now: the app opens on a sign-in screen (Google or email) instead of the opening animation","Guests who are signed in get their own folder for their pictures","The Windows app now updates by itself after every new version (releases are built automatically)"]],
   ["2026-11-25.3", ["Your files are kept per account now: pictures, the AI's folder, code and files sent with Beam go into the account's own folder; guests get theirs","Guest chat summaries look at the pictures the PC made, with a model that can see them","QR codes to connect: next to every connect link in Settings, on the PC page and in the control center"]],
   ["2026-11-25.2", ["Home is a plain launcher now: one box to ask the AI or find a tool (type its name, press Enter), the tools as a list, your recent chats next to it","The side panel looks plainer, and updates of the Windows app no longer fail with 'Failed to uninstall old application files'"]],
   ["2026-11-25.1", ["Remote desktop: see your PC's screen live on any device and use its mouse and keyboard (Home → Your PC)","Side panel: the AI can now do everything at the PC: hover, drag, hold keys, switch windows, use the clipboard, see the whole screen, and run commands (each one waits for your Allow)"]],

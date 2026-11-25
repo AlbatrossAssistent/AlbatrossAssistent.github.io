@@ -10,12 +10,12 @@ const jobs = new Map();       // id -> job
 const KEEP_MS = 30 * 60e3;    // how long a finished answer waits to be picked up
 const MAX_CHARS = 24e6;       // per job; a longer answer is cut, never the whole PC's memory
 
-function start({ body, chatId, upstream, note, uid, onGuestDone, path = "/api/chat" }) {
+function start({ body, chatId, upstream, note, uid, space, onGuestDone, path = "/api/chat" }) {
   if (path !== "/api/chat" && path !== "/api/generate") return [400, { error: "Bad job" }];
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
   const id = crypto.randomBytes(9).toString("base64url");
   const ctrl = new AbortController();
-  if (path === "/api/generate") body = JSON.stringify({ ...j, _space: require("./spaces").spaceOf(uid) });    // the picture is saved in the asker's folder
+  if (path === "/api/generate") body = JSON.stringify({ ...j, _space: typeof space === "string" ? space : require("./spaces").spaceOf(uid) });    // the picture is saved in the asker's folder
   const job = { id, uid: uid || "", chatId: /^[A-Za-z0-9_-]{1,64}$/.test(String(chatId || "")) ? chatId : "", model: j.model || "", kind: path === "/api/generate" ? "image" : "chat", prompt: String(j.prompt || "").slice(0, 400), image: "", pcFile: null, ctrl, lines: [], chars: 0, done: false, error: "", started: Date.now(), polled: Date.now(), content: "", thinking: "", stats: "", waiters: [] };
   jobs.set(id, job);
   const wake = () => { for (const w of job.waiters.splice(0)) w(); };
@@ -129,7 +129,7 @@ function list(uid, chatIds) {
 
 async function handle(method, p, body, ctx) {
   let j = {}; try { j = JSON.parse(body || "{}"); } catch { return [400, { error: "Bad request" }]; }
-  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note, uid: ctx.uid, onGuestDone: ctx.onGuestDone, path: j.path || "/api/chat" });
+  if (p === "/jobs/start") return start({ body: typeof j.body === "string" ? j.body : JSON.stringify(j.body || {}), chatId: j.chatId, upstream: ctx.upstream, note: ctx.note, uid: ctx.uid, space: ctx.space, onGuestDone: ctx.onGuestDone, path: j.path || "/api/chat" });
   if (p === "/jobs/poll") return poll(j, ctx.uid);
   if (p === "/jobs/cancel") return cancel(j, ctx.uid);
   if (p === "/jobs/list") return list(ctx.uid, j.chatIds);

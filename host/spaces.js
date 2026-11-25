@@ -1,7 +1,8 @@
 // Whose files: everything Albatross makes or receives on this PC (pictures, the AI's folder, code projects, files sent with
 // Beam) is kept apart per account, like the chats (chats.js):
 //   a signed-in account          Downloads\Albatross\Accounts\<account>\...
-//   guests (the guest code)      Downloads\Albatross\Guests\...
+//   a guest signed in            Downloads\Albatross\Guests\<account>\...
+//   a guest without an account   Downloads\Albatross\Guests\...
 //   no account (the PC's owner)  Downloads\Albatross\...   (as before; the Accounts and Guests folders are left out of its lists)
 // A request runs inside run(space, fn); the file code asks current() where it is, so it doesn't have to pass the space along.
 // The account comes from the sign-in token the website sends inside the end-to-end encryption, checked in account.js.
@@ -18,6 +19,8 @@ function spaceOf(uid) {
   if (uid && UID.test(uid)) return path.join("Accounts", uid);
   return "";
 }
+// a guest's space: their own folder when they are signed in, the shared guests' folder when not
+const guestSpace = (uid) => (uid && UID.test(uid) ? path.join("Guests", uid) : "Guests");
 const baseOf = (space) => (space ? path.join(BASE, space) : BASE);
 const run = (space, fn) => als.run(String(space || ""), fn);
 const current = () => als.getStore() || "";
@@ -31,4 +34,4 @@ function isPicturePath(full) {
   return parts.length >= 2 && parts[parts.length - 2] === "Pictures";
 }
 
-module.exports = { BASE, spaceOf, baseOf, run, current, hidden, isPicturePath, SPACE_DIRS };
+module.exports = { BASE, spaceOf, guestSpace, baseOf, run, current, hidden, isPicturePath, SPACE_DIRS };
