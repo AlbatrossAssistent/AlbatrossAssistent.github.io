@@ -7463,8 +7463,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-25.5";
+const APP_VERSION = "2026-11-25.6";
 const WHATS_NEW = [
+  ["2026-11-25.6", ["Remote desktop works from your other devices again (it said the PC's Albatross was too old)","Ollama is started again by itself when it stops, and app updates no longer stop it"]],
   ["2026-11-25.5", ["Settings → Connection → Host on this device: this device connects to itself and goes online by itself, every start","In the Windows app, Update now installs the new app version (it closes, installs and opens again) instead of reloading the old pages"]],
   ["2026-11-25.4", ["Signing in is needed now: the app opens on a sign-in screen (Google or email) instead of the opening animation","Guests who are signed in get their own folder for their pictures","The Windows app now updates by itself after every new version (releases are built automatically)"]],
   ["2026-11-25.3", ["Your files are kept per account now: pictures, the AI's folder, code and files sent with Beam go into the account's own folder; guests get theirs","Guest chat summaries look at the pictures the PC made, with a model that can see them","QR codes to connect: next to every connect link in Settings, on the PC page and in the control center"]],

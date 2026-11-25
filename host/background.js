@@ -47,9 +47,11 @@ function runtimeCopy() {
   }
 }
 
-(async () => {
-  console.log("Burrow background start");
-  if (!(await up())) {
+let starting = false;
+async function startOllama() {
+  if (starting) return;
+  starting = true;
+  try {
     const exe = runtimeCopy() || [path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama.exe")].find((f) => fs.existsSync(f)) || "ollama";
     console.log("Starting Ollama:", exe);
     const ollamaLog = fs.openSync(path.join(process.env.ALBATROSS_DATA || __dirname, "ollama-background.log"), "a");
@@ -71,8 +73,21 @@ function runtimeCopy() {
     child.unref();
     for (let i = 0; i < 60 && !(await up()); i++) await wait(1000);
     console.log((await up()) ? "Ollama is running" : "Ollama didn't start, the host will keep checking");
-  } else console.log("Ollama was already running");
+  } finally { starting = false; }
+}
+
+(async () => {
+  console.log("Burrow background start");
+  if (!(await up())) { console.log("Starting Ollama"); await startOllama(); }
+  else console.log("Ollama was already running");
 
   process.argv.push("--no-panel", "--background");
   require("./host.js");
+  // Ollama can stop while the host keeps running (an app update ended it, it crashed, someone quit it in the tray): without it
+  // no answer works ("Ollama isn't answering"). Down for three checks in a row (about 45 seconds): started again.
+  let down = 0;
+  setInterval(async () => {
+    if (await up()) { down = 0; return; }
+    if (++down >= 3 && !starting) { down = 0; console.log("Ollama stopped: starting it again"); await startOllama(); }
+  }, 15000).unref();
 })();

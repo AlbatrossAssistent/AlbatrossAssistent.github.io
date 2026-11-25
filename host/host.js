@@ -613,6 +613,17 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
     return send({ type: "end", id });
   }
 
+  // remote desktop's pictures: a stream, so it comes before the /pc/ answers below (they would say "unknown": "too old")
+  if (p === "/pc/deskstream") {      // guests never get here: /pc/ is closed to them above
+    const ctrl = new AbortController(); running.set(id, ctrl);
+    try {
+      reply({ k: "m", s: 200, c: "application/x-ndjson" });
+      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+      await remoteDesk.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 1.5e6, note);
+      reply({ k: "e" });
+    } catch (e) { try { reply({ k: "d", d: JSON.stringify({ error: e.message }) + "\n" }); reply({ k: "e" }); } catch {} } finally { running.delete(id); }
+    return send({ type: "end", id });
+  }
   // Files to and from this PC (see files.js), answered here instead of by Ollama.
   if (typeof p === "string" && p.startsWith("/pc/")) {
     let status = 500, out;
@@ -657,16 +668,6 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
     let status = 500, out;
     try { [status, out] = await agentHandle(method, p, body); } catch (e) { out = { error: e.message }; }
     reply({ k: "m", s: status, c: "application/json" }); reply({ k: "d", d: JSON.stringify(out) }); reply({ k: "e" });
-    return send({ type: "end", id });
-  }
-  if (p === "/pc/deskstream") {      // guests never get here: /pc/ is closed to them above
-    const ctrl = new AbortController(); running.set(id, ctrl);
-    try {
-      reply({ k: "m", s: 200, c: "application/x-ndjson" });
-      let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
-      await remoteDesk.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 1.5e6, note);
-      reply({ k: "e" });
-    } catch (e) { try { reply({ k: "d", d: JSON.stringify({ error: e.message }) + "\n" }); reply({ k: "e" }); } catch {} } finally { running.delete(id); }
     return send({ type: "end", id });
   }
   if (p === "/browser/stream") {
