@@ -187,7 +187,8 @@ Give a tool a name, say what it does (the AI reads that to decide when to use it
 
 - Tools are stored in the extension (`chrome.storage.local`). The chat only gets the name, description and inputs, never the code; the extension looks the code up itself when the AI asks for a tool.
 - A page tool can read and change the page, like a bookmarklet. Only add tools you wrote or trust.
-- **YouTube ads** (`extension/youtube.js`, `background.js`), three settings under **⋯ → YouTube ads** (each click goes to the next):
+- **The icon** opens a small menu (`popup.html`): the YouTube ad setting and **Open chat**, so the chat only shows when you want it. *The icon opens the chat directly* there goes back to opening the sidebar on click.
+- **YouTube ads** (`extension/youtube.js`, `background.js`), three settings in the icon's menu or under **⋯ → YouTube ads** in the sidebar; a skipped ad shows a short "Ad skipped" note with the Albatross face in the player:
   - *skip* (default): an ad is muted, sped through at 16x and skipped as soon as YouTube allows; the video goes on with your own sound and speed. Banner ads over the video are closed.
   - *watch ahead, swap*: the ads are watched, just not by you. A second copy of the video runs in a hidden, muted tab (collapsed group "Ads ahead") about a minute ahead of you and plays the ads it meets there. When your copy reaches an ad that the hidden copy is already past, you're switched to the hidden copy at the same second, with your volume and speed; your old copy plays its ad muted and becomes the one ahead. The ad at the very start of a video stays (both copies get one). Switching tabs ends fullscreen.
   - *leave them*: nothing.

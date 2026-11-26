@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Albatross</title>
+<style>
+  :root { --fg: #1d1d1f; --muted: #6e6e73; --line: rgba(0,0,0,.1); --bg: #fff; --soft: #f5f5f7; --accent: #007aff; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #f5f5f7; --muted: #a1a1a6; --line: rgba(255,255,255,.14); --bg: #1c1c1e; --soft: #2c2c2e; } }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { width: 260px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+  .head img { width: 18px; height: 18px; }
+  h2 { margin: 0; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .opts { display: flex; flex-direction: column; gap: 2px; }
+  label.opt { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+  label.opt:hover { background: var(--soft); }
+  label.opt input { margin: 2px 0 0; accent-color: var(--accent); }
+  label.opt small { display: block; color: var(--muted); font-size: 11.5px; }
+  button { font: inherit; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; cursor: pointer; }
+  .check input { accent-color: var(--accent); margin: 0; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 0; }
+</style>
+</head>
+<body>
+  <div class="head"><img src="icon48.png" alt="">Albatross</div>
+  <h2>YouTube ads</h2>
+  <div class="opts">
+    <label class="opt"><input type="radio" name="yt" value="skip"><span>Skip<small>Muted, sped through and skipped</small></span></label>
+    <label class="opt"><input type="radio" name="yt" value="swap"><span>Watch ahead, swap<small>A hidden copy watches them; you're switched past</small></span></label>
+    <label class="opt"><input type="radio" name="yt" value="off"><span>Leave them<small>Albatross does nothing on YouTube</small></span></label>
+  </div>
+  <hr>
+  <button id="chat" type="button">Open chat</button>
+  <label class="check"><input type="checkbox" id="direct">The icon opens the chat directly</label>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -22,6 +22,22 @@
   const isAd = (player) => !!player && player.classList.contains("ad-showing");
   const videoId = () => new URLSearchParams(location.search).get("v") || "";
 
+  // ---------- "Ad skipped": a small note with the Albatross face, in the player (so it shows in fullscreen too) ----------
+  const FACE = '<svg viewBox="0 0 28 28" width="22" height="22" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>';
+  function toast(text) {
+    const host = document.querySelector("#movie_player") || document.body;
+    let el = host.querySelector(".alb-yt-toast");
+    if (!el) {
+      el = document.createElement("div"); el.className = "alb-yt-toast";
+      el.style.cssText = "position:absolute;left:16px;top:16px;z-index:2147483647;display:flex;align-items:center;gap:8px;padding:8px 14px 8px 10px;border-radius:999px;background:rgba(15,15,17,.82);color:#fff;font:600 14px/1.2 Roboto,system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.35);pointer-events:none;opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s";
+      el.innerHTML = FACE + "<span></span>";
+      host.appendChild(el);
+    }
+    el.querySelector("span").textContent = text;
+    requestAnimationFrame(() => { el.style.opacity = "1"; el.style.transform = "none"; });
+    clearTimeout(el._t); el._t = setTimeout(() => { el.style.opacity = "0"; el.style.transform = "translateY(-6px)"; }, 2500);
+  }
+
   // ---------- skip ----------
   function skip(player, video) {
     if (mode === "skip" && isAd(player)) {
@@ -36,6 +52,7 @@
       video.muted = saved.muted;
       try { video.playbackRate = saved.rate === 16 ? 1 : saved.rate; } catch {}
       saved = null;
+      toast("Ad skipped");
     }
     if (mode === "skip") for (const b of document.querySelectorAll(".ytp-ad-overlay-close-button")) b.click();
   }
@@ -81,6 +98,7 @@
     if (typeof m.volume === "number") video.volume = m.volume;
     video.muted = false; video.play().catch(() => {});
     role = "main"; steady = 0;
+    toast("Ad skipped: switched past it");
   }
   // the old one: its ad plays out muted; it already had its ads up to where you were
   function demote(m) { role = "helper"; swapped++; clear = Math.max(clear, m.t || 0); seekAt = 0; steady = 0; }

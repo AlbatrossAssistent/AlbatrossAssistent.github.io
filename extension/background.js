@@ -26,7 +26,15 @@ async function sendState() { out({ type: "state", paused: st.paused, tab: await 
 
 // ---------- the sidebar ----------
 // a click on the Albatross icon opens it
-const panelOnClick = () => chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+// The icon opens a small menu (popup.html: the YouTube ad setting and "Open chat"), so Albatross stays out of the way when you only
+// want the ad skipper; with "iconOpens" = "chat" (set in that menu) it opens the chat sidebar directly, as it used to.
+const panelOnClick = async () => {
+  const { iconOpens } = await chrome.storage.local.get("iconOpens");
+  const chat = iconOpens === "chat";
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: chat }).catch(() => {});
+  await chrome.action.setPopup({ popup: chat ? "" : "popup.html" }).catch(() => {});
+};
+chrome.storage.onChanged.addListener((c) => { if (c.iconOpens) panelOnClick(); });
 panelOnClick();
 // "Follow my tab": the AI's tab is the one you're looking at in the window with the sidebar
 async function followTab() {
