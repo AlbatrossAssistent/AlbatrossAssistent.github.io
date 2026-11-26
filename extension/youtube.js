@@ -84,12 +84,37 @@
   }
   // the old one: its ad plays out muted; it already had its ads up to where you were
   function demote(m) { role = "helper"; clear = Math.max(clear, m.t || 0); seekAt = 0; steady = 0; }
+  // ---------- to try it: jump to just before the next ad ----------
+  // The ad places come from YouTube's own page (youtube-main.js). 10 seconds before, so in "swap" the hidden copy has time to
+  // get past that ad first.
+  const fmt = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+  function askCues() {
+    return new Promise((res) => {
+      const on = (e) => { if (e.source === window && e.data && e.data.albYt === "cues") { removeEventListener("message", on); res(e.data.cues || []); } };
+      addEventListener("message", on);
+      window.postMessage({ albYt: "cues?" }, "*");
+      setTimeout(() => { removeEventListener("message", on); res(null); }, 1500);
+    });
+  }
+  async function jumpToAd() {
+    const { player, video } = parts();
+    if (!video || !videoId()) return { error: "Open a YouTube video first." };
+    if (isAd(player)) return { error: "An ad is playing right now." };
+    const cues = await askCues();
+    if (cues === null) return { error: "Couldn't read the video's ad places (reload the YouTube page once)." };
+    const now = video.currentTime, next = cues.find((c) => c > now + 11);
+    if (!next) return { error: cues.length ? "No more ads after " + fmt(now) + " in this video." : "YouTube placed no ads in the middle of this video (short videos often have none)." };
+    video.currentTime = Math.max(0, next - 10);
+    video.play().catch(() => {});
+    return { ok: true, text: "Jumped to " + fmt(next - 10) + ": the ad comes at " + fmt(next) + " (" + cues.length + " in this video)." };
+  }
   try {
     chrome.runtime.onMessage.addListener((m, _s, reply) => {
       if (!m || !m.yt) return;
       if (m.yt === "lead") { role = "helper"; reply(helperStep(m)); return; }
       if (m.yt === "become") { become(m); reply({ ok: true }); return; }
       if (m.yt === "demote") { demote(m); reply({ ok: true }); return; }
+      if (m.yt === "jumpAd") { jumpToAd().then(reply); return true; }
     });
   } catch {}
 

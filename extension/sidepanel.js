@@ -56,6 +56,14 @@ const YT = { skip: ["skip", "Ads are muted, sped through and skipped"], swap: ["
 const ytNow = (v) => v.ytMode || (v.ytAds === false ? "off" : "skip");
 const paintYt = (m) => { $("#ytAds").textContent = "YouTube ads: " + YT[m][0]; $("#ytAds").title = YT[m][1]; $("#ytAds").className = m === "off" ? "" : "primary"; };
 chrome.storage.local.get(["ytMode", "ytAds"], (v) => paintYt(ytNow(v)));
+// to try the setting: the video you're watching jumps to just before its next ad (youtube.js)
+$("#ytJump").onclick = async () => {
+  const say = (t) => { const m = $("#ytJumpMsg"); m.hidden = false; m.textContent = t; clearTimeout(say.t); say.t = setTimeout(() => (m.hidden = true), 8000); };
+  const [t] = await chrome.tabs.query({ active: true, windowId: winId });
+  if (!t || !/^https:\/\/(www|m)\.youtube\.com\//.test(t.url || "")) return say("Open a YouTube video in this window first.");
+  const r = await chrome.tabs.sendMessage(t.id, { yt: "jumpAd" }).catch(() => null);
+  say(!r ? "The YouTube page doesn't answer: reload it once (it was open before the extension was updated)." : r.error || r.text);
+};
 $("#ytAds").onclick = () => chrome.storage.local.get(["ytMode", "ytAds"], (v) => { const m = { skip: "swap", swap: "off", off: "skip" }[ytNow(v)]; chrome.storage.local.set({ ytMode: m }); paintYt(m); });
 $("#openApp").onclick = () => chrome.tabs.create({ url: "https://albatrossassistent.github.io/public/" });
 // the code is shown as "123 456": spaces and anything else that isn't a digit are ignored, and the field shows it with the gap
