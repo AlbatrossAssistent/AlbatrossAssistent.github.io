@@ -619,7 +619,7 @@ async function handleRelayRequest(send, ws, msg, isGuestSocket = false) {
     try {
       reply({ k: "m", s: 200, c: "application/x-ndjson" });
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
-      await remoteDesk.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 1.5e6, note);
+      await remoteDesk.stream(j, (t) => reply({ k: "d", d: t }), ctrl.signal, () => ws.bufferedAmount > 256e3, note);   // frames waiting to go out: skip new ones, so what you see stays current
       reply({ k: "e" });
     } catch (e) { try { reply({ k: "d", d: JSON.stringify({ error: e.message }) + "\n" }); reply({ k: "e" }); } catch {} } finally { running.delete(id); }
     return send({ type: "end", id });

@@ -31,26 +31,46 @@ public class AlbDesk {
   static INPUT K(ushort vk, ushort scan, uint flags) { var i = new INPUT(); i.type = 1; i.u.ki.vk = vk; i.u.ki.scan = scan; i.u.ki.flags = flags; return i; }
   static ImageCodecInfo jpeg = null;
 
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr w);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr w, IntPtr dc);
+  [DllImport("gdi32.dll")] static extern bool StretchBlt(IntPtr d, int dx, int dy, int dw, int dh, IntPtr s, int sx, int sy, int sw, int sh, int rop);
+  [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr d, int dx, int dy, int dw, int dh, IntPtr s, int sx, int sy, int rop);
+  [DllImport("gdi32.dll")] static extern int SetStretchBltMode(IntPtr dc, int mode);
+  [DllImport("gdi32.dll")] static extern bool SetBrushOrgEx(IntPtr dc, int x, int y, IntPtr old);
+  // the picture of the last size, kept between frames (no new bitmap 10 times a second), and a fingerprint of the last frame:
+  // an unchanged screen isn't encoded again
+  static Bitmap pic = null; static long lastSum = 0; static string lastOut = "";
+  // Copies and shrinks the screen in one step (StretchBlt, HALFTONE: smooth, not blocky) instead of copying the whole screen at
+  // full size first and shrinking that: on a 2560x1440 screen about half the time per frame.
   public static string Shot(int x, int y, int w, int h, int max, long q) {
-    using (var full = new Bitmap(w, h, PixelFormat.Format24bppRgb)) {
-      using (var g = Graphics.FromImage(full)) {
-        g.CopyFromScreen(x, y, 0, 0, new Size(w, h), CopyPixelOperation.SourceCopy);
-        // the mouse pointer isn't in a screen copy: draw it in, so the other device sees where it is
-        var ci = new CURSORINFO(); ci.cbSize = Marshal.SizeOf(typeof(CURSORINFO));
-        if (GetCursorInfo(ref ci) && ci.flags == 1) {
-          ICONINFO ii; int hx = 0, hy = 0;
-          if (GetIconInfo(ci.hCursor, out ii)) { hx = ii.xHot; hy = ii.yHot; if (ii.hbmMask != IntPtr.Zero) DeleteObject(ii.hbmMask); if (ii.hbmColor != IntPtr.Zero) DeleteObject(ii.hbmColor); }
-          var hdc = g.GetHdc(); DrawIconEx(hdc, ci.pt.X - x - hx, ci.pt.Y - y - hy, ci.hCursor, 0, 0, 0, IntPtr.Zero, 3); g.ReleaseHdc(hdc);
-        }
+    double k = Math.Min(1.0, (double)max / w); int tw = Math.Max(1, (int)(w * k)), th = Math.Max(1, (int)(h * k));
+    if (pic == null || pic.Width != tw || pic.Height != th) { if (pic != null) pic.Dispose(); pic = new Bitmap(tw, th, PixelFormat.Format24bppRgb); lastOut = ""; }
+    IntPtr screen = GetDC(IntPtr.Zero);
+    try {
+      using (var g = Graphics.FromImage(pic)) {
+        var hdc = g.GetHdc();
+        try {
+          if (k < 1) { SetStretchBltMode(hdc, 4); SetBrushOrgEx(hdc, 0, 0, IntPtr.Zero); StretchBlt(hdc, 0, 0, tw, th, screen, x, y, w, h, 0x00CC0020); }
+          else BitBlt(hdc, 0, 0, tw, th, screen, x, y, 0x00CC0020);
+          // the mouse pointer isn't in a screen copy: draw it in (at its normal size, so it stays easy to see on a small picture)
+          var ci = new CURSORINFO(); ci.cbSize = Marshal.SizeOf(typeof(CURSORINFO));
+          if (GetCursorInfo(ref ci) && ci.flags == 1) {
+            ICONINFO ii; int hx = 0, hy = 0;
+            if (GetIconInfo(ci.hCursor, out ii)) { hx = ii.xHot; hy = ii.yHot; if (ii.hbmMask != IntPtr.Zero) DeleteObject(ii.hbmMask); if (ii.hbmColor != IntPtr.Zero) DeleteObject(ii.hbmColor); }
+            DrawIconEx(hdc, (int)((ci.pt.X - x) * k) - hx, (int)((ci.pt.Y - y) * k) - hy, ci.hCursor, 0, 0, 0, IntPtr.Zero, 3);
+          }
+        } finally { g.ReleaseHdc(hdc); }
       }
-      double k = Math.Min(1.0, (double)max / w); int tw = Math.Max(1, (int)(w * k)), th = Math.Max(1, (int)(h * k));
-      using (var small = new Bitmap(tw, th, PixelFormat.Format24bppRgb)) {
-        using (var g = Graphics.FromImage(small)) { g.InterpolationMode = k < 1 ? System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear : System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor; g.DrawImage(full, 0, 0, tw, th); }
-        if (jpeg == null) foreach (var c in ImageCodecInfo.GetImageEncoders()) if (c.MimeType == "image/jpeg") jpeg = c;
-        var ep = new EncoderParameters(1); ep.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, q);
-        using (var ms = new MemoryStream()) { small.Save(ms, jpeg, ep); return tw + "," + th + "," + Convert.ToBase64String(ms.ToArray()); }
-      }
-    }
+    } finally { ReleaseDC(IntPtr.Zero, screen); }
+    // fingerprint: every 7th 64-bit word of the pixels; the same as last time = the same picture, no need to encode it
+    var bd = pic.LockBits(new Rectangle(0, 0, tw, th), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+    long sum = 0;
+    try { int n = bd.Stride * th / 8; for (int i = 0; i < n; i += 7) sum = sum * 31 + Marshal.ReadInt64(bd.Scan0, i * 8); } finally { pic.UnlockBits(bd); }
+    if (sum == lastSum && lastOut != "") return lastOut;
+    lastSum = sum;
+    if (jpeg == null) foreach (var c in ImageCodecInfo.GetImageEncoders()) if (c.MimeType == "image/jpeg") jpeg = c;
+    var ep = new EncoderParameters(1); ep.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, q);
+    using (var ms = new MemoryStream()) { pic.Save(ms, jpeg, ep); lastOut = tw + "," + th + "," + Convert.ToBase64String(ms.ToArray()); return lastOut; }
   }
   static uint Down(string b) { return b == "right" ? 8u : b == "middle" ? 32u : 2u; }
   public static void Move(int x, int y) { SetCursorPos(x, y); }

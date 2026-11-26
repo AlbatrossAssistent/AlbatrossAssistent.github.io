@@ -9,7 +9,7 @@
 (() => {
 const R = { open: false, ctrl: null, screen: null, screens: [], quality: "auto", frame: null, queue: Promise.resolve(), moveT: 0, lastMove: null, down: null, keysDown: new Set(), frames: 0, fpsT: 0 };
 const page = () => $("#remotePage");
-const QUAL = { auto: null, sharp: { max: 1920, q: 70, fps: 6 }, normal: { max: 1280, q: 55, fps: 8 }, fast: { max: 960, q: 40, fps: 12 } };
+const QUAL = { auto: null, sharp: { max: 1920, q: 70, fps: 8 }, normal: { max: 1280, q: 50, fps: 12 }, fast: { max: 960, q: 40, fps: 15 } };
 const settings = () => QUAL[R.quality] || (remotePC() ? QUAL.normal : QUAL.sharp);
 // inputs go out one after the other, in order; a slow one never lets the next overtake it
 const send = (o) => { R.queue = R.queue.then(() => pcCall("/pc/desk", { screen: R.screen, ...o }).catch((e) => { if (/Unknown|404/.test(e.message)) toast("Update Albatross on the PC for remote desktop"); })); return R.queue; };
@@ -104,7 +104,16 @@ function at(e) {
 function moveSoon(p) {
   R.lastMove = p;
   if (R.moveT) return;
-  R.moveT = setTimeout(() => { R.moveT = 0; if (R.lastMove) send({ t: "move", ...R.lastMove }); }, 50);    // at most 20 moves a second
+  R.moveT = setTimeout(() => { R.moveT = 0; if (R.lastMove) sendMove(R.lastMove); }, 40);    // at most 25 moves a second
+}
+// Each move takes a round trip to the PC (through the Albatross server when you're away). Queued one by one they piled up and the
+// pointer trailed further and further behind; now only the newest position waits while one is on its way.
+let moveWaiting = false;
+function sendMove(p) {
+  R.nextMove = p;
+  if (moveWaiting) return;
+  moveWaiting = true;
+  R.queue = R.queue.then(() => { moveWaiting = false; const m = R.nextMove; R.nextMove = null; return m ? pcCall("/pc/desk", { screen: R.screen, t: "move", ...m }).catch(() => {}) : null; });
 }
 function wireInput() {
   const st = $("#rdStage");
