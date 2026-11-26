@@ -7463,8 +7463,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-26.1";
+const APP_VERSION = "2026-11-26.2";
 const WHATS_NEW = [
+  ["2026-11-26.2", ["The Windows app looks for new versions every 10 minutes and when you come back to it, so updates arrive within minutes"]],
   ["2026-11-26.1", ["Remote desktop and the PC controls work in the Windows app (they said the helper didn't start, 'is someone signed in on the PC?')"]],
   ["2026-11-25.6", ["Remote desktop works from your other devices again (it said the PC's Albatross was too old)","Ollama is started again by itself when it stops, and app updates no longer stop it"]],
   ["2026-11-25.5", ["Settings → Connection → Host on this device: this device connects to itself and goes online by itself, every start","In the Windows app, Update now installs the new app version (it closes, installs and opens again) instead of reloading the old pages"]],

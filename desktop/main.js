@@ -250,7 +250,12 @@ function startUpdates() {
   });
   autoUpdater.on("error", (e) => noteUpdateError(e));
   autoUpdater.on("update-not-available", () => clearUpdateError());
-  setInterval(() => autoUpdater.checkForUpdates().catch((e) => noteUpdateError(e)), 4 * 3600e3);
+  // a new version should arrive within minutes, not hours: a look every 10 minutes (one small request to GitHub), and right away
+  // when you come back to the window (at most every 2 minutes)
+  let lastLook = Date.now();
+  const look = () => { if (update && update.ready) return; lastLook = Date.now(); autoUpdater.checkForUpdates().catch((e) => noteUpdateError(e)); };
+  setInterval(look, 10 * 60e3);
+  app.on("browser-window-focus", () => { if (Date.now() - lastLook > 2 * 60e3) look(); });
 }
 // ---------- the self-check after every update ----------
 // The first time a new version starts, Albatross runs its self-check (public/selftest.js, the same checks as the developer smoke
