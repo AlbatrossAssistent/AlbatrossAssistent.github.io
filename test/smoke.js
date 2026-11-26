@@ -46,14 +46,14 @@ const server = http.createServer((req, res) => {
 server.listen(0, "127.0.0.1", () => {
   const port = server.address().port, prof = fs.mkdtempSync(path.join(os.tmpdir(), "albatross-smoke-"));
   const args = ["--headless=new", "--disable-gpu", "--no-sandbox", `--user-data-dir=${prof}`, "--window-size=1300,900", "--virtual-time-budget=40000", "--dump-dom", `http://127.0.0.1:${port}/__smoke.html`];
-  const ch = spawn(CHROME, args, { stdio: ["ignore", "pipe", "ignore"] });
-  let out = ""; ch.stdout.on("data", (d) => (out += d));
+  const ch = spawn(CHROME, args, { stdio: ["ignore", "pipe", "pipe"] });
+  let out = "", err = ""; ch.stdout.on("data", (d) => (out += d)); ch.stderr.on("data", (d) => (err = (err + d).slice(-3000)));   // Chrome's own messages, shown when it fails
   const kill = setTimeout(() => ch.kill(), 90000);
   ch.on("close", () => {
     clearTimeout(kill); server.close(); try { fs.rmSync(prof, { recursive: true, force: true }); } catch {}
     const m = /<pre id="o">([^<]*)<\/pre>/.exec(out);
     let r = null; try { r = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")); } catch {}
-    if (!r) { console.error("smoke: the test page didn't finish (the app may not start at all)"); process.exit(1); }
+    if (!r) { console.error("smoke: the test page didn't finish (the app may not start at all)" + (err.trim() ? "\nChrome said:\n" + err.trim() : "")); process.exit(1); }
     let bad = 0;
     for (const c of r.checks) { if (!c.ok) bad++; console.log(`${c.ok ? "  ok  " : "  FAIL"} ${c.name}${c.ok || !c.info ? "" : " — " + c.info}`); }
     for (const e of r.errors) { bad++; console.log("  ERROR " + e); }

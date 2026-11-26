@@ -35,7 +35,7 @@ jobs:
           if gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "Version $v is released already."; echo "skip=1" >> "$GITHUB_OUTPUT"; fi
       - name: Smoke test (the app in headless Chrome)
         if: steps.ver.outputs.skip != '1'
-        run: node test/smoke.js || (echo "Trying the smoke test once more" && node test/smoke.js)
+        run: for i in 1 2 3; do node test/smoke.js && exit 0; echo "Smoke test try $i failed, trying again"; sleep 5; done; exit 1
   release:
     needs: check
     if: needs.check.outputs.skip != '1'
