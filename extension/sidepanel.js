@@ -51,6 +51,10 @@ $("#follow").onclick = async () => { await refresh({ action: "follow", on: !(sta
 $("#show").onclick = () => refresh({ action: "show" });
 $("#closeTab").onclick = () => refresh({ action: "closetab" });
 $("#reload").onclick = () => { appReady = false; frame.src = APP; };
+// YouTube ads (youtube.js): skipped unless switched off here
+const paintYt = (on) => { $("#ytAds").textContent = "YouTube ads: " + (on ? "skip" : "don't skip"); $("#ytAds").className = on ? "primary" : ""; };
+chrome.storage.local.get("ytAds", (v) => paintYt(v.ytAds !== false));
+$("#ytAds").onclick = () => chrome.storage.local.get("ytAds", (v) => { const on = v.ytAds === false; chrome.storage.local.set({ ytAds: on }); paintYt(on); });
 $("#openApp").onclick = () => chrome.tabs.create({ url: "https://albatrossassistent.github.io/public/" });
 // the code is shown as "123 456": spaces and anything else that isn't a digit are ignored, and the field shows it with the gap
 const codeDigits = () => $("#code").value.replace(/\D/g, "").slice(0, 6);

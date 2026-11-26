@@ -187,6 +187,7 @@ Give a tool a name, say what it does (the AI reads that to decide when to use it
 
 - Tools are stored in the extension (`chrome.storage.local`). The chat only gets the name, description and inputs, never the code; the extension looks the code up itself when the AI asks for a tool.
 - A page tool can read and change the page, like a bookmarklet. Only add tools you wrote or trust.
+- **YouTube ads** (`extension/youtube.js`): when an ad plays, it is muted, sped through at 16x and skipped as soon as YouTube allows; the video then goes on with your own sound and speed. Banner ads over the video are closed. On by default; **⋯ → YouTube ads** switches it off. After an update, press the reload arrow on the extension in chrome://extensions once (Chrome asks to allow it on youtube.com).
 - The Minecraft redstone tool was taken out of the app on 2026-11-16 and is kept in `archive/redstone/` (see its README to put it back).
 
 ## Your own tools on the PC (and open-source tools)
