@@ -205,8 +205,88 @@ async function runCustomTool({ name, args, draft }) {
   return (v === undefined ? "(the tool returned nothing: end the code with return ...)" : asText(v)).slice(0, CUSTOM_LIMIT);
 }
 
+// ---------- YouTube, "swap": a second copy in a hidden tab watches the ads ahead (see youtube.js) ----------
+// For each tab you watch on (main) there is one hidden, muted tab (helper) in a collapsed group "Ads ahead". Every look from the
+// main tab (4 a second) is passed on to the helper, which answers how far it has had its ads ("clear"). When the main tab gets an
+// ad at a second the helper is already clear past, the two swap: the helper is shown at that second, the main tab is muted and
+// hidden and becomes the helper.
+const ytPairs = new Map();          // main tab id -> { helper, v, t, clear, hv, had, busy }
+const ytHelperOf = new Map();       // helper tab id -> main tab id
+const ytUrl = (v, t) => "https://www.youtube.com/watch?v=" + encodeURIComponent(v) + "&t=" + Math.max(0, Math.floor(t)) + "s";
+async function ytMode() { const s = await chrome.storage.local.get(["ytMode", "ytAds"]); return s.ytMode || (s.ytAds === false ? "off" : "skip"); }
+async function ytHide(tabId, windowId) {
+  try {
+    const g = await chrome.tabs.group({ tabIds: [tabId], createProperties: { windowId } });
+    await chrome.tabGroups.update(g, { title: "Ads ahead", collapsed: true, color: "grey" });
+  } catch {}
+}
+async function ytHelperFor(tab, v, t) {
+  const h = await chrome.tabs.create({ windowId: tab.windowId, index: tab.index + 1, active: false, url: ytUrl(v, t + 60) });
+  // muted (the tab, not the video: Chrome keeps playing a tab that "has sound"), and never thrown out of memory to save it
+  try { await chrome.tabs.update(h.id, { muted: true, autoDiscardable: false }); } catch {}
+  await ytHide(h.id, tab.windowId);
+  return h.id;
+}
+function ytDrop(mainId, closeHelper) {
+  const p = ytPairs.get(mainId); if (!p) return;
+  ytPairs.delete(mainId); ytHelperOf.delete(p.helper);
+  if (closeHelper) chrome.tabs.remove(p.helper).catch(() => {});
+}
+async function ytSwap(mainId, p, msg) {
+  p.busy = true;
+  const helper = p.helper;
+  try {
+    const [oldTab, newTab] = await Promise.all([chrome.tabs.get(mainId), chrome.tabs.get(helper)]);
+    // the roles change first, so looks that arrive meanwhile go to the right place
+    ytPairs.delete(mainId); ytHelperOf.delete(helper);
+    ytPairs.set(helper, { helper: mainId, v: p.v, t: msg.t, clear: msg.t, hv: p.v, had: true });
+    ytHelperOf.set(mainId, helper);
+    try { await chrome.tabs.ungroup(helper); } catch {}
+    await chrome.tabs.move(helper, { windowId: oldTab.windowId, index: oldTab.index });
+    await chrome.tabs.update(helper, { muted: false, active: true, autoDiscardable: true });
+    await chrome.tabs.sendMessage(helper, { yt: "become", t: msg.t, rate: msg.rate, volume: msg.volume }).catch(() => {});
+    await chrome.tabs.update(mainId, { muted: true, autoDiscardable: false });
+    await chrome.tabs.sendMessage(mainId, { yt: "demote", t: msg.t }).catch(() => {});
+    await ytHide(mainId, newTab.windowId);
+  } catch { /* a tab was closed meanwhile: the next look sorts it out */ }
+  finally { p.busy = false; }
+}
+async function ytTick(msg, tab) {
+  if (!tab || tab.id == null) return { role: "none" };
+  if ((await ytMode()) !== "swap") {
+    for (const id of [...ytPairs.keys()]) ytDrop(id, true);
+    return { role: "none" };
+  }
+  if (ytHelperOf.has(tab.id)) return { role: "helper" };
+  let p = ytPairs.get(tab.id);
+  if (!p) {
+    if (ytTick.making && ytTick.making.has(tab.id)) return { role: "main" };
+    (ytTick.making = ytTick.making || new Set()).add(tab.id);
+    try { const helper = await ytHelperFor(tab, msg.v, msg.t); p = { helper, v: msg.v, t: msg.t, clear: 0, hv: "", had: false }; ytPairs.set(tab.id, p); ytHelperOf.set(helper, tab.id); }
+    finally { ytTick.making.delete(tab.id); }
+    return { role: "main" };
+  }
+  if (p.busy) return { role: "main" };
+  if (p.v !== msg.v) { p.v = msg.v; p.clear = 0; p.hv = ""; }        // another video: the helper follows (it opens it itself)
+  p.t = msg.t;
+  if (msg.ad && p.hv === p.v && !p.had && p.clear > msg.t + 0.5) { ytSwap(tab.id, p, msg); return { role: "main" }; }
+  const r = await chrome.tabs.sendMessage(p.helper, { yt: "lead", v: p.v, lead: p.t }).catch(() => null);
+  if (r) { p.hv = r.v; p.clear = r.clear; p.had = r.ad; }
+  return { role: "main" };
+}
+chrome.tabs.onRemoved.addListener((id) => {
+  if (ytPairs.has(id)) ytDrop(id, true);                                       // closed the video: its helper goes too
+  else if (ytHelperOf.has(id)) { const m = ytHelperOf.get(id); ytHelperOf.delete(id); ytPairs.delete(m); }   // closed the helper: a new one comes
+});
+chrome.tabs.onUpdated.addListener((id, info) => {
+  // the main tab left YouTube: no helper needed anymore
+  if (info.url && ytPairs.has(id) && !/^https:\/\/(www|m)\.youtube\.com\//.test(info.url)) ytDrop(id, true);
+});
+chrome.storage.onChanged.addListener((c) => { if (c.ytMode && c.ytMode.newValue !== "swap") for (const id of [...ytPairs.keys()]) ytDrop(id, true); });
+
 // ---------- the popup ----------
 chrome.runtime.onMessage.addListener((msg, _s, reply) => {
+  if (msg && msg.yt === "tick") { ytTick(msg, _s.tab).then(reply, () => reply({ role: "none" })); return true; }
   (async () => {
     if (msg.customTool) {
       // "draft" (a tool being tested before it's saved) only from our own pages
