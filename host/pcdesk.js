@@ -24,7 +24,10 @@ function start() {
     // run hidden (no console window) through a little VBScript; the task runs it on the signed-in desktop (/IT)
     const vbs = path.join(DIR, "desktop.vbs");
     fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(vbs, `CreateObject("WScript.Shell").Run """${process.execPath}"" ""${path.join(__dirname, "desktop.js")}""", 0, False\r\n`);
+    // In the Windows app, process.execPath is Albatross.exe: it only runs a script with ELECTRON_RUN_AS_NODE set (the task doesn't
+    // inherit the host's environment). Without it the app itself started instead of the helper, and the helper never came.
+    fs.writeFileSync(vbs, [`Set sh = CreateObject("WScript.Shell")`, `sh.Environment("Process")("ELECTRON_RUN_AS_NODE") = "1"`,
+      `sh.Run """${process.execPath}"" ""${path.join(__dirname, "desktop.js")}""", 0, False`, ""].join("\r\n"));
     let r = await sh("schtasks", ["/Run", "/TN", TASK]);
     if (!r.ok) {
       await sh("schtasks", ["/Create", "/TN", TASK, "/TR", `wscript.exe "${vbs}"`, "/SC", "ONCE", "/ST", "23:59", "/IT", "/F"]);
