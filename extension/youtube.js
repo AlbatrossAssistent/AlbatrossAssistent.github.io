@@ -83,7 +83,7 @@
     role = "main"; steady = 0;
   }
   // the old one: its ad plays out muted; it already had its ads up to where you were
-  function demote(m) { role = "helper"; clear = Math.max(clear, m.t || 0); seekAt = 0; steady = 0; }
+  function demote(m) { role = "helper"; swapped++; clear = Math.max(clear, m.t || 0); seekAt = 0; steady = 0; }
   // ---------- to try it: jump to just before the next ad ----------
   // The ad places come from YouTube's own page (youtube-main.js). 10 seconds before, so in "swap" the hidden copy has time to
   // get past that ad first.
@@ -106,7 +106,27 @@
     if (!next) return { error: cues.length ? "No more ads after " + fmt(now) + " in this video." : "YouTube placed no ads in the middle of this video (short videos often have none)." };
     video.currentTime = Math.max(0, next - 10);
     video.play().catch(() => {});
-    return { ok: true, text: "Jumped to " + fmt(next - 10) + ": the ad comes at " + fmt(next) + " (" + cues.length + " in this video)." };
+    reportAd(next);
+    return { ok: true, text: "Jumped to " + fmt(next - 10) + ": an ad place at " + fmt(next) + " (" + cues.length + " in this video). Whether YouTube fills it, it says shortly after." };
+  }
+  // After the jump: did an ad really come at that place? An ad place is only an offer: YouTube decides there whether to show one
+  // (often not right after a jump, or soon after another ad). The answer goes to the sidebar, with what the setting did.
+  let adsSeen = 0, wasAd = false, swapped = 0;
+  function reportAd(at) {
+    const before = adsSeen, swapsBefore = swapped, until = Date.now() + 45000;
+    let cameAt = 0;
+    const t = setInterval(() => {
+      const { video } = parts();
+      const came = adsSeen > before || swapped > swapsBefore;
+      if (came && !cameAt) cameAt = Date.now();
+      if (came && Date.now() - cameAt < 1500) return;              // in "swap" the switch comes a moment after the ad shows
+      const past = video && !isAd(parts().player) && video.currentTime > at + 6;
+      if (!came && !past && Date.now() < until) return;
+      clearInterval(t);
+      const what = swapped > swapsBefore ? "you were switched to the copy ahead (watch ahead, swap)" : mode === "skip" ? "it was muted and skipped (skip)" : mode === "swap" ? "the copy ahead wasn't past it yet, so it played here" : "it played (leave them)";
+      const text = came ? "An ad came at " + fmt(at) + ": " + what + "." : "No ad came at " + fmt(at) + ": YouTube left that place empty this time.";
+      try { chrome.runtime.sendMessage({ ytNote: text }); } catch {}
+    }, 500);
   }
   try {
     chrome.runtime.onMessage.addListener((m, _s, reply) => {
@@ -121,6 +141,7 @@
   function tick() {
     const { player, video } = parts();
     if (!video) return;
+    const a = isAd(player); if (a && !wasAd) adsSeen++; wasAd = a;          // ads that really came (for the jump's report)
     if (mode === "swap") { if (saved) skip(player, video); if (role !== "helper" && !document.hidden) mainTick(player, video); else note(player, video); }
     else skip(player, video);
   }

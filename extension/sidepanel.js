@@ -64,6 +64,13 @@ $("#ytJump").onclick = async () => {
   const r = await chrome.tabs.sendMessage(t.id, { yt: "jumpAd" }).catch(() => null);
   say(!r ? "The YouTube page doesn't answer: reload it once (it was open before the extension was updated)." : r.error || r.text);
 };
+// the page's answer a little later: did an ad really come at that place, and what the setting did with it
+chrome.runtime.onMessage.addListener((m) => {
+  if (!m || !m.ytNote) return;
+  const el = $("#ytJumpMsg"); el.hidden = false; el.textContent = m.ytNote;
+  $("#more").hidden = false; $("#moreBtn").setAttribute("aria-expanded", "true");
+  clearTimeout(el._t); el._t = setTimeout(() => (el.hidden = true), 20000);
+});
 $("#ytAds").onclick = () => chrome.storage.local.get(["ytMode", "ytAds"], (v) => { const m = { skip: "swap", swap: "off", off: "skip" }[ytNow(v)]; chrome.storage.local.set({ ytMode: m }); paintYt(m); });
 $("#openApp").onclick = () => chrome.tabs.create({ url: "https://albatrossassistent.github.io/public/" });
 // the code is shown as "123 456": spaces and anything else that isn't a digit are ignored, and the field shows it with the gap

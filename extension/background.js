@@ -286,6 +286,7 @@ chrome.storage.onChanged.addListener((c) => { if (c.ytMode && c.ytMode.newValue 
 
 // ---------- the popup ----------
 chrome.runtime.onMessage.addListener((msg, _s, reply) => {
+  if (msg && msg.ytNote) return;                 // for the sidebar (what happened at an ad place), not for here
   if (msg && msg.yt === "tick") { ytTick(msg, _s.tab).then(reply, () => reply({ role: "none" })); return true; }
   (async () => {
     if (msg.customTool) {
