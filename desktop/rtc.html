@@ -9,7 +9,9 @@
 <script>
 // Hidden window of the Windows app (desktop/rtc.js): captures one screen and sends it to the other device as WebRTC video. The other
 // device made the offer (a video it receives, a data channel for its mouse and keyboard); this answers it.
-let pc = null;
+let pc = null, sender = null, chan = null;
+// a message to the other device over the data channel (rtc.js: "touch doesn't work here after all")
+function say(o) { try { if (chan && chan.readyState === "open") chan.send(JSON.stringify(o)); } catch {} }
 const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }];
 // all candidates gathered (or 4 seconds): one answer with everything in it, no back and forth
 const gathered = (p) => new Promise((ok) => { if (p.iceGatheringState === "complete") return ok(); const t = setTimeout(ok, 4000); p.addEventListener("icegatheringstatechange", () => { if (p.iceGatheringState === "complete") { clearTimeout(t); ok(); } }); });
@@ -21,12 +23,19 @@ async function start(o) {
   pc = new RTCPeerConnection({ iceServers: ICE });
   pc.onconnectionstatechange = () => { rtcApp.state(pc.connectionState); if (pc.connectionState === "failed" || pc.connectionState === "closed") stream.getTracks().forEach((t) => t.stop()); };
   pc.ondatachannel = (e) => {
-    const ch = e.channel;
-    ch.onmessage = (m) => rtcApp.input(String(m.data));
+    const ch = chan = e.channel;
+    // tell the other device what this app can do: fingers as touch input (an older app says nothing, and touch imitates the mouse)
+    const hello = () => { try { ch.send(JSON.stringify({ t: "hello", touch: true })); } catch {} };
+    if (ch.readyState === "open") hello(); else ch.addEventListener("open", hello);
+    ch.onmessage = (m) => {
+      const s = String(m.data);
+      if (s.startsWith('{"t":"tune"')) { try { tune(JSON.parse(s)); } catch {} return; }
+      rtcApp.input(s);
+    };
     ch.onclose = () => rtcApp.state("closed");
   };
   await pc.setRemoteDescription({ type: "offer", sdp: o.sdp });
-  const sender = pc.addTrack(track, stream);
+  sender = pc.addTrack(track, stream);
   await pc.setLocalDescription(await pc.createAnswer());
   try {
     const p = sender.getParameters();
@@ -37,7 +46,37 @@ async function start(o) {
     await sender.setParameters(p);
   } catch {}
   await gathered(pc);
+  pcStats();
   return pc.localDescription.sdp;
+}
+// every 2 seconds, how long a frame takes on this side (encoding, then waiting to be sent) and how many frames the screen gives,
+// for the other device's delay figure
+function pcStats() {
+  const me = pc; let last = null;
+  const t = setInterval(async () => {
+    if (pc !== me || me.connectionState === "closed" || me.connectionState === "failed") return clearInterval(t);
+    try {
+      const st = [...(await me.getStats()).values()];
+      const o = st.find((x) => x.type === "outbound-rtp" && x.kind === "video"), m = st.find((x) => x.type === "media-source" && x.kind === "video") || {};
+      if (!o) return;
+      if (last && o.framesEncoded > last.framesEncoded) {
+        const enc = (o.totalEncodeTime - last.totalEncodeTime) / (o.framesEncoded - last.framesEncoded) * 1000;
+        const wait = o.packetsSent > last.packetsSent ? (o.totalPacketSendDelay - last.totalPacketSendDelay) / (o.packetsSent - last.packetsSent) * 1000 : 0;
+        say({ t: "pc", enc: Math.round(enc * 10) / 10, wait: Math.round(wait * 10) / 10, fps: m.framesPerSecond || 0, limit: o.qualityLimitationReason || "" });
+      }
+      last = o;
+    } catch {}
+  }, 2000);
+}
+// the other device found which way the video takes: over the internet, fewer frames and less data than inside your own network
+async function tune(o) {
+  if (!sender) return;
+  try {
+    const p = sender.getParameters(); if (!p.encodings || !p.encodings.length) return;
+    p.encodings[0].maxFramerate = Math.max(5, Math.min(60, Number(o.fps) || 30));
+    if (o.bitrate) p.encodings[0].maxBitrate = Math.max(5e5, Math.min(5e7, Number(o.bitrate)));
+    await sender.setParameters(p);
+  } catch {}
 }
 </script>
 </body>

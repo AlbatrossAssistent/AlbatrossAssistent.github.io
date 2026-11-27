@@ -6,18 +6,23 @@
 // can't reach each other directly), the pictures: JPEGs from the desktop helper (host/remotedesk.js → remotedesk.ps1) through
 // /pc/deskstream, with clicks, drags, scrolling and keys going to /pc/desk.
 // Where you click is sent as a place in the picture (0 to 1), so this page never needs the PC's resolution.
+// With live video and a new enough Windows app, a finger is a finger on the PC (Windows touch input: tap, drag to scroll, pinch,
+// press and hold = right-click; the mouse pointer hides while you touch, as on a touchscreen laptop). Otherwise touch imitates the mouse:
 //   Mouse: click, double-click, right-click, drag, wheel. Touch: tap = click, two-finger tap or long press = right-click,
 //   drag with one finger = drag, two fingers = scroll. Keyboard: everything you press while the screen has the focus; on a phone
 //   the keyboard button opens the on-screen keyboard. Special keys and shortcuts are in the bar.
 // Uses the main page's helpers: $, esc, toast, pcCall, pcStream, connected, remotePC.
 (() => {
 const R = { open: false, ctrl: null, screen: null, screens: [], quality: "auto", frame: null, queue: Promise.resolve(), moveT: 0, lastMove: null, down: null, keysDown: new Set(), frames: 0, fpsT: 0,
-  pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0 };
+  pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0, touch: false, tuned: false, showSum: 0, showN: 0, pcStat: null };
 const page = () => $("#remotePage");
 const QUAL = { auto: null, sharp: { max: 1920, q: 70, fps: 8 }, normal: { max: 1280, q: 50, fps: 12 }, fast: { max: 960, q: 40, fps: 15 } };
 const settings = () => QUAL[R.quality] || (remotePC() ? QUAL.normal : QUAL.sharp);
 // live video: much more for the same data (only changes travel), so higher sizes and rates
-const VQUAL = { auto: { maxW: 1920, fps: 30, bitrate: 8e6 }, sharp: { maxW: 2560, fps: 30, bitrate: 14e6 }, normal: { maxW: 1920, fps: 30, bitrate: 8e6 }, fast: { maxW: 1280, fps: 60, bitrate: 6e6 } };
+// auto: 60 frames a second (a new picture every 16 ms instead of 33, and decoders that hold a frame or two hold them half as long),
+// with up to 20 Mbit/s so a big change (a window opening) gets through at once; when the video goes over the internet rather than
+// inside your network, it's turned down to 30 and 8 (liveStats)
+const VQUAL = { auto: { maxW: 1920, fps: 60, bitrate: 20e6 }, sharp: { maxW: 2560, fps: 30, bitrate: 14e6 }, normal: { maxW: 1920, fps: 30, bitrate: 8e6 }, fast: { maxW: 1280, fps: 60, bitrate: 6e6 } };
 const live = () => R.dc && R.dc.readyState === "open";
 // inputs go out one after the other, in order; a slow one never lets the next overtake it
 const send = (o) => { if (live()) { try { R.dc.send(JSON.stringify(o)); return Promise.resolve(); } catch {} } R.queue = R.queue.then(() => pcCall("/pc/desk", { screen: R.screen, ...o }).catch((e) => { if (/Unknown|404/.test(e.message)) toast("Update Albatross on the PC for remote desktop"); })); return R.queue; };
@@ -78,7 +83,8 @@ function fastStart(sdp, maxKbps) {
 }
 const within = (ms, why, pr) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(why)), ms))]);
 function rtcStop() {
-  const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false; R.lastBytes = null;
+  fingersLift();
+  const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false; R.lastBytes = null; R.touch = false; R.tuned = false; R.pcStat = null;
   try { if (dc && dc.readyState === "open") dc.send(JSON.stringify({ t: "bye" })); } catch {}
   try { if (pc) pc.close(); } catch {}
   const v = $("#rdVid"); if (v) { v.srcObject = null; v.hidden = true; }
@@ -93,6 +99,9 @@ async function rtcStart(seq) {
   // which on a phone can't keep up at this size: fewer frames and a growing delay)
   try { const c = RTCRtpReceiver.getCapabilities("video").codecs; tr.setCodecPreferences([...c.filter((x) => /h264/i.test(x.mimeType)), ...c.filter((x) => !/h264/i.test(x.mimeType))]); } catch {}
   const dc = pc.createDataChannel("input", { ordered: true });
+  // the PC says what it can do: a new enough app takes fingers as touch input
+  // and every 2 seconds how long a frame takes there (for the delay in the bar)
+  dc.onmessage = (m) => { try { const o = JSON.parse(m.data); if (pc !== R.pc) return; if (o.t === "hello") R.touch = !!o.touch; if (o.t === "pc") R.pcStat = o; } catch {} };
   const track = new Promise((ok) => (pc.ontrack = (e) => {
     // show each frame as soon as it's there: no waiting room for smoothness (it's a desktop, not a film)
     try { e.receiver.jitterBufferTarget = 0; } catch {}
@@ -134,10 +143,12 @@ async function rtcStart(seq) {
 function countFrames(v, seq) {
   R.frames = 0; R.fpsT = Date.now();
   const next = () => (v.requestVideoFrameCallback ? v.requestVideoFrameCallback(tick) : setTimeout(tick, 33));
-  const tick = () => {
+  const tick = (_now, md) => {
     if (seq !== R.seq || !R.video) return;
     R.frame = { w: v.videoWidth, h: v.videoHeight };
     R.frames++;
+    // this device's part of the delay: from the picture arriving to it being on the screen (decoding, any buffer, drawing)
+    if (md && md.receiveTime > 0 && md.expectedDisplayTime > 0) { const d = md.expectedDisplayTime - md.receiveTime; if (d >= 0 && d < 2000) { R.showSum += d; R.showN++; } }
     const now = Date.now();
     if (now - R.fpsT > 2000) { const fps = Math.round(R.frames * 1000 / (now - R.fpsT)); R.frames = 0; R.fpsT = now; liveStats(fps); }
     next();
@@ -148,22 +159,32 @@ function countFrames(v, seq) {
 // the bar: frames per second, the codec, and how long a picture takes to arrive (the network's round trip, and the time it waits
 // to be decoded), so a slow spot can be told apart
 async function liveStats(fps) {
-  let t = "Live video · " + fps + " fps";
+  const show = R.showN ? R.showSum / R.showN : null, pcs = R.pcStat; R.showSum = 0; R.showN = 0;
+  let t = "Live · " + fps + " fps", delay = null, parts = "";
   try {
     const st = [...(await R.pc.getStats()).values()];
     const i = st.find((x) => x.type === "inbound-rtp" && x.kind === "video") || {};
     const c = st.find((x) => x.type === "codec" && x.id === i.codecId) || {};
     const pair = st.find((x) => x.type === "candidate-pair" && x.nominated && x.state === "succeeded") || {};
     const rtt = pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : null;
+    // the delay from the PC's screen to this one, added up: encoding and waiting to be sent on the PC (it reports them), half the
+    // network's round trip, and arriving to shown here (the screen capture itself, a few ms, isn't in it)
+    if (pcs && show != null && rtt != null) {
+      delay = Math.round(pcs.enc + pcs.wait + rtt / 2 + show);
+      parts = "Delay about " + delay + " ms: PC encoding " + Math.round(pcs.enc) + " + waiting to send " + Math.round(pcs.wait) + " + network " + Math.round(rtt / 2) + " + this device decoding and showing " + Math.round(show) + " · ";
+      t += " · " + delay + " ms delay";
+    }
     const buf = i.jitterBufferEmittedCount ? Math.round(i.jitterBufferDelay / i.jitterBufferEmittedCount * 1000) : null;
     const loc = st.find((x) => x.id === pair.localCandidateId) || {}, rem = st.find((x) => x.id === pair.remoteCandidateId) || {};
     const via = loc.candidateType === "relay" || rem.candidateType === "relay" ? "relayed" : (loc.candidateType === "srflx" || rem.candidateType === "srflx") ? "via the internet" : "in your network";
+    if (rtt != null && delay == null) t += " · ping " + rtt + " ms";
     if (c.mimeType) t += " · " + c.mimeType.replace("video/", "");
     t += " · " + via;
-    if (rtt != null) t += " · " + rtt + " ms";
-    if (i.frameWidth) t += " · " + i.frameWidth + "×" + i.frameHeight;
+    // auto starts at 60 frames a second and up to 20 Mbit/s, for your own network; over the internet 30 and 8 Mbit/s, what a line
+    // out of the house can carry without the pictures queueing up
+    if (!R.tuned && pair.id && R.quality === "auto" && live()) { R.tuned = true; if (via !== "in your network") R.dc.send(JSON.stringify({ t: "tune", fps: 30, bitrate: 8e6 })); }
     const kbps = R.lastBytes != null ? Math.round((i.bytesReceived - R.lastBytes) * 8 / 2000) : null; R.lastBytes = i.bytesReceived;
-    $("#rdStat").title = (kbps != null ? kbps + " kbit/s · " : "") + "Network round trip " + (rtt ?? "?") + " ms · waiting before showing " + (buf ?? "?") + " ms · decoder " + (i.decoderImplementation || "?") + " · frames dropped " + (i.framesDropped ?? 0);
+    $("#rdStat").title = parts + (pcs && pcs.limit && pcs.limit !== "none" ? "PC held back by " + pcs.limit + " · " : "") + (kbps != null ? kbps + " kbit/s · " : "") + (i.frameWidth ? i.frameWidth + "×" + i.frameHeight + " · " : "") + "network round trip " + (rtt ?? "?") + " ms · waiting before showing " + (buf ?? "?") + " ms · decoder " + (i.decoderImplementation || "?") + " · frames dropped " + (i.framesDropped ?? 0);
   } catch {}
   if (R.video) $("#rdStat").textContent = t;
 }
@@ -224,17 +245,20 @@ function screensList(list, cur) {
 }
 
 // ---------- mouse, touch and keyboard ----------
-// where in the picture (0..1) a pointer is; null outside the picture (the black bars of a different shape)
-function at(e) {
+// where in the picture (0..1) a pointer is; null outside the picture (the black bars of a different shape), or with clamp the
+// nearest edge
+function at(e, clamp) {
   const img = R.video ? $("#rdVid") : $("#rdImg"), r = img.getBoundingClientRect();
   if (!R.frame || !r.width) return null;
   // the picture keeps its shape inside the stage (object-fit: contain): work out where it really is
   const k = Math.min(r.width / R.frame.w, r.height / R.frame.h), w = R.frame.w * k, h = R.frame.h * k, x0 = r.left + (r.width - w) / 2, y0 = r.top + (r.height - h) / 2;
   const x = (e.clientX - x0) / w, y = (e.clientY - y0) / h;
-  return x < -0.01 || y < -0.01 || x > 1.01 || y > 1.01 ? null : { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
+  return !clamp && (x < -0.01 || y < -0.01 || x > 1.01 || y > 1.01) ? null : { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
 }
 function moveSoon(p) {
   R.lastMove = p;
+  // live video: every move goes at once (the PC keeps only the newest while it's busy); the pictures' way, at most 25 a second
+  if (live()) { sendMove(p); return; }
   if (R.moveT) return;
   R.moveT = setTimeout(() => { R.moveT = 0; if (R.lastMove) sendMove(R.lastMove); }, 40);    // at most 25 moves a second
 }
@@ -248,6 +272,40 @@ function sendMove(p) {
   moveWaiting = true;
   R.queue = R.queue.then(() => { moveWaiting = false; const m = R.nextMove; R.nextMove = null; return m ? pcCall("/pc/desk", { screen: R.screen, t: "move", ...m }).catch(() => {}) : null; });
 }
+// ---------- fingers as fingers ----------
+// With live video and a new enough Windows app, a finger here is a finger on the PC's screen: Windows touch input, as on a touchscreen
+// laptop (tap, drag to scroll, pinch to zoom, press and hold for the right-click; Chrome Remote Desktop does the same). Windows hides
+// the mouse pointer while you touch, so it isn't in the picture. Without that, touch imitates the mouse (in wireInput).
+const fingers = new Map();        // pointerId -> { id (0..9 on the PC), x, y }
+let fingerSent = 0, fingerBeat = 0;
+const fingerMode = () => live() && R.touch;
+// one frame: every finger that's down, where it is now; the one that just went down or up says so
+function fingerFrame(changed) {
+  const pts = [...fingers.values()].map((f) => ({ id: f.id, x: f.x, y: f.y, s: "move" }));
+  if (changed) { const i = pts.findIndex((f) => f.id === changed.id); if (i >= 0) pts[i] = changed; else pts.push(changed); }
+  if (!pts.length) return;
+  try { R.dc.send(JSON.stringify({ t: "touch", pts })); fingerSent = Date.now(); } catch {}
+}
+// a finger held still is sent again every 100 ms, so it stays down on the PC (press and hold for the right-click needs that)
+function fingerBeatOn() {
+  if (fingerBeat) return;
+  fingerBeat = setInterval(() => { if (!fingers.size || !live()) { clearInterval(fingerBeat); fingerBeat = 0; return; } if (Date.now() - fingerSent > 90) fingerFrame(null); }, 100);
+}
+function fingerDown(e, p) {
+  if (fingers.size >= 10) return;
+  const used = new Set([...fingers.values()].map((f) => f.id)); let id = 0; while (used.has(id)) id++;
+  const f = { id, x: p.x, y: p.y }; fingers.set(e.pointerId, f);
+  fingerFrame({ ...f, s: "down" }); fingerBeatOn();
+}
+function fingerMove(e) { const f = fingers.get(e.pointerId), p = at(e, true); if (!f || !p) return; f.x = p.x; f.y = p.y; fingerFrame(null); }
+function fingerUp(e) {
+  const f = fingers.get(e.pointerId); if (!f) return false;
+  const p = at(e, true); if (p) { f.x = p.x; f.y = p.y; }
+  fingers.delete(e.pointerId); fingerFrame({ ...f, s: "up" });
+  return true;
+}
+function fingersLift() { for (const [k, f] of [...fingers]) { fingers.delete(k); fingerFrame({ ...f, s: "up" }); } }
+
 function wireInput() {
   const st = $("#rdStage");
   const BTN = ["left", "middle", "right"];
@@ -256,6 +314,7 @@ function wireInput() {
   st.addEventListener("pointerdown", (e) => {
     const p = at(e); if (!p) return;
     st.focus({ preventScroll: true });
+    if (e.pointerType === "touch" && fingerMode()) { e.preventDefault(); fingerDown(e, p); return; }
     if (e.pointerType === "touch") {
       // touch: decided when the finger lifts (tap, long press) or moves (drag)
       touch = { id: e.pointerId, start: p, t: Date.now(), moved: false, dragging: false, long: setTimeout(() => { if (touch && !touch.moved) { touch.longDone = true; send({ t: "click", button: "right", ...p }); if (navigator.vibrate) navigator.vibrate(15); } }, 550) };
@@ -266,6 +325,7 @@ function wireInput() {
     send({ t: "down", button: R.down, ...p });
   });
   st.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch" && fingers.has(e.pointerId)) { fingerMove(e); return; }
     const p = at(e); if (!p) return;
     if (e.pointerType === "touch" && touch && touch.id === e.pointerId) {
       if (!touch.moved && Math.hypot(p.x - touch.start.x, p.y - touch.start.y) > 0.01) { touch.moved = true; clearTimeout(touch.long); if (!touch.longDone) { touch.dragging = true; send({ t: "down", button: "left", ...touch.start }); } }
@@ -275,6 +335,7 @@ function wireInput() {
     if (e.pointerType !== "touch") moveSoon(p);
   });
   const up = (e) => {
+    if (e.pointerType === "touch" && fingerUp(e)) return;
     const p = at(e) || R.lastMove || { x: 0.5, y: 0.5 };
     if (e.pointerType === "touch" && touch && touch.id === e.pointerId) {
       clearTimeout(touch.long);
@@ -290,7 +351,7 @@ function wireInput() {
   st.addEventListener("pointercancel", up);
   // two-finger tap: right-click; two-finger drag: scroll
   let two = null;
-  st.addEventListener("touchstart", (e) => { if (e.touches.length === 2) { if (touch) { clearTimeout(touch.long); touch = null; } const y = (e.touches[0].clientY + e.touches[1].clientY) / 2; two = { y, y0: y, t: Date.now(), p: at(e.touches[0]) }; } }, { passive: true });
+  st.addEventListener("touchstart", (e) => { if (fingerMode()) return; if (e.touches.length === 2) { if (touch) { clearTimeout(touch.long); touch = null; } const y = (e.touches[0].clientY + e.touches[1].clientY) / 2; two = { y, y0: y, t: Date.now(), p: at(e.touches[0]) }; } }, { passive: true });
   st.addEventListener("touchmove", (e) => {
     if (!two || e.touches.length !== 2) return;
     e.preventDefault();
@@ -320,7 +381,7 @@ function wireInput() {
     else if (e.key === "Escape") { e.preventDefault(); ta.blur(); }
   });
 }
-function releaseKeys() { for (const code of R.keysDown) send({ t: "key", code, down: false }); R.keysDown.clear(); if (R.down) { send({ t: "up", button: R.down, ...(R.lastMove || { x: 0.5, y: 0.5 }) }); R.down = null; } }
+function releaseKeys() { fingersLift(); for (const code of R.keysDown) send({ t: "key", code, down: false }); R.keysDown.clear(); if (R.down) { send({ t: "up", button: R.down, ...(R.lastMove || { x: 0.5, y: 0.5 }) }); R.down = null; } }
 
 window.remoteOpen = function () {
   if (R.open) return;

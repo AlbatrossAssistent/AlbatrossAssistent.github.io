@@ -8,6 +8,9 @@
 //  - updates itself: new versions come from GitHub, download in the background and install when the app restarts
 const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, nativeTheme, dialog, ipcMain, Notification, screen, desktopCapturer, globalShortcut } = require("electron");
 const { execFile } = require("child_process");
+// Remote desktop's live video (rtc.js) tells the other device to show every frame the moment it's decoded instead of holding it in a
+// buffer for smoothness (WebRTC's playout delay 0, what game streaming uses): measured here, 33 ms less buffer on the other side
+app.commandLine.appendSwitch("force-fieldtrials", "WebRTC-ForcePlayoutDelay/min_ms:0,max_ms:0/");
 let autoUpdater = null; try { autoUpdater = require("electron-updater").autoUpdater; } catch {}
 const path = require("path");
 const fs = require("fs");

@@ -6,6 +6,8 @@
 #                                             max pixels wide, as JPEG quality q: { w, h, img }
 #   move / down / up / click / wheel { x, y, button, count, dy }      the mouse, at physical screen pixels
 #   key   { vk, down }   combo { vks }   text { text }                 the keyboard
+#   touch { pts: [{ id, x, y, s }] }          fingers (id 0..9, s: 0 down, 1 moved, 2 up) as Windows touch input; where Windows
+#                                             can't take that, the first finger is the mouse
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [Text.Encoding]::UTF8; [Console]::InputEncoding = [Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms
@@ -72,6 +74,44 @@ public class AlbDesk {
     var ep = new EncoderParameters(1); ep.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, q);
     using (var ms = new MemoryStream()) { pic.Save(ms, jpeg, ep); lastOut = tw + "," + th + "," + Convert.ToBase64String(ms.ToArray()); return lastOut; }
   }
+  // ---------- fingers: Windows touch input, as from a touchscreen (Windows hides the mouse pointer while you touch) ----------
+  [StructLayout(LayoutKind.Sequential)] struct RECT { public int L; public int T; public int R; public int B; }
+  [StructLayout(LayoutKind.Sequential)] struct PINFO { public int type; public uint id; public uint frame; public uint flags; public IntPtr device; public IntPtr hwnd; public POINT px; public POINT him; public POINT pxRaw; public POINT himRaw; public uint time; public uint history; public int data; public uint keys; public ulong perf; public int button; }
+  [StructLayout(LayoutKind.Sequential)] struct PTOUCH { public PINFO p; public uint tflags; public uint mask; public RECT contact; public RECT contactRaw; public uint orientation; public uint pressure; }
+  [DllImport("user32.dll", SetLastError = true)] static extern bool InitializeTouchInjection(uint max, uint mode);
+  [DllImport("user32.dll", SetLastError = true)] static extern bool InjectTouchInput(uint n, [In] PTOUCH[] c);
+  public static int TouchSize() { return Marshal.SizeOf(typeof(PTOUCH)); }
+  static int touchWay = 0; static bool[] tDown = new bool[10]; static int[] tX = new int[10], tY = new int[10]; static int mouseFinger = -1;
+  static PTOUCH Finger(int id, int x, int y, int s) {
+    var c = new PTOUCH(); c.p.type = 2; c.p.id = (uint)id; c.p.px.X = x; c.p.px.Y = y;
+    c.p.flags = s == 0 ? 0x10006u : s == 1 ? 0x20006u : 0x40000u;     // down|in range|in contact, update|in range|in contact, up
+    return c;
+  }
+  public static string Touch(int[] ids, int[] xs, int[] ys, int[] st) {
+    if (touchWay == 0) touchWay = InitializeTouchInjection(10, 1) ? 1 : -1;
+    if (touchWay == 1) {
+      var list = new System.Collections.Generic.List<PTOUCH>(); var seen = new bool[10];
+      for (int i = 0; i < ids.Length; i++) {
+        int id = ids[i], s = st[i]; if (id < 0 || id > 9 || seen[id]) continue;
+        if (s == 0 && tDown[id]) s = 1;          // already down: a move
+        if (s != 0 && !tDown[id]) continue;      // never down: nothing to move or lift
+        seen[id] = true; tX[id] = xs[i]; tY[id] = ys[i]; list.Add(Finger(id, xs[i], ys[i], s));
+      }
+      for (int id = 0; id < 10; id++) if (tDown[id] && !seen[id]) list.Add(Finger(id, tX[id], tY[id], 1));    // every finger that's down, in each frame
+      if (list.Count == 0) return "touch";
+      var a = list.ToArray();
+      if (InjectTouchInput((uint)a.Length, a)) { foreach (var c in a) tDown[c.p.id] = c.p.flags != 0x40000u; return "touch"; }
+      // Windows didn't take it: the mouse from now on
+      touchWay = -1; Array.Clear(tDown, 0, 10);
+    }
+    for (int i = 0; i < ids.Length; i++) {
+      int id = ids[i], s = st[i];
+      if (s == 0 && mouseFinger < 0) { mouseFinger = id; SetCursorPos(xs[i], ys[i]); Send(new INPUT[] { M(2, 0) }); }
+      else if (id == mouseFinger && s == 1) SetCursorPos(xs[i], ys[i]);
+      else if (id == mouseFinger && s == 2) { SetCursorPos(xs[i], ys[i]); Send(new INPUT[] { M(4, 0) }); mouseFinger = -1; }
+    }
+    return "mouse";
+  }
   static uint Down(string b) { return b == "right" ? 8u : b == "middle" ? 32u : 2u; }
   public static void Move(int x, int y) { SetCursorPos(x, y); }
   public static void Press(int x, int y, string b, bool down) { SetCursorPos(x, y); Send(new INPUT[] { M(down ? Down(b) : Down(b) * 2, 0) }); }
@@ -116,6 +156,7 @@ while ($true) {
       "up" { [AlbDesk]::Press((Num $a.x), (Num $a.y), [string]$a.button, $false) }
       "click" { [AlbDesk]::Click((Num $a.x), (Num $a.y), [string]$a.button, (Num $a.count 1)) }
       "wheel" { [AlbDesk]::Wheel((Num $a.x), (Num $a.y), (Num $a.dy), [bool]$a.horizontal) }
+      "touch" { $p = @($a.pts); $out = '{"via":"' + [AlbDesk]::Touch([int[]]@($p.id), [int[]]@($p.x), [int[]]@($p.y), [int[]]@($p.s)) + '"}' }
       "key" { [AlbDesk]::Key([uint16](Num $a.vk), [bool]$a.down) }
       "combo" { [AlbDesk]::Combo([uint16[]]@($a.vks)) }
       "text" { [AlbDesk]::Text([string]$a.text) }

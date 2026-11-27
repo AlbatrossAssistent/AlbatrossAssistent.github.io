@@ -12,6 +12,8 @@
 // The screen is captured in a hidden window (rtc.html) in this app, where Chromium's screen capture and video encoder are. Inputs from
 // the data channel go straight to this app's own copy of the remote-desktop PowerShell (host/remotedesk.ps1: the same mouse and keyboard
 // as the old way, without the trip through the host and the desktop helper); if that can't start, to the host's /pc/desk.
+// Fingers from a phone or tablet become Windows touch input there (as Chrome Remote Desktop does): Windows hides the mouse pointer
+// while you touch, so it isn't in the video.
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const { spawn } = require("child_process");
 const { session } = require("electron");
@@ -51,6 +53,8 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
     if (!src) throw new Error("No screen to show");
     const id = Date.now();
     cur = { screen: o.screen, id, rect: o.rect && o.rect.w > 0 ? o.rect : null };
+    // the mouse and keyboard's PowerShell starts now, not at the first click (starting it takes a second or two)
+    if (psStart()) psKeep();
     win = new BrowserWindow({ show: false, width: 320, height: 240, webPreferences: { session: ses, preload: path.join(assetsDir, "rtc-preload.js"), contextIsolation: true, sandbox: false, backgroundThrottling: false } });
     win.on("closed", () => { if (cur && cur.id === id) { win = null; cur = null; } });
     await win.loadFile(path.join(assetsDir, "rtc.html"));
@@ -67,7 +71,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
   // ---------- mouse and keyboard from the data channel ----------
   // this app's own remotedesk.ps1: one line per input, answered in order; a mouse move waits only while two are unanswered (then
   // only the newest one goes)
-  let ps = null, psBuf = "", pending = 0, moveHeld = null, psIdle = 0, seqNo = 0;
+  let ps = null, psBuf = "", pending = 0, moveHeld = null, touchHeld = null, psIdle = 0, seqNo = 0;
   let vkOf = null; try { vkOf = require(path.join(scriptDir, "remotedesk.js")).vkOf; } catch {}
   function psStart() {
     if (ps && ps.exitCode === null && !ps.killed) return ps;
@@ -79,7 +83,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
     ps.stdout.setEncoding("utf8");
     ps.stdout.on("data", (d) => {
       psBuf += d; let k;
-      while ((k = psBuf.indexOf("\n")) >= 0) { const line = psBuf.slice(0, k); psBuf = psBuf.slice(k + 1); if (line.startsWith("@@") && !line.startsWith("@@ready")) { pending = Math.max(0, pending - 1); if (moveHeld && pending < 2) { const m = moveHeld; moveHeld = null; psWrite("move", m); } } }
+      while ((k = psBuf.indexOf("\n")) >= 0) { const line = psBuf.slice(0, k); psBuf = psBuf.slice(k + 1); if (line.startsWith("@@") && !line.startsWith("@@ready")) { if (line.includes('"via":"mouse"')) noTouch(); pending = Math.max(0, pending - 1); if (moveHeld && pending < 2) { const m = moveHeld; moveHeld = null; psWrite("move", m); } if (touchHeld && pending < 2) { const t = touchHeld; touchHeld = null; psWrite("touch", { pts: t }); } } }
     });
     ps.on("exit", () => { ps = null; pending = 0; });
     ps.on("error", () => { ps = null; });
@@ -87,10 +91,19 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
   }
   function psWrite(cmd, arg) {
     if (!psStart()) return false;
-    clearTimeout(psIdle); psIdle = setTimeout(() => { if (ps) try { ps.kill(); } catch {} }, 5 * 60e3);   // unused for 5 minutes: closed
+    psKeep();
     pending++; ps.stdin.write(JSON.stringify({ id: ++seqNo, cmd, arg }) + "\n");
     return true;
   }
+  // Windows didn't take a finger as touch input: the other device goes back to imitating the mouse with touch (tap, long press,
+  // two fingers to scroll), which it can do better than the first finger as the mouse here
+  function noTouch() {
+    if (!cur || cur.noTouch || !win || win.isDestroyed()) return;
+    cur.noTouch = true; log("remote desktop: touch input refused, using the mouse");
+    win.webContents.executeJavaScript('say({ t: "hello", touch: false })').catch(() => {});
+  }
+  // unused for 5 minutes: closed
+  function psKeep() { clearTimeout(psIdle); psIdle = setTimeout(() => { if (ps) try { ps.kill(); } catch {} }, 5 * 60e3); }
   // a place in the picture (0..1) -> the screen's pixel
   const px = (o) => { const r = cur.rect, fx = Math.max(0, Math.min(1, Number(o.x) || 0)), fy = Math.max(0, Math.min(1, Number(o.y) || 0)); return { x: Math.round(r.x + fx * (r.w - 1)), y: Math.round(r.y + fy * (r.h - 1)) }; };
   function direct(o) {
@@ -103,6 +116,15 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
     if (o.t === "key") { const vk = vkOf(o.code || o.key); return vk ? psWrite("key", { vk, down: !!o.down }) : true; }
     if (o.t === "combo") { const vks = String(o.combo || "").split("+").map((x) => vkOf(x.trim())).filter(Boolean).slice(0, 4); return vks.length ? psWrite("combo", { vks }) : true; }
     if (o.t === "text") return psWrite("text", { text: String(o.text || "").slice(0, 2000) });
+    // fingers (s: 0 down, 1 moved, 2 up), every finger that's down in each frame; a frame of only moves may wait (then only the
+    // newest goes), a finger going down or up never does, and no older move comes after it
+    if (o.t === "touch") {
+      const pts = (Array.isArray(o.pts) ? o.pts : []).slice(0, 10).map((c) => ({ id: Math.max(0, Math.min(9, Math.floor(Number(c.id) || 0))), ...px(c), s: c.s === "down" ? 0 : c.s === "up" ? 2 : 1 }));
+      if (!pts.length) return true;
+      if (pts.every((c) => c.s === 1) && pending >= 2 && ps) { touchHeld = pts; return true; }
+      touchHeld = null;
+      return psWrite("touch", { pts });
+    }
     return true;
   }
   // the fallback: the host's /pc/desk, one after the other, mouse moves only the newest one
@@ -119,6 +141,11 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
     if (!o || typeof o.t !== "string") return;
     if (o.t === "bye") return stop("closed on the other device");
     if (direct(o)) return;
+    if (o.t === "touch") {      // no way to touch directly: the finger that changed (or the first) as the mouse, through the host
+      const pts = Array.isArray(o.pts) ? o.pts : [], f = pts.find((c) => c && c.s !== "move") || pts[0];
+      if (!f) return;
+      o = { t: f.s === "down" ? "down" : f.s === "up" ? "up" : "move", button: "left", x: f.x, y: f.y };
+    }
     const msg = { ...o, screen: cur.screen };
     if (o.t === "move") {
       moveNext = msg; if (moveWaiting) return;
