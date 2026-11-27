@@ -1,13 +1,62 @@
 {
   "manifest_version": 3,
   "name": "Albatross",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Albatross in a Chrome sidebar: chat with your own AI about the page you're on, and let it read, click and type there for you. Make your own tools for it.",
-  "permissions": ["debugger", "tabs", "tabGroups", "storage", "alarms", "sidePanel", "clipboardRead"],
-  "background": { "service_worker": "background.js" },
-  "content_scripts": [{ "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"], "js": ["youtube.js"], "run_at": "document_idle" },
-    { "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"], "js": ["youtube-main.js"], "run_at": "document_idle", "world": "MAIN" }],
-  "side_panel": { "default_path": "sidepanel.html" },
-  "action": { "default_title": "Albatross", "default_popup": "popup.html", "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" } },
-  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" }
+  "permissions": [
+    "debugger",
+    "tabs",
+    "tabGroups",
+    "storage",
+    "alarms",
+    "sidePanel",
+    "clipboardRead",
+    "tabCapture",
+    "offscreen",
+    "scripting",
+    "activeTab"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube-main.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Albatross",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
 }

@@ -295,6 +295,7 @@ chrome.storage.onChanged.addListener((c) => { if (c.ytMode && c.ytMode.newValue 
 // ---------- the popup ----------
 chrome.runtime.onMessage.addListener((msg, _s, reply) => {
   if (msg && msg.ytNote) return;                 // for the sidebar (what happened at an ad place), not for here
+  if (msg && msg.det) return;                    // Detect on a tab: its own listener below
   if (msg && msg.yt === "tick") { ytTick(msg, _s.tab).then(reply, () => reply({ role: "none" })); return true; }
   (async () => {
     if (msg.customTool) {
@@ -319,3 +320,36 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
   })().then(reply, (e) => reply({ error: String(e.message || e) }));
   return true;
 });
+
+// ---------- Detect on a tab: the AI finds people on the page and detect-overlay.js draws boxes around them ----------
+// The menu starts it (only a click there may capture a tab): the tab's picture goes to a hidden page (detect-offscreen.html), which
+// runs the detector; its results come back here and go to the overlay in that tab. It only looks: it never clicks, aims or types.
+let detTab = null;
+async function detStop() {
+  const t = detTab; detTab = null;
+  chrome.runtime.sendMessage({ det: "offscreen", cmd: "stop" }).catch(() => {});
+  if (t != null) chrome.tabs.sendMessage(t, { det: "overlay", end: true }).catch(() => {});
+  try { await chrome.offscreen.closeDocument(); } catch {}
+}
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (!msg || !msg.det) return;
+  if (msg.det === "start") {
+    (async () => {
+      await detStop();
+      await chrome.scripting.executeScript({ target: { tabId: msg.tabId }, files: ["detect-overlay.js"] });
+      try { await chrome.offscreen.createDocument({ url: "detect-offscreen.html", reasons: ["USER_MEDIA"], justification: "Find people in the picture of the tab you chose" }); } catch {}
+      detTab = msg.tabId;
+      chrome.runtime.sendMessage({ det: "offscreen", cmd: "start", tabId: msg.tabId, streamId: msg.streamId }).catch(() => {});
+      return { ok: true };
+    })().then(reply, (e) => reply({ ok: false, error: String(e.message || e) }));
+    return true;
+  }
+  if (msg.det === "stop") { detStop().then(() => reply({ ok: true })); return true; }
+  if (msg.det === "state") { reply({ tab: detTab }); return; }
+  if (msg.det === "result" && msg.tabId === detTab) {
+    chrome.tabs.sendMessage(detTab, { ...msg, det: "overlay" }).catch(() => {});
+    if (msg.end) detStop();
+  }
+});
+chrome.tabs.onRemoved.addListener((id) => { if (id === detTab) detStop(); });
+chrome.tabs.onUpdated.addListener((id, info) => { if (id === detTab && info.status === "loading") detStop(); });   // a new page: start again from the menu

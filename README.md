@@ -166,11 +166,16 @@ The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDA
 - **When:**
   - **a time** on chosen weekdays, also on holidays, **not on holidays**, or **only on holidays**. Up to 3 minutes late still counts (a busy or just-woken PC); a PC that's asleep or off at that time skips it.
   - **a date**, once or every year.
+  - **sunrise or sunset** at one of your places, up to 2 hours before or after (worked out on the PC).
+  - **every 5 minutes to 24 hours**, if wanted only between two times.
+  - **when the PC starts** (a minute after Albatross is up).
   - **arriving at or leaving a place** (see below).
   - **Alexa**: every shortcut with "Alexa can start it" (see below).
   - **its own link** (Copy link in the editor), and **Run now**.
+- **Only if:** rules that hold a shortcut back when it's started by a time, a place or the PC starting: **only between two times** (also across midnight), **only if someone is (or nobody is) at a place** (from the devices that reported where they are within the last 12 hours). By hand, from Alexa or from a link it always runs.
+- **More steps:** **show a notification on the PC** (Windows' own, in the corner) and **run another shortcut** (at most 3 inside each other).
 - **Holidays:** Germany's are worked out on the PC for every state (pick yours: Fronleichnam, Allerheiligen and others are only in some states). Other countries come from [Nager.Date](https://date.nager.at), a free public-holiday service: the PC asks once per country and year (only the country and the year are sent) and keeps the answer in `holidays-<country>-<year>.json`. **Your own days off** (a vacation, a bridge day) count as holidays too.
-- **Places:** a circle around a spot (Add where I am now, then pick its size). Two ways for the PC to know you arrived or left:
+- **Places:** a circle around a spot, shown on a map (OpenStreetMap, loaded when you open Places): drag a pin to move a place, click the map or find an address (OpenStreetMap's search; only what you type is sent) to set a red pin and add a place there, or add where you are now; pick each circle's size. Two ways for the PC to know you arrived or left:
   - **Report where this device is** (a switch per device): while Albatross is open on it, the device tells the PC where it is (after moving 30 m, at most every 20 seconds, otherwise every 5 minutes). Browsers don't share the location of a closed page.
   - **In the background**, a phone automation opens the place's **Arrive** or **Leave** link. iPhone: Shortcuts app → Automation → Arrive/Leave → "Get Contents of URL" with the link. Android: an automation app (MacroDroid, Tasker) with a location trigger and an HTTP request.
   - Inside the circle counts as there, outside by more than the location's accuracy (at least 50 m) as gone, so standing at the edge doesn't flip back and forth. A device's first report only learns where it is. Two devices arriving together run it once (within 5 minutes).
@@ -219,6 +224,7 @@ Give a tool a name, say what it does (the AI reads that to decide when to use it
 - Tools are stored in the extension (`chrome.storage.local`). The chat only gets the name, description and inputs, never the code; the extension looks the code up itself when the AI asks for a tool.
 - A page tool can read and change the page, like a bookmarklet. Only add tools you wrote or trust.
 - **The icon** opens a small menu (`popup.html`): the YouTube ad setting and **Open chat**, so the chat only shows when you want it. *The icon opens the chat directly* there goes back to opening the sidebar on click.
+- **Detect** (the icon's menu, "Find people on this tab"): the AI finds the people on the page you're on (also in a browser game) and draws a box around each, with a small bar to switch to everything it knows or stop. The tab's picture goes to a hidden extension page (`detect-offscreen.html`, `chrome.tabCapture`) where the detector runs (TensorFlow.js and COCO-SSD, bundled in `extension/vendor`); `detect-overlay.js` draws the boxes. It only looks: it never clicks, aims or types. A new page in the tab stops it.
 - **YouTube ads** (`extension/youtube.js`, `background.js`), three settings in the icon's menu or under **⋯ → YouTube ads** in the sidebar; a skipped ad shows a short "Ad skipped" note with the Albatross face in the player:
   - *skip* (default): an ad is muted, sped through at 16x and skipped as soon as YouTube allows; the video goes on with your own sound and speed. Banner ads over the video are closed.
   - *watch ahead, swap*: the ads are watched, just not by you. A second copy of the video runs in a hidden, muted tab (collapsed group "Ads ahead") about a minute ahead of you and plays the ads it meets there. When your copy reaches an ad that the hidden copy is already past, you're switched to the hidden copy at the same second, with your volume and speed; your old copy plays its ad muted and becomes the one ahead. The ad at the very start of a video stays (both copies get one). Switching tabs ends fullscreen.

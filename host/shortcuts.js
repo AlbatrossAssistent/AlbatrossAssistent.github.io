@@ -18,7 +18,7 @@ const { execFile } = require("child_process");
 const holidays = require("./holidays");
 
 const FILE = path.join(process.env.ALBATROSS_DATA || __dirname, "shortcuts.json");
-const STEPS = ["app", "url", "key", "volume", "bright", "lock", "sleep", "shutdown", "link", "say", "jarvis", "wait"];
+const STEPS = ["app", "url", "key", "volume", "bright", "lock", "sleep", "shutdown", "link", "say", "notify", "jarvis", "shortcut", "wait"];
 const KEYS = ["playpause", "next", "prev", "mute", "volup", "voldown"];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const newId = () => crypto.randomBytes(6).toString("hex");
@@ -60,6 +60,21 @@ function cleanWhen(w) {
   }
   if (w.t === "date" && okDate(w.date) && okTime(w.at)) return { t: "date", date: w.date, at: w.at, yearly: !!w.yearly };
   if (w.t === "place" && okId(w.place)) return { t: "place", place: w.place, on: w.on === "leave" ? "leave" : "arrive" };
+  // sunrise or sunset at a place (your first place if none is picked), up to 3 hours before or after
+  if (w.t === "sun") {
+    const days = [...new Set((Array.isArray(w.days) ? w.days : [0, 1, 2, 3, 4, 5, 6]).map(Number).filter((x) => Number.isInteger(x) && x >= 0 && x <= 6))].sort();
+    return { t: "sun", ev: w.ev === "sunrise" ? "sunrise" : "sunset", off: Math.max(-180, Math.min(180, Math.round(Number(w.off) || 0))), place: okId(w.place) ? w.place : "", days: days.length ? days : [0, 1, 2, 3, 4, 5, 6], hol: ["skip", "only"].includes(w.hol) ? w.hol : "also" };
+  }
+  if (w.t === "start") return { t: "start" };
+  // every so many minutes, if wanted only between two times
+  if (w.t === "every") return { t: "every", mins: Math.max(5, Math.min(1440, Math.round(Number(w.mins) || 60))), from: okTime(w.from) ? w.from : "", to: okTime(w.to) ? w.to : "" };
+  return null;
+}
+// "only if": between two times, and/or somebody (or nobody) at a place
+function cleanOnly(c) {
+  if (!c || typeof c !== "object") return null;
+  if (c.c === "between" && okTime(c.from) && okTime(c.to)) return { c: "between", from: c.from, to: c.to };
+  if (c.c === "place" && okId(c.place)) return { c: "place", place: c.place, who: c.who === "nobody" ? "nobody" : "someone" };
   return null;
 }
 function cleanStep(s) {
@@ -74,6 +89,7 @@ function clean(it) {
     on: it.on !== false, alexa: it.alexa !== false,
     when: (Array.isArray(it.when) ? it.when : []).slice(0, 12).map(cleanWhen).filter(Boolean),
     steps: (Array.isArray(it.steps) ? it.steps : []).slice(0, 30).map(cleanStep).filter(Boolean),
+    only: (Array.isArray(it.only) ? it.only : []).slice(0, 6).map(cleanOnly).filter(Boolean),
   };
 }
 function cleanPlace(p) {
@@ -105,7 +121,7 @@ async function callLink(a) {
   if (!r.ok) throw new Error(`The link answered ${r.status}`);
 }
 let appsCache = null, appsAt = 0;
-async function step(s) {
+async function step(s, depth) {
   const a = String(s.arg || "").trim();
   switch (s.kind) {
     case "wait": return sleep(duration(a) * 1000);
@@ -121,6 +137,14 @@ async function step(s) {
     case "bright": return deps.desk("bright", { level: level(a) });
     case "lock": return deps.desk("lock");
     case "say": return deps.desk("say", a);
+    case "notify": return deps.desk("notify", a);
+    // another shortcut, as a step (at most 3 inside each other, and never itself)
+    case "shortcut": {
+      const other = db.items.find((x) => x.id === a); if (!other) throw new Error("The shortcut to run is gone");
+      if (depth >= 3) throw new Error("Too many shortcuts inside each other");
+      for (const t of other.steps) await step(t, depth + 1);
+      return;
+    }
     case "link": return callLink(a);
     case "jarvis": { const [st, j] = await deps.jarvis(a); if (st !== 200) throw new Error((j && j.error) || "Jarvis didn't take that"); return; }
     case "sleep": await sleep(1500); return deps.sleepNow();
@@ -132,13 +156,27 @@ async function step(s) {
   throw new Error(`Unknown step "${s.kind}"`);
 }
 const running = new Set();
-async function run(it, via) {
+// minutes since midnight; "between" also works across midnight (22:00 to 06:00)
+const mm = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const inWindow = (from, to, now = new Date()) => { const n = now.getHours() * 60 + now.getMinutes(), a = mm(from), b = mm(to); return a <= b ? n >= a && n < b : n >= a || n < b; };
+// is any device at that place now (from a report within the last 12 hours)?
+const someoneAt = (pid) => Object.values(db.where).some((d) => d && d.in && d.in[pid] && Date.now() - (d.at || 0) < 12 * 3600e3);
+function allowed(it) {
+  for (const c of it.only || []) {
+    if (c.c === "between" && !inWindow(c.from, c.to)) return false;
+    if (c.c === "place" && someoneAt(c.place) !== (c.who === "someone")) return false;
+  }
+  return true;
+}
+// auto: started by a time, a place or the PC starting: then the "only if" rules count (by hand, Alexa or a link: always)
+async function run(it, via, auto) {
   if (!it) return { ok: false, error: "No such shortcut" };
+  if (auto && !allowed(it)) { deps.note(`Shortcut “${it.name}” skipped (${via}): its “only if” didn't fit`); return { ok: false, error: "skipped" }; }
   if (running.has(it.id)) return { ok: false, error: "It's already running" };
   running.add(it.id);
   deps.note(`Shortcut “${it.name}” started (${via})`);
   let error = "";
-  try { for (const s of it.steps) await step(s); }
+  try { for (const s of it.steps) await step(s, 0); }
   catch (e) { error = (e && e.message) || String(e); deps.note(`Shortcut “${it.name}” stopped: ${error}`, "error"); }
   finally { running.delete(it.id); }
   const cur = db.items.find((x) => x.id === it.id);
@@ -156,18 +194,43 @@ function due(w, now, today) {
   if (w.hol === "only") return !!hol;
   return true;
 }
-const whenKey = (it, w) => `${it.id}|${w.t}|${w.at}|${w.date || ""}`;
+const whenKey = (it, w) => `${it.id}|${w.t}|${w.at || w.ev + w.off}|${w.date || w.place || ""}`;
+// sunrise and sunset (the sunrise equation; good to a minute or two), as Dates for that day at that place
+function sunTimes(day, lat, lon) {
+  const r = Math.PI / 180, J = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 12) / 864e5 + 2440587.5;
+  const n = Math.round(J - 2451545.0 + 0.0008), Js = n - lon / 360, M = (357.5291 + 0.98560028 * Js) % 360;
+  const C = 1.9148 * Math.sin(M * r) + 0.02 * Math.sin(2 * M * r) + 0.0003 * Math.sin(3 * M * r), L = (M + C + 180 + 102.9372) % 360;
+  const Jt = 2451545.0 + Js + 0.0053 * Math.sin(M * r) - 0.0069 * Math.sin(2 * L * r), d = Math.asin(Math.sin(L * r) * Math.sin(23.4397 * r));
+  const cw = (Math.sin(-0.833 * r) - Math.sin(lat * r) * Math.sin(d)) / (Math.cos(lat * r) * Math.cos(d));
+  if (cw < -1 || cw > 1) return null;                       // midnight sun or polar night
+  const w0 = Math.acos(cw) / r, at = (j) => new Date((j - 2440587.5) * 864e5);
+  return { sunrise: at(Jt - w0 / 360), sunset: at(Jt + w0 / 360) };
+}
+function sunAt(w, now) {
+  const p = db.places.find((x) => x.id === w.place) || db.places[0]; if (!p) return null;
+  const t = sunTimes(now, p.lat, p.lon); if (!t) return null;
+  const d = new Date(t[w.ev].getTime() + w.off * 60e3);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+const everyLast = new Map();
 function tick(now = new Date()) {
   const today = holidays.ymd(now), mins = now.getHours() * 60 + now.getMinutes();
   for (const it of db.items) {
     if (!it.on) continue;
     for (const w of it.when) {
-      if (w.t !== "time" && w.t !== "date") continue;
-      const [h, m] = w.at.split(":").map(Number), late = mins - (h * 60 + m);
+      if (w.t === "every") {
+        const k = whenKey(it, w), last = everyLast.get(k);
+        if (last == null) { everyLast.set(k, now.getTime()); continue; }             // the first one a full interval after start
+        if (now - last < w.mins * 60e3 || (w.from && w.to && !inWindow(w.from, w.to, now))) continue;
+        everyLast.set(k, now.getTime()); run(it, `every ${w.mins} min`, true); continue;
+      }
+      if (w.t !== "time" && w.t !== "date" && w.t !== "sun") continue;
+      const at = w.t === "sun" ? sunAt(w, now) : w.at; if (!at) continue;
+      const [h, m] = at.split(":").map(Number), late = mins - (h * 60 + m);
       if (late < 0 || late > 3 || !due(w, now, today)) continue;
       const k = whenKey(it, w); if (db.fired[k] === today) continue;
       db.fired[k] = today; save();
-      run(it, w.t === "date" ? `${w.date} ${w.at}` : `${w.at}`);
+      run(it, w.t === "date" ? `${w.date} ${w.at}` : w.t === "sun" ? `${w.ev} ${at}` : `${w.at}`, true);
     }
   }
 }
@@ -181,7 +244,7 @@ function placeEvent(pid, ev, via) {
   lastPlaceRun.set(k, Date.now());
   const hit = db.items.filter((it) => it.on && it.when.some((w) => w.t === "place" && w.place === pid && w.on === ev));
   deps.note(`${ev === "arrive" ? "Arrived at" : "Left"} ${p.name} (${via})${hit.length ? "" : ": no shortcut for that"}`);
-  for (const it of hit) run(it, `${ev === "arrive" ? "arrived at" : "left"} ${p.name}`);
+  for (const it of hit) run(it, `${ev === "arrive" ? "arrived at" : "left"} ${p.name}`, true);
   return hit.map((x) => x.name);
 }
 // a device says where it is: inside a place's circle, or more than its accuracy (at least 50 m) outside it; in between nothing
@@ -273,6 +336,7 @@ function view() {
     places: db.places.map((p) => ({ ...p, arrive: `${base}/place/${p.id}/arrive`, leave: `${base}/place/${p.id}/leave` })),
     holidays: { ...db.holidays, regions: holidays.regions(db.holidays.country), today: holidays.on(holidays.ymd(new Date()), db.holidays), next: holidays.upcoming(db.holidays, 8) },
     alexa: { endpoint: `${base}/alexa`, linked: !!db.alexa.app },
+    sun: db.places[0] ? (() => { const t = sunTimes(new Date(), db.places[0].lat, db.places[0].lon); return t ? { place: db.places[0].name, sunrise: t.sunrise.toTimeString().slice(0, 5), sunset: t.sunset.toTimeString().slice(0, 5) } : null; })() : null,
     now: new Date().toString().slice(0, 21), tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
 }
@@ -316,6 +380,8 @@ function start(d) {
     save();
   }, 6 * 3600e3).unref();
   if (!fs.existsSync(FILE)) save();
+  // "when the PC starts": a minute after the host started (the desktop and the network are ready by then)
+  setTimeout(() => { for (const it of db.items) if (it.on && it.when.some((w) => w.t === "start")) run(it, "the PC started", true); }, 60e3).unref();
 }
 
-module.exports = { start, handle, hook, tick, where, find, alexa, _db: () => db, _set: (x) => { db = x; } };
+module.exports = { start, handle, hook, tick, where, find, alexa, sunTimes, allowed, _db: () => db, _set: (x) => { db = x; } };

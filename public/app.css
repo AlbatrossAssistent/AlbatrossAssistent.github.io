@@ -2674,3 +2674,7 @@ body.aigames-view #typeBadge, body.aigames-view #model { display: none !importan
 .ag-msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 12px; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; text-align: center; max-width: 80%; pointer-events: none; }
 .ag-stat { font-size: 13.5px; color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
 @media (max-width: 600px) { .ag-head h1 { font-size: 24px; } }
+.sc-map-bar { display: flex; gap: 8px; } .sc-map-bar .hub-in { flex: 1; min-width: 0; }
+.sc-map { height: 340px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--soft); z-index: 0; }
+.sc-pin i { display: block; width: 18px; height: 18px; border-radius: 50%; background: #FF3B30; border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.4); box-sizing: border-box; }
+@media (max-width: 600px) { .sc-map { height: 260px; } }

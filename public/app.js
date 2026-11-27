@@ -7481,8 +7481,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.9";
+const APP_VERSION = "2026-11-27.10";
 const WHATS_NEW = [
+  ["2026-11-27.10", ["Shortcuts: places on a map with their circles (drag to move, find an address), sunrise and sunset, every so often, when the PC starts","Shortcuts: only between two times, only if someone (or nobody) is at a place; new steps: a notification on the PC, run another shortcut","Chrome extension: Find people on this tab draws boxes around the people on the page (it only looks)"]],
   ["2026-11-27.9", ["AI games: Detect finds people and things in the camera, a screen, a picture or a video","AI games: Target range, a game where the AI aims at cardboard people, or you play against it"]],
   ["2026-11-27.8", ["Remote desktop: one pointer: with a mouse or trackpad (also an iPad's) the PC hides its own pointer, also behind the cover","Remote desktop: HDR is switched off on the PC during a session (no more blooming), and back on afterwards","Remote desktop: the cover is a screen saver with the time, drifting slowly, Ctrl+Alt+Shift+U closes it at the PC"]],
   ["2026-11-27.7", ["Shortcuts: your PC does things by itself at a time, on a date, on or not on holidays, when you arrive somewhere or leave, from Alexa, or from a link","Remote desktop: 120 frames a second when your PC's monitor and your device's screen can show it (back to 60 by itself if your device can't keep up)","Remote desktop: the cover screen on the PC is plain white on black"]],

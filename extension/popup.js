@@ -13,3 +13,17 @@ $("#chat").onclick = async () => {
   try { await chrome.sidePanel.open({ windowId: w.id }); } catch {}
   window.close();
 };
+// Detect on this tab: the click here is what Chrome needs to let the extension see the tab's picture
+chrome.runtime.sendMessage({ det: "state" }, (r) => { if (r && r.tab != null) $("#detect").textContent = "Stop finding people"; });
+$("#detect").onclick = async () => {
+  const b = $("#detect");
+  if (b.textContent.startsWith("Stop")) { await chrome.runtime.sendMessage({ det: "stop" }); window.close(); return; }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !/^https?:/.test(tab.url || "")) { b.textContent = "Only on web pages"; return; }
+  try {
+    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+    const r = await chrome.runtime.sendMessage({ det: "start", tabId: tab.id, streamId });
+    if (r && r.ok === false) throw new Error(r.error);
+    window.close();
+  } catch (e) { b.textContent = "Couldn't: " + String(e.message || e).slice(0, 60); }
+};

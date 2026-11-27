@@ -201,7 +201,16 @@ async function run(cmd, arg) {
       { windowsHide: true, timeout: 23000, env: { ...process.env, ALB_SAY: text, ALB_LANG: de ? "de-DE" : "" } }, () => ok()));
     return { ok: true };
   }
-  if (cmd === "ping") return { ok: true, pid: process.pid, v: 5 };
+  // a Windows notification in the corner (a shortcut's "Show a notification" step); the text goes in through the environment
+  if (cmd === "notify") {
+    const text = String(arg || "").replace(/\s+/g, " ").trim().slice(0, 300); if (!text) return { ok: true };
+    const ps = "$x = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); " +
+      "$t = $x.GetElementsByTagName('text'); [void]$t.Item(0).AppendChild($x.CreateTextNode('Albatross')); [void]$t.Item(1).AppendChild($x.CreateTextNode($env:ALB_TEXT)); " +
+      "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe').Show([Windows.UI.Notifications.ToastNotification]::new($x))";
+    await new Promise((ok) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], { windowsHide: true, timeout: 15000, env: { ...process.env, ALB_TEXT: text } }, () => ok()));
+    return { ok: true };
+  }
+  if (cmd === "ping") return { ok: true, pid: process.pid, v: 6 };
   throw new Error("Unknown command");
 }
 
