@@ -143,9 +143,15 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
       } catch (e) { stop("error"); done(500, { error: e.message || String(e) }); }
     });
   });
-  server.listen(0, "127.0.0.1", () => {
+  // the host finds this server through rtc.json; if it goes missing or another copy wrote its own there (a second start, a test),
+  // it's written again within 10 seconds, or live video would quietly fall back to the slow pictures
+  const writeInfo = () => {
+    if (!server.listening) return;
+    try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token && i.port === server.address().port) return; } catch {}
     try { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(INFO, JSON.stringify({ port: server.address().port, token, pid: process.pid })); } catch (e) { log("rtc: " + e.message); }
-  });
-  return { stop, close() { stop(); if (ps) try { ps.kill(); } catch {} try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
+  };
+  server.listen(0, "127.0.0.1", writeInfo);
+  const keep = setInterval(writeInfo, 10000); keep.unref && keep.unref();
+  return { stop, close() { clearInterval(keep); stop(); if (ps) try { ps.kill(); } catch {} try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
 }
 module.exports = { create };
