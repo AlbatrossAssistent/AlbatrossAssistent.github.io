@@ -5,6 +5,8 @@ host/background.log*
 host/ollama-background.log
 host/comfyui.log
 host/schedule.json
+host/shortcuts.json
+host/holidays-*.json
 extension.pem
 extension.crx
 *.pem

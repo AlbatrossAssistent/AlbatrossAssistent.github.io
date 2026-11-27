@@ -123,6 +123,8 @@ const pcPower = {
       return [200, { ok: true }];
     }
     if (method === "GET" && p === "/pc/schedule") return [200, schedule.get()];
+    // shortcuts: steps this PC runs by itself at a time, on a date, at a place, from Alexa or a link (see shortcuts.js)
+    if (p === "/pc/shortcuts") return shortcuts.handle(method, body);
     // the Monitor: a picture or video full screen on this PC's screen (see monitor.js)
     if (p === "/pc/monitor") return monitor.handle(method, body, PANEL_PORT);
     // lists of requests that run here one after the other (see list.js)
@@ -178,6 +180,7 @@ const pcPower = {
 };
 const jarvis = require("./jarvis");
 const pcDesk = require("./pcdesk");
+const shortcuts = require("./shortcuts");
 const remoteDesk = require("./remotedesk");
 const codeTool = require("./code");
 const chatStore = require("./chats");
@@ -923,6 +926,12 @@ function connect() {
       running.delete(msg.id);
       return;
     }
+    // a shortcut's link or Alexa, passed on by the server (shortcuts.js checks the link's key)
+    if (msg.type === "hook") {
+      let out;
+      try { out = await shortcuts.hook(String(msg.path || ""), String(msg.method || "GET"), typeof msg.body === "string" ? msg.body.slice(0, 65536) : ""); } catch (e) { out = [500, { error: e.message }]; }
+      return send({ type: "hook-done", id: msg.id, status: out[0], json: out[1] });
+    }
     if (msg.type !== "req") return;
     await handleRelayRequest(send, ws, msg, false);
   });
@@ -1151,6 +1160,8 @@ panel = startPanel({
     if (!args.includes("--no-panel")) openWindow(url);
     keepAwake();
     schedule.start(note);
+    shortcuts.start({ note, hookBase: () => `${SERVER}/hook/${state.code}/`, desk: (cmd, arg) => pcDesk.call(cmd, arg), sleepNow: () => schedule.sleepNow(),
+      jarvis: (t) => jarvis.handle("POST", "/jarvis/ask", JSON.stringify({ text: t }), note, freeImageModels) });
     monitor.setNote(note);
     comfy.retireOutdated(note);
     pollOllama();

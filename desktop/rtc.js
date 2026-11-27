@@ -62,9 +62,12 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     await win.loadFile(path.join(assetsDir, "rtc.html"));
     const phys = screen.dipToScreenRect ? screen.dipToScreenRect(null, d.bounds) : d.bounds;
     const maxW = Math.min(phys.width, Math.max(640, Number(o.maxW) || 1920)), maxH = Math.round(maxW * phys.height / phys.width);
-    const fps = Math.max(5, Math.min(60, Number(o.fps) || 30));
-    const sdp = await win.webContents.executeJavaScript(`start(${JSON.stringify({ sdp: String(o.sdp || ""), sourceId: src.id, maxW, maxH, fps, bitrate: Number(o.bitrate) || 0 })})`);
-    log("remote desktop video: " + maxW + "x" + maxH + " up to " + fps + " fps");
+    // up to 120 frames a second (the most Chromium's screen capture gives), but never more than the monitor shows: a 60 Hz
+    // monitor has nothing new between its own 60 pictures
+    const hz = Math.round(Number(d.displayFrequency) || 60), top = Math.max(60, Math.min(120, hz));
+    const fps = Math.max(5, Math.min(top, Number(o.fps) || 30));
+    const sdp = await win.webContents.executeJavaScript(`start(${JSON.stringify({ sdp: String(o.sdp || ""), sourceId: src.id, maxW, maxH, fps, hz, bitrate: Number(o.bitrate) || 0 })})`);
+    log("remote desktop video: " + maxW + "x" + maxH + " up to " + fps + " fps (monitor " + hz + " Hz)");
     // nobody connected within 30 seconds (the other device gave up, or no direct way between the two): close it
     setTimeout(() => { if (cur && cur.id === id && !cur.connected) stop("never connected"); }, 30000);
     return { sdp };
@@ -85,7 +88,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     for (const d of screen.getAllDisplays()) {
       const b = d.bounds;
       const w = new BrowserWindow({ x: b.x, y: b.y, width: b.width, height: b.height, show: false, frame: false, resizable: false, movable: false, focusable: false, skipTaskbar: true,
-        alwaysOnTop: true, hasShadow: false, backgroundColor: "#0b0d12", title: "Albatross: in use remotely", webPreferences: { sandbox: true, contextIsolation: true } });
+        alwaysOnTop: true, hasShadow: false, backgroundColor: "#000000", title: "Albatross: in use remotely", webPreferences: { sandbox: true, contextIsolation: true } });
       w.setAlwaysOnTop(true, "screen-saver");
       w.setIgnoreMouseEvents(true, { forward: false });
       w.loadFile(path.join(assetsDir, "cover.html")).catch(() => {});

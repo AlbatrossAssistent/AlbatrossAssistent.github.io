@@ -120,7 +120,7 @@ function setGuestMode(on) {
     if ($("#notesStart")) $("#notesStart").hidden = true;
     if ($("#filesDlg")?.open) $("#filesDlg").close();
     if ($("#sidePanel") && ["browser", "agent", "list"].includes($("#sidePanel").dataset.tab) && window.sideClose) window.sideClose();
-    if (["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor", "remote"].some(v => document.body.classList.contains(v + "-view"))) {
+    if (["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor", "remote", "shortcuts"].some(v => document.body.classList.contains(v + "-view"))) {
       setView("home");
     }
   }
@@ -1199,7 +1199,7 @@ function finishRun() {
 // Light mode: the shapes behind the page grow in number with what the open chat holds (messages, text, pictures); none extra elsewhere
 function shapesForChat() {
   if (typeof polygonField === "undefined" || !polygonField || !polygonField.setAmount) return;
-  const inChat = !["home", "pc", "jarvis", "notes", "mail", "hub", "monitor", "remote", "browser", "list"].some((v) => document.body.classList.contains(v + "-view"));
+  const inChat = !["home", "pc", "jarvis", "notes", "mail", "hub", "monitor", "remote", "browser", "list", "shortcuts"].some((v) => document.body.classList.contains(v + "-view"));
   const msgs = inChat && current ? current.messages.filter((m) => !m.isEvent) : [];
   const chars = msgs.reduce((n, m) => n + String(m.content || "").length + (m.genImage ? 2500 : 0) + (m.images ? m.images.length * 1500 : 0), 0);
   polygonField.setAmount(msgs.length * .8 + chars / 1200);
@@ -5697,8 +5697,8 @@ $("#goTools").onclick = (e) => {
   e.stopPropagation();
   const old = document.querySelector(".tools-pop"); if (old) { old.remove(); $("#goTools").setAttribute("aria-expanded", "false"); return; }
   const pop = document.createElement("div"); pop.className = "tools-pop"; pop.setAttribute("role", "menu");
-  for (const id of ["goHost", "goJarvis", "goNotes", "goMail", "goHub", "goMonitor", "goRemote", "goList"]) {
-    const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Host|Jarvis|Notes|Mail|Hub|Monitor|Remote|List/.test(id))) continue;
+  for (const id of ["goHost", "goJarvis", "goNotes", "goMail", "goHub", "goShortcuts", "goMonitor", "goRemote", "goList"]) {
+    const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Host|Jarvis|Notes|Mail|Hub|Shortcuts|Monitor|Remote|List/.test(id))) continue;
     const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
     b.innerHTML = (src.querySelector("svg") || {}).outerHTML || ""; b.append(src.textContent.trim());
     b.onclick = () => { pop.remove(); $("#goTools").setAttribute("aria-expanded", "false"); src.click(); };
@@ -5748,7 +5748,7 @@ loadImgFields();
 function setView(v, opt) {
   if (v === "agent") v = "chat";     // the Agent mode is gone: the chat itself works on the PC now
   if (window.EMBED_CHROME && v !== "chat") v = "chat";     // the Chrome sidebar is only the chat
-  if (guestMode && ["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor", "remote"].includes(v)) {
+  if (guestMode && ["pc", "jarvis", "agent", "browser", "notes", "mail", "hub", "monitor", "remote", "shortcuts"].includes(v)) {
     toast("Not available in guest mode");
     return;
   }
@@ -5756,7 +5756,7 @@ function setView(v, opt) {
   if (v === "jarvis" && pcLocked) { ensureUnlocked("Jarvis").then(ok => ok && setView("jarvis", opt)); return; }
   const wasHome = document.body.classList.contains("home-view");
   // remembered, so the next start opens here again instead of on Home (only places that make sense to come back to)
-  if (!(opt && opt.restoring)) store.set("lastView", ["home", "chat", "notes", "mail", "hub", "monitor"].includes(v) ? v : "chat");
+  if (!(opt && opt.restoring)) store.set("lastView", ["home", "chat", "notes", "mail", "hub", "monitor", "shortcuts"].includes(v) ? v : "chat");
   document.body.classList.toggle("home-view", v === "home");
   if (wasHome && v !== "home") setTimeout(() => window.wallAnim && window.wallAnim.enter(), 0);
   document.body.classList.toggle("jarvis-view", v === "jarvis");
@@ -5769,6 +5769,7 @@ function setView(v, opt) {
   document.body.classList.toggle("hub-view", v === "hub");
   document.body.classList.toggle("monitor-view", v === "monitor");
   document.body.classList.toggle("remote-view", v === "remote");
+  document.body.classList.toggle("shortcuts-view", v === "shortcuts");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   $("#goNotes").classList.toggle("on", v === "notes");
@@ -5776,10 +5777,12 @@ function setView(v, opt) {
   $("#goHub").classList.toggle("on", v === "hub");
   $("#goMonitor").classList.toggle("on", v === "monitor");
   $("#goRemote").classList.toggle("on", v === "remote");
-  $("#goTools").classList.toggle("on", ["jarvis", "notes", "mail", "hub", "monitor", "remote", "list", "pc"].includes(v));
+  $("#goShortcuts").classList.toggle("on", v === "shortcuts");
+  $("#goTools").classList.toggle("on", ["jarvis", "notes", "mail", "hub", "monitor", "remote", "list", "pc", "shortcuts"].includes(v));
   if (v === "hub") window.hubOpen && window.hubOpen(); else window.hubClose && window.hubClose();
   if (v === "monitor") window.monitorOpen && window.monitorOpen(); else window.monitorClose && window.monitorClose();
   if (v === "remote") window.remoteOpen && window.remoteOpen(); else window.remoteClose && window.remoteClose();
+  if (v === "shortcuts") window.shortcutsOpen && window.shortcutsOpen(); else window.shortcutsClose && window.shortcutsClose();
   if (v === "mail") window.mailOpen && window.mailOpen(opt);
   if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
@@ -5822,6 +5825,7 @@ function renderHome() {
     browser: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
     code: svg('<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>'),
     hub: svg('<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>'),
+    shortcuts: svg('<path d="M13 2L4.5 13.5H12L11 22l8.5-11.5H12z"/>'),
     monitor: svg('<rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/>'),
     remote: svg('<rect x="2" y="3" width="20" height="14" rx="2.2"/><path d="M8 21h8M12 17v4"/><path d="M9.5 8.5 13 12M13 12v-3M13 12h-3"/>'),
     mail: svg('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>'),
@@ -5849,6 +5853,7 @@ function renderHome() {
       ["browser", I.browser, "Browser", "chrome, web", "owner"],
       ["pcfiles", ICON_FILES, "Files", "folders, downloads", "owner"],
       ["hub", I.hub, "Hub", "media, volume, programs", "owner"],
+      ["shortcuts", I.shortcuts, "Shortcuts", "time, holidays, places, Alexa", "owner"],
       ["monitor", I.monitor, "Monitor", "picture or video full screen", "owner"],
       ["print", I.print, "Print", "printer", "owner"],
       ["beam", I.beam, "Beam", "send files", "owner"],
@@ -5905,6 +5910,7 @@ function renderHome() {
     else if (g === "notes") setView("notes");
     else if (g === "mail") setView("mail");
     else if (g === "hub") setView("hub");
+    else if (g === "shortcuts") setView("shortcuts");
     else if (g === "monitor") setView("monitor");
     else if (g === "remote") setView("remote");
     else if (g === "browser") setView("browser");
@@ -7408,6 +7414,7 @@ $("#goJarvis").onclick = () => { setView("jarvis"); $("#sidebar").classList.remo
 $("#goNotes").onclick = () => { setView("notes"); $("#sidebar").classList.remove("open"); };
 $("#goMail").onclick = () => { setView("mail"); $("#sidebar").classList.remove("open"); };
 $("#goHub").onclick = () => { setView("hub"); $("#sidebar").classList.remove("open"); };
+$("#goShortcuts").onclick = () => { setView("shortcuts"); $("#sidebar").classList.remove("open"); };
 $("#goRemote").onclick = () => { setView("remote"); $("#sidebar").classList.remove("open"); };
 $("#goMonitor").onclick = () => { setView("monitor"); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
@@ -7463,8 +7470,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.6";
+const APP_VERSION = "2026-11-27.7";
 const WHATS_NEW = [
+  ["2026-11-27.7", ["Shortcuts: your PC does things by itself at a time, on a date, on or not on holidays, when you arrive somewhere or leave, from Alexa, or from a link","Remote desktop: 120 frames a second when your PC's monitor and your device's screen can show it (back to 60 by itself if your device can't keep up)","Remote desktop: the cover screen on the PC is plain white on black"]],
   ["2026-11-27.6", ["Remote desktop: Hide the PC's monitor. People at the PC see a cover screen while you still see and use everything."]],
   ["2026-11-27.5", ["Remote desktop is faster: 60 frames a second in your own network, each frame shown the moment it arrives, mouse moves sent at once, and the delay in the bar. On a phone, your fingers are real touch on the PC and the mouse pointer is gone from the picture."]],
   ["2026-11-27.4", ["Remote desktop live video starts at full speed instead of working its way up; the bar says whether it's live video or the slow pictures (and why), and whether it runs inside your network"]],
@@ -7692,7 +7700,7 @@ if (!(store.get("termsAccepted", "") >= TERMS_VERSION)) {   // ISO dates: accept
 // Only the very first start, or when there's nothing to come back to, shows Home.
 { const last = store.get("lastView", "home");
   if (last === "chat" && !(current && current.messages && current.messages.length) && !chats.some((c) => c.messages.length)) setView("home", { restoring: true });
-  else setView(["home", "chat", "notes", "mail", "hub", "monitor"].includes(last) ? last : "home", { restoring: true }); }
+  else setView(["home", "chat", "notes", "mail", "hub", "monitor", "shortcuts"].includes(last) ? last : "home", { restoring: true }); }
 // the Chrome sidebar starts in a sidebar chat (never in one of the normal app's chats)
 if (window.EMBED_CHROME && (!current || current.src !== "chrome")) newChat("chat");
 { const go = new URLSearchParams(location.search).get("go");

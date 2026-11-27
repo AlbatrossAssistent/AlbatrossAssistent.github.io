@@ -221,6 +221,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (url.pathname.startsWith("/relay/")) return handleRelay(req, res, url);
+  if (url.pathname.startsWith("/hook/")) return handleHook(req, res, url);
   if (url.pathname.startsWith("/tools/")) return handleTools(req, res, url);
   if (url.pathname === "/power/wake") return handleWake(req, res);
 
@@ -287,6 +288,41 @@ function handleRelay(req, res, url) {
         safeSend(host.ws, { type: "abort", id });
       }
     });
+  });
+}
+
+// ---------- shortcut links and Alexa ----------
+// /hook/<the PC's code>/<key>/... (GET or POST): a shortcut's own link, a place's link for a phone automation, or the PC's Alexa
+// skill. Alexa and phone automations can't encrypt like the website, so this goes to the PC as it is: the PC checks the secret
+// key in the link and answers within 7 seconds (Alexa waits 8). The link only says which shortcut or place, never what it does.
+const hookUse = new Map(); // ip -> times
+const isAlexa = (b) => { try { const j = JSON.parse(b); return !!(j && j.version && j.request && j.request.type); } catch { return false; } };
+const alexaSays = (text) => ({ version: "1.0", response: { outputSpeech: { type: "PlainText", text }, shouldEndSession: true } });
+function handleHook(req, res, url) {
+  cors(res);
+  if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+  if (req.method !== "GET" && req.method !== "POST") return sendJson(res, 405, { error: "GET or POST" });
+  const m = url.pathname.match(/^\/hook\/([A-Za-z0-9]{4}-?[A-Za-z0-9]{4})\/([A-Za-z0-9_\-\/]{20,200})$/);
+  if (!m) return sendJson(res, 404, { error: "Bad link" });
+  let code = m[1].toUpperCase().replace(/-/g, ""); code = code.slice(0, 4) + "-" + code.slice(4);
+  const ip = clientIp(req), now = Date.now();
+  if (tooManyFailures(ip)) return sendJson(res, 429, { error: "Too many wrong links. Try again in 10 minutes." });
+  const times = (hookUse.get(ip) || []).filter((t) => now - t < 60e3);
+  if (times.length >= 30) return sendJson(res, 429, { error: "Too many in a minute. Wait a little." });
+  times.push(now); hookUse.set(ip, times);
+  let body = "";
+  req.on("data", (c) => { body += c; if (body.length > 65536) req.destroy(); });
+  req.on("end", () => {
+    const alexa = req.method === "POST" && isAlexa(body);
+    const host = hosts.get(code);
+    if (!host) return alexa ? sendJson(res, 200, alexaSays(/"locale"\s*:\s*"de/.test(body) ? "Dein PC ist gerade nicht online." : "Your PC isn't online right now.")) : sendJson(res, 503, { error: "The PC isn't online right now." });
+    const id = crypto.randomUUID();
+    const timer = setTimeout(() => {
+      if (!host.hooks.delete(id)) return;
+      sendJson(res, alexa ? 200 : 504, alexa ? alexaSays(/"locale"\s*:\s*"de/.test(body) ? "Dein PC hat nicht rechtzeitig geantwortet." : "Your PC didn't answer in time.") : { error: "The PC didn't answer in time." });
+    }, 7000);
+    host.hooks.set(id, { res, timer, ip });
+    safeSend(host.ws, { type: "hook", id, path: m[2], method: req.method, body: req.method === "POST" ? body : "" });
   });
 }
 
@@ -379,7 +415,7 @@ wss.on("connection", (ws, req) => {
         try { existing.ws.close(); } catch {}
       }
       myCode = code;
-      hosts.set(code, { ws, name: String(msg.name || "PC").slice(0, 60), secretHash: sha(msg.secret), pending: new Map() });
+      hosts.set(code, { ws, name: String(msg.name || "PC").slice(0, 60), secretHash: sha(msg.secret), pending: new Map(), hooks: new Map() });
       setNoBan(code, msg.noBan === true);
       console.log(`[relay] device online: ${code} (${msg.name || "PC"})`);
       return safeSend(ws, { type: "registered", code, ip: publicIp });
@@ -388,6 +424,14 @@ wss.on("connection", (ws, req) => {
     const host = myCode && hosts.get(myCode);
     if (!host || host.ws !== ws) return;
     if (msg.type === "options") { setNoBan(myCode, msg.noBan === true); return; }
+    // the PC's answer to a shortcut link or Alexa; a wrong key counts like a wrong code
+    if (msg.type === "hook-done") {
+      const h = host.hooks.get(msg.id); if (!h) return;
+      host.hooks.delete(msg.id); clearTimeout(h.timer);
+      const st = Number(msg.status) || 200;
+      if (st === 403) noteFailure(h.ip);
+      return sendJson(h.res, st >= 200 && st < 600 ? st : 500, msg.json && typeof msg.json === "object" ? msg.json : {});
+    }
     const p = host.pending.get(msg.id);
     if (!p) return;
 
@@ -407,6 +451,7 @@ wss.on("connection", (ws, req) => {
     const host = myCode && hosts.get(myCode);
     if (host && host.ws === ws) {
       for (const id of [...host.pending.keys()]) finish(host, id, "Device went offline");
+      for (const [id, h] of host.hooks) { host.hooks.delete(id); clearTimeout(h.timer); sendJson(h.res, 503, { error: "The PC went offline." }); }
       hosts.delete(myCode);
       console.log(`[relay] device offline: ${myCode}`);
     }

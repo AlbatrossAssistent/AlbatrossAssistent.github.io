@@ -6,7 +6,7 @@ const path = require("path");
 const ROOT = path.resolve(__dirname, "..");
 const OUT = path.join(__dirname, "bundle");
 fs.rmSync(OUT, { recursive: true, force: true });
-const skip = /(^|[\\/])(host-code\.json|schedule\.json|.*\.log(\.old)?|comfyui\.log|node_modules|my-tools)$/i;     // my-tools: the user's own tools (may hold API keys), never in the installer
+const skip = /(^|[\\/])(host-code\.json|schedule\.json|shortcuts\.json|holidays-.*\.json|.*\.log(\.old)?|comfyui\.log|node_modules|my-tools)$/i;     // my-tools: the user's own tools (may hold API keys), never in the installer
 const copy = (from, to) => fs.cpSync(path.join(ROOT, from), path.join(OUT, to), { recursive: true, filter: (f) => !skip.test(path.relative(ROOT, f)) || f === path.join(ROOT, from) });
 copy("host", "host");
 copy("public", "public");

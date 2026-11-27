@@ -191,7 +191,17 @@ async function run(cmd, arg) {
   if (cmd === "monstate") return { open: (await monPids()).length > 0 };
   if (cmd === "lock") { execFile("rundll32.exe", ["user32.dll,LockWorkStation"], { windowsHide: true }, () => {}); return { ok: true }; }
   if (cmd === "rd") return rdCall(String((arg && arg.cmd) || ""), arg && arg.arg);
-  if (cmd === "ping") return { ok: true, pid: process.pid, v: 4 };
+  // the PC says something out loud in Windows' own voice (a shortcut's "Say" step); a German-looking text gets a German voice if
+  // Windows has one. The text goes in through the environment, never into the command itself.
+  if (cmd === "say") {
+    const text = String(arg || "").replace(/\s+/g, " ").trim().slice(0, 400); if (!text) return { ok: true };
+    const de = /[äöüß]|\b(und|der|die|das|ist|nicht|guten|morgen|abend|hallo|heute)\b/i.test(text);
+    await new Promise((ok) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+      "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; if ($env:ALB_LANG) { try { $s.SelectVoiceByHints(0, 0, 0, [Globalization.CultureInfo]::new($env:ALB_LANG)) } catch {} }; $s.Speak($env:ALB_SAY)"],
+      { windowsHide: true, timeout: 23000, env: { ...process.env, ALB_SAY: text, ALB_LANG: de ? "de-DE" : "" } }, () => ok()));
+    return { ok: true };
+  }
+  if (cmd === "ping") return { ok: true, pid: process.pid, v: 5 };
   throw new Error("Unknown command");
 }
 

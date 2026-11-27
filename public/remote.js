@@ -14,7 +14,8 @@
 // Uses the main page's helpers: $, esc, toast, pcCall, pcStream, connected, remotePC.
 (() => {
 const R = { open: false, ctrl: null, screen: null, screens: [], quality: "auto", frame: null, queue: Promise.resolve(), moveT: 0, lastMove: null, down: null, keysDown: new Set(), frames: 0, fpsT: 0,
-  pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0, touch: false, tuned: false, showSum: 0, showN: 0, pcStat: null, canCover: false, coverWant: false, dcHello: null };
+  pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0, touch: false, tuned: false, showSum: 0, showN: 0, pcStat: null, canCover: false, coverWant: false, dcHello: null,
+  hz: 0, hzP: null, fpsWant: 60, pcFps: 0, hiWin: null, hiBad: 0, hiOff: false };
 const page = () => $("#remotePage");
 const QUAL = { auto: null, sharp: { max: 1920, q: 70, fps: 8 }, normal: { max: 1280, q: 50, fps: 12 }, fast: { max: 960, q: 40, fps: 15 } };
 const settings = () => QUAL[R.quality] || (remotePC() ? QUAL.normal : QUAL.sharp);
@@ -23,6 +24,27 @@ const settings = () => QUAL[R.quality] || (remotePC() ? QUAL.normal : QUAL.sharp
 // with up to 20 Mbit/s so a big change (a window opening) gets through at once; when the video goes over the internet rather than
 // inside your network, it's turned down to 30 and 8 (liveStats)
 const VQUAL = { auto: { maxW: 1920, fps: 60, bitrate: 20e6 }, sharp: { maxW: 2560, fps: 30, bitrate: 14e6 }, normal: { maxW: 1920, fps: 30, bitrate: 8e6 }, fast: { maxW: 1280, fps: 60, bitrate: 6e6 } };
+// 120 frames a second (a new picture every 8 ms instead of 16) where it helps: Auto or Fast, this device's screen shows 100 or more
+// pictures a second (screenHz), and it kept up with 120 the last time (if not, 60 here for 14 days). The PC sends no more than its
+// own monitor shows (a 60 Hz monitor: 60), and only while the screen moves: a still screen sends nothing new.
+const HI = { auto: { fps: 120, bitrate: 30e6 }, fast: { fps: 120, bitrate: 10e6 } };
+const no120 = () => { try { return Date.now() - Number(localStorage.getItem("burrow.rd120off") || 0) < 14 * 864e5; } catch { return false; } };
+const vq = () => { const q = VQUAL[R.quality] || VQUAL.auto, hi = HI[R.quality] || (VQUAL[R.quality] ? null : HI.auto); return hi && R.hz >= 100 && !no120() ? { ...q, ...hi } : q; };
+// how many pictures a second this device's screen shows (60, 90, 120, 144…), from the gaps between animation frames; 0 when the
+// page isn't on screen (no frames come)
+function screenHz() {
+  return new Promise((ok) => {
+    const t = [];
+    const step = (now) => {
+      t.push(now);
+      if (t.length < 25) return requestAnimationFrame(step);
+      const d = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b);
+      ok(Math.round(1000 / d[d.length >> 1]));
+    };
+    requestAnimationFrame(step);
+    setTimeout(() => ok(0), 1500);
+  });
+}
 const live = () => R.dc && R.dc.readyState === "open";
 // inputs go out one after the other, in order; a slow one never lets the next overtake it
 const send = (o) => { if (live()) { try { R.dc.send(JSON.stringify(o)); return Promise.resolve(); } catch {} } R.queue = R.queue.then(() => pcCall("/pc/desk", { screen: R.screen, ...o }).catch((e) => { if (/Unknown|404/.test(e.message)) toast("Update Albatross on the PC for remote desktop"); })); return R.queue; };
@@ -93,6 +115,7 @@ const within = (ms, why, pr) => Promise.race([pr, new Promise((_, no) => setTime
 function rtcStop() {
   fingersLift();
   const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false; R.lastBytes = null; R.touch = false; R.tuned = false; R.pcStat = null; R.canCover = false; R.dcHello = null; coverBtn();
+  R.pcFps = 0; R.hiWin = null; R.hiBad = 0; R.hiOff = false;
   try { if (dc && dc.readyState === "open") dc.send(JSON.stringify({ t: "bye" })); } catch {}
   try { if (pc) pc.close(); } catch {}
   const v = $("#rdVid"); if (v) { v.srcObject = null; v.hidden = true; }
@@ -100,7 +123,6 @@ function rtcStop() {
 }
 async function rtcStart(seq) {
   if (!window.RTCPeerConnection || Date.now() < R.rtcBadUntil) return false;
-  const q = VQUAL[R.quality] || VQUAL.auto;
   const pc = new RTCPeerConnection({ iceServers: ICE });
   const tr = pc.addTransceiver("video", { direction: "recvonly" });
   // H.264 first: the PC encodes it on the graphics card, and phones and laptops decode it in hardware (VP8 is decoded in software,
@@ -115,6 +137,7 @@ async function rtcStart(seq) {
       const o = JSON.parse(m.data); if (pc !== R.pc) return;
       if (o.t === "hello") {
         R.touch = !!o.touch; R.canCover = !!o.cover; R.dcHello = dc; coverBtn();
+        R.pcFps = Number(o.fps) || 0;          // the most frames a second the PC captures (an older app doesn't say: 60 at most)
         if (R.canCover && R.coverWant) dc.send(JSON.stringify({ t: "cover", on: true }));
       }
       if (o.t === "pc") R.pcStat = o;
@@ -131,6 +154,8 @@ async function rtcStart(seq) {
     msg("Connecting to the PC's screen (live video)…");
     await pc.setLocalDescription(await pc.createOffer());
     await gathered(pc);
+    if (R.hzP) await R.hzP;                  // measured while the connection was being prepared
+    const q = vq(); R.fpsWant = q.fps;
     // no bigger than this device can show (a phone gets fewer pixels to decode)
     const maxW = R.quality === "auto" ? Math.max(1280, Math.min(q.maxW, Math.round(Math.max(screen.width, screen.height) * (devicePixelRatio || 1)))) : q.maxW;
     const r = await pcCall("/pc/rtc", { sdp: fastStart(pc.localDescription.sdp, q.bitrate / 1000), screen: R.screen, maxW, fps: q.fps, bitrate: q.bitrate });
@@ -206,11 +231,30 @@ async function liveStats(fps) {
     if (rtt != null && delay == null) t += " · ping " + rtt + " ms";
     if (c.mimeType) t += " · " + c.mimeType.replace("video/", "");
     t += " · " + via;
-    // auto starts at 60 frames a second and up to 20 Mbit/s, for your own network; over the internet 30 and 8 Mbit/s, what a line
-    // out of the house can carry without the pictures queueing up
-    if (!R.tuned && pair.id && R.quality === "auto" && live()) { R.tuned = true; if (via !== "in your network") R.dc.send(JSON.stringify({ t: "tune", fps: 30, bitrate: 8e6 })); }
+    // auto starts for your own network (120 or 60 frames a second, up to 30 or 20 Mbit/s); over the internet it's 30 and 8 Mbit/s,
+    // what a line out of the house can carry without the pictures queueing up (Fast at 120 goes back to its 60)
+    if (!R.tuned && pair.id && live()) {
+      R.tuned = true;
+      if (via !== "in your network" && R.quality === "auto") { R.fpsWant = 30; R.dc.send(JSON.stringify({ t: "tune", fps: 30, bitrate: 8e6 })); }
+      else if (via !== "in your network" && R.fpsWant >= 100) { R.fpsWant = 60; R.dc.send(JSON.stringify({ t: "tune", fps: 60, bitrate: (VQUAL[R.quality] || VQUAL.auto).bitrate })); }
+    }
+    // 120 frames a second, checked while the PC really sends 90 or more (the screen moves): this device falls behind when it decodes
+    // fewer than 80% of them, drops more than 5%, or its screen shows fewer than 75% of the decoded ones. Twice in a row: back to 60
+    // (and 60 here for the next 14 days)
+    const now = performance.now(), hw = R.hiWin;
+    R.hiWin = { t: now, dec: i.framesDecoded || 0, drop: i.framesDropped || 0 };
+    const hiOn = R.fpsWant >= 100 && R.pcFps >= 100;
+    if (hiOn && !R.hiOff && live() && hw && pcs && pcs.fps >= 90 && now - hw.t > 500) {
+      const dec = R.hiWin.dec - hw.dec, drop = R.hiWin.drop - hw.drop, decFps = dec * 1000 / (now - hw.t);
+      R.hiBad = decFps < pcs.fps * 0.8 || drop > dec * 0.05 || fps < decFps * 0.75 ? R.hiBad + 1 : 0;
+      if (R.hiBad >= 2) {
+        R.hiOff = true; R.fpsWant = 60;
+        R.dc.send(JSON.stringify({ t: "tune", fps: 60, bitrate: (VQUAL[R.quality] || VQUAL.auto).bitrate }));
+        try { localStorage.setItem("burrow.rd120off", String(Date.now())); } catch {}
+      }
+    }
     const kbps = R.lastBytes != null ? Math.round((i.bytesReceived - R.lastBytes) * 8 / 2000) : null; R.lastBytes = i.bytesReceived;
-    $("#rdStat").title = parts + (pcs && pcs.limit && pcs.limit !== "none" ? "PC held back by " + pcs.limit + " · " : "") + (kbps != null ? kbps + " kbit/s · " : "") + (i.frameWidth ? i.frameWidth + "×" + i.frameHeight + " · " : "") + "network round trip " + (rtt ?? "?") + " ms · waiting before showing " + (buf ?? "?") + " ms · decoder " + (i.decoderImplementation || "?") + " · frames dropped " + (i.framesDropped ?? 0);
+    $("#rdStat").title = parts + (hiOn ? "up to 120 frames a second · " : R.hiOff ? "back to 60 frames a second: this device didn't keep up with 120 · " : "") + (pcs && pcs.limit && pcs.limit !== "none" ? "PC held back by " + pcs.limit + " · " : "") + (kbps != null ? kbps + " kbit/s · " : "") + (i.frameWidth ? i.frameWidth + "×" + i.frameHeight + " · " : "") + "network round trip " + (rtt ?? "?") + " ms · waiting before showing " + (buf ?? "?") + " ms · decoder " + (i.decoderImplementation || "?") + " · frames dropped " + (i.framesDropped ?? 0);
   } catch {}
   if (R.video) $("#rdStat").textContent = t;
 }
@@ -417,6 +461,7 @@ window.remoteOpen = function () {
   shell();
   if (!connected) { msg("Connect to your PC first (Home → Connect)."); R.open = false; return; }
   R.fpsT = Date.now(); R.frames = 0;
+  R.hzP = screenHz().then((h) => { R.hz = h; });
   watch();
   setTimeout(() => $("#rdStage") && $("#rdStage").focus({ preventScroll: true }), 80);
 };

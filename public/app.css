@@ -1984,6 +1984,7 @@ body.guest-mode #goMail,
 body.guest-mode #goHub,
 body.guest-mode #goMonitor,
 body.guest-mode #goRemote,
+body.guest-mode #goShortcuts,
 body.guest-mode #goList,
 body.guest-mode #goHost,
 body.guest-mode #acctBar,
@@ -2338,7 +2339,7 @@ aside.rail .app-ver { display: none; }
    Chrome sidebar (extension/sidepanel.html loads the app with ?embed=chrome): only the chat, about the page you're on
    ====================================================================== */
 html.embed-chrome #goHome, html.embed-chrome #goJarvis, html.embed-chrome #goNotes, html.embed-chrome #goMail, html.embed-chrome #goHub,
-html.embed-chrome #goMonitor, html.embed-chrome #goRemote, html.embed-chrome #goList, html.embed-chrome #goHost, html.embed-chrome #goTools, html.embed-chrome #railBtn, html.embed-chrome #typeBadge, html.embed-chrome #loadedPill,
+html.embed-chrome #goMonitor, html.embed-chrome #goRemote, html.embed-chrome #goShortcuts, html.embed-chrome #goList, html.embed-chrome #goHost, html.embed-chrome #goTools, html.embed-chrome #railBtn, html.embed-chrome #typeBadge, html.embed-chrome #loadedPill,
 html.embed-chrome #topFold, html.embed-chrome #sideBtn, html.embed-chrome #fullBtn, html.embed-chrome #imgBtn, html.embed-chrome #appVer { display: none !important; }
 html.embed-chrome .embed-empty h1 { font-size: 24px; }
 html.embed-chrome .embed-page { font-weight: 600; color: var(--fg); overflow-wrap: anywhere; max-width: 100%; }
@@ -2397,7 +2398,7 @@ html.effort-max #sky { display: block; }
 /* the sidebar: Home, Tools (a menu with Jarvis, Notes, Mail, Hub, Monitor, List and Your PC), New chat and the chats; the same when it is collapsed to icons */
 #goTools { display: none; }
 html:not(.embed-chrome) #goTools { display: flex; }
-html:not(.embed-chrome) #goJarvis, html:not(.embed-chrome) #goNotes, html:not(.embed-chrome) #goMail, html:not(.embed-chrome) #goHub, html:not(.embed-chrome) #goMonitor, html:not(.embed-chrome) #goRemote, html:not(.embed-chrome) #goHost, html:not(.embed-chrome) #goList { display: none !important; }
+html:not(.embed-chrome) #goJarvis, html:not(.embed-chrome) #goNotes, html:not(.embed-chrome) #goMail, html:not(.embed-chrome) #goHub, html:not(.embed-chrome) #goMonitor, html:not(.embed-chrome) #goRemote, html:not(.embed-chrome) #goShortcuts, html:not(.embed-chrome) #goHost, html:not(.embed-chrome) #goList { display: none !important; }
 .tools-pop { position: fixed; z-index: 9500; min-width: 210px; padding: 6px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 18px 48px -12px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 2px; }
 .tools-pop button { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-radius: 10px; background: none; color: var(--fg); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .tools-pop button:hover, .tools-pop button:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -2607,3 +2608,50 @@ body.gated #sidebar, body.gated main, body.gated #sidePanel { visibility: hidden
 /* Settings → Connection: host on this device */
 .host-self { margin-bottom: 14px; }
 .host-self small.bad { color: var(--danger); }
+
+/* ---------- Shortcuts (shortcuts.js): things the PC does by itself at a time, a place, from Alexa or a link ---------- */
+body:not(.shortcuts-view) #shortcutsPage { display: none; }
+body.shortcuts-view main > :not(#shortcutsPage):not(.topbar) { display: none !important; }
+body.shortcuts-view #typeBadge, body.shortcuts-view #model { display: none !important; }
+#shortcutsPage { flex: 1; min-height: 0; overflow-y: auto; }
+.sc-wrap { max-width: 860px; margin: 0 auto; padding: 8px 6px 32px; display: flex; flex-direction: column; gap: 12px; }
+.sc-head { display: flex; align-items: center; gap: 10px; } .sc-head h1 { margin: 0; font-size: 28px; }
+.sc-sp { flex: 1; }
+.sc-sub, .sc-tip { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.sc-list { display: flex; flex-direction: column; gap: 10px; }
+.sc-card { padding: 12px 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--soft); display: flex; flex-direction: column; gap: 7px; }
+.sc-card.off { opacity: .6; }
+.sc-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sc-name { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sc-when { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc-chip { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--fg); }
+.sc-chip.dim { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+.sc-steps { font-size: 13.5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.sc-last { font-size: 12.5px; color: var(--muted); } .sc-last.bad { color: var(--danger); }
+.sc-sec { border: 1px solid var(--line); border-radius: 18px; padding: 0 14px; }
+.sc-sec > summary { cursor: pointer; padding: 12px 0; font-weight: 650; }
+.sc-sec > summary small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.sc-secb { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; min-width: 0; }
+.sc-secb h4, .sc-ed-card h4 { margin: 6px 0 0; font-size: 12.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.sc-adds { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sc-adds .hub-in { flex: 1 1 160px; min-width: 0; }
+.sc-w, .sc-s, .sc-x-row, .sc-place { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border-radius: 14px; background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.sc-x-row .hub-in[data-e="name"] { flex: 1 1 120px; min-width: 0; }
+.sc-days { display: flex; gap: 3px; flex-wrap: wrap; }
+.sc-days button { width: 34px; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.sc-days button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.sc-x { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 0; background: none; color: var(--muted); font-size: 19px; line-height: 1; cursor: pointer; margin-left: auto; }
+.sc-x:hover { background: var(--soft); color: var(--danger); }
+.sc-s input.hub-in { flex: 1 1 160px; min-width: 0; }
+.sc-mv { width: 30px; height: 30px; flex: none; border-radius: 8px; border: 0; background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
+.sc-mv:hover:not(:disabled) { background: var(--soft); color: var(--fg); } .sc-mv:disabled { opacity: .3; cursor: default; }
+.sc-check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.sc-ed-card { width: min(640px, 100%); }
+.sc-ed-foot { align-items: center; margin-top: 6px; }
+.sc-linkrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sc-place input.hub-in { flex: 1 1 140px; min-width: 0; font-weight: 600; } .sc-place small { color: var(--muted); font-size: 12px; }
+.sc-ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 9px; font-size: 13.5px; line-height: 1.55; }
+.sc-ol details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+.sc-ol pre { max-height: 260px; overflow: auto; font-size: 11.5px; background: color-mix(in srgb, var(--fg) 5%, transparent); padding: 8px 10px; border-radius: 10px; margin: 6px 0 0; }
+.sc-lang { align-self: flex-start; }
+@media (max-width: 600px) { .sc-head h1 { font-size: 24px; } .sc-top .btn.small { padding: 0 10px; } .sc-place small { display: none; } }

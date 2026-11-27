@@ -9,13 +9,14 @@
 <script>
 // Hidden window of the Windows app (desktop/rtc.js): captures one screen and sends it to the other device as WebRTC video. The other
 // device made the offer (a video it receives, a data channel for its mouse and keyboard); this answers it.
-let pc = null, sender = null, chan = null;
+let pc = null, sender = null, chan = null, capFps = 60;     // capFps: the most frames a second the screen is captured with
 // a message to the other device over the data channel (rtc.js: "touch doesn't work here after all")
 function say(o) { try { if (chan && chan.readyState === "open") chan.send(JSON.stringify(o)); } catch {} }
 const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }];
 // all candidates gathered (or 4 seconds): one answer with everything in it, no back and forth
 const gathered = (p) => new Promise((ok) => { if (p.iceGatheringState === "complete") return ok(); const t = setTimeout(ok, 4000); p.addEventListener("icegatheringstatechange", () => { if (p.iceGatheringState === "complete") { clearTimeout(t); ok(); } }); });
 async function start(o) {
+  capFps = o.fps;
   const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: o.sourceId, maxWidth: o.maxW, maxHeight: o.maxH, maxFrameRate: o.fps, minFrameRate: Math.min(15, o.fps) } } });
   const track = stream.getVideoTracks()[0];
   // a desktop: sharp text matters, but so does moving smoothly; frames are dropped before the picture gets blurry
@@ -24,9 +25,9 @@ async function start(o) {
   pc.onconnectionstatechange = () => { rtcApp.state(pc.connectionState); if (pc.connectionState === "failed" || pc.connectionState === "closed") stream.getTracks().forEach((t) => t.stop()); };
   pc.ondatachannel = (e) => {
     const ch = chan = e.channel;
-    // tell the other device what this app can do: fingers as touch input, and covering the PC's monitors (an older app says nothing,
-    // and touch imitates the mouse)
-    const hello = () => { try { ch.send(JSON.stringify({ t: "hello", touch: true, cover: true })); } catch {} };
+    // tell the other device what this app can do: fingers as touch input, covering the PC's monitors, and how many frames a second
+    // the screen gives (120 on a 120 Hz monitor if it asked for that); an older app says nothing, and touch imitates the mouse
+    const hello = () => { try { ch.send(JSON.stringify({ t: "hello", touch: true, cover: true, fps: o.fps, hz: o.hz })); } catch {} };
     if (ch.readyState === "open") hello(); else ch.addEventListener("open", hello);
     ch.onmessage = (m) => {
       const s = String(m.data);
@@ -69,12 +70,13 @@ function pcStats() {
     } catch {}
   }, 2000);
 }
-// the other device found which way the video takes: over the internet, fewer frames and less data than inside your own network
+// the other device found which way the video takes (over the internet, fewer frames and less data than inside your own network),
+// or that it can't keep up with 120 frames a second (back to 60)
 async function tune(o) {
   if (!sender) return;
   try {
     const p = sender.getParameters(); if (!p.encodings || !p.encodings.length) return;
-    p.encodings[0].maxFramerate = Math.max(5, Math.min(60, Number(o.fps) || 30));
+    p.encodings[0].maxFramerate = Math.max(5, Math.min(capFps, Number(o.fps) || 30));
     if (o.bitrate) p.encodings[0].maxBitrate = Math.max(5e5, Math.min(5e7, Number(o.bitrate)));
     await sender.setParameters(p);
   } catch {}
