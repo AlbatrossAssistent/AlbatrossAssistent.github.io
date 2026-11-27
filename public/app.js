@@ -7463,8 +7463,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.1";
+const APP_VERSION = "2026-11-27.2";
 const WHATS_NEW = [
+  ["2026-11-27.2", ["Remote desktop live video: H.264 on the graphics card (decoded in hardware on phones), no waiting before a frame is shown, mouse and keyboard straight to the PC without detours; the bar shows codec and delay"]],
   ["2026-11-27.1", ["Remote desktop as live video, like Chrome Remote Desktop: about 30 fps straight from the PC's Windows app to your device, mouse and keyboard over the same direct connection (falls back to the pictures when needed)"]],
   ["2026-11-26.8", ["Chrome extension: the icon opens a small menu (YouTube ads, Open chat) instead of the whole chat; a skipped ad shows 'Ad skipped' with the Albatross face"]],
   ["2026-11-26.7", ["Chrome extension: after 'Jump to the next ad', the sidebar says whether an ad really came there and what the setting did with it"]],

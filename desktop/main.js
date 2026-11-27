@@ -324,7 +324,7 @@ function setUpHelpers() {
   health = require("./health").create({ BrowserWindow, screen, ipcMain, assetsDir: __dirname, panel: PANEL, dataDir: DATA, showMain: () => show(), quiet, log });
   health.start();
   // remote desktop as live video over WebRTC, straight to the other device (desktop/rtc.js); the old pictures stay as the fallback
-  try { rtc = require("./rtc").create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir: __dirname, log }); } catch (e) { log("remote desktop video: " + e.message); }
+  try { rtc = require("./rtc").create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir: __dirname, scriptDir: path.join(FILES, "host"), log }); } catch (e) { log("remote desktop video: " + e.message); }
   makeTray.refresh && makeTray.refresh();
 }
 app.whenReady().then(async () => {

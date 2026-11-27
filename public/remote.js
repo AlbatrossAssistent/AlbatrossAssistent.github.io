@@ -70,15 +70,25 @@ async function rtcStart(seq) {
   if (!window.RTCPeerConnection || Date.now() < R.rtcBadUntil) return false;
   const q = VQUAL[R.quality] || VQUAL.auto;
   const pc = new RTCPeerConnection({ iceServers: ICE });
-  pc.addTransceiver("video", { direction: "recvonly" });
+  const tr = pc.addTransceiver("video", { direction: "recvonly" });
+  // H.264 first: the PC encodes it on the graphics card, and phones and laptops decode it in hardware (VP8 is decoded in software,
+  // which on a phone can't keep up at this size: fewer frames and a growing delay)
+  try { const c = RTCRtpReceiver.getCapabilities("video").codecs; tr.setCodecPreferences([...c.filter((x) => /h264/i.test(x.mimeType)), ...c.filter((x) => !/h264/i.test(x.mimeType))]); } catch {}
   const dc = pc.createDataChannel("input", { ordered: true });
-  const track = new Promise((ok) => (pc.ontrack = (e) => ok(e.streams[0] || new MediaStream([e.track]))));
+  const track = new Promise((ok) => (pc.ontrack = (e) => {
+    // show each frame as soon as it's there: no waiting room for smoothness (it's a desktop, not a film)
+    try { e.receiver.jitterBufferTarget = 0; } catch {}
+    try { e.receiver.playoutDelayHint = 0; } catch {}
+    ok(e.streams[0] || new MediaStream([e.track]));
+  }));
   R.pc = pc;
   try {
     msg("Connecting to the PC's screen (live video)…");
     await pc.setLocalDescription(await pc.createOffer());
     await gathered(pc);
-    const r = await pcCall("/pc/rtc", { sdp: pc.localDescription.sdp, screen: R.screen, maxW: q.maxW, fps: q.fps, bitrate: q.bitrate });
+    // no bigger than this device can show (a phone gets fewer pixels to decode)
+    const maxW = R.quality === "auto" ? Math.max(1280, Math.min(q.maxW, Math.round(Math.max(screen.width, screen.height) * (devicePixelRatio || 1)))) : q.maxW;
+    const r = await pcCall("/pc/rtc", { sdp: pc.localDescription.sdp, screen: R.screen, maxW, fps: q.fps, bitrate: q.bitrate });
     if (seq !== R.seq) throw new Error("replaced");
     if (r.screens && r.screens.length) screensList(r.screens, r.screen);
     await pc.setRemoteDescription({ type: "answer", sdp: r.sdp });
@@ -111,10 +121,29 @@ function countFrames(v, seq) {
     R.frame = { w: v.videoWidth, h: v.videoHeight };
     R.frames++;
     const now = Date.now();
-    if (now - R.fpsT > 2000) { $("#rdStat").textContent = "Live video · " + Math.round(R.frames * 1000 / (now - R.fpsT)) + " fps · " + v.videoWidth + "×" + v.videoHeight; R.frames = 0; R.fpsT = now; }
+    if (now - R.fpsT > 2000) { const fps = Math.round(R.frames * 1000 / (now - R.fpsT)); R.frames = 0; R.fpsT = now; liveStats(fps); }
     next();
   };
   next();
+}
+
+// the bar: frames per second, the codec, and how long a picture takes to arrive (the network's round trip, and the time it waits
+// to be decoded), so a slow spot can be told apart
+async function liveStats(fps) {
+  let t = "Live video · " + fps + " fps";
+  try {
+    const st = [...(await R.pc.getStats()).values()];
+    const i = st.find((x) => x.type === "inbound-rtp" && x.kind === "video") || {};
+    const c = st.find((x) => x.type === "codec" && x.id === i.codecId) || {};
+    const pair = st.find((x) => x.type === "candidate-pair" && x.nominated && x.state === "succeeded") || {};
+    const rtt = pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : null;
+    const buf = i.jitterBufferEmittedCount ? Math.round(i.jitterBufferDelay / i.jitterBufferEmittedCount * 1000) : null;
+    if (c.mimeType) t += " · " + c.mimeType.replace("video/", "");
+    if (rtt != null) t += " · " + rtt + " ms";
+    if (i.frameWidth) t += " · " + i.frameWidth + "×" + i.frameHeight;
+    $("#rdStat").title = "Network round trip " + (rtt ?? "?") + " ms · waiting before showing " + (buf ?? "?") + " ms · decoder " + (i.decoderImplementation || "?") + " · frames dropped " + (i.framesDropped ?? 0);
+  } catch {}
+  if (R.video) $("#rdStat").textContent = t;
 }
 
 // ---------- the pictures ----------

@@ -10,11 +10,13 @@
 // and the keys it checks come inside that encrypted offer and answer, so the Albatross server can't see or change the picture.
 //
 // The screen is captured in a hidden window (rtc.html) in this app, where Chromium's screen capture and video encoder are. Inputs from
-// the data channel go to the host's /pc/desk (the same mouse and keyboard as the old way), mouse moves only the newest one.
+// the data channel go straight to this app's own copy of the remote-desktop PowerShell (host/remotedesk.ps1: the same mouse and keyboard
+// as the old way, without the trip through the host and the desktop helper); if that can't start, to the host's /pc/desk.
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
+const { spawn } = require("child_process");
 const { session } = require("electron");
 
-function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, host = "http://127.0.0.1:4747", log = () => {} }) {
+function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, scriptDir, host = "http://127.0.0.1:4747", log = () => {} }) {
   const DIR = path.join(process.env.LOCALAPPDATA || "", "Albatross"), INFO = path.join(DIR, "rtc.json");
   const token = crypto.randomBytes(24).toString("hex");
   let win = null, cur = null;          // the capture window and the session in it: { screen, id }
@@ -48,7 +50,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, ho
     const src = sources.find((s) => String(s.display_id) === String(d.id)) || sources[0];
     if (!src) throw new Error("No screen to show");
     const id = Date.now();
-    cur = { screen: o.screen, id };
+    cur = { screen: o.screen, id, rect: o.rect && o.rect.w > 0 ? o.rect : null };
     win = new BrowserWindow({ show: false, width: 320, height: 240, webPreferences: { session: ses, preload: path.join(assetsDir, "rtc-preload.js"), contextIsolation: true, sandbox: false, backgroundThrottling: false } });
     win.on("closed", () => { if (cur && cur.id === id) { win = null; cur = null; } });
     await win.loadFile(path.join(assetsDir, "rtc.html"));
@@ -62,7 +64,48 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, ho
     return { sdp };
   }
 
-  // ---------- mouse and keyboard from the data channel -> the host's /pc/desk ----------
+  // ---------- mouse and keyboard from the data channel ----------
+  // this app's own remotedesk.ps1: one line per input, answered in order; a mouse move waits only while two are unanswered (then
+  // only the newest one goes)
+  let ps = null, psBuf = "", pending = 0, moveHeld = null, psIdle = 0, seqNo = 0;
+  let vkOf = null; try { vkOf = require(path.join(scriptDir, "remotedesk.js")).vkOf; } catch {}
+  function psStart() {
+    if (ps && ps.exitCode === null && !ps.killed) return ps;
+    if (!scriptDir || !vkOf) return null;
+    try {
+      ps = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path.join(scriptDir, "remotedesk.ps1")], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    } catch { ps = null; return null; }
+    pending = 0; psBuf = "";
+    ps.stdout.setEncoding("utf8");
+    ps.stdout.on("data", (d) => {
+      psBuf += d; let k;
+      while ((k = psBuf.indexOf("\n")) >= 0) { const line = psBuf.slice(0, k); psBuf = psBuf.slice(k + 1); if (line.startsWith("@@") && !line.startsWith("@@ready")) { pending = Math.max(0, pending - 1); if (moveHeld && pending < 2) { const m = moveHeld; moveHeld = null; psWrite("move", m); } } }
+    });
+    ps.on("exit", () => { ps = null; pending = 0; });
+    ps.on("error", () => { ps = null; });
+    return ps;
+  }
+  function psWrite(cmd, arg) {
+    if (!psStart()) return false;
+    clearTimeout(psIdle); psIdle = setTimeout(() => { if (ps) try { ps.kill(); } catch {} }, 5 * 60e3);   // unused for 5 minutes: closed
+    pending++; ps.stdin.write(JSON.stringify({ id: ++seqNo, cmd, arg }) + "\n");
+    return true;
+  }
+  // a place in the picture (0..1) -> the screen's pixel
+  const px = (o) => { const r = cur.rect, fx = Math.max(0, Math.min(1, Number(o.x) || 0)), fy = Math.max(0, Math.min(1, Number(o.y) || 0)); return { x: Math.round(r.x + fx * (r.w - 1)), y: Math.round(r.y + fy * (r.h - 1)) }; };
+  function direct(o) {
+    if (!cur.rect || !vkOf) return false;
+    const button = ["left", "right", "middle"].includes(o.button) ? o.button : "left";
+    if (o.t === "move") { const p = px(o); if (pending >= 2 && ps) { moveHeld = p; return true; } return psWrite("move", p); }
+    if (o.t === "down" || o.t === "up") return psWrite(o.t, { ...px(o), button });
+    if (o.t === "click") return psWrite("click", { ...px(o), button, count: Math.max(1, Math.min(3, Number(o.count) || 1)) });
+    if (o.t === "wheel") return psWrite("wheel", { ...px(o), dy: Math.max(-2400, Math.min(2400, Math.round(Number(o.dy) || 0))), horizontal: !!o.horizontal });
+    if (o.t === "key") { const vk = vkOf(o.code || o.key); return vk ? psWrite("key", { vk, down: !!o.down }) : true; }
+    if (o.t === "combo") { const vks = String(o.combo || "").split("+").map((x) => vkOf(x.trim())).filter(Boolean).slice(0, 4); return vks.length ? psWrite("combo", { vks }) : true; }
+    if (o.t === "text") return psWrite("text", { text: String(o.text || "").slice(0, 2000) });
+    return true;
+  }
+  // the fallback: the host's /pc/desk, one after the other, mouse moves only the newest one
   let queue = Promise.resolve(), moveNext = null, moveWaiting = false;
   const desk = (o) => fetch(host + "/pc/desk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(o), signal: AbortSignal.timeout(15000) }).catch(() => {});
   ipcMain.on("rtc-state", (e, s) => {
@@ -75,6 +118,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, ho
     let o; try { o = JSON.parse(raw); } catch { return; }
     if (!o || typeof o.t !== "string") return;
     if (o.t === "bye") return stop("closed on the other device");
+    if (direct(o)) return;
     const msg = { ...o, screen: cur.screen };
     if (o.t === "move") {
       moveNext = msg; if (moveWaiting) return;
@@ -102,6 +146,6 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, ho
   server.listen(0, "127.0.0.1", () => {
     try { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(INFO, JSON.stringify({ port: server.address().port, token, pid: process.pid })); } catch (e) { log("rtc: " + e.message); }
   });
-  return { stop, close() { stop(); try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
+  return { stop, close() { stop(); if (ps) try { ps.kill(); } catch {} try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
 }
 module.exports = { create };
