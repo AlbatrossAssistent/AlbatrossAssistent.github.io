@@ -16,8 +16,8 @@ const http = require("http"), fs = require("fs"), path = require("path"), crypto
 const { spawn } = require("child_process");
 const { session } = require("electron");
 
-function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, scriptDir, host = "http://127.0.0.1:4747", log = () => {} }) {
-  const DIR = path.join(process.env.LOCALAPPDATA || "", "Albatross"), INFO = path.join(DIR, "rtc.json");
+function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, scriptDir, host = "http://127.0.0.1:4747", infoFile = "", log = () => {} }) {
+  const INFO = infoFile || path.join(process.env.LOCALAPPDATA || "", "Albatross", "rtc.json"), DIR = path.dirname(INFO);     // tests pass their own file
   const token = crypto.randomBytes(24).toString("hex");
   let win = null, cur = null;          // the capture window and the session in it: { screen, id }
 

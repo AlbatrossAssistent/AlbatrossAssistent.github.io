@@ -7463,8 +7463,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.3";
+const APP_VERSION = "2026-11-27.4";
 const WHATS_NEW = [
+  ["2026-11-27.4", ["Remote desktop live video starts at full speed instead of working its way up; the bar says whether it's live video or the slow pictures (and why), and whether it runs inside your network"]],
   ["2026-11-27.3", ["Remote desktop: the live video no longer quietly falls back to the slow pictures when its link between host and app gets lost"]],
   ["2026-11-27.2", ["Remote desktop live video: H.264 on the graphics card (decoded in hardware on phones), no waiting before a frame is shown, mouse and keyboard straight to the PC without detours; the bar shows codec and delay"]],
   ["2026-11-27.1", ["Remote desktop as live video, like Chrome Remote Desktop: about 30 fps straight from the PC's Windows app to your device, mouse and keyboard over the same direct connection (falls back to the pictures when needed)"]],

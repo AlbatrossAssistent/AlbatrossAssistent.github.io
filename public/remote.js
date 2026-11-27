@@ -58,9 +58,27 @@ function shell() {
 // ---------- live video (WebRTC) ----------
 const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }];
 const gathered = (p) => new Promise((ok) => { if (p.iceGatheringState === "complete") return ok(); const t = setTimeout(ok, 3000); p.addEventListener("icegatheringstatechange", () => { if (p.iceGatheringState === "complete") { clearTimeout(t); ok(); } }); });
+// WebRTC starts slowly (about 0.3 Mbit/s) and works its way up; a desktop's big pictures then wait in a queue, which is the delay
+// you feel. In the offer the PC gets (it sends with the codec settings from there): start at 6 Mbit/s, never below 1 (in your own
+// Wi-Fi that's nothing; on a slow line WebRTC still comes down by itself).
+function fastStart(sdp, maxKbps) {
+  const add = "x-google-start-bitrate=6000;x-google-min-bitrate=1000;x-google-max-bitrate=" + Math.max(2000, Math.round(maxKbps));
+  const lines = sdp.split(/\r\n/), out = [];
+  const video = new Set();
+  for (const l of lines) { const m = /^a=rtpmap:(\d+) (VP8|VP9|H264|AV1)\/90000/i.exec(l); if (m) video.add(m[1]); }
+  const hasFmtp = new Set(lines.map((l) => (/^a=fmtp:(\d+) /.exec(l) || [])[1]).filter(Boolean));
+  for (const l of lines) {
+    const f = /^a=fmtp:(\d+) (.*)$/.exec(l);
+    if (f && video.has(f[1])) { out.push(l + ";" + add); continue; }
+    out.push(l);
+    const r = /^a=rtpmap:(\d+) /.exec(l);
+    if (r && video.has(r[1]) && !hasFmtp.has(r[1])) out.push("a=fmtp:" + r[1] + " " + add);
+  }
+  return out.join("\r\n");
+}
 const within = (ms, why, pr) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(why)), ms))]);
 function rtcStop() {
-  const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false;
+  const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false; R.lastBytes = null;
   try { if (dc && dc.readyState === "open") dc.send(JSON.stringify({ t: "bye" })); } catch {}
   try { if (pc) pc.close(); } catch {}
   const v = $("#rdVid"); if (v) { v.srcObject = null; v.hidden = true; }
@@ -88,7 +106,7 @@ async function rtcStart(seq) {
     await gathered(pc);
     // no bigger than this device can show (a phone gets fewer pixels to decode)
     const maxW = R.quality === "auto" ? Math.max(1280, Math.min(q.maxW, Math.round(Math.max(screen.width, screen.height) * (devicePixelRatio || 1)))) : q.maxW;
-    const r = await pcCall("/pc/rtc", { sdp: pc.localDescription.sdp, screen: R.screen, maxW, fps: q.fps, bitrate: q.bitrate });
+    const r = await pcCall("/pc/rtc", { sdp: fastStart(pc.localDescription.sdp, q.bitrate / 1000), screen: R.screen, maxW, fps: q.fps, bitrate: q.bitrate });
     if (seq !== R.seq) throw new Error("replaced");
     if (r.screens && r.screens.length) screensList(r.screens, r.screen);
     await pc.setRemoteDescription({ type: "answer", sdp: r.sdp });
@@ -108,7 +126,7 @@ async function rtcStart(seq) {
     return true;
   } catch (e) {
     if (pc === R.pc) rtcStop();
-    if (seq === R.seq && e.message !== "replaced") R.rtcBadUntil = Date.now() + 5 * 60e3;     // not again for a while: the pictures
+    if (seq === R.seq && e.message !== "replaced") { R.rtcBadUntil = Date.now() + 2 * 60e3; R.rtcWhy = e.message || "it didn't connect"; }     // not again for a while: the pictures
     return false;
   }
 }
@@ -138,10 +156,14 @@ async function liveStats(fps) {
     const pair = st.find((x) => x.type === "candidate-pair" && x.nominated && x.state === "succeeded") || {};
     const rtt = pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : null;
     const buf = i.jitterBufferEmittedCount ? Math.round(i.jitterBufferDelay / i.jitterBufferEmittedCount * 1000) : null;
+    const loc = st.find((x) => x.id === pair.localCandidateId) || {}, rem = st.find((x) => x.id === pair.remoteCandidateId) || {};
+    const via = loc.candidateType === "relay" || rem.candidateType === "relay" ? "relayed" : (loc.candidateType === "srflx" || rem.candidateType === "srflx") ? "via the internet" : "in your network";
     if (c.mimeType) t += " · " + c.mimeType.replace("video/", "");
+    t += " · " + via;
     if (rtt != null) t += " · " + rtt + " ms";
     if (i.frameWidth) t += " · " + i.frameWidth + "×" + i.frameHeight;
-    $("#rdStat").title = "Network round trip " + (rtt ?? "?") + " ms · waiting before showing " + (buf ?? "?") + " ms · decoder " + (i.decoderImplementation || "?") + " · frames dropped " + (i.framesDropped ?? 0);
+    const kbps = R.lastBytes != null ? Math.round((i.bytesReceived - R.lastBytes) * 8 / 2000) : null; R.lastBytes = i.bytesReceived;
+    $("#rdStat").title = (kbps != null ? kbps + " kbit/s · " : "") + "Network round trip " + (rtt ?? "?") + " ms · waiting before showing " + (buf ?? "?") + " ms · decoder " + (i.decoderImplementation || "?") + " · frames dropped " + (i.framesDropped ?? 0);
   } catch {}
   if (R.video) $("#rdStat").textContent = t;
 }
@@ -186,7 +208,12 @@ function frame(o) {
   msg("");
   R.frames++;
   const now = Date.now();
-  if (now - R.fpsT > 2000) { $("#rdStat").textContent = (remotePC() ? "Online" : "This PC") + " · " + Math.round(R.frames * 1000 / (now - R.fpsT || 1)) + " fps"; R.frames = 0; R.fpsT = now; }
+  if (now - R.fpsT > 2000) {
+    // the slow way: say so, and why there's no live video (so it's never mistaken for it)
+    $("#rdStat").textContent = "Pictures (slow) · " + Math.round(R.frames * 1000 / (now - R.fpsT || 1)) + " fps";
+    $("#rdStat").title = "No live video" + (R.rtcWhy ? ": " + R.rtcWhy : "") + ". It tries live video again when you reopen remote desktop or change the quality.";
+    R.frames = 0; R.fpsT = now;
+  }
 }
 function screensList(list, cur) {
   R.screens = list || []; if (R.screen == null) R.screen = cur;
