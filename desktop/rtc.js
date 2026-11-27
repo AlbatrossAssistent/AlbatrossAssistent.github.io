@@ -85,7 +85,13 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
   // Windows forgets the exclusion when a window is first shown (measured: set before showing, the window was in the capture), so it's
   // set after showing, and again every second along with putting the cover back on top of windows that came up since.
   let hdrOff = false, ptrHidden = false, restoreT = 0;
-  function pointer(hide) { if (hide === ptrHidden || !psStart()) return; ptrHidden = hide; psWrite("pointer", { hide }); }
+  // while the pointer is hidden, Ctrl+Alt+Shift+U at the PC always brings it back (and closes the cover, if it's on)
+  const keysBack = () => { if (cur) cur.mouse = false; coverDrop(); pointer(false); };
+  function pointer(hide) {
+    if (hide === ptrHidden || !psStart()) return;
+    ptrHidden = hide; psWrite("pointer", { hide });
+    try { if (globalShortcut) { if (hide && !globalShortcut.isRegistered(COVER_KEY)) globalShortcut.register(COVER_KEY, keysBack); if (!hide && !covers.length) globalShortcut.unregister(COVER_KEY); } } catch {}
+  }
   function restoreNow() {
     clearTimeout(restoreT); restoreT = 0;
     if (ptrHidden && !covers.length) pointer(false);
@@ -111,7 +117,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     }
     coverTick = setInterval(() => covers.forEach((w) => { if (!w.isDestroyed()) { w.setContentProtection(true); w.moveTop(); } }), 1000);
     // the keys at the PC: the cover goes, and the pointer comes back for whoever sits there (even while the other device uses a mouse)
-    try { if (globalShortcut) globalShortcut.register(COVER_KEY, () => { if (cur) cur.mouse = false; coverDrop(); pointer(false); }); } catch {}
+    try { if (globalShortcut && !globalShortcut.isRegistered(COVER_KEY)) globalShortcut.register(COVER_KEY, keysBack); } catch {}
     pointer(true);         // the pointer would show on top of the cover
     log("remote desktop: the PC's monitors show the cover");
   }
@@ -120,7 +126,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     if (!covers.length) return;
     for (const w of covers) try { if (!w.isDestroyed()) w.destroy(); } catch {}
     covers = [];
-    try { if (globalShortcut) globalShortcut.unregister(COVER_KEY); } catch {}
+    try { if (globalShortcut && !ptrHidden) globalShortcut.unregister(COVER_KEY); } catch {}
     if (!cur || !cur.mouse) pointer(false);
     log("remote desktop: the cover is gone");
   }
@@ -198,7 +204,9 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
   const desk = (o) => fetch(host + "/pc/desk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(o), signal: AbortSignal.timeout(15000) }).catch(() => {});
   ipcMain.on("rtc-state", (e, s) => {
     if (!win || e.sender !== win.webContents || !cur) return;
-    if (s === "connected") { cur.connected = true; log("remote desktop video connected"); }
+    if (s === "connected") { cur.connected = true; clearTimeout(cur.lostT); log("remote desktop video connected"); }
+    // the other device went quiet (asleep, out of Wi-Fi): after 10 seconds the pointer comes back, before WebRTC gives up on it
+    if (s === "disconnected") { clearTimeout(cur.lostT); cur.lostT = setTimeout(() => { if (cur && !covers.length) { cur.mouse = false; pointer(false); } }, 10000); }
     if (s === "closed" || s === "failed") stop(s);
   });
   ipcMain.on("rtc-input", (e, raw) => {
