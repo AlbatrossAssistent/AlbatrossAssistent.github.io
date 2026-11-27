@@ -24,8 +24,9 @@ async function start(o) {
   pc.onconnectionstatechange = () => { rtcApp.state(pc.connectionState); if (pc.connectionState === "failed" || pc.connectionState === "closed") stream.getTracks().forEach((t) => t.stop()); };
   pc.ondatachannel = (e) => {
     const ch = chan = e.channel;
-    // tell the other device what this app can do: fingers as touch input (an older app says nothing, and touch imitates the mouse)
-    const hello = () => { try { ch.send(JSON.stringify({ t: "hello", touch: true })); } catch {} };
+    // tell the other device what this app can do: fingers as touch input, and covering the PC's monitors (an older app says nothing,
+    // and touch imitates the mouse)
+    const hello = () => { try { ch.send(JSON.stringify({ t: "hello", touch: true, cover: true })); } catch {} };
     if (ch.readyState === "open") hello(); else ch.addEventListener("open", hello);
     ch.onmessage = (m) => {
       const s = String(m.data);

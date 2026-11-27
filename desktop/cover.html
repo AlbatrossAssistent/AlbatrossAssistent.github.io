@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>Albatross: in use remotely</title>
+<!-- What the PC's monitors show while someone uses it through remote desktop with "Hide the PC's monitor" on (desktop/rtc.js).
+     The window is left out of screen capture, so the person using it remotely sees the desktop under it. -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; user-select: none; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #e9ecf2;
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(1100px 700px at 50% 42%, #1a1f2b 0%, #0b0d12 72%); }
+  svg { width: 92px; height: 92px; color: #f3f5f9; opacity: .92; }
+  h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: .2px; }
+  p { margin: 0; font-size: 15px; color: #8a92a6; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 28 28" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>
+<h1>This PC is in use remotely</h1>
+<p>Albatross remote desktop</p>
+</body>
+</html>

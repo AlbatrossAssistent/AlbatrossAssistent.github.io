@@ -7463,8 +7463,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.5";
+const APP_VERSION = "2026-11-27.6";
 const WHATS_NEW = [
+  ["2026-11-27.6", ["Remote desktop: Hide the PC's monitor. People at the PC see a cover screen while you still see and use everything."]],
   ["2026-11-27.5", ["Remote desktop is faster: 60 frames a second in your own network, each frame shown the moment it arrives, mouse moves sent at once, and the delay in the bar. On a phone, your fingers are real touch on the PC and the mouse pointer is gone from the picture."]],
   ["2026-11-27.4", ["Remote desktop live video starts at full speed instead of working its way up; the bar says whether it's live video or the slow pictures (and why), and whether it runs inside your network"]],
   ["2026-11-27.3", ["Remote desktop: the live video no longer quietly falls back to the slow pictures when its link between host and app gets lost"]],

@@ -1,7 +1,7 @@
 {
   "name": "albatross-desktop",
   "productName": "Albatross",
-  "version": "1.0.52",
+  "version": "1.0.53",
   "description": "Albatross as a Windows app: your own AI, with the host and Ollama started by itself",
   "main": "main.js",
   "private": true,
@@ -38,6 +38,7 @@
       "rtc.js",
       "rtc.html",
       "rtc-preload.js",
+      "cover.html",
       "splash.html",
       "icon.png"
     ],

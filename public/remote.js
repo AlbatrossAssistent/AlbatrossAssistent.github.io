@@ -14,7 +14,7 @@
 // Uses the main page's helpers: $, esc, toast, pcCall, pcStream, connected, remotePC.
 (() => {
 const R = { open: false, ctrl: null, screen: null, screens: [], quality: "auto", frame: null, queue: Promise.resolve(), moveT: 0, lastMove: null, down: null, keysDown: new Set(), frames: 0, fpsT: 0,
-  pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0, touch: false, tuned: false, showSum: 0, showN: 0, pcStat: null };
+  pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0, touch: false, tuned: false, showSum: 0, showN: 0, pcStat: null, canCover: false, coverWant: false, dcHello: null };
 const page = () => $("#remotePage");
 const QUAL = { auto: null, sharp: { max: 1920, q: 70, fps: 8 }, normal: { max: 1280, q: 50, fps: 12 }, fast: { max: 960, q: 40, fps: 15 } };
 const settings = () => QUAL[R.quality] || (remotePC() ? QUAL.normal : QUAL.sharp);
@@ -37,6 +37,7 @@ function shell() {
       <span class="rd-sp"></span>
       <select id="rdScreen" class="rd-sel" title="Which screen" hidden></select>
       <select id="rdQual" class="rd-sel" title="Picture quality"><option value="auto">Auto</option><option value="sharp">Sharp</option><option value="normal">Normal</option><option value="fast">Fast</option></select>
+      <button class="icon-btn rd-cover" type="button" data-rd="cover" aria-pressed="false" hidden>${I('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M3 3l18 18"/>')}</button>
       <button class="icon-btn" type="button" data-rd="kbd" title="Keyboard (type on the PC)" aria-label="Keyboard">${I('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>')}</button>
       <button class="icon-btn" type="button" data-rd="full" title="Full screen" aria-label="Full screen">${I('<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>')}</button>
     </div>
@@ -52,6 +53,13 @@ function shell() {
     </div>`;
   page().querySelector('[data-rd="back"]').onclick = () => setView("home");
   page().querySelector('[data-rd="full"]').onclick = () => { const st = $("#rdStage"); (document.fullscreenElement ? document.exitFullscreen() : st.requestFullscreen && st.requestFullscreen()).catch?.(() => {}); };
+  page().querySelector('[data-rd="cover"]').onclick = () => {
+    R.coverWant = !R.coverWant;
+    try { localStorage.setItem("burrow.rdCover", JSON.stringify(R.coverWant)); } catch {}
+    const ch = R.dc || R.dcHello; try { if (ch && ch.readyState === "open") ch.send(JSON.stringify({ t: "cover", on: R.coverWant })); } catch {}
+    coverBtn(); toast(R.coverWant ? "The PC's monitor shows a cover screen now. You still see everything." : "The PC's monitor shows the desktop again.");
+    $("#rdStage").focus({ preventScroll: true });
+  };
   page().querySelector('[data-rd="kbd"]').onclick = () => { const t = $("#rdType"); t.value = ""; t.focus(); };
   page().querySelectorAll("[data-combo]").forEach((b) => (b.onclick = () => { send({ t: "combo", combo: b.dataset.combo }); $("#rdStage").focus({ preventScroll: true }); }));
   $("#rdQual").value = R.quality;
@@ -84,7 +92,7 @@ function fastStart(sdp, maxKbps) {
 const within = (ms, why, pr) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(why)), ms))]);
 function rtcStop() {
   fingersLift();
-  const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false; R.lastBytes = null; R.touch = false; R.tuned = false; R.pcStat = null;
+  const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false; R.lastBytes = null; R.touch = false; R.tuned = false; R.pcStat = null; R.canCover = false; R.dcHello = null; coverBtn();
   try { if (dc && dc.readyState === "open") dc.send(JSON.stringify({ t: "bye" })); } catch {}
   try { if (pc) pc.close(); } catch {}
   const v = $("#rdVid"); if (v) { v.srcObject = null; v.hidden = true; }
@@ -101,7 +109,17 @@ async function rtcStart(seq) {
   const dc = pc.createDataChannel("input", { ordered: true });
   // the PC says what it can do: a new enough app takes fingers as touch input
   // and every 2 seconds how long a frame takes there (for the delay in the bar)
-  dc.onmessage = (m) => { try { const o = JSON.parse(m.data); if (pc !== R.pc) return; if (o.t === "hello") R.touch = !!o.touch; if (o.t === "pc") R.pcStat = o; } catch {} };
+  // and whether it can cover its monitors (then it does again, if you had that on)
+  dc.onmessage = (m) => {
+    try {
+      const o = JSON.parse(m.data); if (pc !== R.pc) return;
+      if (o.t === "hello") {
+        R.touch = !!o.touch; R.canCover = !!o.cover; R.dcHello = dc; coverBtn();
+        if (R.canCover && R.coverWant) dc.send(JSON.stringify({ t: "cover", on: true }));
+      }
+      if (o.t === "pc") R.pcStat = o;
+    } catch {}
+  };
   const track = new Promise((ok) => (pc.ontrack = (e) => {
     // show each frame as soon as it's there: no waiting room for smoothness (it's a desktop, not a film)
     try { e.receiver.jitterBufferTarget = 0; } catch {}
@@ -138,6 +156,14 @@ async function rtcStart(seq) {
     if (seq === R.seq && e.message !== "replaced") { R.rtcBadUntil = Date.now() + 2 * 60e3; R.rtcWhy = e.message || "it didn't connect"; }     // not again for a while: the pictures
     return false;
   }
+}
+// "Hide the PC's monitor": only with live video from an app that can do it; on, the PC's monitors show a cover screen
+function coverBtn() {
+  const b = page() && page().querySelector('[data-rd="cover"]'); if (!b) return;
+  b.hidden = !R.canCover; b.classList.toggle("on", R.coverWant); b.setAttribute("aria-pressed", String(R.coverWant));
+  b.title = R.coverWant ? "The PC's monitor shows a cover screen; you still see everything. Click to show the desktop there again."
+    : "Hide the PC's monitor: people at the PC see a cover screen, you still see everything";
+  b.setAttribute("aria-label", b.title);
 }
 // frames per second of the video, for the bar
 function countFrames(v, seq) {
@@ -387,6 +413,7 @@ window.remoteOpen = function () {
   if (R.open) return;
   R.open = true;
   try { R.quality = JSON.parse(localStorage.getItem("burrow.rdQuality")) || "auto"; } catch { R.quality = "auto"; }
+  try { R.coverWant = JSON.parse(localStorage.getItem("burrow.rdCover")) === true; } catch { R.coverWant = false; }
   shell();
   if (!connected) { msg("Connect to your PC first (Home → Connect)."); R.open = false; return; }
   R.fpsT = Date.now(); R.frames = 0;

@@ -152,6 +152,7 @@ The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDA
 
 - **Mouse:** click, double-click, right-click, drag and scroll. **Touch:** tap to click, long press or two-finger tap to right-click, drag with one finger, scroll with two.
 - **Keyboard:** click on the screen, then type: every key goes down and up on the PC, so shortcuts and held keys work. On a phone the keyboard button opens the on-screen keyboard. A row of buttons has Esc, Tab, Win, Alt+Tab, Ctrl+C/V/Z/A, Win+D, Alt+F4, Task Manager and the arrows.
+- **Hide the PC's monitor** (the crossed-out screen in the bar, with live video): the PC's monitors show a cover screen ("This PC is in use remotely") while you still see and use the desktop. Windows leaves the cover out of the screen capture, and clicks and keys go through it. It stays on for next time, and goes 5 seconds after you leave remote desktop or with Ctrl+Alt+Shift+U on the PC. Windows' own Start menu and notifications can still show above it.
 - **Quality:** Auto, Sharp, Normal or Fast (a smaller, quicker picture for slow connections). With several displays, pick which one. Full screen hides everything else.
 - The picture is taken about 8 times a second by the desktop helper on the signed-in desktop (`host/remotedesk.ps1`, so someone has to be signed in); a still screen sends nothing. The PC's control center notes when someone starts and stops viewing.
 

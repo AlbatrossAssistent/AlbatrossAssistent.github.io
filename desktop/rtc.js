@@ -14,11 +14,12 @@
 // as the old way, without the trip through the host and the desktop helper); if that can't start, to the host's /pc/desk.
 // Fingers from a phone or tablet become Windows touch input there (as Chrome Remote Desktop does): Windows hides the mouse pointer
 // while you touch, so it isn't in the video.
+// "Hide the PC's monitor": the PC's monitors show a cover screen (cover.html) while the video still shows the desktop under it.
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const { spawn } = require("child_process");
 const { session } = require("electron");
 
-function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, scriptDir, host = "http://127.0.0.1:4747", infoFile = "", log = () => {} }) {
+function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcut = null, assetsDir, scriptDir, host = "http://127.0.0.1:4747", infoFile = "", log = () => {} }) {
   const INFO = infoFile || path.join(process.env.LOCALAPPDATA || "", "Albatross", "rtc.json"), DIR = path.dirname(INFO);     // tests pass their own file
   const token = crypto.randomBytes(24).toString("hex");
   let win = null, cur = null;          // the capture window and the session in it: { screen, id }
@@ -29,6 +30,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
   ses.setPermissionCheckHandler((_wc, perm) => perm === "media");
 
   function stop(why) {
+    coverLater();
     if (win && !win.isDestroyed()) win.destroy();
     if (cur) log("remote desktop video ended" + (why ? " (" + why + ")" : ""));
     win = null; cur = null;
@@ -67,6 +69,44 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
     setTimeout(() => { if (cur && cur.id === id && !cur.connected) stop("never connected"); }, 30000);
     return { sdp };
   }
+
+  // ---------- the cover: the PC's monitors show a cover screen, the video doesn't ----------
+  // Windows leaves a window out of every screen capture when asked (setContentProtection: WDA_EXCLUDEFROMCAPTURE, Windows 10 2004
+  // and later), so whoever is at the PC sees the cover while the video shows the desktop under it. Clicks, touches and keys go
+  // through it (it can't be clicked or focused). It goes when you switch it off, 5 seconds after the session ends (so the new session
+  // after changing the quality or the screen doesn't uncover it in between), or with Ctrl+Alt+Shift+U on the PC.
+  // Windows forgets the exclusion when a window is first shown (measured: set before showing, the window was in the capture), so it's
+  // set after showing, and again every second along with putting the cover back on top of windows that came up since.
+  let covers = [], coverOff = 0, coverTick = 0;
+  const COVER_KEY = "CommandOrControl+Alt+Shift+U";
+  function coverOn() {
+    clearTimeout(coverOff); coverOff = 0;
+    if (covers.length) return;
+    for (const d of screen.getAllDisplays()) {
+      const b = d.bounds;
+      const w = new BrowserWindow({ x: b.x, y: b.y, width: b.width, height: b.height, show: false, frame: false, resizable: false, movable: false, focusable: false, skipTaskbar: true,
+        alwaysOnTop: true, hasShadow: false, backgroundColor: "#0b0d12", title: "Albatross: in use remotely", webPreferences: { sandbox: true, contextIsolation: true } });
+      w.setAlwaysOnTop(true, "screen-saver");
+      w.setIgnoreMouseEvents(true, { forward: false });
+      w.loadFile(path.join(assetsDir, "cover.html")).catch(() => {});
+      w.showInactive(); w.setBounds(b);
+      w.setContentProtection(true);
+      setTimeout(() => { if (!w.isDestroyed()) w.setContentProtection(true); }, 100);
+      covers.push(w);
+    }
+    coverTick = setInterval(() => covers.forEach((w) => { if (!w.isDestroyed()) { w.setContentProtection(true); w.moveTop(); } }), 1000);
+    try { if (globalShortcut) globalShortcut.register(COVER_KEY, coverDrop); } catch {}
+    log("remote desktop: the PC's monitors show the cover");
+  }
+  function coverDrop() {
+    clearTimeout(coverOff); coverOff = 0; clearInterval(coverTick); coverTick = 0;
+    if (!covers.length) return;
+    for (const w of covers) try { if (!w.isDestroyed()) w.destroy(); } catch {}
+    covers = [];
+    try { if (globalShortcut) globalShortcut.unregister(COVER_KEY); } catch {}
+    log("remote desktop: the cover is gone");
+  }
+  function coverLater() { if (covers.length && !coverOff) coverOff = setTimeout(coverDrop, 5000); }
 
   // ---------- mouse and keyboard from the data channel ----------
   // this app's own remotedesk.ps1: one line per input, answered in order; a mouse move waits only while two are unanswered (then
@@ -140,6 +180,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
     let o; try { o = JSON.parse(raw); } catch { return; }
     if (!o || typeof o.t !== "string") return;
     if (o.t === "bye") return stop("closed on the other device");
+    if (o.t === "cover") return o.on ? coverOn() : coverDrop();
     if (direct(o)) return;
     if (o.t === "touch") {      // no way to touch directly: the finger that changed (or the first) as the mouse, through the host
       const pts = Array.isArray(o.pts) ? o.pts : [], f = pts.find((c) => c && c.s !== "move") || pts[0];
@@ -179,6 +220,6 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir, sc
   };
   server.listen(0, "127.0.0.1", writeInfo);
   const keep = setInterval(writeInfo, 10000); keep.unref && keep.unref();
-  return { stop, close() { clearInterval(keep); stop(); if (ps) try { ps.kill(); } catch {} try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
+  return { stop, close() { clearInterval(keep); stop(); coverDrop(); if (ps) try { ps.kill(); } catch {} try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
 }
 module.exports = { create };
