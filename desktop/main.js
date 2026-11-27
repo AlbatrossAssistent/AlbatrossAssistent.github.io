@@ -308,6 +308,7 @@ ipcMain.handle("update-install", () => { installUpdate(); return { ok: !!(update
 // ---------- help with my screen, and the slowdown warning ----------
 // Both are windows in front of every other app, so they live here. Screen help also reads the desktop, which only this app (in
 // your signed-in session) can do: the host may run in the background session at boot, where it would see nothing.
+let rtc = null;
 function setUpHelpers() {
   const log = (t) => console.log("[albatross] " + t);
   screenHelp = require("./screenhelp").create({ BrowserWindow, screen, scriptDir: path.join(FILES, "host"), assetsDir: __dirname, log });
@@ -322,6 +323,8 @@ function setUpHelpers() {
   try { globalShortcut.register("CommandOrControl+Alt+Space", () => sidePanel.toggle()); } catch {}
   health = require("./health").create({ BrowserWindow, screen, ipcMain, assetsDir: __dirname, panel: PANEL, dataDir: DATA, showMain: () => show(), quiet, log });
   health.start();
+  // remote desktop as live video over WebRTC, straight to the other device (desktop/rtc.js); the old pictures stay as the fallback
+  try { rtc = require("./rtc").create({ BrowserWindow, screen, desktopCapturer, ipcMain, assetsDir: __dirname, log }); } catch (e) { log("remote desktop video: " + e.message); }
   makeTray.refresh && makeTray.refresh();
 }
 app.whenReady().then(async () => {
@@ -371,5 +374,5 @@ app.whenReady().then(async () => {
   }
 });
 app.on("window-all-closed", (e) => { /* keep running in the tray */ });
-app.on("before-quit", () => { quitting = true; if (sidePanel) { sidePanel.stop(); sidePanel.release(); } });
+app.on("before-quit", () => { quitting = true; if (rtc) rtc.close(); if (sidePanel) { sidePanel.stop(); sidePanel.release(); } });
 app.on("will-quit", () => { try { globalShortcut.unregisterAll(); } catch {} });

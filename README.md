@@ -146,6 +146,8 @@ The window is Chrome or Edge in kiosk mode (no bars, own profile in `%LOCALAPPDA
 
 ## Remote desktop: the PC's screen and mouse from any device
 
+**Live video (like Chrome Remote Desktop):** with the Windows app open on the PC (also just in the tray), the screen comes as WebRTC video straight to your device: only what changes travels, about 30 frames per second at 1920x1080, and mouse and keyboard go back over the same direct connection. Only the setup goes through the Albatross server (`/pc/rtc`, end-to-end encrypted; `desktop/rtc.js` captures the screen in a hidden window). When the two can't reach each other directly (some mobile networks) or the app isn't open, it falls back to the pictures by itself. The bar shows "Live video · N fps" when it's on.
+
 **Remote desktop** (Home → Your PC, or the Tools menu) shows the PC's screen live on your phone, tablet or another computer, and lets you use its mouse and keyboard. It goes end-to-end encrypted through your code, like everything else, and only the PC's owner can use it (never guests).
 
 - **Mouse:** click, double-click, right-click, drag and scroll. **Touch:** tap to click, long press or two-finger tap to right-click, drag with one finger, scroll with two.

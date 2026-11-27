@@ -2566,7 +2566,8 @@ body.remote-view #typeBadge, body.remote-view #model { display: none !important;
 .rd-stage { position: relative; flex: 1; min-height: 0; border-radius: 14px; background: #000; overflow: hidden; outline: none; touch-action: none; cursor: default; user-select: none; -webkit-user-select: none; }
 .rd-stage:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .rd-stage:fullscreen { border-radius: 0; }
-#rdImg { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+#rdImg, #rdVid { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+#rdImg[hidden], #rdVid[hidden] { display: none; }
 .rd-msg { position: absolute; inset: 0; display: grid; place-items: center; color: #ddd; font-size: 14px; text-align: center; padding: 20px; }
 .rd-type { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; resize: none; }
 

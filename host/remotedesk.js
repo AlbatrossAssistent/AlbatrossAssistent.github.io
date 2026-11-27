@@ -86,4 +86,23 @@ async function stream(j, write, signal, busy, note) {
     }
   } finally { watchers--; if (watchers === 0 && note) note("Remote desktop: nobody is viewing the screen anymore"); }
 }
-module.exports = { handle, stream, vkOf };
+// POST /pc/rtc { sdp, screen, maxW, fps }: remote desktop as live video (WebRTC). The offer goes to the Windows app (desktop/rtc.js,
+// which captures the screen in your session) through its server on 127.0.0.1, and its answer comes back with the list of screens.
+// The screen is named by its place, from the same list as the mouse and keyboard, so clicks land where the picture shows.
+const fs = require("fs"), path = require("path");
+const RTC_INFO = path.join(process.env.LOCALAPPDATA || "", "Albatross", "rtc.json");
+async function rtc(body) {
+  let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
+  let info; try { info = JSON.parse(fs.readFileSync(RTC_INFO, "utf8")); } catch { return [503, { error: "The Albatross app isn't open on the PC (live video needs it)." }]; }
+  let list = []; try { list = await getScreens(true); } catch {}
+  const s = pick(list, j.screen);
+  const r = await fetch("http://127.0.0.1:" + info.port + "/offer", {
+    method: "POST", headers: { "Content-Type": "application/json", "x-token": info.token }, signal: AbortSignal.timeout(25000),
+    body: JSON.stringify({ sdp: String(j.sdp || "").slice(0, 100000), screen: s ? s.i : 0, rect: s ? { x: s.x, y: s.y, w: s.w, h: s.h } : null, maxW: j.maxW, fps: j.fps, bitrate: j.bitrate }),
+  }).catch(() => null);
+  if (!r) return [503, { error: "The Albatross app on the PC doesn't answer (live video needs it open, also in the tray)." }];
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok || !out.sdp) return [502, { error: out.error || "HTTP " + r.status }];
+  return [200, { sdp: out.sdp, screens: list, screen: s ? s.i : 0 }];
+}
+module.exports = { handle, stream, rtc, vkOf };

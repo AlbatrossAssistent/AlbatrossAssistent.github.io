@@ -134,6 +134,7 @@ const pcPower = {
     // the Hub: media and volume keys, the Start menu's programs, opening a website, locking (done on the desktop by desktop.js)
     // remote desktop: the mouse and keyboard from another device (the screen itself comes through /pc/deskstream)
     if (p === "/pc/desk") return remoteDesk.handle(method, body, note);
+    if (method === "POST" && p === "/pc/rtc") return remoteDesk.rtc(body);        // remote desktop as live video: set up through here
     if (p === "/pc/apps" || p === "/pc/media" || p === "/pc/launch" || p === "/pc/openurl" || p === "/pc/lockpc" || p === "/pc/volume" || p === "/pc/bright" || p === "/pc/playing") {
       let j = {}; try { j = JSON.parse(body || "{}"); } catch {}
       if (method === "GET" && p === "/pc/apps") return [200, await pcDesk.call("apps")];

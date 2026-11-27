@@ -1,18 +1,26 @@
 "use strict";
-// Remote desktop: the PC's screen, live, on this device, with its mouse and keyboard. The pictures come from the desktop helper
-// on the PC (host/remotedesk.js → remotedesk.ps1) through /pc/deskstream; clicks, drags, scrolling and keys go to /pc/desk.
+// Remote desktop: the PC's screen, live, on this device, with its mouse and keyboard.
+// First choice, live video (like Chrome Remote Desktop): a WebRTC connection straight to the Albatross app on the PC (desktop/rtc.js),
+// set up once through /pc/rtc; the screen comes as video (only what changes travels) and the mouse and keyboard go back over a data
+// channel of the same connection, no server in between. If that can't connect (the app isn't open on the PC, or the two networks
+// can't reach each other directly), the pictures: JPEGs from the desktop helper (host/remotedesk.js → remotedesk.ps1) through
+// /pc/deskstream, with clicks, drags, scrolling and keys going to /pc/desk.
 // Where you click is sent as a place in the picture (0 to 1), so this page never needs the PC's resolution.
 //   Mouse: click, double-click, right-click, drag, wheel. Touch: tap = click, two-finger tap or long press = right-click,
 //   drag with one finger = drag, two fingers = scroll. Keyboard: everything you press while the screen has the focus; on a phone
 //   the keyboard button opens the on-screen keyboard. Special keys and shortcuts are in the bar.
 // Uses the main page's helpers: $, esc, toast, pcCall, pcStream, connected, remotePC.
 (() => {
-const R = { open: false, ctrl: null, screen: null, screens: [], quality: "auto", frame: null, queue: Promise.resolve(), moveT: 0, lastMove: null, down: null, keysDown: new Set(), frames: 0, fpsT: 0 };
+const R = { open: false, ctrl: null, screen: null, screens: [], quality: "auto", frame: null, queue: Promise.resolve(), moveT: 0, lastMove: null, down: null, keysDown: new Set(), frames: 0, fpsT: 0,
+  pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0 };
 const page = () => $("#remotePage");
 const QUAL = { auto: null, sharp: { max: 1920, q: 70, fps: 8 }, normal: { max: 1280, q: 50, fps: 12 }, fast: { max: 960, q: 40, fps: 15 } };
 const settings = () => QUAL[R.quality] || (remotePC() ? QUAL.normal : QUAL.sharp);
+// live video: much more for the same data (only changes travel), so higher sizes and rates
+const VQUAL = { auto: { maxW: 1920, fps: 30, bitrate: 8e6 }, sharp: { maxW: 2560, fps: 30, bitrate: 14e6 }, normal: { maxW: 1920, fps: 30, bitrate: 8e6 }, fast: { maxW: 1280, fps: 60, bitrate: 6e6 } };
+const live = () => R.dc && R.dc.readyState === "open";
 // inputs go out one after the other, in order; a slow one never lets the next overtake it
-const send = (o) => { R.queue = R.queue.then(() => pcCall("/pc/desk", { screen: R.screen, ...o }).catch((e) => { if (/Unknown|404/.test(e.message)) toast("Update Albatross on the PC for remote desktop"); })); return R.queue; };
+const send = (o) => { if (live()) { try { R.dc.send(JSON.stringify(o)); return Promise.resolve(); } catch {} } R.queue = R.queue.then(() => pcCall("/pc/desk", { screen: R.screen, ...o }).catch((e) => { if (/Unknown|404/.test(e.message)) toast("Update Albatross on the PC for remote desktop"); })); return R.queue; };
 const I = (d) => `<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
 
 function shell() {
@@ -33,6 +41,7 @@ function shell() {
     </div>
     <div class="rd-stage" id="rdStage" tabindex="0" aria-label="The PC's screen: click here, then use mouse and keyboard">
       <img id="rdImg" alt="" draggable="false">
+      <video id="rdVid" autoplay playsinline muted hidden></video>
       <div class="rd-msg" id="rdMsg">Connecting to the PC's screen…</div>
       <textarea id="rdType" class="rd-type" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Type on the PC"></textarea>
     </div>`;
@@ -46,9 +55,76 @@ function shell() {
   wireInput();
 }
 
+// ---------- live video (WebRTC) ----------
+const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }];
+const gathered = (p) => new Promise((ok) => { if (p.iceGatheringState === "complete") return ok(); const t = setTimeout(ok, 3000); p.addEventListener("icegatheringstatechange", () => { if (p.iceGatheringState === "complete") { clearTimeout(t); ok(); } }); });
+const within = (ms, why, pr) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(why)), ms))]);
+function rtcStop() {
+  const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false;
+  try { if (dc && dc.readyState === "open") dc.send(JSON.stringify({ t: "bye" })); } catch {}
+  try { if (pc) pc.close(); } catch {}
+  const v = $("#rdVid"); if (v) { v.srcObject = null; v.hidden = true; }
+  const i = $("#rdImg"); if (i) i.hidden = false;
+}
+async function rtcStart(seq) {
+  if (!window.RTCPeerConnection || Date.now() < R.rtcBadUntil) return false;
+  const q = VQUAL[R.quality] || VQUAL.auto;
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  pc.addTransceiver("video", { direction: "recvonly" });
+  const dc = pc.createDataChannel("input", { ordered: true });
+  const track = new Promise((ok) => (pc.ontrack = (e) => ok(e.streams[0] || new MediaStream([e.track]))));
+  R.pc = pc;
+  try {
+    msg("Connecting to the PC's screen (live video)…");
+    await pc.setLocalDescription(await pc.createOffer());
+    await gathered(pc);
+    const r = await pcCall("/pc/rtc", { sdp: pc.localDescription.sdp, screen: R.screen, maxW: q.maxW, fps: q.fps, bitrate: q.bitrate });
+    if (seq !== R.seq) throw new Error("replaced");
+    if (r.screens && r.screens.length) screensList(r.screens, r.screen);
+    await pc.setRemoteDescription({ type: "answer", sdp: r.sdp });
+    // connected, the data channel open and a first picture within 12 seconds each, or it's the pictures
+    const stream = await within(12000, "no direct connection", track);
+    await within(12000, "no direct connection", new Promise((ok) => { if (dc.readyState === "open") ok(); else dc.onopen = ok; }));
+    const v = $("#rdVid");
+    v.srcObject = stream; v.hidden = false; $("#rdImg").hidden = true;
+    await within(12000, "no picture", new Promise((ok) => { if (v.readyState >= 2) ok(); else v.onloadeddata = ok; }));
+    if (seq !== R.seq) throw new Error("replaced");
+    R.dc = dc; R.video = true; msg("");
+    pc.onconnectionstatechange = () => {
+      if (seq !== R.seq || !R.open) return;
+      if (pc.connectionState === "failed" || pc.connectionState === "closed") { R.rtcBadUntil = Date.now() + 60e3; watch(); }
+    };
+    countFrames(v, seq);
+    return true;
+  } catch (e) {
+    if (pc === R.pc) rtcStop();
+    if (seq === R.seq && e.message !== "replaced") R.rtcBadUntil = Date.now() + 5 * 60e3;     // not again for a while: the pictures
+    return false;
+  }
+}
+// frames per second of the video, for the bar
+function countFrames(v, seq) {
+  R.frames = 0; R.fpsT = Date.now();
+  const next = () => (v.requestVideoFrameCallback ? v.requestVideoFrameCallback(tick) : setTimeout(tick, 33));
+  const tick = () => {
+    if (seq !== R.seq || !R.video) return;
+    R.frame = { w: v.videoWidth, h: v.videoHeight };
+    R.frames++;
+    const now = Date.now();
+    if (now - R.fpsT > 2000) { $("#rdStat").textContent = "Live video · " + Math.round(R.frames * 1000 / (now - R.fpsT)) + " fps · " + v.videoWidth + "×" + v.videoHeight; R.frames = 0; R.fpsT = now; }
+    next();
+  };
+  next();
+}
+
 // ---------- the pictures ----------
 async function watch() {
   if (R.ctrl) R.ctrl.abort();
+  R.ctrl = null;
+  rtcStop();
+  const seq = ++R.seq;
+  if (await rtcStart(seq)) return;
+  if (seq !== R.seq || !R.open) return;
   const ctrl = R.ctrl = new AbortController(), dec = new TextDecoder();
   let fails = 0;
   while (R.open && !ctrl.signal.aborted) {
@@ -94,7 +170,7 @@ function screensList(list, cur) {
 // ---------- mouse, touch and keyboard ----------
 // where in the picture (0..1) a pointer is; null outside the picture (the black bars of a different shape)
 function at(e) {
-  const img = $("#rdImg"), r = img.getBoundingClientRect();
+  const img = R.video ? $("#rdVid") : $("#rdImg"), r = img.getBoundingClientRect();
   if (!R.frame || !r.width) return null;
   // the picture keeps its shape inside the stage (object-fit: contain): work out where it really is
   const k = Math.min(r.width / R.frame.w, r.height / R.frame.h), w = R.frame.w * k, h = R.frame.h * k, x0 = r.left + (r.width - w) / 2, y0 = r.top + (r.height - h) / 2;
@@ -110,6 +186,7 @@ function moveSoon(p) {
 // pointer trailed further and further behind; now only the newest position waits while one is on its way.
 let moveWaiting = false;
 function sendMove(p) {
+  if (live()) { try { R.dc.send(JSON.stringify({ t: "move", ...p })); return; } catch {} }
   R.nextMove = p;
   if (moveWaiting) return;
   moveWaiting = true;
@@ -202,8 +279,9 @@ window.remoteOpen = function () {
 window.remoteClose = function () {
   if (!R.open) return;
   releaseKeys();
-  R.open = false;
+  R.open = false; R.seq++;
   if (R.ctrl) R.ctrl.abort(); R.ctrl = null;
+  rtcStop();
   if (document.fullscreenElement && document.fullscreenElement.id === "rdStage") document.exitFullscreen().catch(() => {});
 };
 })();
