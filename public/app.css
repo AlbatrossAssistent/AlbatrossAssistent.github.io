@@ -2339,7 +2339,7 @@ aside.rail .app-ver { display: none; }
    Chrome sidebar (extension/sidepanel.html loads the app with ?embed=chrome): only the chat, about the page you're on
    ====================================================================== */
 html.embed-chrome #goHome, html.embed-chrome #goJarvis, html.embed-chrome #goNotes, html.embed-chrome #goMail, html.embed-chrome #goHub,
-html.embed-chrome #goMonitor, html.embed-chrome #goRemote, html.embed-chrome #goShortcuts, html.embed-chrome #goList, html.embed-chrome #goHost, html.embed-chrome #goTools, html.embed-chrome #railBtn, html.embed-chrome #typeBadge, html.embed-chrome #loadedPill,
+html.embed-chrome #goMonitor, html.embed-chrome #goRemote, html.embed-chrome #goShortcuts, html.embed-chrome #goAigames, html.embed-chrome #goList, html.embed-chrome #goHost, html.embed-chrome #goTools, html.embed-chrome #railBtn, html.embed-chrome #typeBadge, html.embed-chrome #loadedPill,
 html.embed-chrome #topFold, html.embed-chrome #sideBtn, html.embed-chrome #fullBtn, html.embed-chrome #imgBtn, html.embed-chrome #appVer { display: none !important; }
 html.embed-chrome .embed-empty h1 { font-size: 24px; }
 html.embed-chrome .embed-page { font-weight: 600; color: var(--fg); overflow-wrap: anywhere; max-width: 100%; }
@@ -2398,7 +2398,7 @@ html.effort-max #sky { display: block; }
 /* the sidebar: Home, Tools (a menu with Jarvis, Notes, Mail, Hub, Monitor, List and Your PC), New chat and the chats; the same when it is collapsed to icons */
 #goTools { display: none; }
 html:not(.embed-chrome) #goTools { display: flex; }
-html:not(.embed-chrome) #goJarvis, html:not(.embed-chrome) #goNotes, html:not(.embed-chrome) #goMail, html:not(.embed-chrome) #goHub, html:not(.embed-chrome) #goMonitor, html:not(.embed-chrome) #goRemote, html:not(.embed-chrome) #goShortcuts, html:not(.embed-chrome) #goHost, html:not(.embed-chrome) #goList { display: none !important; }
+html:not(.embed-chrome) #goJarvis, html:not(.embed-chrome) #goNotes, html:not(.embed-chrome) #goMail, html:not(.embed-chrome) #goHub, html:not(.embed-chrome) #goMonitor, html:not(.embed-chrome) #goRemote, html:not(.embed-chrome) #goShortcuts, html:not(.embed-chrome) #goAigames, html:not(.embed-chrome) #goHost, html:not(.embed-chrome) #goList { display: none !important; }
 .tools-pop { position: fixed; z-index: 9500; min-width: 210px; padding: 6px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 18px 48px -12px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 2px; }
 .tools-pop button { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-radius: 10px; background: none; color: var(--fg); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .tools-pop button:hover, .tools-pop button:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -2655,3 +2655,22 @@ body.shortcuts-view #typeBadge, body.shortcuts-view #model { display: none !impo
 .sc-ol pre { max-height: 260px; overflow: auto; font-size: 11.5px; background: color-mix(in srgb, var(--fg) 5%, transparent); padding: 8px 10px; border-radius: 10px; margin: 6px 0 0; }
 .sc-lang { align-self: flex-start; }
 @media (max-width: 600px) { .sc-head h1 { font-size: 24px; } .sc-top .btn.small { padding: 0 10px; } .sc-place small { display: none; } }
+
+/* ---------- AI games (aigames.js): Detect and the Target range ---------- */
+body:not(.aigames-view) #aigamesPage { display: none; }
+body.aigames-view main > :not(#aigamesPage):not(.topbar) { display: none !important; }
+body.aigames-view #typeBadge, body.aigames-view #model { display: none !important; }
+#aigamesPage { flex: 1; min-height: 0; overflow-y: auto; }
+.ag-wrap { max-width: 1000px; margin: 0 auto; padding: 8px 6px 28px; display: flex; flex-direction: column; gap: 12px; }
+.ag-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .ag-head h1 { margin: 0; font-size: 28px; }
+.ag-head .hub-in, .ag-bar .hub-in { padding: 6px 10px; }
+.ag-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ag-min { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--muted); } .ag-min input { width: 110px; }
+#agBody { display: flex; flex-direction: column; gap: 10px; }
+.ag-stage { position: relative; border-radius: 16px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; min-height: 200px; }
+.ag-stage canvas { display: block; width: 100%; height: auto; max-height: calc(100dvh - 260px); object-fit: contain; }
+.ag-range canvas + canvas { position: absolute; inset: 0; height: 100%; cursor: crosshair; touch-action: none; }
+.ag-range { aspect-ratio: 16 / 9; } .ag-range canvas { height: 100%; max-height: none; }
+.ag-msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 12px; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; text-align: center; max-width: 80%; pointer-events: none; }
+.ag-stat { font-size: 13.5px; color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) { .ag-head h1 { font-size: 24px; } }

@@ -1199,7 +1199,7 @@ function finishRun() {
 // Light mode: the shapes behind the page grow in number with what the open chat holds (messages, text, pictures); none extra elsewhere
 function shapesForChat() {
   if (typeof polygonField === "undefined" || !polygonField || !polygonField.setAmount) return;
-  const inChat = !["home", "pc", "jarvis", "notes", "mail", "hub", "monitor", "remote", "browser", "list", "shortcuts"].some((v) => document.body.classList.contains(v + "-view"));
+  const inChat = !["home", "pc", "jarvis", "notes", "mail", "hub", "monitor", "remote", "browser", "list", "shortcuts", "aigames"].some((v) => document.body.classList.contains(v + "-view"));
   const msgs = inChat && current ? current.messages.filter((m) => !m.isEvent) : [];
   const chars = msgs.reduce((n, m) => n + String(m.content || "").length + (m.genImage ? 2500 : 0) + (m.images ? m.images.length * 1500 : 0), 0);
   polygonField.setAmount(msgs.length * .8 + chars / 1200);
@@ -5697,7 +5697,7 @@ $("#goTools").onclick = (e) => {
   e.stopPropagation();
   const old = document.querySelector(".tools-pop"); if (old) { old.remove(); $("#goTools").setAttribute("aria-expanded", "false"); return; }
   const pop = document.createElement("div"); pop.className = "tools-pop"; pop.setAttribute("role", "menu");
-  for (const id of ["goHost", "goJarvis", "goNotes", "goMail", "goHub", "goShortcuts", "goMonitor", "goRemote", "goList"]) {
+  for (const id of ["goHost", "goJarvis", "goNotes", "goMail", "goHub", "goShortcuts", "goMonitor", "goRemote", "goList", "goAigames"]) {
     const src = document.getElementById(id); if (!src || getComputedStyle(src).visibility === "hidden" || (guestMode && /Host|Jarvis|Notes|Mail|Hub|Shortcuts|Monitor|Remote|List/.test(id))) continue;
     const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
     b.innerHTML = (src.querySelector("svg") || {}).outerHTML || ""; b.append(src.textContent.trim());
@@ -5770,6 +5770,7 @@ function setView(v, opt) {
   document.body.classList.toggle("monitor-view", v === "monitor");
   document.body.classList.toggle("remote-view", v === "remote");
   document.body.classList.toggle("shortcuts-view", v === "shortcuts");
+  document.body.classList.toggle("aigames-view", v === "aigames");
   $("#goHome").classList.toggle("on", v === "home");
   $("#goJarvis").classList.toggle("on", v === "jarvis");
   $("#goNotes").classList.toggle("on", v === "notes");
@@ -5778,11 +5779,13 @@ function setView(v, opt) {
   $("#goMonitor").classList.toggle("on", v === "monitor");
   $("#goRemote").classList.toggle("on", v === "remote");
   $("#goShortcuts").classList.toggle("on", v === "shortcuts");
-  $("#goTools").classList.toggle("on", ["jarvis", "notes", "mail", "hub", "monitor", "remote", "list", "pc", "shortcuts"].includes(v));
+  $("#goAigames").classList.toggle("on", v === "aigames");
+  $("#goTools").classList.toggle("on", ["jarvis", "notes", "mail", "hub", "monitor", "remote", "list", "pc", "shortcuts", "aigames"].includes(v));
   if (v === "hub") window.hubOpen && window.hubOpen(); else window.hubClose && window.hubClose();
   if (v === "monitor") window.monitorOpen && window.monitorOpen(); else window.monitorClose && window.monitorClose();
   if (v === "remote") window.remoteOpen && window.remoteOpen(); else window.remoteClose && window.remoteClose();
   if (v === "shortcuts") window.shortcutsOpen && window.shortcutsOpen(); else window.shortcutsClose && window.shortcutsClose();
+  if (v === "aigames") window.aigamesOpen && window.aigamesOpen(opt && opt.tab); else window.aigamesClose && window.aigamesClose();
   if (v === "mail") window.mailOpen && window.mailOpen(opt);
   if (v === "notes") window.notesOpen && window.notesOpen();
   if (v === "home") renderHome();
@@ -5826,6 +5829,8 @@ function renderHome() {
     code: svg('<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>'),
     hub: svg('<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>'),
     shortcuts: svg('<path d="M13 2L4.5 13.5H12L11 22l8.5-11.5H12z"/>'),
+    detect: svg('<path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="9" r="2.5"/><path d="M7.5 17a4.5 4.5 0 0 1 9 0"/>'),
+    range: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>'),
     monitor: svg('<rect x="3" y="4" width="18" height="12" rx="2.2"/><path d="M8 20h8M12 16v4M10 8.5v4l3.5-2z"/>'),
     remote: svg('<rect x="2" y="3" width="20" height="14" rx="2.2"/><path d="M8 21h8M12 17v4"/><path d="M9.5 8.5 13 12M13 12v-3M13 12h-3"/>'),
     mail: svg('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>'),
@@ -5859,6 +5864,10 @@ function renderHome() {
       ["beam", I.beam, "Beam", "send files", "owner"],
       ["pcstatus", I.pc, "Status", "load, graphics card", "owner"],
       ["power", I.power, "Power", "sleep, shut down", "owner"],
+    ]],
+    ["AI games", [
+      ["detect", I.detect, "Detect", "find people and things in the camera, screen or a picture"],
+      ["range", I.range, "Target range", "a game where the AI aims at targets"],
     ]],
     ["Setup", [
       ["connect", I.connect, "Connect", "code"],
@@ -5911,6 +5920,7 @@ function renderHome() {
     else if (g === "mail") setView("mail");
     else if (g === "hub") setView("hub");
     else if (g === "shortcuts") setView("shortcuts");
+    else if (g === "detect" || g === "range") setView("aigames", { tab: g });
     else if (g === "monitor") setView("monitor");
     else if (g === "remote") setView("remote");
     else if (g === "browser") setView("browser");
@@ -7415,6 +7425,7 @@ $("#goNotes").onclick = () => { setView("notes"); $("#sidebar").classList.remove
 $("#goMail").onclick = () => { setView("mail"); $("#sidebar").classList.remove("open"); };
 $("#goHub").onclick = () => { setView("hub"); $("#sidebar").classList.remove("open"); };
 $("#goShortcuts").onclick = () => { setView("shortcuts"); $("#sidebar").classList.remove("open"); };
+$("#goAigames").onclick = () => { setView("aigames"); $("#sidebar").classList.remove("open"); };
 $("#goRemote").onclick = () => { setView("remote"); $("#sidebar").classList.remove("open"); };
 $("#goMonitor").onclick = () => { setView("monitor"); $("#sidebar").classList.remove("open"); };
 $("#loadedPill").onclick = () => { refreshLoaded(); openSettings("models"); };
@@ -7470,8 +7481,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.8";
+const APP_VERSION = "2026-11-27.9";
 const WHATS_NEW = [
+  ["2026-11-27.9", ["AI games: Detect finds people and things in the camera, a screen, a picture or a video","AI games: Target range, a game where the AI aims at cardboard people, or you play against it"]],
   ["2026-11-27.8", ["Remote desktop: one pointer: with a mouse or trackpad (also an iPad's) the PC hides its own pointer, also behind the cover","Remote desktop: HDR is switched off on the PC during a session (no more blooming), and back on afterwards","Remote desktop: the cover is a screen saver with the time, drifting slowly, Ctrl+Alt+Shift+U closes it at the PC"]],
   ["2026-11-27.7", ["Shortcuts: your PC does things by itself at a time, on a date, on or not on holidays, when you arrive somewhere or leave, from Alexa, or from a link","Remote desktop: 120 frames a second when your PC's monitor and your device's screen can show it (back to 60 by itself if your device can't keep up)","Remote desktop: the cover screen on the PC is plain white on black"]],
   ["2026-11-27.6", ["Remote desktop: Hide the PC's monitor. People at the PC see a cover screen while you still see and use everything."]],
