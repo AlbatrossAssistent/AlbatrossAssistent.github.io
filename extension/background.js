@@ -352,4 +352,5 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
 });
 chrome.tabs.onRemoved.addListener((id) => { if (id === detTab) detStop(); });
-chrome.tabs.onUpdated.addListener((id, info) => { if (id === detTab && info.status === "loading") detStop(); });   // a new page: start again from the menu
+// a new page or a reload in that tab: it keeps looking (the tab's picture keeps coming), the boxes come back on the new page
+chrome.tabs.onUpdated.addListener((id, info) => { if (id === detTab && info.status === "complete") chrome.scripting.executeScript({ target: { tabId: id }, files: ["detect-overlay.js"] }).catch(() => {}); });
