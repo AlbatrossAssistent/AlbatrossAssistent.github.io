@@ -131,9 +131,65 @@ public class AlbDesk {
       Thread.Sleep(4);
     }
   }
+  // ---------- the PC's own mouse pointer: hidden while someone uses the PC remotely with a mouse, or behind the cover ----------
+  // Every standard Windows pointer becomes an empty one (so it's neither on the monitor nor in the video, and the other device shows
+  // its own pointer, without delay); showing it again reloads the pointers chosen in Windows. Never lasting: signing out or
+  // restarting brings them back too.
+  [DllImport("user32.dll")] static extern IntPtr CreateCursor(IntPtr inst, int x, int y, int w, int h, byte[] and, byte[] xor);
+  [DllImport("user32.dll")] static extern bool SetSystemCursor(IntPtr cur, uint id);
+  [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint p, IntPtr v, uint ini);
+  static readonly uint[] POINTERS = { 32512, 32513, 32514, 32515, 32516, 32642, 32643, 32644, 32645, 32646, 32648, 32649, 32650, 32651, 32671, 32672 };
+  public static void Pointer(bool hide) {
+    if (!hide) { SystemParametersInfo(0x57, 0, IntPtr.Zero, 0); return; }      // SPI_SETCURSORS
+    byte[] and = new byte[128], xor = new byte[128];
+    for (int i = 0; i < 128; i++) and[i] = 0xFF;                               // 32x32, every pixel see-through
+    foreach (uint id in POINTERS) SetSystemCursor(CreateCursor(IntPtr.Zero, 0, 0, 32, 32, and, xor), id);
+  }
+  // ---------- HDR: off while the screen goes out as video (an HDR desktop comes out washed out and blooming in the video) ----------
+  // Every monitor that has HDR on gets it switched off (Windows' own setting, as in Settings → Display), and back on afterwards.
+  // Which ones is also kept in a file, so a copy of this that was ended by force still gets them back the next time it starts.
+  [DllImport("user32.dll")] static extern int GetDisplayConfigBufferSizes(uint flags, out uint np, out uint nm);
+  [DllImport("user32.dll")] static extern int QueryDisplayConfig(uint flags, ref uint np, IntPtr paths, ref uint nm, IntPtr modes, IntPtr topo);
+  [DllImport("user32.dll")] static extern int DisplayConfigGetDeviceInfo(IntPtr pkt);
+  [DllImport("user32.dll")] static extern int DisplayConfigSetDeviceInfo(IntPtr pkt);
+  static readonly string HdrFile = System.IO.Path.Combine(Environment.GetEnvironmentVariable("LOCALAPPDATA") ?? "", "Albatross", "hdr-off.txt");
+  static System.Collections.Generic.List<int[]> hdrOff = new System.Collections.Generic.List<int[]>();
+  static void Head(IntPtr g, int type, int size, int[] t) { Marshal.WriteInt32(g, 0, type); Marshal.WriteInt32(g, 4, size); Marshal.WriteInt32(g, 8, t[0]); Marshal.WriteInt32(g, 12, t[1]); Marshal.WriteInt32(g, 16, t[2]); }
+  static bool SetHdr(int[] t, bool on) {
+    IntPtr g = Marshal.AllocHGlobal(24);
+    try { Head(g, 10, 24, t); Marshal.WriteInt32(g, 20, on ? 1 : 0); return DisplayConfigSetDeviceInfo(g) == 0; } finally { Marshal.FreeHGlobal(g); }   // SET_ADVANCED_COLOR_STATE
+  }
+  // off: switches HDR off where it's on and says how many; on: switches those back on
+  public static int Hdr(bool off) {
+    if (!off) {
+      if (hdrOff.Count == 0) try { foreach (var l in System.IO.File.ReadAllLines(HdrFile)) { var p = l.Split(','); if (p.Length == 3) hdrOff.Add(new int[] { int.Parse(p[0]), int.Parse(p[1]), int.Parse(p[2]) }); } } catch { }
+      int back = 0; foreach (var t in hdrOff) if (SetHdr(t, true)) back++;
+      hdrOff.Clear(); try { System.IO.File.Delete(HdrFile); } catch { }
+      return back;
+    }
+    uint np, nm; if (GetDisplayConfigBufferSizes(2, out np, out nm) != 0) return 0;          // QDC_ONLY_ACTIVE_PATHS
+    IntPtr paths = Marshal.AllocHGlobal((int)(72 * np)), modes = Marshal.AllocHGlobal((int)(64 * nm)), g = Marshal.AllocHGlobal(32);
+    int n = 0;
+    try {
+      if (QueryDisplayConfig(2, ref np, paths, ref nm, modes, IntPtr.Zero) != 0) return 0;
+      for (int i = 0; i < np; i++) {
+        int o = i * 72 + 20, lo = Marshal.ReadInt32(paths, o), hi = Marshal.ReadInt32(paths, o + 4), id = Marshal.ReadInt32(paths, o + 8);   // the path's target
+        int[] t = new int[] { lo, hi, id };
+        if (hdrOff.Exists(x => x[0] == lo && x[1] == hi && x[2] == id)) continue;
+        Head(g, 9, 32, t); for (int k = 20; k < 32; k += 4) Marshal.WriteInt32(g, k, 0);                                // GET_ADVANCED_COLOR_INFO
+        if (DisplayConfigGetDeviceInfo(g) != 0 || (Marshal.ReadInt32(g, 20) & 2) == 0) continue;                         // advancedColorEnabled
+        if (SetHdr(t, false)) { hdrOff.Add(t); n++; }
+      }
+      if (hdrOff.Count > 0) try { System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(HdrFile)); System.IO.File.WriteAllLines(HdrFile, hdrOff.ConvertAll(x => x[0] + "," + x[1] + "," + x[2]).ToArray()); } catch { }
+    } finally { Marshal.FreeHGlobal(paths); Marshal.FreeHGlobal(modes); Marshal.FreeHGlobal(g); }
+    return n;
+  }
 }
 '@
 [void][AlbDesk]::SetProcessDPIAware()
+# a pointer left hidden by a copy of this that was ended by force comes back now
+[AlbDesk]::Pointer($false)
+[void][AlbDesk]::Hdr($false)
 [Console]::Out.WriteLine("@@ready")
 function Num($v, $d = 0) { if ($null -eq $v) { return $d }; return [int]$v }
 while ($true) {
@@ -160,8 +216,13 @@ while ($true) {
       "key" { [AlbDesk]::Key([uint16](Num $a.vk), [bool]$a.down) }
       "combo" { [AlbDesk]::Combo([uint16[]]@($a.vks)) }
       "text" { [AlbDesk]::Text([string]$a.text) }
+      "pointer" { [AlbDesk]::Pointer([bool]$a.hide) }
+      "hdr" { $out = '{"changed":' + [AlbDesk]::Hdr([bool]$a.off) + '}' }
       default { throw "Unknown remote desktop command" }
     }
     [Console]::Out.WriteLine("@@" + $id + " " + $out)
   } catch { [Console]::Out.WriteLine("@@" + $id + " " + (ConvertTo-Json -Compress @{ error = ($_.Exception.Message -replace "[\r\n]+", " ") })) }
 }
+# the app closed this (or went away): the pointer comes back
+[AlbDesk]::Pointer($false)
+[void][AlbDesk]::Hdr($false)

@@ -15,6 +15,9 @@
 // Fingers from a phone or tablet become Windows touch input there (as Chrome Remote Desktop does): Windows hides the mouse pointer
 // while you touch, so it isn't in the video.
 // "Hide the PC's monitor": the PC's monitors show a cover screen (cover.html) while the video still shows the desktop under it.
+// During a session HDR is switched off (an HDR desktop blooms and looks washed out in the video), and the PC's own mouse pointer is
+// hidden while the other device uses a mouse or the cover is on (the other device shows its own pointer); both come back 5 seconds
+// after the session (a new session right after, for another quality or screen, doesn't flicker them).
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const { spawn } = require("child_process");
 const { session } = require("electron");
@@ -30,7 +33,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
   ses.setPermissionCheckHandler((_wc, perm) => perm === "media");
 
   function stop(why) {
-    coverLater();
+    coverLater(); restoreLater();
     if (win && !win.isDestroyed()) win.destroy();
     if (cur) log("remote desktop video ended" + (why ? " (" + why + ")" : ""));
     win = null; cur = null;
@@ -55,8 +58,9 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     if (!src) throw new Error("No screen to show");
     const id = Date.now();
     cur = { screen: o.screen, id, rect: o.rect && o.rect.w > 0 ? o.rect : null };
-    // the mouse and keyboard's PowerShell starts now, not at the first click (starting it takes a second or two)
-    if (psStart()) psKeep();
+    // the mouse and keyboard's PowerShell starts now, not at the first click (starting it takes a second or two); HDR goes off before
+    // the capture starts, so the video starts with the right colours
+    if (psStart()) { psKeep(); clearTimeout(restoreT); restoreT = 0; await psAsk("hdr", { off: true }, 6000).then((r) => { if (r && r.changed) { hdrOff = true; log("remote desktop: HDR off on " + r.changed + " monitor(s)"); } }, () => {}); }
     win = new BrowserWindow({ show: false, width: 320, height: 240, webPreferences: { session: ses, preload: path.join(assetsDir, "rtc-preload.js"), contextIsolation: true, sandbox: false, backgroundThrottling: false } });
     win.on("closed", () => { if (cur && cur.id === id) { win = null; cur = null; } });
     await win.loadFile(path.join(assetsDir, "rtc.html"));
@@ -80,6 +84,14 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
   // after changing the quality or the screen doesn't uncover it in between), or with Ctrl+Alt+Shift+U on the PC.
   // Windows forgets the exclusion when a window is first shown (measured: set before showing, the window was in the capture), so it's
   // set after showing, and again every second along with putting the cover back on top of windows that came up since.
+  let hdrOff = false, ptrHidden = false, restoreT = 0;
+  function pointer(hide) { if (hide === ptrHidden || !psStart()) return; ptrHidden = hide; psWrite("pointer", { hide }); }
+  function restoreNow() {
+    clearTimeout(restoreT); restoreT = 0;
+    if (ptrHidden && !covers.length) pointer(false);
+    if (hdrOff && ps) { hdrOff = false; psWrite("hdr", { off: false }); log("remote desktop: HDR back on"); }
+  }
+  function restoreLater() { clearTimeout(restoreT); restoreT = setTimeout(restoreNow, 5000); }
   let covers = [], coverOff = 0, coverTick = 0;
   const COVER_KEY = "CommandOrControl+Alt+Shift+U";
   function coverOn() {
@@ -98,7 +110,9 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
       covers.push(w);
     }
     coverTick = setInterval(() => covers.forEach((w) => { if (!w.isDestroyed()) { w.setContentProtection(true); w.moveTop(); } }), 1000);
-    try { if (globalShortcut) globalShortcut.register(COVER_KEY, coverDrop); } catch {}
+    // the keys at the PC: the cover goes, and the pointer comes back for whoever sits there (even while the other device uses a mouse)
+    try { if (globalShortcut) globalShortcut.register(COVER_KEY, () => { if (cur) cur.mouse = false; coverDrop(); pointer(false); }); } catch {}
+    pointer(true);         // the pointer would show on top of the cover
     log("remote desktop: the PC's monitors show the cover");
   }
   function coverDrop() {
@@ -107,6 +121,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     for (const w of covers) try { if (!w.isDestroyed()) w.destroy(); } catch {}
     covers = [];
     try { if (globalShortcut) globalShortcut.unregister(COVER_KEY); } catch {}
+    if (!cur || !cur.mouse) pointer(false);
     log("remote desktop: the cover is gone");
   }
   function coverLater() { if (covers.length && !coverOff) coverOff = setTimeout(coverDrop, 5000); }
@@ -126,7 +141,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     ps.stdout.setEncoding("utf8");
     ps.stdout.on("data", (d) => {
       psBuf += d; let k;
-      while ((k = psBuf.indexOf("\n")) >= 0) { const line = psBuf.slice(0, k); psBuf = psBuf.slice(k + 1); if (line.startsWith("@@") && !line.startsWith("@@ready")) { if (line.includes('"via":"mouse"')) noTouch(); pending = Math.max(0, pending - 1); if (moveHeld && pending < 2) { const m = moveHeld; moveHeld = null; psWrite("move", m); } if (touchHeld && pending < 2) { const t = touchHeld; touchHeld = null; psWrite("touch", { pts: t }); } } }
+      while ((k = psBuf.indexOf("\n")) >= 0) { const line = psBuf.slice(0, k); psBuf = psBuf.slice(k + 1); if (line.startsWith("@@") && !line.startsWith("@@ready")) { const m = /^@@(\d+) (.*)$/.exec(line), w = m && asks.get(m[1]); if (w) { asks.delete(m[1]); try { w(JSON.parse(m[2])); } catch { w(null); } } if (line.includes('"via":"mouse"')) noTouch(); pending = Math.max(0, pending - 1); if (moveHeld && pending < 2) { const m = moveHeld; moveHeld = null; psWrite("move", m); } if (touchHeld && pending < 2) { const t = touchHeld; touchHeld = null; psWrite("touch", { pts: t }); } } }
     });
     ps.on("exit", () => { ps = null; pending = 0; });
     ps.on("error", () => { ps = null; });
@@ -136,7 +151,13 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     if (!psStart()) return false;
     psKeep();
     pending++; ps.stdin.write(JSON.stringify({ id: ++seqNo, cmd, arg }) + "\n");
-    return true;
+    return seqNo;
+  }
+  // a command whose answer is needed (HDR off before the capture starts)
+  const asks = new Map();
+  function psAsk(cmd, arg, ms) {
+    const id = psWrite(cmd, arg); if (!id) return Promise.reject(new Error("no PowerShell"));
+    return new Promise((ok, no) => { const t = setTimeout(() => { asks.delete(String(id)); no(new Error("timeout")); }, ms); asks.set(String(id), (r) => { clearTimeout(t); ok(r); }); });
   }
   // Windows didn't take a finger as touch input: the other device goes back to imitating the mouse with touch (tap, long press,
   // two fingers to scroll), which it can do better than the first finger as the mouse here
@@ -146,7 +167,9 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     win.webContents.executeJavaScript('say({ t: "hello", touch: false })').catch(() => {});
   }
   // unused for 5 minutes: closed
-  function psKeep() { clearTimeout(psIdle); psIdle = setTimeout(() => { if (ps) try { ps.kill(); } catch {} }, 5 * 60e3); }
+  function psKeep() { clearTimeout(psIdle); psIdle = setTimeout(() => (cur || covers.length || hdrOff || ptrHidden ? psKeep() : psEnd()), 5 * 60e3); }
+  // ended by closing its input: then it shows the pointer and switches HDR back on before it goes (killed, it couldn't)
+  function psEnd() { const p = ps; if (!p) return; try { p.stdin.end(); } catch {} setTimeout(() => { try { if (p.exitCode === null) p.kill(); } catch {} }, 4000); }
   // a place in the picture (0..1) -> the screen's pixel
   const px = (o) => { const r = cur.rect, fx = Math.max(0, Math.min(1, Number(o.x) || 0)), fy = Math.max(0, Math.min(1, Number(o.y) || 0)); return { x: Math.round(r.x + fx * (r.w - 1)), y: Math.round(r.y + fy * (r.h - 1)) }; };
   function direct(o) {
@@ -184,6 +207,7 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
     if (!o || typeof o.t !== "string") return;
     if (o.t === "bye") return stop("closed on the other device");
     if (o.t === "cover") return o.on ? coverOn() : coverDrop();
+    if (o.t === "pointer") { cur.mouse = !!o.hide; return pointer(!!o.hide || covers.length > 0); }
     if (direct(o)) return;
     if (o.t === "touch") {      // no way to touch directly: the finger that changed (or the first) as the mouse, through the host
       const pts = Array.isArray(o.pts) ? o.pts : [], f = pts.find((c) => c && c.s !== "move") || pts[0];
@@ -223,6 +247,6 @@ function create({ BrowserWindow, screen, desktopCapturer, ipcMain, globalShortcu
   };
   server.listen(0, "127.0.0.1", writeInfo);
   const keep = setInterval(writeInfo, 10000); keep.unref && keep.unref();
-  return { stop, close() { clearInterval(keep); stop(); coverDrop(); if (ps) try { ps.kill(); } catch {} try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
+  return { stop, close() { clearInterval(keep); stop(); coverDrop(); restoreNow(); psEnd(); try { server.close(); } catch {} try { const i = JSON.parse(fs.readFileSync(INFO, "utf8")); if (i.token === token) fs.unlinkSync(INFO); } catch {} } };
 }
 module.exports = { create };

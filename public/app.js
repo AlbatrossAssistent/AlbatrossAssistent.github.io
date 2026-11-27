@@ -7470,8 +7470,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.7";
+const APP_VERSION = "2026-11-27.8";
 const WHATS_NEW = [
+  ["2026-11-27.8", ["Remote desktop: one pointer: with a mouse or trackpad (also an iPad's) the PC hides its own pointer, also behind the cover","Remote desktop: HDR is switched off on the PC during a session (no more blooming), and back on afterwards","Remote desktop: the cover is a screen saver with the time, drifting slowly, Ctrl+Alt+Shift+U closes it at the PC"]],
   ["2026-11-27.7", ["Shortcuts: your PC does things by itself at a time, on a date, on or not on holidays, when you arrive somewhere or leave, from Alexa, or from a link","Remote desktop: 120 frames a second when your PC's monitor and your device's screen can show it (back to 60 by itself if your device can't keep up)","Remote desktop: the cover screen on the PC is plain white on black"]],
   ["2026-11-27.6", ["Remote desktop: Hide the PC's monitor. People at the PC see a cover screen while you still see and use everything."]],
   ["2026-11-27.5", ["Remote desktop is faster: 60 frames a second in your own network, each frame shown the moment it arrives, mouse moves sent at once, and the delay in the bar. On a phone, your fingers are real touch on the PC and the mouse pointer is gone from the picture."]],

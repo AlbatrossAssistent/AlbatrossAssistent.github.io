@@ -27,7 +27,7 @@ async function start(o) {
     const ch = chan = e.channel;
     // tell the other device what this app can do: fingers as touch input, covering the PC's monitors, and how many frames a second
     // the screen gives (120 on a 120 Hz monitor if it asked for that); an older app says nothing, and touch imitates the mouse
-    const hello = () => { try { ch.send(JSON.stringify({ t: "hello", touch: true, cover: true, fps: o.fps, hz: o.hz })); } catch {} };
+    const hello = () => { try { ch.send(JSON.stringify({ t: "hello", touch: true, cover: true, pointer: true, fps: o.fps, hz: o.hz })); } catch {} };
     if (ch.readyState === "open") hello(); else ch.addEventListener("open", hello);
     ch.onmessage = (m) => {
       const s = String(m.data);

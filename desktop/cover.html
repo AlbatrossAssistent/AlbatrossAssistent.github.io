@@ -2,23 +2,46 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>Albatross: in use remotely</title>
 <!-- What the PC's monitors show while someone uses it through remote desktop with "Hide the PC's monitor" on (desktop/rtc.js).
-     The window is left out of screen capture, so the person using it remotely sees the desktop under it. -->
+     The window is left out of screen capture, so the person using it remotely sees the desktop under it.
+     A screen saver, plain white on black: the face, the words and the time drift slowly across the screen and bounce off its edges,
+     so nothing stands still long enough to burn into a screen. Ctrl+Alt+Shift+U on the PC closes it. -->
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; user-select: none; }
-  /* plain white on black */
-  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #fff; background: #000;
-    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
-  svg { width: 92px; height: 92px; color: #fff; }
-  h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: .2px; }
-  p { margin: 0; font-size: 15px; color: #fff; }
+  html, body { margin: 0; height: 100%; overflow: hidden; user-select: none; cursor: none; background: #000; }
+  body { color: #fff; font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+  #box { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; will-change: transform; }
+  svg { width: 84px; height: 84px; color: #fff; }
+  #time { font-size: 64px; font-weight: 300; letter-spacing: 1px; font-variant-numeric: tabular-nums; line-height: 1; }
+  h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: .2px; }
+  p { margin: 0; font-size: 14px; color: #fff; }
 </style>
 </head>
 <body>
-<svg viewBox="0 0 28 28" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>
-<h1>This PC is in use remotely</h1>
-<p>Albatross remote desktop</p>
+<div id="box">
+  <svg viewBox="0 0 28 28" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M14 2a12 12 0 1 0 0 24a12 12 0 1 0 0-24ZM9.91 10.47H10.85A1.88 1.88 0 0 1 12.73 12.35V15.12A1.88 1.88 0 0 1 10.85 17H9.91A1.88 1.88 0 0 1 8.02 15.12V12.35A1.88 1.88 0 0 1 9.91 10.47ZM17.15 10.47H18.09A1.88 1.88 0 0 1 19.98 12.35V15.12A1.88 1.88 0 0 1 18.09 17H17.15A1.88 1.88 0 0 1 15.27 15.12V12.35A1.88 1.88 0 0 1 17.15 10.47Z"/></svg>
+  <div id="time"></div>
+  <h1>This PC is in use remotely</h1>
+  <p>Albatross remote desktop · Ctrl+Alt+Shift+U closes this</p>
+</div>
+<script>
+// the time, and the drift: about 25 pixels a second, bouncing off the edges, starting from the middle
+const box = document.getElementById("box"), time = document.getElementById("time");
+const tick = () => { time.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
+tick(); setInterval(tick, 5000);
+let x = 0, y = 0, dx = 25, dy = 18, last = 0, placed = false;
+function frame(t) {
+  const W = innerWidth - box.offsetWidth, H = innerHeight - box.offsetHeight;
+  if (!placed && W > 0) { x = W / 2; y = H / 2; placed = true; }
+  const s = last ? Math.min(0.1, (t - last) / 1000) : 0; last = t;
+  x += dx * s; y += dy * s;
+  if (x < 0 || x > W) { dx = -dx; x = Math.max(0, Math.min(W, x)); }
+  if (y < 0 || y > H) { dy = -dy; y = Math.max(0, Math.min(H, y)); }
+  box.style.transform = `translate(${x}px, ${y}px)`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
 </body>
 </html>

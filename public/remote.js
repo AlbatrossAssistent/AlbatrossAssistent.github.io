@@ -15,7 +15,7 @@
 (() => {
 const R = { open: false, ctrl: null, screen: null, screens: [], quality: "auto", frame: null, queue: Promise.resolve(), moveT: 0, lastMove: null, down: null, keysDown: new Set(), frames: 0, fpsT: 0,
   pc: null, dc: null, video: false, rtcBadUntil: 0, seq: 0, touch: false, tuned: false, showSum: 0, showN: 0, pcStat: null, canCover: false, coverWant: false, dcHello: null,
-  hz: 0, hzP: null, fpsWant: 60, pcFps: 0, hiWin: null, hiBad: 0, hiOff: false };
+  canPointer: false, ptrSent: false, hz: 0, hzP: null, fpsWant: 60, pcFps: 0, hiWin: null, hiBad: 0, hiOff: false };
 const page = () => $("#remotePage");
 const QUAL = { auto: null, sharp: { max: 1920, q: 70, fps: 8 }, normal: { max: 1280, q: 50, fps: 12 }, fast: { max: 960, q: 40, fps: 15 } };
 const settings = () => QUAL[R.quality] || (remotePC() ? QUAL.normal : QUAL.sharp);
@@ -115,7 +115,7 @@ const within = (ms, why, pr) => Promise.race([pr, new Promise((_, no) => setTime
 function rtcStop() {
   fingersLift();
   const { pc, dc } = R; R.pc = null; R.dc = null; R.video = false; R.lastBytes = null; R.touch = false; R.tuned = false; R.pcStat = null; R.canCover = false; R.dcHello = null; coverBtn();
-  R.pcFps = 0; R.hiWin = null; R.hiBad = 0; R.hiOff = false;
+  R.canPointer = false; R.ptrSent = false; R.pcFps = 0; R.hiWin = null; R.hiBad = 0; R.hiOff = false;
   try { if (dc && dc.readyState === "open") dc.send(JSON.stringify({ t: "bye" })); } catch {}
   try { if (pc) pc.close(); } catch {}
   const v = $("#rdVid"); if (v) { v.srcObject = null; v.hidden = true; }
@@ -137,7 +137,8 @@ async function rtcStart(seq) {
       const o = JSON.parse(m.data); if (pc !== R.pc) return;
       if (o.t === "hello") {
         R.touch = !!o.touch; R.canCover = !!o.cover; R.dcHello = dc; coverBtn();
-        R.pcFps = Number(o.fps) || 0;          // the most frames a second the PC captures (an older app doesn't say: 60 at most)
+        R.pcFps = Number(o.fps) || 0;
+        R.canPointer = !!o.pointer;              // it can hide its own mouse pointer while you use a mouse here (mouseHere)          // the most frames a second the PC captures (an older app doesn't say: 60 at most)
         if (R.canCover && R.coverWant) dc.send(JSON.stringify({ t: "cover", on: true }));
       }
       if (o.t === "pc") R.pcStat = o;
@@ -376,12 +377,19 @@ function fingerUp(e) {
 }
 function fingersLift() { for (const [k, f] of [...fingers]) { fingers.delete(k); fingerFrame({ ...f, s: "up" }); } }
 
+// a mouse or trackpad here (an iPad's, a laptop's): the PC hides its own pointer (on its monitor and in the video), so there's one
+// pointer, this device's own, which moves without any delay
+function mouseHere(e) {
+  if (e.pointerType !== "mouse" || R.ptrSent || !R.canPointer || !live()) return;
+  R.ptrSent = true; try { R.dc.send(JSON.stringify({ t: "pointer", hide: true })); } catch {}
+}
 function wireInput() {
   const st = $("#rdStage");
   const BTN = ["left", "middle", "right"];
   let touch = null;
   st.addEventListener("contextmenu", (e) => e.preventDefault());
   st.addEventListener("pointerdown", (e) => {
+    mouseHere(e);
     const p = at(e); if (!p) return;
     st.focus({ preventScroll: true });
     if (e.pointerType === "touch" && fingerMode()) { e.preventDefault(); fingerDown(e, p); return; }
@@ -402,7 +410,7 @@ function wireInput() {
       if (touch.dragging) moveSoon(p);
       return;
     }
-    if (e.pointerType !== "touch") moveSoon(p);
+    if (e.pointerType !== "touch") { mouseHere(e); moveSoon(p); }
   });
   const up = (e) => {
     if (e.pointerType === "touch" && fingerUp(e)) return;
