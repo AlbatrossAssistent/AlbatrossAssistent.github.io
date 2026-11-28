@@ -49,9 +49,9 @@ function detectPage() {
       <label class="ag-min">Sure at least <input type="range" id="agMin" min="20" max="90" step="5" value="50"> <span id="agMinV">50%</span></label>
       <button class="btn small ghost" type="button" data-src="stop">Stop</button>
     </div>
-    <div class="ag-stage"><canvas id="agCv" width="960" height="540"></canvas><div class="ag-msg" id="agMsg">Pick the camera, a screen or window, or a picture or video.</div></div>
+    <div class="ag-stage ag-det"><video id="agVid" playsinline muted autoplay hidden></video><img id="agImg" alt="" hidden><canvas id="agCv" width="960" height="540"></canvas><div class="ag-msg" id="agMsg">Pick the camera, a screen or window, or a picture or video.</div></div>
     <div class="ag-stat" id="agStat"></div>
-    <video id="agVid" class="ag-src" playsinline muted autoplay></video><img id="agImg" class="ag-src" alt="">`;
+`;
   const body = $("#agBody");
   body.querySelectorAll("[data-src]").forEach((b) => (b.onclick = () => (b.dataset.src === "file" ? $("#agFile").click() : b.dataset.src === "stop" ? detectStop("Stopped.") : detectStart(b.dataset.src))));
   $("#agFile").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) detectStart("file", f); };
@@ -61,7 +61,8 @@ function msg(t) { const m = $("#agMsg"); if (m) { m.hidden = !t; m.textContent =
 function detectStop(text) {
   D.token++; cancelAnimationFrame(D.raf); D.preds = [];
   if (D.stream) D.stream.getTracks().forEach((t) => t.stop()); D.stream = null;
-  const v = $("#agVid"); if (v) { v.pause(); v.srcObject = null; v.removeAttribute("src"); v.load(); }
+  const v = $("#agVid"); if (v) { v.pause(); v.srcObject = null; v.removeAttribute("src"); v.load(); v.hidden = true; }
+  const im = $("#agImg"); if (im) im.hidden = true;
   if (text != null) msg(text);
   const st = $("#agStat"); if (st) st.textContent = "";
 }
@@ -91,11 +92,14 @@ async function runDetect(kind, media) {
   if (token !== D.token) return;
   msg("");
   const cv = $("#agCv"), ctx = cv.getContext("2d");
+  // the camera, video or picture itself is on the page (Chrome stops decoding a video nobody can see, and the AI then only saw an
+  // empty picture); the canvas lies over it with only the boxes
+  media.hidden = false;
   const size = () => { const w = media.videoWidth || media.naturalWidth, h = media.videoHeight || media.naturalHeight; if (w && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; } };
   // drawing every frame, with the newest boxes
   const draw = () => {
     if (token !== D.token) return;
-    size(); ctx.drawImage(media, 0, 0, cv.width, cv.height);
+    size(); ctx.clearRect(0, 0, cv.width, cv.height);
     const want = $("#agWhat").value, min = Number($("#agMin").value) / 100;
     const shown = D.preds.filter((p) => p.score >= min && (want === "all" || p.class === "person"));
     boxes(ctx, shown, cv.width);

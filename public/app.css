@@ -2679,6 +2679,8 @@ body.aigames-view #typeBadge, body.aigames-view #model { display: none !importan
 .sc-pin i { display: block; width: 18px; height: 18px; border-radius: 50%; background: #FF3B30; border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.4); box-sizing: border-box; }
 @media (max-width: 600px) { .sc-map { height: 260px; } }
 
-/* the camera or video Detect looks at: not shown (the canvas shows it with the boxes), but not display:none either, because Safari
-   stops giving frames of a hidden video */
-.ag-src { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+/* Detect: the camera, video or picture is shown as it is, the boxes on a canvas of the same size over it */
+.ag-det { display: block; }
+.ag-det video, .ag-det img { display: block; width: 100%; height: auto; max-height: calc(100dvh - 260px); object-fit: contain; }
+.ag-det video[hidden], .ag-det img[hidden] { display: none; }
+.ag-det video:not([hidden]) ~ canvas, .ag-det img:not([hidden]) ~ canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; max-height: none; }
