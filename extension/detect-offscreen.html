@@ -3,7 +3,10 @@
 <body>
 <!-- A hidden page (chrome.offscreen) that watches the tab you chose and finds the people in it; detect-overlay.js draws the boxes. -->
 
-<script src="vendor/tf.min.js"></script>
+<!-- TensorFlow.js in its separate parts: the all-in-one tf.min.js uses eval, which Chrome forbids in extensions (it stopped half loaded) -->
+<script src="vendor/tf-core.min.js"></script>
+<script src="vendor/tf-converter.min.js"></script>
+<script src="vendor/tf-backend-webgl.min.js"></script>
 <script src="vendor/coco-ssd.min.js"></script>
 <script src="detect-offscreen.js"></script>
 </body></html>

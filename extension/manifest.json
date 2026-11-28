@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Albatross",
-  "version": "1.9.3",
+  "version": "1.9.4",
   "description": "Albatross in a Chrome sidebar: chat with your own AI about the page you're on, and let it read, click and type there for you. Make your own tools for it.",
   "permissions": [
     "debugger",
