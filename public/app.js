@@ -7481,8 +7481,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-28.3";
+const APP_VERSION = "2026-11-28.4";
 const WHATS_NEW = [
+  ["2026-11-28.4", ["AI games: no more stale copies after an update"]],
   ["2026-11-28.3", ["AI games: no more stale copies after an update"]],
   ["2026-11-28.2", ["AI games: Detect really looks at the camera and videos now (it only saw an empty picture before)"]],
   ["2026-11-28.1", ["AI games: Detect works with the camera and videos on iPad and iPhone too"]],
