@@ -7481,8 +7481,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-28.5";
+const APP_VERSION = "2026-11-28.6";
 const WHATS_NEW = [
+  ["2026-11-28.6", ["AI games: Teach it finds the objects in a picture and labels each with your own things (probably a banana, probably an apple)","AI games: teach it whole folders of pictures, also a folder with one subfolder per thing"]],
   ["2026-11-28.5", ["AI games: Teach it, show it a few pictures of your own things and it recognises them in new pictures, the camera or the screen"]],
   ["2026-11-28.4", ["AI games: no more stale copies after an update"]],
   ["2026-11-28.3", ["AI games: no more stale copies after an update"]],

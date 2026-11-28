@@ -324,12 +324,11 @@ function top(figs) {
 
 // ======================================================================
 // Teach it: you show it a few pictures of each thing, then it recognises those things in new pictures, the camera or the screen.
-// MobileNet turns each picture into a list of numbers that describes what's in it; a nearest-neighbour classifier compares a new
-// picture's numbers with your examples' (the way Google's Teachable Machine works). All in this browser; the examples are kept on
+// The detector (COCO-SSD) finds the objects; MobileNet turns each one into a list of numbers that describes it, compared with your
+// examples' numbers: the nearest ones vote, and it only takes your name when the object is really similar (else the detector's). All in this browser; the examples are kept on
 // this device (small copies in its storage), never sent anywhere.
 // ======================================================================
 const MOBILENET = "https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js";
-const KNN = "https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.6/dist/knn-classifier.min.js";
 const K = { things: null, net: null, knn: null, token: 0, stream: null, media: null, dirty: true };
 const KEY = "burrow.teach";
 function things() {
@@ -338,41 +337,71 @@ function things() {
   return K.things;
 }
 function keep() { try { localStorage.setItem(KEY, JSON.stringify(K.things)); } catch { toast("This device's storage is full: the newest examples are only kept until you reload"); } }
+// the examples as MobileNet's numbers (each a direction: compared by the angle between them, 1 = the same picture)
+async function embed(c) { const e = K.net.infer(c, true), v = await e.data(); e.dispose(); let n = 0; for (const x of v) n += x * x; n = Math.sqrt(n) || 1; return v.map((x) => x / n); }
 async function brain() {
-  if (!K.net) { await loadOnce(TFJS); await loadOnce(MOBILENET); await loadOnce(KNN); K.net = await window.mobilenet.load({ version: 2, alpha: 1.0 }); }
-  if (!K.knn) K.knn = window.knnClassifier.create();
+  if (!K.net) { await loadOnce(TFJS); await loadOnce(MOBILENET); K.net = await window.mobilenet.load({ version: 2, alpha: 1.0 }); }
   if (K.dirty) {                                   // the examples, learned again (after a reload, or when they changed)
-    K.knn.clearAllClasses();
-    for (const [i, t] of things().entries()) for (const src of t.pics) { const im = await pic(src); const e = K.net.infer(im, true); K.knn.addExample(e, i); e.dispose(); }
+    K.ex = [];
+    for (const [i, t] of things().entries()) for (const src of t.pics) { const im = await pic(src); K.ex.push({ i, v: await embed(square(im, 224)) }); }
     K.dirty = false;
   }
 }
+// which of your things a picture is, or none: the most similar examples vote (the 5 nearest), and the best one has to be really
+// similar (SIM_MIN), not just the least different of your things, or it's "none of them"
+const SIM_MIN = 0.5;          // measured: a taught banana or apple 0.56–0.83, melons against them 0.32
+async function classify(c) {
+  if (!K.ex || !K.ex.length) return null;
+  const v = await embed(c), sims = K.ex.map((e) => { let d = 0; for (let k = 0; k < v.length; k++) d += v[k] * e.v[k]; return { i: e.i, d }; }).sort((x, y) => y.d - x.d);
+  const top = sims.slice(0, 5), votes = new Map(); for (const t of top) votes.set(t.i, (votes.get(t.i) || 0) + t.d);
+  const [bi, bv] = [...votes].sort((x, y) => y[1] - x[1])[0], best = sims.find((x) => x.i === bi).d, share = bv / top.reduce((n, t) => n + t.d, 0);
+  window.__tkLast = { best, share };
+  return best >= SIM_MIN && share >= 0.6 ? { i: bi, conf: Math.min(0.99, share * (0.5 + (best - SIM_MIN) / (1 - SIM_MIN) * 0.5 + 0.5) / 1) , sim: best } : { i: -1, sim: best };
+}
 const pic = (src) => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = src; });
-// a square middle part of a picture or video, small (what MobileNet looks at, and what's kept)
-function square(media, size = 160) {
-  const w = media.videoWidth || media.naturalWidth || media.width, h = media.videoHeight || media.naturalHeight || media.height, m = Math.min(w, h);
+// a part of a picture or video (x, y, w, h in its own pixels; the whole of it when not given), squared and small: what MobileNet
+// looks at, and what's kept as an example
+function square(media, size = 160, box) {
+  const W = media.videoWidth || media.naturalWidth || media.width, H = media.videoHeight || media.naturalHeight || media.height;
+  let [x, y, w, h] = box || [0, 0, W, H];
+  const m = Math.max(w, h) * (box ? 1.1 : 1), cx = x + w / 2, cy = y + h / 2;       // a bit of room around a found object
+  const s = box ? m : Math.min(W, H), sx = box ? cx - s / 2 : (W - s) / 2, sy = box ? cy - s / 2 : (H - s) / 2;
   const c = document.createElement("canvas"); c.width = c.height = size;
-  c.getContext("2d").drawImage(media, (w - m) / 2, (h - m) / 2, m, m, 0, 0, size, size);
+  const g = c.getContext("2d"); g.fillStyle = "#808080"; g.fillRect(0, 0, size, size);
+  g.drawImage(media, sx, sy, s, s, 0, 0, size, size);
   return c;
+}
+const TK_COLORS = ["#30D158", "#0A84FF", "#FF9F0A", "#BF5AF2", "#FF375F", "#64D2FF", "#FFD60A", "#AC8E68"];
+const MAX_PICS = 80;                              // per thing: more from a folder are picked evenly across it
+const isPic = (f) => /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(f.name);
+async function addFiles(thing, files) {
+  files = files.filter(isPic);
+  const room = Math.max(0, MAX_PICS - thing.pics.length);
+  if (files.length > room) { const step = files.length / room; files = Array.from({ length: room }, (_, i) => files[Math.floor(i * step)]); }
+  for (const f of files) { const url = URL.createObjectURL(f); try { const im = await pic(url); thing.pics.push(square(im).toDataURL("image/jpeg", 0.75)); } catch {} URL.revokeObjectURL(url); }
+  return files.length;
 }
 function teachPage() {
   const list = things();
   $("#agBody").innerHTML = `
-    <p class="sc-tip">Teach it your own things: give each one a name and a few example pictures (at least 3; more and different ones work better, like the same thing from other sides or in other light). Then it says which one it sees in a new picture, the camera or the screen. It all stays on this device.</p>
-    <div class="tk-things">${list.map((t, i) => `<div class="tk-thing" data-i="${i}">
-      <div class="tk-top"><input class="hub-in" data-k="name" value="${esc(t.name)}" placeholder="Name, e.g. ${["My cat", "My dog", "Empty sofa", "Cup"][i % 4]}" maxlength="40"><span class="sc-sp"></span>
-        <button class="btn small" type="button" data-a="add">Add pictures</button><button class="btn small" type="button" data-a="snap" title="Take the current picture from the camera or screen below">Take from below</button><button class="sc-x" type="button" data-a="del" aria-label="Remove">×</button></div>
-      <div class="tk-pics">${t.pics.map((p, j) => `<img src="${p}" alt="" data-j="${j}" title="Click to remove">`).join("") || '<span class="sc-tip">No pictures yet</span>'}</div>
-      <div class="tk-bar"><i style="width:0%"></i><b></b></div></div>`).join("")}</div>
-    <div class="ag-bar"><button class="btn small" type="button" data-a="thing">+ Another thing</button><input type="file" id="tkFile" accept="image/*" multiple hidden></div>
+    <p class="sc-tip">Teach it your own things (a banana, an apple, your cat…): a name and example pictures for each, the more and the more different the better. Then it finds the objects in a picture, the camera or the screen, draws a box around each and says what it probably is. Things you didn't teach it get the detector's own guess. It all stays on this device.</p>
+    <div class="ag-bar"><button class="btn small primary" type="button" data-a="folders">Open a folder of things</button><span class="sc-tip">One subfolder per thing, named after it (for example <b>fruit/banana</b>, <b>fruit/apple</b>), up to ${MAX_PICS} pictures each.</span>
+      <input type="file" id="tkTree" webkitdirectory directory multiple hidden></div>
+    <div class="tk-things">${list.map((t, i) => `<div class="tk-thing" data-i="${i}" style="--c:${TK_COLORS[i % TK_COLORS.length]}">
+      <div class="tk-top"><i class="tk-dot"></i><input class="hub-in" data-k="name" value="${esc(t.name)}" placeholder="Name, e.g. ${["Banana", "Apple", "Carrot", "My cat"][i % 4]}" maxlength="40"><span class="tk-n">${t.pics.length} picture${t.pics.length === 1 ? "" : "s"}</span><span class="sc-sp"></span>
+        <button class="btn small" type="button" data-a="add">Add pictures</button><button class="btn small" type="button" data-a="folder">Add a folder</button><button class="btn small" type="button" data-a="snap" title="Take the current picture from the camera or screen below">Take from below</button><button class="sc-x" type="button" data-a="del" aria-label="Remove">×</button></div>
+      <div class="tk-pics">${t.pics.slice(0, 24).map((p, j) => `<img src="${p}" alt="" data-j="${j}" title="Click to remove">`).join("")}${t.pics.length > 24 ? `<span class="sc-tip">+${t.pics.length - 24} more</span>` : ""}${t.pics.length ? `<button class="btn small ghost" type="button" data-a="clear">Remove all</button>` : '<span class="sc-tip">No pictures yet</span>'}</div></div>`).join("")}</div>
+    <div class="ag-bar"><button class="btn small" type="button" data-a="thing">+ Another thing</button><input type="file" id="tkFile" accept="image/*" multiple hidden><input type="file" id="tkDir" webkitdirectory directory multiple hidden></div>
     <h3 class="tk-h">Try it</h3>
     <div class="ag-bar">
       <button class="btn small" type="button" data-src="camera">Camera</button><button class="btn small" type="button" data-src="screen">Screen or window</button><button class="btn small" type="button" data-src="file">A picture</button><input type="file" id="tkTest" accept="image/*" hidden>
+      <label class="ag-min">Boxes from <input type="range" id="tkMin" min="10" max="80" step="5" value="25"> <span id="tkMinV">25%</span></label>
       <button class="btn small ghost" type="button" data-src="stop">Stop</button>
     </div>
-    <div class="ag-stage ag-det"><video id="agVid" playsinline muted autoplay hidden></video><img id="agImg" alt="" hidden><div class="ag-msg" id="agMsg">Teach it at least two things, then try it with the camera, the screen or a picture.</div></div>
+    <div class="ag-stage ag-det"><video id="agVid" playsinline muted autoplay hidden></video><img id="agImg" alt="" hidden><canvas id="tkCv" width="960" height="540"></canvas><div class="ag-msg" id="agMsg">Try it with a picture, the camera or the screen.</div></div>
     <div class="ag-stat tk-guess" id="agStat"></div>`;
   const body = $("#agBody"); let target = 0;
+  $("#tkMin").oninput = (e) => { $("#tkMinV").textContent = e.target.value + "%"; if (K.media && K.media.tagName === "IMG" && K.token) loopGuess(K.token); };
   body.oninput = (e) => { const r = e.target.closest(".tk-thing"); if (r && e.target.dataset.k === "name") { list[r.dataset.i].name = e.target.value; keep(); } };
   body.onclick = async (e) => {
     const b = e.target.closest("button, .tk-pics img"); if (!b) return;
@@ -380,18 +409,38 @@ function teachPage() {
     if (b.tagName === "IMG") { list[i].pics.splice(Number(b.dataset.j), 1); K.dirty = true; keep(); return teachPage(); }
     if (b.dataset.src) return b.dataset.src === "file" ? $("#tkTest").click() : b.dataset.src === "stop" ? teachStop("Stopped.") : teachStart(b.dataset.src);
     const a = b.dataset.a;
+    if (a === "folders") return $("#tkTree").click();
     if (a === "thing") { list.push({ name: "", pics: [] }); keep(); return teachPage(); }
-    if (a === "del") { if (list.length <= 2) { list[i] = { name: "", pics: [] }; } else list.splice(i, 1); K.dirty = true; keep(); return teachPage(); }
+    if (a === "del") { if (list.length <= 2) list[i] = { name: "", pics: [] }; else list.splice(i, 1); K.dirty = true; keep(); return teachPage(); }
+    if (a === "clear") { list[i].pics = []; K.dirty = true; keep(); return teachPage(); }
     if (a === "add") { target = i; return $("#tkFile").click(); }
+    if (a === "folder") { target = i; return $("#tkDir").click(); }
     if (a === "snap") {
       const m = K.media; if (!m || (m.tagName === "VIDEO" && m.readyState < 2)) return toast("Start the camera or the screen below first");
-      list[i].pics.push(square(m).toDataURL("image/jpeg", 0.8)); K.dirty = true; keep(); return teachPage();
+      list[i].pics.push(square(m).toDataURL("image/jpeg", 0.75)); K.dirty = true; keep(); return teachPage();
     }
   };
-  $("#tkFile").onchange = async (e) => {
-    const files = [...e.target.files].slice(0, 30); e.target.value = "";
-    for (const f of files) { const url = URL.createObjectURL(f); try { const im = await pic(url); list[target].pics.push(square(im).toDataURL("image/jpeg", 0.8)); } catch {} URL.revokeObjectURL(url); }
-    K.dirty = true; keep(); teachPage();
+  const busy = (t) => { const st = $("#agStat"); if (st) st.textContent = t; };
+  $("#tkFile").onchange = async (e) => { const files = [...e.target.files]; e.target.value = ""; busy("Reading the pictures…"); await addFiles(list[target], files); K.dirty = true; keep(); teachPage(); };
+  $("#tkDir").onchange = async (e) => {
+    const files = [...e.target.files]; e.target.value = ""; busy(`Reading ${files.filter(isPic).length} pictures…`);
+    const t = list[target]; if (!t.name && files[0] && files[0].webkitRelativePath) t.name = files[0].webkitRelativePath.split("/")[0];
+    const n = await addFiles(t, files); K.dirty = true; keep(); teachPage(); toast(`${n} pictures added to ${t.name || "the thing"}`);
+  };
+  // a folder of things: each subfolder is one thing, named after it (pictures right in the folder go to a thing named after it)
+  $("#tkTree").onchange = async (e) => {
+    const files = [...e.target.files].filter(isPic); e.target.value = "";
+    const groups = new Map();
+    for (const f of files) { const parts = (f.webkitRelativePath || f.name).split("/"); const name = parts.length > 2 ? parts[parts.length - 2] : parts[0]; if (!groups.has(name)) groups.set(name, []); groups.get(name).push(f); }
+    if (!groups.size) return toast("No pictures in that folder");
+    let done = 0;
+    for (const [name, fs] of groups) {
+      busy(`Reading ${name} (${++done} of ${groups.size})…`);
+      let t = list.find((x) => x.name.trim().toLowerCase() === name.toLowerCase()) || list.find((x) => !x.name && !x.pics.length);
+      if (!t) { t = { name: "", pics: [] }; list.push(t); }
+      t.name = t.name || name; await addFiles(t, fs);
+    }
+    K.dirty = true; keep(); teachPage(); toast(`${groups.size} thing${groups.size === 1 ? "" : "s"} learned from the folder`);
   };
   $("#tkTest").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) teachStart("file", f); };
   if (K.media && K.token) teachStart(K.kind, K.file);         // a camera that was running goes on after the page is redrawn
@@ -400,11 +449,10 @@ function teachStop(text) {
   K.token = 0; if (K.stream) K.stream.getTracks().forEach((t) => t.stop()); K.stream = null; K.media = null;
   const v = $("#agVid"); if (v) { v.pause(); v.srcObject = null; v.removeAttribute("src"); v.hidden = true; }
   const im = $("#agImg"); if (im) im.hidden = true;
+  const cv = $("#tkCv"); if (cv) cv.getContext("2d").clearRect(0, 0, cv.width, cv.height);
   if (text != null) msg(text);
 }
 async function teachStart(kind, file) {
-  const list = things(), ready = list.filter((t) => t.pics.length >= 3);
-  if (ready.length < 2) { msg("First give at least two things 3 or more pictures each."); return; }
   if (K.media && K.kind === kind && kind !== "file" && K.token) { loopGuess(K.token); return; }
   teachStop(null);
   const v = $("#agVid"), img = $("#agImg"), token = K.token = Math.random(); K.kind = kind; K.file = file;
@@ -417,24 +465,55 @@ async function teachStart(kind, file) {
       v.srcObject = K.stream; v.hidden = false; await v.play(); K.media = v;
     }
     msg("Loading the AI and learning your examples…");
-    await brain(); if (K.token !== token) return; msg("");
+    await brain(); await model(A.acc); if (K.token !== token) return; msg("");
     loopGuess(token);
   } catch (e) { teachStop(e.name === "NotAllowedError" ? "Not allowed: the browser (or you) said no." : e.message); }
 }
+// one look: the detector finds the objects; each one is compared with your things (if at least two have 3 pictures) and named
+// after the best match when it's close enough, otherwise it keeps the detector's own name
+async function guess(m) {
+  const list = things(), taught = list.filter((t) => t.pics.length >= 3).length >= 2;
+  if (K.dirty) await brain();
+  const det = await model(A.acc), min = Number(($("#tkMin") || {}).value || 25) / 100;
+  const found = (await det.detect(m, 20, min)).sort((a, b) => b.score - a.score).slice(0, 10), out = [];
+  for (const p of found) {
+    let name = p.class, conf = p.score, i = -1;
+    if (taught) {
+      const r = await classify(square(m, 224, p.bbox));
+      if (r && r.i >= 0) { i = r.i; name = list[i].name || "thing " + (i + 1); conf = Math.min(0.99, Math.max(0.6, r.conf)); }
+      // the detector's own name is one of your things (it found a "banana" and you taught it "Banana"): that one
+      if (i < 0) { const j = list.findIndex((t) => t.pics.length && t.name.trim().toLowerCase() === p.class); if (j >= 0) { i = j; name = list[j].name; } }
+    }
+    out.push({ bbox: p.bbox, name, conf, i });
+  }
+  // nothing found as an object: the whole picture, compared with your things
+  let whole = null;
+  if (taught) { const r = await classify(square(m, 224)); if (r && r.i >= 0) whole = { name: list[r.i].name || "thing " + (r.i + 1), conf: Math.min(0.99, Math.max(0.6, r.conf)) }; }
+  return { out, whole, taught };
+}
+const sure = (c) => (c >= 0.85 ? "" : c >= 0.6 ? "probably " : "maybe ");
 async function loopGuess(token) {
-  const list = things();
+  const cv = $("#tkCv"); if (!cv) return; const ctx = cv.getContext("2d");
   do {
     const m = K.media; if (!m) return;
     if (m.tagName === "VIDEO" && m.readyState < 2) { await new Promise((r) => setTimeout(r, 60)); continue; }
-    if (K.dirty) await brain();
-    const e = K.net.infer(square(m, 224), true), r = await K.knn.predictClass(e, 5); e.dispose();
+    const g = await guess(m);
     if (K.token !== token) return;
-    // every thing's bar, and the best guess in words
-    document.querySelectorAll(".tk-thing").forEach((row) => { const i = Number(row.dataset.i), c = (r.confidences && r.confidences[i]) || 0; row.querySelector(".tk-bar i").style.width = Math.round(c * 100) + "%"; row.querySelector(".tk-bar b").textContent = list[i].pics.length >= 3 ? Math.round(c * 100) + "%" : ""; row.classList.toggle("best", String(r.label) === String(i)); });
-    const best = list[Number(r.label)], conf = (r.confidences && r.confidences[r.label]) || 0;
-    const st = $("#agStat"); if (st) st.textContent = best ? `Looks like: ${best.name || "thing " + (Number(r.label) + 1)} (${Math.round(conf * 100)}% sure)` : "";
+    const W = m.videoWidth || m.naturalWidth, H = m.videoHeight || m.naturalHeight;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    ctx.clearRect(0, 0, W, H);
+    const lw = Math.max(2, W / 350), fs = Math.max(14, W / 50); ctx.font = `600 ${fs}px system-ui, sans-serif`; ctx.textBaseline = "top";
+    for (const o of g.out) {
+      const [x, y, w, h] = o.bbox, c = o.i >= 0 ? TK_COLORS[o.i % TK_COLORS.length] : "#FFFFFF", label = `${sure(o.conf)}${o.name} ${Math.round(o.conf * 100)}%`;
+      ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.setLineDash(o.i >= 0 ? [] : [lw * 3, lw * 2]); ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
+      const tw = ctx.measureText(label).width + 10; ctx.fillStyle = c; ctx.fillRect(x, Math.max(0, y - fs - 8), tw, fs + 8);
+      ctx.fillStyle = "#000"; ctx.fillText(label, x + 5, Math.max(0, y - fs - 8) + 4);
+    }
+    const names = g.out.map((o) => sure(o.conf) + o.name);
+    const st = $("#agStat");
+    if (st) st.textContent = (g.out.length ? `${g.out.length} object${g.out.length === 1 ? "" : "s"}: ${names.join(", ")}` : "No objects found") + (g.whole ? ` · the whole picture looks most like ${g.whole.name} (${Math.round(g.whole.conf * 100)}%)` : g.taught ? "" : " · teach it at least two things (3+ pictures each) to get your own names");
     if (m.tagName !== "VIDEO") return;
-    await new Promise((res) => setTimeout(res, 120));
+    await new Promise((res) => setTimeout(res, 60));
   } while (K.token === token);
 }
 

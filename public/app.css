@@ -2694,3 +2694,5 @@ body.aigames-view #typeBadge, body.aigames-view #model { display: none !importan
 .tk-bar { position: relative; height: 18px; border-radius: 9px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; }
 .tk-bar i { position: absolute; inset: 0 auto 0 0; background: #30D158; transition: width .15s; } .tk-bar b { position: absolute; right: 8px; top: 0; font-size: 12px; line-height: 18px; }
 .tk-h { margin: 6px 0 0; font-size: 16px; } .tk-guess { font-size: 16px; color: var(--fg); font-weight: 600; }
+.tk-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; } .tk-n { font-size: 12.5px; color: var(--muted); }
+.tk-thing { border-left: 4px solid var(--c); }
