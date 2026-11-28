@@ -25,13 +25,13 @@ function render() {
   const p = page(); if (!p) return;
   p.innerHTML = `<div class="ag-wrap">
     <div class="ag-head"><h1>AI games</h1><span class="sc-sp"></span>
-      <div class="seg" role="tablist"><button type="button" data-tab="detect" class="${A.tab === "detect" ? "on" : ""}">Detect</button><button type="button" data-tab="range" class="${A.tab === "range" ? "on" : ""}">Target range</button></div>
+      <div class="seg" role="tablist"><button type="button" data-tab="detect" class="${A.tab === "detect" ? "on" : ""}">Detect</button><button type="button" data-tab="teach" class="${A.tab === "teach" ? "on" : ""}">Teach it</button><button type="button" data-tab="range" class="${A.tab === "range" ? "on" : ""}">Target range</button></div>
       <select class="hub-in ag-acc" id="agAcc" aria-label="How the AI looks"><option value="lite_mobilenet_v2">Fast AI</option><option value="mobilenet_v2">Precise AI</option></select></div>
     <div id="agBody"></div></div>`;
   $("#agAcc").value = A.acc;
   $("#agAcc").onchange = (e) => { A.acc = e.target.value; if (A.tab === "detect") detectRestart(); };
   p.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { if (A.tab === b.dataset.tab) return; stopAll(); A.tab = b.dataset.tab; render(); }));
-  if (A.tab === "detect") detectPage(); else rangePage();
+  if (A.tab === "detect") detectPage(); else if (A.tab === "teach") teachPage(); else rangePage();
 }
 
 // ======================================================================
@@ -322,7 +322,123 @@ function top(figs) {
   for (const s of R.flashes) { const k = (now - s.t) / 400; ctx.strokeStyle = s.hit ? `rgba(255,214,10,${1 - k})` : `rgba(255,255,255,${0.8 - k * 0.8})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, 6 + k * 18, 0, 7); ctx.stroke(); }
 }
 
-function stopAll() { detectStop(null); if (R) { R.on = false; cancelAnimationFrame(R.raf); } }
+// ======================================================================
+// Teach it: you show it a few pictures of each thing, then it recognises those things in new pictures, the camera or the screen.
+// MobileNet turns each picture into a list of numbers that describes what's in it; a nearest-neighbour classifier compares a new
+// picture's numbers with your examples' (the way Google's Teachable Machine works). All in this browser; the examples are kept on
+// this device (small copies in its storage), never sent anywhere.
+// ======================================================================
+const MOBILENET = "https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js";
+const KNN = "https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.6/dist/knn-classifier.min.js";
+const K = { things: null, net: null, knn: null, token: 0, stream: null, media: null, dirty: true };
+const KEY = "burrow.teach";
+function things() {
+  if (!K.things) { try { K.things = JSON.parse(localStorage.getItem(KEY)) || null; } catch {} }
+  if (!Array.isArray(K.things)) K.things = [{ name: "", pics: [] }, { name: "", pics: [] }];
+  return K.things;
+}
+function keep() { try { localStorage.setItem(KEY, JSON.stringify(K.things)); } catch { toast("This device's storage is full: the newest examples are only kept until you reload"); } }
+async function brain() {
+  if (!K.net) { await loadOnce(TFJS); await loadOnce(MOBILENET); await loadOnce(KNN); K.net = await window.mobilenet.load({ version: 2, alpha: 1.0 }); }
+  if (!K.knn) K.knn = window.knnClassifier.create();
+  if (K.dirty) {                                   // the examples, learned again (after a reload, or when they changed)
+    K.knn.clearAllClasses();
+    for (const [i, t] of things().entries()) for (const src of t.pics) { const im = await pic(src); const e = K.net.infer(im, true); K.knn.addExample(e, i); e.dispose(); }
+    K.dirty = false;
+  }
+}
+const pic = (src) => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = src; });
+// a square middle part of a picture or video, small (what MobileNet looks at, and what's kept)
+function square(media, size = 160) {
+  const w = media.videoWidth || media.naturalWidth || media.width, h = media.videoHeight || media.naturalHeight || media.height, m = Math.min(w, h);
+  const c = document.createElement("canvas"); c.width = c.height = size;
+  c.getContext("2d").drawImage(media, (w - m) / 2, (h - m) / 2, m, m, 0, 0, size, size);
+  return c;
+}
+function teachPage() {
+  const list = things();
+  $("#agBody").innerHTML = `
+    <p class="sc-tip">Teach it your own things: give each one a name and a few example pictures (at least 3; more and different ones work better, like the same thing from other sides or in other light). Then it says which one it sees in a new picture, the camera or the screen. It all stays on this device.</p>
+    <div class="tk-things">${list.map((t, i) => `<div class="tk-thing" data-i="${i}">
+      <div class="tk-top"><input class="hub-in" data-k="name" value="${esc(t.name)}" placeholder="Name, e.g. ${["My cat", "My dog", "Empty sofa", "Cup"][i % 4]}" maxlength="40"><span class="sc-sp"></span>
+        <button class="btn small" type="button" data-a="add">Add pictures</button><button class="btn small" type="button" data-a="snap" title="Take the current picture from the camera or screen below">Take from below</button><button class="sc-x" type="button" data-a="del" aria-label="Remove">×</button></div>
+      <div class="tk-pics">${t.pics.map((p, j) => `<img src="${p}" alt="" data-j="${j}" title="Click to remove">`).join("") || '<span class="sc-tip">No pictures yet</span>'}</div>
+      <div class="tk-bar"><i style="width:0%"></i><b></b></div></div>`).join("")}</div>
+    <div class="ag-bar"><button class="btn small" type="button" data-a="thing">+ Another thing</button><input type="file" id="tkFile" accept="image/*" multiple hidden></div>
+    <h3 class="tk-h">Try it</h3>
+    <div class="ag-bar">
+      <button class="btn small" type="button" data-src="camera">Camera</button><button class="btn small" type="button" data-src="screen">Screen or window</button><button class="btn small" type="button" data-src="file">A picture</button><input type="file" id="tkTest" accept="image/*" hidden>
+      <button class="btn small ghost" type="button" data-src="stop">Stop</button>
+    </div>
+    <div class="ag-stage ag-det"><video id="agVid" playsinline muted autoplay hidden></video><img id="agImg" alt="" hidden><div class="ag-msg" id="agMsg">Teach it at least two things, then try it with the camera, the screen or a picture.</div></div>
+    <div class="ag-stat tk-guess" id="agStat"></div>`;
+  const body = $("#agBody"); let target = 0;
+  body.oninput = (e) => { const r = e.target.closest(".tk-thing"); if (r && e.target.dataset.k === "name") { list[r.dataset.i].name = e.target.value; keep(); } };
+  body.onclick = async (e) => {
+    const b = e.target.closest("button, .tk-pics img"); if (!b) return;
+    const r = b.closest(".tk-thing"), i = r ? Number(r.dataset.i) : -1;
+    if (b.tagName === "IMG") { list[i].pics.splice(Number(b.dataset.j), 1); K.dirty = true; keep(); return teachPage(); }
+    if (b.dataset.src) return b.dataset.src === "file" ? $("#tkTest").click() : b.dataset.src === "stop" ? teachStop("Stopped.") : teachStart(b.dataset.src);
+    const a = b.dataset.a;
+    if (a === "thing") { list.push({ name: "", pics: [] }); keep(); return teachPage(); }
+    if (a === "del") { if (list.length <= 2) { list[i] = { name: "", pics: [] }; } else list.splice(i, 1); K.dirty = true; keep(); return teachPage(); }
+    if (a === "add") { target = i; return $("#tkFile").click(); }
+    if (a === "snap") {
+      const m = K.media; if (!m || (m.tagName === "VIDEO" && m.readyState < 2)) return toast("Start the camera or the screen below first");
+      list[i].pics.push(square(m).toDataURL("image/jpeg", 0.8)); K.dirty = true; keep(); return teachPage();
+    }
+  };
+  $("#tkFile").onchange = async (e) => {
+    const files = [...e.target.files].slice(0, 30); e.target.value = "";
+    for (const f of files) { const url = URL.createObjectURL(f); try { const im = await pic(url); list[target].pics.push(square(im).toDataURL("image/jpeg", 0.8)); } catch {} URL.revokeObjectURL(url); }
+    K.dirty = true; keep(); teachPage();
+  };
+  $("#tkTest").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) teachStart("file", f); };
+  if (K.media && K.token) teachStart(K.kind, K.file);         // a camera that was running goes on after the page is redrawn
+}
+function teachStop(text) {
+  K.token = 0; if (K.stream) K.stream.getTracks().forEach((t) => t.stop()); K.stream = null; K.media = null;
+  const v = $("#agVid"); if (v) { v.pause(); v.srcObject = null; v.removeAttribute("src"); v.hidden = true; }
+  const im = $("#agImg"); if (im) im.hidden = true;
+  if (text != null) msg(text);
+}
+async function teachStart(kind, file) {
+  const list = things(), ready = list.filter((t) => t.pics.length >= 3);
+  if (ready.length < 2) { msg("First give at least two things 3 or more pictures each."); return; }
+  if (K.media && K.kind === kind && kind !== "file" && K.token) { loopGuess(K.token); return; }
+  teachStop(null);
+  const v = $("#agVid"), img = $("#agImg"), token = K.token = Math.random(); K.kind = kind; K.file = file;
+  try {
+    if (kind === "file") { img.src = URL.createObjectURL(file); await img.decode(); img.hidden = false; K.media = img; }
+    else {
+      if (!navigator.mediaDevices) throw new Error("This browser can't share the camera or screen here (it needs https).");
+      if (kind === "screen" && !navigator.mediaDevices.getDisplayMedia) throw new Error("This device can't share its screen (phones and tablets usually can't).");
+      K.stream = kind === "camera" ? await navigator.mediaDevices.getUserMedia({ video: true, audio: false }) : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      v.srcObject = K.stream; v.hidden = false; await v.play(); K.media = v;
+    }
+    msg("Loading the AI and learning your examples…");
+    await brain(); if (K.token !== token) return; msg("");
+    loopGuess(token);
+  } catch (e) { teachStop(e.name === "NotAllowedError" ? "Not allowed: the browser (or you) said no." : e.message); }
+}
+async function loopGuess(token) {
+  const list = things();
+  do {
+    const m = K.media; if (!m) return;
+    if (m.tagName === "VIDEO" && m.readyState < 2) { await new Promise((r) => setTimeout(r, 60)); continue; }
+    if (K.dirty) await brain();
+    const e = K.net.infer(square(m, 224), true), r = await K.knn.predictClass(e, 5); e.dispose();
+    if (K.token !== token) return;
+    // every thing's bar, and the best guess in words
+    document.querySelectorAll(".tk-thing").forEach((row) => { const i = Number(row.dataset.i), c = (r.confidences && r.confidences[i]) || 0; row.querySelector(".tk-bar i").style.width = Math.round(c * 100) + "%"; row.querySelector(".tk-bar b").textContent = list[i].pics.length >= 3 ? Math.round(c * 100) + "%" : ""; row.classList.toggle("best", String(r.label) === String(i)); });
+    const best = list[Number(r.label)], conf = (r.confidences && r.confidences[r.label]) || 0;
+    const st = $("#agStat"); if (st) st.textContent = best ? `Looks like: ${best.name || "thing " + (Number(r.label) + 1)} (${Math.round(conf * 100)}% sure)` : "";
+    if (m.tagName !== "VIDEO") return;
+    await new Promise((res) => setTimeout(res, 120));
+  } while (K.token === token);
+}
+
+function stopAll() { detectStop(null); teachStop(null); if (R) { R.on = false; cancelAnimationFrame(R.raf); } }
 window.aigamesOpen = (tab) => { A.open = true; if (tab) A.tab = tab; render(); };
 window.aigamesClose = () => { if (!A.open) return; A.open = false; stopAll(); };
 window.aigamesTest = { person: (ctx, f) => person(ctx, f, 0), scene: (ctx, figs) => scene(ctx, figs, 0), LANES, SHIRTS, PANTS, SKIN, HAIR, model };

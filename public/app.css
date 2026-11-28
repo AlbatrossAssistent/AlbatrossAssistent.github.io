@@ -2684,3 +2684,13 @@ body.aigames-view #typeBadge, body.aigames-view #model { display: none !importan
 .ag-det video, .ag-det img { display: block; width: 100%; height: auto; max-height: calc(100dvh - 260px); object-fit: contain; }
 .ag-det video[hidden], .ag-det img[hidden] { display: none; }
 .ag-det video:not([hidden]) ~ canvas, .ag-det img:not([hidden]) ~ canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; max-height: none; }
+/* Teach it */
+.tk-things { display: flex; flex-direction: column; gap: 10px; }
+.tk-thing { padding: 10px 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--soft); display: flex; flex-direction: column; gap: 8px; }
+.tk-thing.best { border-color: #30D158; box-shadow: 0 0 0 2px color-mix(in srgb, #30D158 40%, transparent); }
+.tk-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .tk-top .hub-in { flex: 1 1 180px; min-width: 0; font-weight: 600; }
+.tk-pics { display: flex; gap: 6px; flex-wrap: wrap; } .tk-pics img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; cursor: pointer; }
+.tk-pics img:hover { outline: 2px solid var(--danger); }
+.tk-bar { position: relative; height: 18px; border-radius: 9px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; }
+.tk-bar i { position: absolute; inset: 0 auto 0 0; background: #30D158; transition: width .15s; } .tk-bar b { position: absolute; right: 8px; top: 0; font-size: 12px; line-height: 18px; }
+.tk-h { margin: 6px 0 0; font-size: 16px; } .tk-guess { font-size: 16px; color: var(--fg); font-weight: 600; }
