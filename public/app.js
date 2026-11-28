@@ -7481,8 +7481,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppea
 
 // ---------- updates: what's new after an update, and a newer version published while the app is open ----------
 // APP_VERSION goes up with every published change, and WHATS_NEW says what changed (newest first, a few lines each).
-const APP_VERSION = "2026-11-27.10";
+const APP_VERSION = "2026-11-28.1";
 const WHATS_NEW = [
+  ["2026-11-28.1", ["AI games: Detect works with the camera and videos on iPad and iPhone too"]],
   ["2026-11-27.10", ["Shortcuts: places on a map with their circles (drag to move, find an address), sunrise and sunset, every so often, when the PC starts","Shortcuts: only between two times, only if someone (or nobody) is at a place; new steps: a notification on the PC, run another shortcut","Chrome extension: Find people on this tab draws boxes around the people on the page (it only looks)"]],
   ["2026-11-27.9", ["AI games: Detect finds people and things in the camera, a screen, a picture or a video","AI games: Target range, a game where the AI aims at cardboard people, or you play against it"]],
   ["2026-11-27.8", ["Remote desktop: one pointer: with a mouse or trackpad (also an iPad's) the PC hides its own pointer, also behind the cover","Remote desktop: HDR is switched off on the PC during a session (no more blooming), and back on afterwards","Remote desktop: the cover is a screen saver with the time, drifting slowly, Ctrl+Alt+Shift+U closes it at the PC"]],

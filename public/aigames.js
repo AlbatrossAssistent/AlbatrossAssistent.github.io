@@ -51,7 +51,7 @@ function detectPage() {
     </div>
     <div class="ag-stage"><canvas id="agCv" width="960" height="540"></canvas><div class="ag-msg" id="agMsg">Pick the camera, a screen or window, or a picture or video.</div></div>
     <div class="ag-stat" id="agStat"></div>
-    <video id="agVid" playsinline muted hidden></video><img id="agImg" alt="" hidden>`;
+    <video id="agVid" class="ag-src" playsinline muted autoplay></video><img id="agImg" class="ag-src" alt="">`;
   const body = $("#agBody");
   body.querySelectorAll("[data-src]").forEach((b) => (b.onclick = () => (b.dataset.src === "file" ? $("#agFile").click() : b.dataset.src === "stop" ? detectStop("Stopped.") : detectStart(b.dataset.src))));
   $("#agFile").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) detectStart("file", f); };
