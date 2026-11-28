@@ -8,7 +8,7 @@
   bar.innerHTML = '<span data-t>Albatross Detect: starting…</span><select data-w style="font:inherit;border-radius:6px"><option value="person">People</option><option value="all">Everything</option></select><button data-x style="font:inherit;border:0;border-radius:6px;padding:3px 8px;cursor:pointer">Stop</button>';
   const st = { what: "person", last: null };
   bar.querySelector("[data-w]").onchange = (e) => { st.what = e.target.value; paint(); };
-  bar.querySelector("[data-x]").onclick = () => chrome.runtime.sendMessage({ det: "stop" });
+  bar.querySelector("[data-x]").onclick = () => { chrome.runtime.sendMessage({ det: "stop" }).catch(() => {}); remove(); };
   const ctx = cv.getContext("2d");
   function paint() {
     const r = st.last; const dpr = devicePixelRatio || 1;
@@ -28,7 +28,7 @@
   chrome.runtime.onMessage.addListener((m) => {
     if (!m || m.det !== "overlay") return;
     if (m.end) { remove(); return; }
-    if (m.status != null && m.status !== "") bar.querySelector("[data-t]").textContent = "Albatross Detect: " + m.status;
+    if (m.status != null && m.status !== "") { bar.querySelector("[data-t]").textContent = "Albatross Detect: " + m.status; if (/^couldn't|ended/.test(m.status)) bar.querySelector("[data-x]").textContent = "Close"; }
     if (m.preds) { st.last = m; paint(); }
   });
   addEventListener("resize", paint);

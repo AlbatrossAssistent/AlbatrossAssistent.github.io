@@ -339,16 +339,22 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       await chrome.scripting.executeScript({ target: { tabId: msg.tabId }, files: ["detect-overlay.js"] });
       try { await chrome.offscreen.createDocument({ url: "detect-offscreen.html", reasons: ["USER_MEDIA"], justification: "Find people in the picture of the tab you chose" }); } catch {}
       detTab = msg.tabId;
-      chrome.runtime.sendMessage({ det: "offscreen", cmd: "start", tabId: msg.tabId, streamId: msg.streamId }).catch(() => {});
-      return { ok: true };
+      chrome.tabs.sendMessage(msg.tabId, { det: "overlay", status: "starting…" }).catch(() => {});
+      // the hidden page may still be getting ready: ask until it answers (up to 5 seconds)
+      for (let i = 0; i < 25; i++) {
+        const r = await chrome.runtime.sendMessage({ det: "offscreen", cmd: "start", tabId: msg.tabId, streamId: msg.streamId }).catch(() => null);
+        if (r && r.ok) return { ok: true };
+        await new Promise((ok) => setTimeout(ok, 200));
+      }
+      throw new Error("The hidden Detect page didn't start");
     })().then(reply, (e) => reply({ ok: false, error: String(e.message || e) }));
     return true;
   }
   if (msg.det === "stop") { detStop().then(() => reply({ ok: true })); return true; }
   if (msg.det === "state") { reply({ tab: detTab }); return; }
   if (msg.det === "result" && msg.tabId === detTab) {
-    chrome.tabs.sendMessage(detTab, { ...msg, det: "overlay" }).catch(() => {});
-    if (msg.end) detStop();
+    chrome.tabs.sendMessage(detTab, { ...msg, det: "overlay", end: false }).catch(() => {});
+    if (msg.end) { const t = detTab; detTab = null; chrome.runtime.sendMessage({ det: "offscreen", cmd: "stop" }).catch(() => {}); chrome.offscreen.closeDocument().catch(() => {}); void t; }   // the bar keeps showing why
   }
 });
 chrome.tabs.onRemoved.addListener((id) => { if (id === detTab) detStop(); });
